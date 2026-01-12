@@ -1,26 +1,37 @@
 package com.eduquest.springbackend.controller;
 
 import com.eduquest.springbackend.model.User;
-import com.eduquest.springbackend.service.UserService;
+import com.eduquest.springbackend.service.AuthService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/auth")
-@CrossOrigin(origins = "*") // Allow all origins for development
 public class AuthController {
-    private final UserService userService;
+    private final AuthService authService;
 
-    public AuthController(UserService userService) {
-        this.userService = userService;
+    public AuthController(AuthService authService) {
+        this.authService = authService;
     }
 
+    public record RegisterRequest(String username, String email, String password) {}
+    public record LoginRequest(String username, String password) {}
+
     @PostMapping("/register")
-    public ResponseEntity<?> registerUser(@RequestBody User user) {
+    public ResponseEntity<?> register(@RequestBody RegisterRequest req) {
         try {
-            User requestUser = userService.register(user);
-            return ResponseEntity.ok(requestUser);
+            User savedUser = authService.register(new User(req.username(), req.email(), req.password()));
+            return ResponseEntity.ok(Map.of(
+                    "id", savedUser.getId(),
+                    "username", savedUser.getUsername(),
+                    "email", savedUser.getEmail()));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         } catch (Exception e) {
@@ -29,14 +40,17 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody User user) {
+    public ResponseEntity<?> login(@RequestBody LoginRequest req) {
         try {
-            boolean requestUser = userService.login(user.getUsername(), user.getPassword());
-            return ResponseEntity.ok(requestUser);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+            String token = authService.login(req.username(), req.password());
+            return ResponseEntity.ok(Map.of(
+                    "token", token,
+                    "user", req.username()
+            ));
+        } catch (BadCredentialsException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid username or password");
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Authentication failed: " + e.getMessage());
         }
     }
 }
