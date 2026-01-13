@@ -1,32 +1,83 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
-
-import { useColorScheme } from '@/hooks/useColorScheme';
-import { AuthProvider } from '@/src/auth/AuthContext';
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const [loaded] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-  });
-
-  if (!loaded) {
-    // Async font loading only occurs in development.
-    return null;
-  }
-
-  return (
-    <AuthProvider>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    return (
         <Stack>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="+not-found" />
+            <Stack.Screen
+                name="index"
+                options={{
+                    headerShown: false
+                }}
+            />
+            <Stack.Screen
+                name="games/math"
+                options={{
+                    title: 'Math Challenge',
+                    headerStyle: {
+                        backgroundColor: '#4CAF50',
+                    },
+                    headerTintColor: '#fff',
+                    headerTitleStyle: {
+                        fontWeight: 'bold',
+                    }
+                }}
+            />
+            <Stack.Screen
+                name="games/language"
+                options={{
+                    title: 'Language Learning',
+                    headerStyle: {
+                        backgroundColor: '#2196F3',
+                    },
+                    headerTintColor: '#fff',
+                    headerTitleStyle: {
+                        fontWeight: 'bold',
+                    }
+                }}
+            />
+            <Stack.Screen
+                name="games/science"
+                options={{
+                    title: 'Science Explorer',
+                    headerStyle: {
+                        backgroundColor: '#FF9800',
+                    },
+                    headerTintColor: '#fff',
+                    headerTitleStyle: {
+                        fontWeight: 'bold',
+                    }
+                }}
+            />
+            <Stack.Screen
+                name="games/memory"
+                options={{
+                    title: 'Memory Training',
+                    headerStyle: {
+                        backgroundColor: '#9C27B0',
+                    },
+                    headerTintColor: '#fff',
+                    headerTitleStyle: {
+                        fontWeight: 'bold',
+                    }
+                }}
+            />
+            <Stack.Screen
+                name="profile"
+                options={{
+                    title: 'Learning Progress',
+                    headerStyle: {
+                        backgroundColor: '#607D8B',
+                    },
+                    headerTintColor: '#fff',
+                    headerTitleStyle: {
+                        fontWeight: 'bold',
+                    }
+                }}
+            />
+
+
         </Stack>
-        <StatusBar style="auto" />
-      </ThemeProvider>
-    </AuthProvider>
-  );
+
+
+    );
 }
