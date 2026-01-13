@@ -1,7 +1,9 @@
 package com.eduquest.springbackend.service;
 
+import com.eduquest.springbackend.dao.RoleRepository;
 import com.eduquest.springbackend.dao.UserRepository;
 import com.eduquest.springbackend.model.AppUser;
+import com.eduquest.springbackend.model.Role;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -16,16 +18,19 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthService {
 
     private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
     private final AuthenticationManager authenticationManager;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
     public AuthService(UserRepository userRepository,
+                       RoleRepository roleRepository,
                        AuthenticationManager authenticationManager,
                        PasswordEncoder passwordEncoder,
                        JwtService jwtService) {
         this.userRepository = userRepository;
+        this.roleRepository = roleRepository;
         this.authenticationManager = authenticationManager;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
@@ -34,6 +39,14 @@ public class AuthService {
     @Transactional
     public AppUser register(AppUser user) {
         user.setPassword(passwordEncoder.encode(user.getPassword()));
+        
+        // Assign ROLE_USER by default
+        Role userRole = roleRepository.findByName("ROLE_USER");
+        if (userRole == null) {
+            throw new RuntimeException("ROLE_USER not found in database");
+        }
+        user.getRoles().add(userRole);
+        
         return userRepository.save(user);
     }
 
