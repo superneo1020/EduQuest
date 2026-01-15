@@ -8,14 +8,14 @@ import { getApiBaseUrl } from "@/src/api/client";
 export default function LoginScreen() {
   const router = useRouter();
   const { signIn } = useAuth();
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   const onSubmit = async () => {
     setLoading(true);
     try {
-      await signIn(email, password);
+      await signIn(username, password);
       // navigate to home (replace history)
       router.replace("../(tabs)/home");
     } catch (err: any) {
@@ -30,11 +30,11 @@ export default function LoginScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>Sign in</Text>
       <TextInput
-        placeholder="Email"
+        placeholder="Username"
         keyboardType="email-address"
         autoCapitalize="none"
-        value={email}
-        onChangeText={setEmail}
+        value={username}
+        onChangeText={setUsername}
         style={styles.input}
       />
       <TextInput
@@ -48,7 +48,7 @@ export default function LoginScreen() {
       {loading ? (
         <ActivityIndicator size="large" color="#007AFF" />
       ) : (
-        <Button title="Sign in" onPress={onSubmit} disabled={!email || !password} />
+        <Button title="Sign in" onPress={onSubmit} disabled={!username || !password} />
       )}
 
       <Text style={styles.note}>API base: {getApiBaseUrl()}</Text>
