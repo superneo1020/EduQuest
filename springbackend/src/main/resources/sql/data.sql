@@ -7,11 +7,11 @@ INSERT INTO roles (name) VALUES ('ROLE_USER'), ('ROLE_ADMIN') ON CONFLICT (name)
 -- Insert sample users
 -- Password for all these users is "password"
 INSERT INTO users (username, email, password) VALUES
-    ('john_doe', 'john.doe@example.com', '$2a$10$xn3LI/AjqicFYZFDuSw1y.wv1B2XYYFth43uU2vQOeBpNxY4zT9mW'),
-    ('jane_smith', 'jane.smith@example.com', '$2a$10$xn3LI/AjqicFYZFDuSw1y.wv1B2XYYFth43uU2vQOeBpNxY4zT9mW'),
-    ('mike_wilson', 'mike.wilson@example.com', '$2a$10$xn3LI/AjqicFYZFDuSw1y.wv1B2XYYFth43uU2vQOeBpNxY4zT9mW'),
-    ('sarah_jones', 'sarah.jones@example.com', '$2a$10$xn3LI/AjqicFYZFDuSw1y.wv1B2XYYFth43uU2vQOeBpNxY4zT9mW'),
-    ('admin_user', 'admin@example.com', '$2a$10$xn3LI/AjqicFYZFDuSw1y.wv1B2XYYFth43uU2vQOeBpNxY4zT9mW')
+    ('john_doe', 'john.doe@example.com', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha'),
+    ('jane_smith', 'jane.smith@example.com', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha'),
+    ('mike_wilson', 'mike.wilson@example.com', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha'),
+    ('sarah_jones', 'sarah.jones@example.com', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha'),
+    ('admin_user', 'admin@example.com', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha')
 ON CONFLICT (username) DO NOTHING;
 
 -- Insert user-role associations by selecting ids
