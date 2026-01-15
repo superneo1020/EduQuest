@@ -1,6 +1,6 @@
 package com.eduquest.springbackend.controller;
 
-import com.eduquest.springbackend.model.User;
+import com.eduquest.springbackend.model.AppUser;
 import com.eduquest.springbackend.service.AuthService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -24,7 +24,7 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody RegisterRequest req) {
         try {
-            User savedUser = authService.register(new User(req.username(), req.email(), req.password()));
+            AppUser savedUser = authService.register(new AppUser(req.username(), req.email(), req.password()));
             return ResponseEntity.ok(Map.of(
                     "id", savedUser.getId(),
                     "username", savedUser.getUsername(),
@@ -37,7 +37,7 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody LoginRequest req) {
+    public ResponseEntity<?>login(@RequestBody LoginRequest req) {
         try {
             String token = authService.login(req.username(), req.password());
             return ResponseEntity.ok(Map.of(

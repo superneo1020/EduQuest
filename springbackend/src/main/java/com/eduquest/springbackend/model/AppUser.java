@@ -7,7 +7,7 @@ import java.util.Collection;
 
 @Entity
 @Table(name = "users")
-public class User {
+public class AppUser {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -23,9 +23,9 @@ public class User {
     )
     private Collection<Role> roles = new ArrayList<>();
 
-    public User() {}
+    public AppUser() {}
 
-    public User(String username, String email, String password) {
+    public AppUser(String username, String email, String password) {
         this.username = username;
         this.email = email;
         this.password = password;
