@@ -14,7 +14,7 @@ public class Role {
     private String name;
 
     @ManyToMany(mappedBy = "roles")
-    private Collection<User> users = new ArrayList<>();
+    private Collection<AppUser> users = new ArrayList<>();
 
     public Role() {}
 
@@ -38,11 +38,11 @@ public class Role {
         this.name = name;
     }
 
-    public Collection<User> getUsers() {
+    public Collection<AppUser> getUsers() {
         return users;
     }
 
-    public void setUsers(Collection<User> users) {
+    public void setUsers(Collection<AppUser> users) {
         this.users = users;
     }
 }

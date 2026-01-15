@@ -1,7 +1,7 @@
 package com.eduquest.springbackend.service;
 
 import com.eduquest.springbackend.dao.UserRepository;
-import com.eduquest.springbackend.model.User;
+import com.eduquest.springbackend.model.AppUser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -32,7 +32,7 @@ public class AuthService {
     }
 
     @Transactional
-    public User register(User user) {
+    public AppUser register(AppUser user) {
         user.setPassword(passwordEncoder.encode(user.getPassword()));
         return userRepository.save(user);
     }
