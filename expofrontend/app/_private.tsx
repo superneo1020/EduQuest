@@ -15,7 +15,7 @@ export default function PrivateLayout({ children }: { children: React.ReactNode 
   useEffect(() => {
     if (!token) {
       // navigate to login stack if not authenticated
-      router.replace("../(auth)/login");
+      router.replace("/Profile/Login");
     }
   }, [token]);
 
