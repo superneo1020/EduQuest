@@ -32,7 +32,7 @@ public class AppUserDetailsService implements UserDetailsService {
             logger.error("Invalid username");
             throw new UsernameNotFoundException("User not found");
         }
-        logger.info("Loading UserDetails for {} with password {}", username, user.getPassword());
+        logger.info("Loading UserDetails for {}", username);
         Collection<GrantedAuthority> authorities = new ArrayList<>();
         user.getRoles().forEach(role -> authorities.add(new SimpleGrantedAuthority(role.getName())));
         return new User(user.getUsername(), user.getPassword(), authorities);

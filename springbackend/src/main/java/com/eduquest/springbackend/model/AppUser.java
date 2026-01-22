@@ -4,15 +4,23 @@ import jakarta.persistence.*;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 
 @Entity
 @Table(name = "users")
 public class AppUser {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(nullable = false, length = 20, unique = true)
     private String username;
+
+    @Column(nullable = false, length = 50, unique = true)
     private String email;
+
+    @Column(nullable = false)
     private String password;
 
     @ManyToMany(fetch = FetchType.EAGER)
@@ -22,6 +30,20 @@ public class AppUser {
             inverseJoinColumns = @JoinColumn(name = "role_id")
     )
     private Collection<Role> roles = new ArrayList<>();
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<UserGameScore> userGameScores = new ArrayList<>();
+
+    @ManyToMany
+    @JoinTable(
+            name = "user_missions",
+            joinColumns = @JoinColumn(name = "user_id"),
+            inverseJoinColumns = @JoinColumn(name = "mission_id")
+    )
+    private Collection<Mission> missions = new ArrayList<>();
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<UserExp> userExps = new ArrayList<>();
 
     public AppUser() {}
 
@@ -69,5 +91,29 @@ public class AppUser {
 
     public void setRoles(Collection<Role> roles) {
         this.roles = roles;
+    }
+
+    public List<UserGameScore> getUserGameScores() {
+        return userGameScores;
+    }
+
+    public void setUserGameScores(List<UserGameScore> userGameScores) {
+        this.userGameScores = userGameScores;
+    }
+
+    public Collection<Mission> getMissions() {
+        return missions;
+    }
+
+    public void setMissions(Collection<Mission> missions) {
+        this.missions = missions;
+    }
+
+    public List<UserExp> getUserExps() {
+        return userExps;
+    }
+
+    public void setUserExps(List<UserExp> userExps) {
+        this.userExps = userExps;
     }
 }
