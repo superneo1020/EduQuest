@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS users (
     id BIGSERIAL PRIMARY KEY,
     username VARCHAR(20) UNIQUE NOT NULL,
     email VARCHAR(50) UNIQUE NOT NULL,
-    password VARCHAR(120) NOT NULL
+    password VARCHAR(255) NOT NULL
 );
 
 -- Join table for users and roles

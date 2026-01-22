@@ -1,0 +1,8 @@
+{
+  "properties": [
+    {
+      "name": "jwt.secret",
+      "type": "java.lang.String",
+      "description": "Base64-encoded 32-byte secret used to sign JWTs (HS256). Do not commit production secrets."
+  }
+] }
