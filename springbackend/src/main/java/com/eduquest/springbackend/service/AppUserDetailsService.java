@@ -27,11 +27,10 @@ public class AppUserDetailsService implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        AppUser user = userRepository.findByUsername(username);
-        if (user == null) {
-            logger.error("Invalid username");
-            throw new UsernameNotFoundException("User not found");
-        }
+        AppUser user = userRepository.findByUsername(username).orElseThrow(() -> {
+            logger.warn("Invalid username");
+            return new UsernameNotFoundException("User not found");
+        });
         logger.info("Loading UserDetails for {}", username);
         Collection<GrantedAuthority> authorities = new ArrayList<>();
         user.getRoles().forEach(role -> authorities.add(new SimpleGrantedAuthority(role.getName())));
