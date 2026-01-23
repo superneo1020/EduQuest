@@ -2,9 +2,11 @@ package com.eduquest.springbackend.controller;
 
 import com.eduquest.springbackend.model.AppUser;
 import com.eduquest.springbackend.service.AuthService;
-import org.springframework.http.HttpStatus;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -18,37 +20,28 @@ public class AuthController {
         this.authService = authService;
     }
 
-    public record RegisterRequest(String username, String email, String password) {}
-    public record LoginRequest(String username, String password) {}
+    public record RegisterRequest(@NotBlank @Size(max = 20) String username,
+                                  @NotBlank @Email @Size(max = 50) String email,
+                                  @NotBlank @Size(max = 255) String password) {}
+    public record LoginRequest(@NotBlank @Size(max = 20) String username,
+                               @NotBlank @Size(max = 255) String password) {}
 
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody RegisterRequest req) {
-        try {
-            AppUser savedUser = authService.register(new AppUser(req.username(), req.email(), req.password()));
-            return ResponseEntity.ok(Map.of(
-                    "id", savedUser.getId(),
-                    "username", savedUser.getUsername(),
-                    "email", savedUser.getEmail()));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(e.getMessage());
-        }
+    public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest req) {
+        AppUser savedUser = authService.register(new AppUser(req.username(), req.email(), req.password()));
+        return ResponseEntity.ok(Map.of(
+                "id", savedUser.getId(),
+                "username", savedUser.getUsername(),
+                "email", savedUser.getEmail()));
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?>login(@RequestBody LoginRequest req) {
-        try {
-            String token = authService.login(req.username(), req.password());
-            return ResponseEntity.ok(Map.of(
-                    "token", token,
-                    "user", req.username()
-            ));
-        } catch (BadCredentialsException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid username or password");
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Authentication failed: " + e.getMessage());
-        }
+    public ResponseEntity<?>login(@Valid @RequestBody LoginRequest req) {
+        String token = authService.login(req.username(), req.password());
+        return ResponseEntity.ok(Map.of(
+                "token", token,
+                "user", req.username()
+        ));
     }
 
     @GetMapping("/test-password")

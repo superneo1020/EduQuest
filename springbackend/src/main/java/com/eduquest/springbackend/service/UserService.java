@@ -30,18 +30,20 @@ public class UserService {
 
     @Transactional
     public AppUser findUserByUsername (String username) {
-        return userRepository.findByUsername(username);
+        return userRepository.findByUsername(username).orElse(null);
     }
 
     @Transactional
     public Role findRoleByName (String name) {
-        return roleRepository.findByName(name);
+        return roleRepository.findByName(name).orElse(null);
     }
 
     @Transactional
     public void addRoleToUser (String user_name, String role_name) {
-        AppUser user = userRepository.findByUsername(user_name);
-        Role role = roleRepository.findByName(role_name);
+        AppUser user = userRepository.findByUsername(user_name).orElse(null);
+        Role role = roleRepository.findByName(role_name).orElse(null);
+        if (user == null) throw new RuntimeException("User not found: " + user_name);
+        if (role == null) throw new RuntimeException("Role not found: " + role_name);
         user.getRoles().add(role);
     }
 }
