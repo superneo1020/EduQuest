@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
     View,
     Text,
@@ -7,16 +7,40 @@ import {
     ImageBackground,
     useWindowDimensions,
     SafeAreaView,
-    Platform
+    ActivityIndicator, Alert
 } from 'react-native';
-import { Calculator, Languages, Atom, Brain, User, Trophy, Clock, Target } from 'lucide-react-native';
+import { Calculator, Languages, Atom, Brain, LogOut, User, Trophy, Clock, Target } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
+import { useAuth } from '@/src/auth/AuthContext';
+
 
 export default function LandscapeOptimizedHome() {
     const router = useRouter();
     const { width, height } = useWindowDimensions();
 
-    // 判斷是否為橫屏
+
+    const { token, loading, signOut } = useAuth();
+
+    useEffect(() => {
+
+        if (!loading && !token) {
+            router.replace('/Profile/Login');
+        }
+    }, [token, loading, router]);
+
+
+    if (loading) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color="#4CAF50" />
+                    <Text style={styles.loadingText}>Loading...</Text>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+
     const isLandscape = width > height;
 
     const gameButtons = [
@@ -31,13 +55,38 @@ export default function LandscapeOptimizedHome() {
             {/* Header - 保持簡潔 */}
             <View style={styles.header}>
                 <Text style={styles.headerTitle}>EduQuest</Text>
-                <TouchableOpacity onPress={() => router.push('/Profile/profile' as any)}>
-                                                    <User size={22} color="#333" />
-                                                </TouchableOpacity>
-                <TouchableOpacity onPress={() => router.push('/Profile/Welcome' as any)}>
-                    <User size={22} color="#333" />
-                </TouchableOpacity>
 
+                <View style={{ flexDirection: 'row', gap: 15 }}>
+                    {/* 個人資料按鈕 */}
+                    <TouchableOpacity onPress={() => router.push('/Profile/profile' as any)}>
+                        <User size={22} color="#333" />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            padding: 10,           // 增加點擊區域
+                            backgroundColor: '#FFF0F0', // 增加背景色以便確認按鈕位置
+                            borderRadius: 8,
+                            zIndex: 999,           // 確保在最頂層
+                        }}
+                        onPress={async () => {
+                            console.log("Button clicked! Triggering signOut...");
+                            try {
+                                await signOut();
+                                // 由於 useEffect 會監聽 token，理論上會自動跳轉
+                                // 如果沒自動跳，我們加一行手動跳轉作為保險
+                                router.replace('/Profile/Login');
+                            } catch (error) {
+                                console.error("Logout Error:", error);
+                            }
+                        }}
+                    >
+                        <LogOut size={22} color="#FF4757" />
+                        <Text style={{ color: '#FF4757', fontWeight: 'bold', marginLeft: 5 }}>Logout</Text>
+                    </TouchableOpacity>
+                </View>
             </View>
 
             {/* 主內容區：橫屏時左右排列 */}
@@ -116,6 +165,8 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         borderBottomWidth: 1,
         borderBottomColor: '#eee',
+        zIndex: 100, // 重要：確保 Header 在地圖之上
+        elevation: 5,
     },
     headerTitle: {
         fontSize: 18,
@@ -202,5 +253,15 @@ const styles = StyleSheet.create({
         color: 'white',
         fontSize: 10,
         fontWeight: 'bold',
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    loadingText: {
+        marginTop: 10,
+        fontSize: 16,
+        color: '#666',
     }
 });
