@@ -17,20 +17,31 @@ export default function Login() {
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const { signIn } = useAuth();
 
     const handleLogin = async () => {
         setLoading(true);
+        setError(null);
+
         try {
             await signIn(username, password);
             router.replace("/");
         } catch (err: any) {
-            console.log("Login Error", err);
-            Alert.alert("Login failed", err.response?.data?.message ?? err.message ?? "Unknown error");
+            console.log("Login Error:", err);
+
+            if (err.response?.status === 401) {
+                setError("Incorrect account or password, please try again");
+            } else {
+                setError("Login failed. Please try again later.");
+            }
+
+            setPassword("");
         } finally {
             setLoading(false);
         }
     };
+
 
     return (
         <SafeAreaView style={styles.container}>
@@ -44,7 +55,10 @@ export default function Login() {
                     placeholder="User"
                     placeholderTextColor="#999"
                     value={username}
-                    onChangeText={setUsername}
+                    onChangeText={(text) => {
+                        setUsername(text);
+                        setError(null);
+                    }}
                     style={styles.input}
                 />
 
@@ -52,7 +66,10 @@ export default function Login() {
                     placeholder="Password"
                     placeholderTextColor="#999"
                     value={password}
-                    onChangeText={setPassword}
+                    onChangeText={(text) => {
+                        setPassword(text);
+                        setError(null);
+                    }}
                     style={styles.input}
                     secureTextEntry
                 />
@@ -64,6 +81,10 @@ export default function Login() {
                       <Text style={styles.loginText}>Login</Text>
                   </TouchableOpacity>
                 )}
+                {error && (
+                    <Text style={styles.errorText}>{error}</Text>
+                )}
+
 
                 {loading ? (
                   <ActivityIndicator size="large" color="#007AFF" />
@@ -128,4 +149,12 @@ const styles = StyleSheet.create({
         color: "#4CAF50",
         fontWeight: "600",
     },
+    errorText: {
+        color: "#E53935",
+        marginTop: 10,
+        textAlign: "center",
+        fontSize: 14,
+        fontWeight: "600",
+    },
+
 });
