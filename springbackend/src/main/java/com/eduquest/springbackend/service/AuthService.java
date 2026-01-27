@@ -79,11 +79,4 @@ public class AuthService {
             throw new RuntimeException("Authentication failed", e);
         }
     }
-
-    @Transactional
-    public String testEncoder(String rawPassword) {
-        String encodedPassword = passwordEncoder.encode(rawPassword);
-        return "Raw: " + rawPassword + "\nEncoded: " + encodedPassword +
-                "\nMatches: " + passwordEncoder.matches(rawPassword, encodedPassword);
-    }
 }

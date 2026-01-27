@@ -28,7 +28,7 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest req) {
-        AppUser savedUser = authService.register(new AppUser(req.username(), req.email(), req.password()));
+        AppUser savedUser = authService.register(new AppUser(req.username().trim(), req.email().trim(), req.password()));
         return ResponseEntity.ok(Map.of(
                 "id", savedUser.getId(),
                 "username", savedUser.getUsername(),
@@ -36,16 +36,11 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?>login(@Valid @RequestBody LoginRequest req) {
-        String token = authService.login(req.username(), req.password());
+    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest req) {
+        String token = authService.login(req.username().trim(), req.password());
         return ResponseEntity.ok(Map.of(
                 "token", token,
                 "user", req.username()
         ));
-    }
-
-    @GetMapping("/test-password")
-    public String testPassword() {
-        return authService.testEncoder("password");
     }
 }
