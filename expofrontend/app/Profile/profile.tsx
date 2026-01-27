@@ -53,22 +53,23 @@ export default function ProfileScreen() {
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.scrollContent}
             >
-                {/* 1. 用戶頭像與基本資訊區 */}
+                {/* 1. username and email */}
                 <View style={styles.profileCard}>
-                    {/* 這裡建議加上判斷，如果 user 還在加載則顯示 Loading */}
                     <Text style={styles.userName}>
-                        {user?.username || user?.username || "Loading..."}
+                        {user?.username || 'No email set'}
                     </Text>
 
                     <View style={styles.emailBadge}>
                         <Mail size={14} color="#666" />
                         <Text style={styles.emailText}>
-                            {user?.email || user?.email || 'No email set'}
+                            <Text style={styles.emailText}>
+                                {user?.email || 'No email set'}
+                            </Text>
                         </Text>
                     </View>
                 </View>
 
-                {/* 2. 學習統計數據區 */}
+                {/* 2. Learning statistics */}
                 <View style={styles.sectionCard}>
                     <Text style={styles.sectionTitle}>Learning Statistics</Text>
                     <View style={styles.statsGrid}>

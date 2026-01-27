@@ -44,28 +44,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, []);
 
     const signIn = async (username: string, password: string) => {
-        const res = await axios.post(AUTH_URL, { username, password });
-        const data = res.data;
+        try {
+            const res = await axios.post(AUTH_URL, { username, password });
+            const data = res.data;
+            const userData = {
+                username: data.user,
+                email: data.email
+            };
 
-        // 這裡很重要！確保 data.user 包含 username 欄位
-        // 建議在此加上 console.log(data.user) 看看後端到底傳了什麼
-        console.log("User Data from Server:", data.user);
+            setUser(userData);
+            setToken(data.token || data.accessToken);
 
-        setToken(data.token);
-        setUser(data.user); // 這裡存入 State
+            await AsyncStorage.setItem('auth_token', data.token || data.accessToken);
+            await AsyncStorage.setItem('auth_user', JSON.stringify(userData));
 
-        await AsyncStorage.setItem('auth_token', data.token);
-        await AsyncStorage.setItem('auth_user', JSON.stringify(data.user));
+
+        } catch (error: any) {
+            console.error("login fail:", error.response?.data || error.message);
+            throw error;
+        }
     };
 
-    // src/auth/AuthContext.tsx
     const signOut = async () => {
         try {
-            // 先清除本地存儲
+
             await AsyncStorage.removeItem('auth_token');
             await AsyncStorage.removeItem('auth_user');
 
-            // 關鍵：更新 State 觸發 UI 刷新
             setToken(null);
             setUser(null);
             console.log("Logout successful");

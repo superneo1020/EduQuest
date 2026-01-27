@@ -40,7 +40,8 @@ public class AuthController {
         String token = authService.login(req.username(), req.password());
         return ResponseEntity.ok(Map.of(
                 "token", token,
-                "user", req.username()
+                "user", req.username(),
+                "email", authService.getEmailByUsername(req.username())
         ));
     }
 
