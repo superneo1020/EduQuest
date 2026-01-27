@@ -1,13 +1,13 @@
 // games/LanguageGameScreen.tsx
 import React from 'react';
 import {
-    StyleSheet,
-    SafeAreaView,
-    StatusBar
+  StyleSheet,
+  SafeAreaView,
+  StatusBar
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
-import ListeningGame from './components/ListeningGame';
-import MatchingGame from './components/MatchingGame';
+import ListeningGame from './components/listeninggame';
+import MatchingGame from './components/matchinggame';
 
 const LanguageGameScreen = () => {
   const params = useLocalSearchParams();

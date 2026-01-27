@@ -1,15 +1,15 @@
-// app/games/MatchingGame.tsx
+// app/games/ListeningGame.tsx
 import React from 'react';
 import { SafeAreaView, StatusBar } from 'react-native';
-import MatchingGameComponent from './components/MatchingGame';
+import ListeningGameComponent from './components/listeninggame';
 
-const MatchingGame = () => {
+const ListeningGame = () => {
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: '#f5f7fa' }}>
             <StatusBar barStyle="dark-content" backgroundColor="#f5f7fa" />
-            <MatchingGameComponent />
+            <ListeningGameComponent />
         </SafeAreaView>
     );
 };
 
-export default MatchingGame;
+export default ListeningGame;
