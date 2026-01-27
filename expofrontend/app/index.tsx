@@ -20,10 +20,10 @@ export default function LandscapeOptimizedHome() {
     const isLandscape = width > height;
 
     const gameButtons = [
-        { id: 1, title: 'Math', icon: Calculator, color: '#4CAF50', route: '/games/math', pos: { x: '20%', y: '25%' } },
-        { id: 2, title: 'Language', icon: Languages, color: '#2196F3', route: '/games/language', pos: { x: '70%', y: '20%' } },
+        { id: 1, title: 'Math', icon: Calculator, color: '#4CAF50', route: '/games/math/math', pos: { x: '20%', y: '25%' } },
+        { id: 2, title: 'Language', icon: Languages, color: '#2196F3', route: '/games/english/language', pos: { x: '70%', y: '20%' } },
         { id: 3, title: 'Science', icon: Atom, color: '#FF9800', route: '/games/science', pos: { x: '25%', y: '65%' } },
-        { id: 4, title: 'Memory', icon: Brain, color: '#9C27B0', route: '/games/memory',  pos: { x: '75%', y: '60%' } },
+        { id: 4, title: 'Memory', icon: Brain, color: '#9C27B0', route: '/games/memory/memory',  pos: { x: '75%', y: '60%' } },
     ];
 
     return (
