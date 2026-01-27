@@ -42,7 +42,7 @@ const LanguageGamesPage = () => {
             gradient: ['#4b6cb7', '#182848'] as const,
             level: 'Beginner to Advanced',
             players: 'Suitable for all levels',
-            route: '/games/ListeningGame', // 使用原生组件版本
+            route: '/games/english/listeninggame', // 使用原生组件版本
             native: true
         },
         {
@@ -54,7 +54,7 @@ const LanguageGamesPage = () => {
             gradient: ['#6a11cb', '#2575fc'] as const,
             level: 'Beginner to Intermediate',
             players: 'Memory training',
-            route: '/games/MatchingGame', // 使用原生组件版本
+            route: '/games/english/matchinggame', // 使用原生组件版本
             native: true
         },
         {
@@ -66,7 +66,7 @@ const LanguageGamesPage = () => {
             gradient: ['#667eea', '#764ba2'] as const,
             level: 'Beginner to Advanced',
             players: 'Grammar practice',
-            route: '/games/SentenceReorderGame',
+            route: '/games/english/sentencereordergame',
             native: true
         }
     ];
