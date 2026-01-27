@@ -12,7 +12,7 @@ export default function RootLayout() {
           }}
         />
         <Stack.Screen
-          name="games/math"
+          name="games/math/math"
           options={{
             title: 'Math Challenge',
             headerStyle: {
@@ -51,7 +51,7 @@ export default function RootLayout() {
           }}
         />
         <Stack.Screen
-          name="games/memory"
+          name="games/memory/memory"
           options={{
             title: 'Memory Training',
             headerStyle: {

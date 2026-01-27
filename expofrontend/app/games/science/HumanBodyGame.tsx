@@ -11,6 +11,7 @@ import {
     useWindowDimensions,
     Platform,
     Animated,
+    ScrollView,
 } from 'react-native';
 
 // 檢測是否是網頁環境
@@ -22,12 +23,12 @@ const HumanBodyGame = () => {
 
     // 器官圖片引用
     const organImages = {
-        heart: require('../assets/images/organs/heart.png'),
-        largeIntestine: require('../assets/images/organs/large-intestine.png'),
-        lung: require('../assets/images/organs/lung.png'),
-        liver: require('../assets/images/organs/liver.png'),
-        brain: require('../assets/images/organs/brain.png'),
-        stomach: require('../assets/images/organs/stomach.png'),
+        heart: require('../../../assets/images/organs/heart.png'),
+        largeIntestine: require('../../../assets/images/organs/large-intestine.png'),
+        lung: require('../../../assets/images/organs/lung.png'),
+        liver: require('../../../assets/images/organs/liver.png'),
+        brain: require('../../../assets/images/organs/brain.png'),
+        stomach: require('../../../assets/images/organs/stomach.png'),
     };
 
     // 監聽屏幕方向變化
@@ -51,15 +52,15 @@ const HumanBodyGame = () => {
 
         if (isWeb && !isPortrait) {
             // 網頁橫屏：左右佈局 - 人體圖在左，器官在右
-            const bodyWidth = screenWidth * 0.4;
-            const bodyHeight = screenHeight * 0.75;
+            const bodyWidth = Math.min(screenWidth * 0.4, 500);
+            const bodyHeight = Math.min(screenHeight * 0.75, 700);
             const bodyLeft = screenWidth * 0.05;
             const bodyTop = screenHeight * 0.1;
 
             // 右側器官區域
             const organAreaLeft = bodyLeft + bodyWidth + 20;
             const organAreaTop = bodyTop;
-            const organAreaWidth = screenWidth - organAreaLeft - 10;
+            const organAreaWidth = Math.min(screenWidth - organAreaLeft - 10, 500);
 
             return {
                 bodyOutline: {
@@ -92,6 +93,50 @@ const HumanBodyGame = () => {
                 organCardSize: {
                     width: organAreaWidth * 0.48,
                     height: 100,
+                }
+            };
+        } else if (isWeb && isPortrait) {
+            // 網頁豎屏：自適應佈局
+            const bodyWidth = Math.min(screenWidth * 0.85, 400);
+            const bodyHeight = Math.min(screenHeight * 0.35, 350);
+            const bodyLeft = (screenWidth - bodyWidth) / 2;
+            const bodyTop = screenHeight * 0.15;
+
+            // 器官區域
+            const organAreaTop = bodyTop + bodyHeight + 20;
+            const organAreaHeight = 'auto' as const;
+
+            return {
+                bodyOutline: {
+                    width: bodyWidth,
+                    height: bodyHeight,
+                    left: bodyLeft,
+                    top: bodyTop,
+                },
+                organArea: {
+                    left: bodyLeft,
+                    top: organAreaTop,
+                    width: bodyWidth,
+                    height: organAreaHeight,
+                },
+                // 網格設置
+                grid: {
+                    rows: 8,    // 8行
+                    cols: 6,    // 6列
+                    cellWidth: bodyWidth / 6,
+                    cellHeight: bodyHeight / 8
+                },
+                organSize: {
+                    heart: { width: 60, height: 55 },
+                    largeIntestine: { width: 95, height: 35 },
+                    lung: { width: 80, height: 65 },
+                    liver: { width: 70, height: 55 },
+                    brain: { width: 80, height: 60 },
+                    stomach: { width: 65, height: 45 },
+                },
+                organCardSize: {
+                    width: bodyWidth / 3 - 12,
+                    height: 95,
                 }
             };
         } else {
@@ -151,7 +196,7 @@ const HumanBodyGame = () => {
             name: 'Heart',
             image: organImages.heart,
             description: 'Responsible for pumping blood throughout the body',
-            gridPosition: { row: 4, col: 4 }, // 網格坐標（行, 列）
+            gridPosition: { row: 2, col: 4 }, // 網格坐標（行, 列）
             ...layout.organSize.heart,
             hint: 'Located in the middle left of the chest cavity'
         },
@@ -160,7 +205,7 @@ const HumanBodyGame = () => {
             name: 'Large Intestine',
             image: organImages.largeIntestine,
             description: 'Absorbs water and forms feces',
-            gridPosition: { row: 6, col: 3 },
+            gridPosition: { row: 4, col: 3 },
             ...layout.organSize.largeIntestine,
             hint: 'Located in the abdomen, surrounding the small intestine'
         },
@@ -169,7 +214,7 @@ const HumanBodyGame = () => {
             name: 'Lung',
             image: organImages.lung,
             description: 'Perform gas exchange, breathing',
-            gridPosition: { row: 3, col: 3 },
+            gridPosition: { row: 2, col: 3 },
             ...layout.organSize.lung,
             hint: 'Located in the chest cavity on both sides'
         },
@@ -178,7 +223,7 @@ const HumanBodyGame = () => {
             name: 'Liver',
             image: organImages.liver,
             description: 'Detoxify, metabolize, and store nutrients',
-            gridPosition: { row: 5, col: 4 },
+            gridPosition: { row: 3, col: 4 },
             ...layout.organSize.liver,
             hint: 'Located in the right upper abdomen'
         },
@@ -187,7 +232,7 @@ const HumanBodyGame = () => {
             name: 'Brain',
             image: organImages.brain,
             description: 'Controls body activities and thinking',
-            gridPosition: { row: 1, col: 3 },
+            gridPosition: { row: 0, col: 3 },
             ...layout.organSize.brain,
             hint: 'Located in the head'
         },
@@ -196,7 +241,7 @@ const HumanBodyGame = () => {
             name: 'Stomach',
             image: organImages.stomach,
             description: 'Digests food and secretes stomach acid',
-            gridPosition: { row: 5, col: 3 },
+            gridPosition: { row: 3, col: 3 },
             ...layout.organSize.stomach,
             hint: 'Located in the upper left abdomen'
         },
@@ -235,8 +280,8 @@ const HumanBodyGame = () => {
         const bodyTop = layout.bodyOutline.top;
 
         return {
-            x: bodyLeft + (col - 1) * cellWidth + cellWidth / 2,
-            y: bodyTop + (row - 1) * cellHeight + cellHeight / 2
+            x: bodyLeft + (col - 2) * cellWidth + cellWidth,
+            y: bodyTop + (row - 2) * cellHeight + cellHeight
         };
     };
 
@@ -411,7 +456,7 @@ const HumanBodyGame = () => {
                 height: cardSize.height,
             };
         } else {
-            // 手機豎屏：三列佈局
+            // 手機豎屏或網頁豎屏：三列佈局
             const col = index % 3;
             const row = Math.floor(index / 3);
             const margin = 6;
@@ -493,8 +538,9 @@ const HumanBodyGame = () => {
         return gridCells;
     };
 
-    return (
-        <View style={styles.container}>
+    // 渲染主要內容
+    const renderContent = () => (
+        <>
             {/* 遊戲標題 */}
             <Text style={styles.title}>Understanding Human Organs - Grid Version</Text>
 
@@ -528,11 +574,20 @@ const HumanBodyGame = () => {
                 </View>
             </View>
 
+            {/* 提示區域 */}
+            {currentHint && (
+                <View style={styles.selectionHint}>
+                    <Text style={styles.selectionText}>Selected Organ</Text>
+                    <Text style={styles.hintText}>Hint: {currentHint}</Text>
+                    <Text style={styles.instructionText}>
+                        Click on the grid to place the organ. Green cells are suggested positions.
+                    </Text>
+                </View>
+            )}
 
-
-            {/* Game Area */}
+            {/* 遊戲區域 */}
             <View style={styles.gameArea}>
-                {/* Human body diagram area */}
+                {/* 人體圖區域 */}
                 <View style={[
                     styles.bodyArea,
                     {
@@ -542,17 +597,17 @@ const HumanBodyGame = () => {
                         top: layout.bodyOutline.top,
                     }
                 ]}>
-                    {/* Human body outline */}
+                    {/* 人體輪廓 */}
                     <Image
-                        source={require('../assets/images/organs/human-body-outline.png')}
+                        source={require('../../../assets/images/organs/human-body-outline.png')}
                         style={styles.bodyOutlineImage}
                         resizeMode="contain"
                     />
 
-                    {/* Grid */}
+                    {/* 網格 */}
                     {renderGrid()}
 
-                    {/* Placed organs */}
+                    {/* 已放置的器官 */}
                     {Object.entries(placedOrgans).map(([organIdStr, position]) => {
                         const organId = parseInt(organIdStr);
                         const organ = organs.find(o => o.id === organId);
@@ -591,7 +646,7 @@ const HumanBodyGame = () => {
                                     resizeMode="contain"
                                 />
 
-                                {/* Organ name label */}
+                                {/* 器官名稱標籤 */}
                                 <Text style={[
                                     styles.organNameLabel,
                                     position.isCorrect ? styles.correctLabel : styles.wrongLabel
@@ -599,7 +654,7 @@ const HumanBodyGame = () => {
                                     {organ.name}
                                 </Text>
 
-                                {/* If placed incorrectly, the arrow will indicate the correct position. */}
+                                {/* 如果放置不正確，箭頭將指示正確位置 */}
                                 {!position.isCorrect && showCorrectPositions && (
                                     <View style={[
                                         styles.correctArrow,
@@ -620,14 +675,14 @@ const HumanBodyGame = () => {
                     })}
                 </View>
 
-                {/* Organ selection area */}
+                {/* 器官選擇區域 */}
                 <View style={[
                     styles.organSelectionArea,
                     {
                         left: layout.organArea.left,
                         top: layout.organArea.top,
                         width: layout.organArea.width,
-                        height: layout.organArea.height,
+                        height: layout.organArea.height === 'auto' ? undefined : layout.organArea.height,
                     }
                 ]}>
                     <Text style={styles.organAreaTitle}>Click to select organ:</Text>
@@ -699,16 +754,14 @@ const HumanBodyGame = () => {
                 </View>
             </View>
 
-
-
-            {/* Control buttons */}
+            {/* 控制按鈕 */}
             <View style={styles.controls}>
                 <TouchableOpacity style={styles.resetButton} onPress={resetGame}>
                     <Text style={styles.resetButtonText}>Reset Game</Text>
                 </TouchableOpacity>
             </View>
 
-            {/* Completion modal */}
+            {/* 完成彈窗 */}
             <Modal
                 animationType="slide"
                 transparent={true}
@@ -734,7 +787,7 @@ const HumanBodyGame = () => {
                             </View>
                         </View>
 
-                        {/* Grid placement results display */}
+                        {/* 網格放置結果顯示 */}
                         <View style={styles.gridResult}>
                             <Text style={styles.gridResultTitle}>Your placement results:</Text>
                             <View style={styles.miniGrid}>
@@ -806,18 +859,48 @@ const HumanBodyGame = () => {
                     </View>
                 </View>
             </Modal>
+        </>
+    );
+
+    // 在網頁環境中使用 ScrollView，在移動設備上保持原樣
+    if (isWeb) {
+        return (
+            <ScrollView
+                style={styles.scrollContainer}
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={true}
+            >
+                {renderContent()}
+            </ScrollView>
+        );
+    }
+
+    return (
+        <View style={styles.container}>
+            {renderContent()}
         </View>
     );
 };
 
 const styles = StyleSheet.create({
+    // 網頁滾動容器
+    scrollContainer: {
+        flex: 1,
+        backgroundColor: '#f0f7ff',
+    },
+    scrollContent: {
+        padding: 12,
+        minHeight: '100%',
+        paddingBottom: 30,
+    },
+    // 原始容器（用於移動設備）
     container: {
         flex: 1,
         backgroundColor: '#f0f7ff',
         padding: 12,
     },
     title: {
-        fontSize: 26,
+        fontSize: isWeb ? 28 : 26,
         fontWeight: 'bold',
         color: '#1a5276',
         textAlign: 'center',
@@ -825,10 +908,11 @@ const styles = StyleSheet.create({
         marginTop: 8,
     },
     controlBar: {
-        flexDirection: 'row',
+        flexDirection: isWeb ? 'row' : 'column',
         justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: 15,
+        gap: isWeb ? 0 : 10,
     },
     scoreBoard: {
         flexDirection: 'row',
@@ -840,16 +924,19 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 4,
         elevation: 3,
+        flexWrap: isWeb ? 'wrap' : 'nowrap',
     },
     scoreText: {
-        fontSize: 14,
+        fontSize: isWeb ? 15 : 14,
         fontWeight: '600',
         color: '#2c3e50',
-        marginHorizontal: 8,
+        marginHorizontal: isWeb ? 6 : 8,
+        marginVertical: isWeb ? 2 : 0,
     },
     modeButtons: {
         flexDirection: 'row',
         gap: 10,
+        marginTop: isWeb ? 0 : 10,
     },
     modeButton: {
         backgroundColor: '#fff',
@@ -863,7 +950,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#3498db',
     },
     modeButtonText: {
-        fontSize: 14,
+        fontSize: isWeb ? 15 : 14,
         fontWeight: '600',
         color: '#3498db',
     },
@@ -880,27 +967,28 @@ const styles = StyleSheet.create({
         borderColor: '#3498db',
     },
     selectionText: {
-        fontSize: 18,
+        fontSize: isWeb ? 19 : 18,
         fontWeight: 'bold',
         color: '#1565c0',
         marginBottom: 5,
     },
     hintText: {
-        fontSize: 15,
+        fontSize: isWeb ? 16 : 15,
         color: '#e74c3c',
         fontWeight: '600',
         marginBottom: 8,
         textAlign: 'center',
     },
     instructionText: {
-        fontSize: 14,
+        fontSize: isWeb ? 15 : 14,
         color: '#546e7a',
         textAlign: 'center',
     },
     gameArea: {
-        flex: 1,
+        flex: isWeb ? 0 : 1,
         position: 'relative',
         marginBottom: 15,
+        minHeight: isWeb ? 600 : undefined,
     },
     bodyArea: {
         position: 'absolute',
@@ -984,7 +1072,7 @@ const styles = StyleSheet.create({
         elevation: 3,
     },
     organAreaTitle: {
-        fontSize: 18,
+        fontSize: isWeb ? 19 : 18,
         fontWeight: 'bold',
         color: '#2c3e50',
         marginBottom: 15,
@@ -993,7 +1081,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         flexWrap: 'wrap',
         position: 'relative',
-        minHeight: 350,
+        minHeight: isWeb ? 250 : 350,
     },
     organCard: {
         position: 'absolute',
@@ -1027,26 +1115,26 @@ const styles = StyleSheet.create({
         height: '100%',
     },
     organCardImage: {
-        width: 55,
-        height: 55,
+        width: isWeb ? 60 : 55,
+        height: isWeb ? 60 : 55,
         marginRight: 12,
     },
     organCardInfo: {
         flex: 1,
     },
     organCardName: {
-        fontSize: 16,
+        fontSize: isWeb ? 17 : 16,
         fontWeight: 'bold',
         color: '#2c3e50',
         marginBottom: 4,
     },
     organCardDescription: {
-        fontSize: 12,
+        fontSize: isWeb ? 13 : 12,
         color: '#7f8c8d',
         marginBottom: 4,
     },
     organCardHint: {
-        fontSize: 11,
+        fontSize: isWeb ? 12 : 11,
         color: '#3498db',
         fontWeight: '600',
     },
@@ -1070,7 +1158,7 @@ const styles = StyleSheet.create({
     },
     placedBadgeText: {
         color: 'white',
-        fontSize: 12,
+        fontSize: isWeb ? 13 : 12,
         fontWeight: 'bold',
         textAlign: 'center',
     },
@@ -1097,7 +1185,7 @@ const styles = StyleSheet.create({
     organNameLabel: {
         position: 'absolute',
         bottom: -25,
-        fontSize: 13,
+        fontSize: isWeb ? 14 : 13,
         fontWeight: 'bold',
         backgroundColor: 'rgba(255,255,255,0.95)',
         paddingHorizontal: 10,
@@ -1129,33 +1217,10 @@ const styles = StyleSheet.create({
         color: '#e74c3c',
         fontWeight: 'bold',
     },
-    instructions: {
-        backgroundColor: '#fff',
-        padding: 16,
-        borderRadius: 12,
-        marginBottom: 15,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 3,
-        elevation: 2,
-    },
-    instructionTitle: {
-        fontSize: 17,
-        fontWeight: 'bold',
-        color: '#2c3e50',
-        marginBottom: 10,
-    },
-    instructionNote: {
-        fontSize: 14,
-        color: '#e74c3c',
-        fontWeight: '600',
-        marginTop: 8,
-        fontStyle: 'italic',
-    },
     controls: {
         alignItems: 'center',
         marginBottom: 15,
+        marginTop: isWeb ? 20 : 0,
     },
     resetButton: {
         backgroundColor: '#3498db',
@@ -1170,7 +1235,7 @@ const styles = StyleSheet.create({
     },
     resetButtonText: {
         color: 'white',
-        fontSize: 17,
+        fontSize: isWeb ? 18 : 17,
         fontWeight: 'bold',
     },
     modalContainer: {
@@ -1194,7 +1259,7 @@ const styles = StyleSheet.create({
         elevation: 10,
     },
     modalTitle: {
-        fontSize: 26,
+        fontSize: isWeb ? 28 : 26,
         fontWeight: 'bold',
         color: '#2c3e50',
         marginBottom: 25,
@@ -1210,12 +1275,12 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     resultLabel: {
-        fontSize: 14,
+        fontSize: isWeb ? 15 : 14,
         color: '#7f8c8d',
         marginBottom: 5,
     },
     resultValue: {
-        fontSize: 32,
+        fontSize: isWeb ? 34 : 32,
         fontWeight: 'bold',
         color: '#2c3e50',
     },
@@ -1234,7 +1299,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     gridResultTitle: {
-        fontSize: 18,
+        fontSize: isWeb ? 19 : 18,
         fontWeight: 'bold',
         color: '#2c3e50',
         marginBottom: 15,
@@ -1249,8 +1314,8 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
     },
     miniGridCell: {
-        width: 25,
-        height: 25,
+        width: isWeb ? 28 : 25,
+        height: isWeb ? 28 : 25,
         borderWidth: 1,
         borderColor: '#ddd',
         justifyContent: 'center',
@@ -1267,12 +1332,12 @@ const styles = StyleSheet.create({
         backgroundColor: '#e74c3c',
     },
     miniCellText: {
-        fontSize: 10,
+        fontSize: isWeb ? 11 : 10,
         fontWeight: 'bold',
         color: 'white',
     },
     miniTargetText: {
-        fontSize: 12,
+        fontSize: isWeb ? 13 : 12,
         color: '#2ecc71',
         fontWeight: 'bold',
     },
@@ -1280,6 +1345,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'center',
         gap: 20,
+        flexWrap: 'wrap',
     },
     legendItem: {
         flexDirection: 'row',
@@ -1303,7 +1369,7 @@ const styles = StyleSheet.create({
         borderColor: '#2ecc71',
     },
     legendText: {
-        fontSize: 12,
+        fontSize: isWeb ? 13 : 12,
         color: '#7f8c8d',
     },
     modalButtons: {
@@ -1326,9 +1392,10 @@ const styles = StyleSheet.create({
     },
     modalButtonText: {
         color: 'white',
-        fontSize: 16,
+        fontSize: isWeb ? 17 : 16,
         fontWeight: 'bold',
     },
+
 });
 
 export default HumanBodyGame;
