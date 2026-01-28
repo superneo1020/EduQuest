@@ -21,6 +21,7 @@ export default function MathGameScreen() {
     const [gameActive, setGameActive] = useState(true);
     const [questionsAnswered, setQuestionsAnswered] = useState(0);
     const [streak, setStreak] = useState(0);
+    const [isProcessing, setIsProcessing] = useState(false);
 
     const TOTAL_QUESTIONS = 40;
 
@@ -100,7 +101,10 @@ export default function MathGameScreen() {
 
     // --- 3. 定義檢查答案 ---
     const checkAnswer = useCallback((selectedAnswer: number) => {
-        if (!gameActive) return;
+        // 如果遊戲結束或是正在處理中，直接 return，防止重複點擊
+        if (!gameActive || isProcessing) return;
+
+        setIsProcessing(true); // 立即鎖定按鈕
 
         const isCorrect = selectedAnswer === correctAnswer;
         const nextCount = questionsAnswered + 1;
@@ -120,14 +124,18 @@ export default function MathGameScreen() {
 
         if (nextCount >= TOTAL_QUESTIONS) {
             setGameActive(false);
+            setIsProcessing(false); // 遊戲結束解鎖
             Alert.alert("Mission Complete!", `Finished ${TOTAL_QUESTIONS} questions!`, [
                 { text: "Finish", onPress: () => router.back() }
             ]);
         } else {
-            setTimeout(generateQuestion, 300);
+            // 延遲後生成新題目，並解鎖
+            setTimeout(() => {
+                generateQuestion();
+                setIsProcessing(false); // 生成新題目後才解鎖，允許下一次點擊
+            }, 300);
         }
-    }, [gameActive, correctAnswer, questionsAnswered, streak, level, generateQuestion]);
-
+    }, [gameActive, isProcessing, correctAnswer, questionsAnswered, streak, level, generateQuestion]);
     // --- 4. 定義結束遊戲 ---
     const endGame = useCallback(() => {
         setGameActive(false);
@@ -196,10 +204,10 @@ export default function MathGameScreen() {
                             key={index}
                             style={[
                                 styles.optionButton,
-                                !gameActive && styles.disabledButton
+                                (!gameActive || isProcessing) && styles.disabledButton
                             ]}
                             onPress={() => checkAnswer(option)}
-                            disabled={!gameActive}
+                            disabled={!gameActive || isProcessing}
                         >
                             <Text style={styles.optionText}>{option}</Text>
                         </TouchableOpacity>

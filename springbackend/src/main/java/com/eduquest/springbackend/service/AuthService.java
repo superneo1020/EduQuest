@@ -86,4 +86,16 @@ public class AuthService {
         return "Raw: " + rawPassword + "\nEncoded: " + encodedPassword +
                 "\nMatches: " + passwordEncoder.matches(rawPassword, encodedPassword);
     }
+
+    public String getEmailByUsername(String username) {
+        return userRepository.findByUsername(username)
+                .map(AppUser::getEmail)
+                .orElse("No Email");
+    }
+
+    public Integer getPointsByUsername(String username) {
+        return userRepository.findByUsername(username)
+                .map(AppUser::getPoints)
+                .orElse(0);
+    }
 }

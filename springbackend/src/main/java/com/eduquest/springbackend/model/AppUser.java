@@ -23,6 +23,9 @@ public class AppUser {
     @Column(nullable = false)
     private String password;
 
+    @Column(columnDefinition = "INT DEFAULT 0")
+    private Integer points = 0;
+
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "user_roles",
@@ -42,8 +45,6 @@ public class AppUser {
     )
     private Collection<Mission> missions = new ArrayList<>();
 
-    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<UserExp> userExps = new ArrayList<>();
 
     public AppUser() {}
 
@@ -109,11 +110,11 @@ public class AppUser {
         this.missions = missions;
     }
 
-    public List<UserExp> getUserExps() {
-        return userExps;
+    public Integer getPoints() {
+        return points;
     }
 
-    public void setUserExps(List<UserExp> userExps) {
-        this.userExps = userExps;
+    public void setPoints(Integer points) {
+        this.points = points;
     }
 }

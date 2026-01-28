@@ -16,16 +16,16 @@ const { width, height } = Dimensions.get('window');
 
 // 動物資料
 const ANIMALS = [
-    { id: 1, name: 'shark', type: 'fish', image: require('../assets/images/animals/shark.png') },
-    { id: 2, name: 'trout', type: 'fish', image: require('../assets/images/animals/trout.png') },
-    { id: 3, name: 'sparrow', type: 'bird', image: require('../assets/images/animals/sparrow.png') },
-    { id: 4, name: 'pigeon', type: 'bird', image: require('../assets/images/animals/pigeon.png') },
-    { id: 5, name: 'dog', type: 'mammal', image: require('../assets/images/animals/dog.png') },
-    { id: 6, name: 'tiger', type: 'mammal', image: require('../assets/images/animals/tiger.png') },
-    { id: 7, name: 'turtle', type: 'reptile', image: require('../assets/images/animals/turtle.png') },
-    { id: 8, name: 'snake', type: 'reptile', image: require('../assets/images/animals/snake.png') },
+    { id: 1, name: 'shark', type: 'fish', image: require('../../../assets/images/animals/shark.png') },
+    { id: 2, name: 'trout', type: 'fish', image: require('../../../assets/images/animals/trout.png') },
+    { id: 3, name: 'sparrow', type: 'bird', image: require('../../../assets/images/animals/sparrow.png') },
+    { id: 4, name: 'pigeon', type: 'bird', image: require('../../../assets/images/animals/pigeon.png') },
+    { id: 5, name: 'dog', type: 'mammal', image: require('../../../assets/images/animals/dog.png') },
+    { id: 6, name: 'tiger', type: 'mammal', image: require('../../../assets/images/animals/tiger.png') },
+    { id: 7, name: 'turtle', type: 'reptile', image: require('../../../assets/images/animals/turtle.png') },
+    { id: 8, name: 'snake', type: 'reptile', image: require('../../../assets/images/animals/snake.png') },
 ];
-
+//'../assets/images/animals/shark.png'
 // 分類區域
 const CATEGORIES = [
     { id: 'fish', name: 'fish', color: '#4FC3F7' },
