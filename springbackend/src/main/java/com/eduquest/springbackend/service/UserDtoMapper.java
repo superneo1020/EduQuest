@@ -22,9 +22,7 @@ public class UserDtoMapper {
                 user.getUserGameScores().stream()
                         .map(UserGameScore::getScores)
                         .collect(Collectors.toList()),
-                user.getUserExps().stream()
-                        .map(userExp -> userExp.getExp().getValue())
-                        .collect(Collectors.toList())
+                user.getPoints()
         );
     }
 }
