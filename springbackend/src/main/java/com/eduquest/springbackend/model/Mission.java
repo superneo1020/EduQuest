@@ -25,7 +25,7 @@ public class Mission {
     private String description;
 
     @Column(nullable = false)
-    private Integer expReward = 0;
+    private Integer pointsReward = 0;
 
     @Column(insertable = false,
             updatable = false,
@@ -38,11 +38,11 @@ public class Mission {
 
     public Mission() {}
 
-    public Mission(String mission, String missionIcon, String description, Integer expReward) {
+    public Mission(String mission, String missionIcon, String description, Integer pointsReward) {
         this.mission = mission;
         this.missionIcon = missionIcon;
         this.description = description;
-        this.expReward = expReward;
+        this.pointsReward = pointsReward;
     }
 
     public Long getId() {
@@ -77,12 +77,12 @@ public class Mission {
         this.description = description;
     }
 
-    public Integer getExpReward() {
-        return expReward;
+    public Integer getPointsReward() {
+        return pointsReward;
     }
 
-    public void setExpReward(Integer expReward) {
-        this.expReward = expReward;
+    public void setPointsReward(Integer expReward) {
+        this.pointsReward = pointsReward;
     }
 
     public Instant getCreatedAt() {
