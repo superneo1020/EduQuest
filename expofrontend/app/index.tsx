@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import { Calculator, Languages, Atom, Brain, User, Trophy, Clock, Target } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
-import {Bot} from "lucide-react-native/icons";
 
 export default function LandscapeOptimizedHome() {
     const router = useRouter();
@@ -25,8 +24,6 @@ export default function LandscapeOptimizedHome() {
         { id: 2, title: 'Language', icon: Languages, color: '#2196F3', route: '/games/language', pos: { x: '70%', y: '20%' } },
         { id: 3, title: 'Science', icon: Atom, color: '#FF9800', route: '/games/science', pos: { x: '25%', y: '65%' } },
         { id: 4, title: 'Memory', icon: Brain, color: '#9C27B0', route: '/games/memory',  pos: { x: '75%', y: '60%' } },
-        { id: 5, title: 'chatbot', icon: Bot, color: '#af4c5b', route: '/games/chatbot',  pos: { x: '85%', y: '80%' } },
-
     ];
 
     return (
