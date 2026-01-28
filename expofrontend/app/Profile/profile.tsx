@@ -11,26 +11,26 @@ import {
 } from 'react-native';
 import {
     Trophy,
-    Star,
     Award,
     Target,
     Mail,
     User as UserIcon,
     Settings,
     ChevronRight,
-    LogOut
+    LogOut,
+    History // 引入歷史圖標
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
-import { useAuth } from '@/src/auth/AuthContext'; // 確保路徑正確
+import { useAuth } from '@/src/auth/AuthContext';
 
 export default function ProfileScreen() {
     const router = useRouter();
-    const { user, signOut } = useAuth(); // 從 Context 獲取基礎資料與登出功能
+    const { user, signOut } = useAuth();
 
     const handleLogout = async () => {
         try {
-            await signOut(); // 執行登出
-            router.replace('/Profile/Login'); // 強制跳轉至登入頁
+            await signOut();
+            router.replace('/Profile/Login');
         } catch (error) {
             console.error("Logout failed", error);
         }
@@ -40,7 +40,6 @@ export default function ProfileScreen() {
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" />
 
-            {/* Header 頂部欄 */}
             <View style={styles.header}>
                 <Text style={styles.headerTitle}>My Profile</Text>
                 <TouchableOpacity style={styles.iconBtn}>
@@ -53,51 +52,53 @@ export default function ProfileScreen() {
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.scrollContent}
             >
-                {/* 1. username and email */}
+                {/* 1. 用戶資訊：現在會顯示資料庫的真實數據 */}
                 <View style={styles.profileCard}>
                     <Text style={styles.userName}>
-                        {user?.username || 'No email set'}
+                        {user?.username || 'Learner'}
                     </Text>
 
                     <View style={styles.emailBadge}>
                         <Mail size={14} color="#666" />
                         <Text style={styles.emailText}>
-                            <Text style={styles.emailText}>
-                                {user?.email || 'No email set'}
-                            </Text>
+                            {user?.email || 'No email set'}
                         </Text>
                     </View>
                 </View>
 
-                {/* 2. Learning statistics */}
+                {/* 2. 學習統計：連結 point_history 與 points 欄位 */}
                 <View style={styles.sectionCard}>
                     <Text style={styles.sectionTitle}>Learning Statistics</Text>
                     <View style={styles.statsGrid}>
                         <View style={styles.statBox}>
                             <Trophy size={24} color="#FFD700" />
-                            <Text style={styles.statValue}>150</Text>
+                            {/* 顯示資料庫中的 points 欄位 */}
+                            <Text style={styles.statValue}>{user?.points ?? 0}</Text>
                             <Text style={styles.statLabel}>Total Points</Text>
                         </View>
                         <View style={styles.statBox}>
                             <Target size={24} color="#4CAF50" />
-                            <Text style={styles.statValue}>8</Text>
-                            <Text style={styles.statLabel}>Completed</Text>
-                        </View>
-                        <View style={styles.statBox}>
-                            <Star size={24} color="#2196F3" />
-                            <Text style={styles.statValue}>3</Text>
-                            <Text style={styles.statLabel}>Badges</Text>
-                        </View>
-                        <View style={styles.statBox}>
-                            <Award size={24} color="#FF9800" />
-                            <Text style={styles.statValue}>15</Text>
-                            <Text style={styles.statLabel}>Streak</Text>
+                            {/* 這裡未來可以透過 API 獲取 game_play_history 的次數 */}
+                            <Text style={styles.statValue}>-</Text>
+                            <Text style={styles.statLabel}>Games Played</Text>
                         </View>
                     </View>
                 </View>
 
-                {/* 3. 功能選單列表 */}
+                {/* 3. 功能選單 */}
                 <View style={styles.menuContainer}>
+                    {/* 點擊前往積分明細 (對應 point_history 表) */}
+                    <TouchableOpacity
+                        style={styles.menuItem}
+                        onPress={() => router.push('/Profile/history')}
+                    >
+                        <View style={styles.menuLeft}>
+                            <History size={20} color="#555" />
+                            <Text style={styles.menuText}>Point History</Text>
+                        </View>
+                        <ChevronRight size={18} color="#CCC" />
+                    </TouchableOpacity>
+
                     <TouchableOpacity style={styles.menuItem}>
                         <View style={styles.menuLeft}>
                             <UserIcon size={20} color="#555" />
@@ -115,7 +116,7 @@ export default function ProfileScreen() {
                     </TouchableOpacity>
                 </View>
 
-                <Text style={styles.versionText}>EduQuest v1.0.0</Text>
+                <Text style={styles.versionText}>EduQuest v1.1.0</Text>
             </ScrollView>
         </SafeAreaView>
     );

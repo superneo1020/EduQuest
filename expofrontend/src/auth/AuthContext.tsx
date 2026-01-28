@@ -5,7 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { getApiBaseUrl } from "../api/client";
 
-type User = { username: string; email?: string; password?: string } | null;
+type User = { username: string; email?: string; password?: string; points?: number } | null;
 
 type AuthContextType = {
     token: string | null;
@@ -33,6 +33,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 if (storedToken && storedUser) {
                     setToken(storedToken);
                     setUser(JSON.parse(storedUser));
+                    console.log('Loaded user from storage:', JSON.parse(storedUser));
                 }
             } catch (error) {
                 console.error('Error loading auth state:', error);
@@ -49,7 +50,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const data = res.data;
             const userData = {
                 username: data.user,
-                email: data.email
+                email: data.email,
+                points: data.points
             };
 
             setUser(userData);

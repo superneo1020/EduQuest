@@ -41,7 +41,8 @@ public class AuthController {
         return ResponseEntity.ok(Map.of(
                 "token", token,
                 "user", req.username(),
-                "email", authService.getEmailByUsername(req.username())
+                "email", authService.getEmailByUsername(req.username()),
+                "points", authService.getPointsByUsername(req.username())
         ));
     }
 }

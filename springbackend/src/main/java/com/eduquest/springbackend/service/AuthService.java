@@ -92,4 +92,10 @@ public class AuthService {
                 .map(AppUser::getEmail)
                 .orElse("No Email");
     }
+
+    public Integer getPointsByUsername(String username) {
+        return userRepository.findByUsername(username)
+                .map(AppUser::getPoints)
+                .orElse(0);
+    }
 }
