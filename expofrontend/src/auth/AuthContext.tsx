@@ -5,7 +5,31 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { getApiBaseUrl } from "../api/client";
 
-type User = { username: string; email?: string; password?: string; points?: number } | null;
+type User = { 
+  username: string; 
+  email?: string; 
+  password?: string; 
+  points?: number; 
+  roles?: string[];
+} | null;
+
+type UserProfile = {
+  userGameScores: Array<{
+    gameName: string; 
+    gameType: string; 
+    gameDifficulty: string;
+    gameIcon: string;
+    gameDescription: string;
+    scores: number;
+    points: number; 
+    createdAt: string
+  }>; 
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
+} | null;
 
 type AuthContextType = {
     token: string | null;
@@ -48,19 +72,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
             const res = await axios.post(AUTH_URL, { username, password });
             const data = res.data;
+
+            // 強制轉型，確保 points 是數字
             const userData = {
-                username: data.user,
-                email: data.email,
-                points: data.points
+                username: String(data.user?.username || data.username || 'Guest'),
+                email: String(data.user?.email || data.email || ''),
+                points: Number(data.user?.points || data.points || 0), // 確保它是 Number
+                roles: data.user?.roles || data.roles || []
             };
 
             setUser(userData);
-            setToken(data.token || data.accessToken);
+            const activeToken = data.token || data.accessToken;
+            setToken(activeToken);
 
-            await AsyncStorage.setItem('auth_token', data.token || data.accessToken);
+            await AsyncStorage.setItem('auth_token', activeToken);
             await AsyncStorage.setItem('auth_user', JSON.stringify(userData));
 
-
+            console.log('Login success, saved data:', userData);
         } catch (error: any) {
             console.error("login fail:", error.response?.data || error.message);
             throw error;
