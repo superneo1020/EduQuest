@@ -6,7 +6,7 @@ import * as Speech from 'expo-speech';
 import { Audio } from 'expo-av';
 import axios from 'axios';
 
-const BACKEND = 'http://192.168.xx.x:8000';   // <-- your laptop IP
+const BACKEND = 'http://192.168.56.1:8000';   // <-- your laptop IP
 
 export default function chatbot() {
     const [prompt, setPrompt] = useState('');
