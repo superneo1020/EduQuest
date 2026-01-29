@@ -144,7 +144,7 @@ export default function LandscapeOptimizedHome() {
                         <View style={styles.miniStat}>
                             <Trophy size={24} color="#FFD700" />
                             <Text style={styles.statVal}>
-                                {user?.points ?? 0}
+                                {String(user?.points ?? 0)}
                             </Text>
                         </View>
 
