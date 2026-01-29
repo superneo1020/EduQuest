@@ -1,6 +1,7 @@
 package com.eduquest.springbackend.model;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.PositiveOrZero;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -23,7 +24,8 @@ public class AppUser {
     @Column(nullable = false)
     private String password;
 
-    @Column(columnDefinition = "INT DEFAULT 0")
+    @Column(nullable = false)
+    @PositiveOrZero
     private Integer points = 0;
 
     @ManyToMany(fetch = FetchType.EAGER)
@@ -44,7 +46,6 @@ public class AppUser {
             inverseJoinColumns = @JoinColumn(name = "mission_id")
     )
     private Collection<Mission> missions = new ArrayList<>();
-
 
     public AppUser() {}
 

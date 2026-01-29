@@ -1,5 +1,7 @@
 package com.eduquest.springbackend.model;
 
+import com.eduquest.springbackend.model.type.DifficultyType;
+import com.eduquest.springbackend.model.type.GameType;
 import jakarta.persistence.*;
 
 import java.util.ArrayList;
@@ -12,8 +14,15 @@ public class Game {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private GameType type;
+
     @Column(nullable = false, length = 50, unique = true)
     private String name;
+
+    @Enumerated(EnumType.STRING)
+    private DifficultyType difficulty;
 
     @Column(columnDefinition = "TEXT")
     private String icon;
@@ -26,8 +35,10 @@ public class Game {
 
     public Game() {}
 
-    public Game(String name, String icon, String description) {
+    public Game(GameType type, String name, DifficultyType difficulty, String icon, String description) {
+        this.type = type;
         this.name = name;
+        this.difficulty = difficulty;
         this.icon = icon;
         this.description = description;
     }
@@ -40,12 +51,28 @@ public class Game {
         this.id = id;
     }
 
+    public GameType getType() {
+        return type;
+    }
+
+    public void setType(GameType type) {
+        this.type = type;
+    }
+
     public String getName() {
         return name;
     }
 
     public void setName(String name) {
         this.name = name;
+    }
+
+    public DifficultyType getDifficulty() {
+        return difficulty;
+    }
+
+    public void setDifficulty(DifficultyType difficulty) {
+        this.difficulty = difficulty;
     }
 
     public String getIcon() {
