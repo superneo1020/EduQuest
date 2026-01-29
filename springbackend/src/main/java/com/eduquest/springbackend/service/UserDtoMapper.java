@@ -36,9 +36,12 @@ public class UserDtoMapper {
         if (game == null) return null;
         return new UserGameScoreDto(
                 game.getName(),
+                game.getType(),
+                game.getDifficulty(),
                 game.getIcon(),
                 game.getDescription(),
                 userGameScore.getScores(),
+                userGameScore.getPoints(),
                 userGameScore.getCreatedAt()
         );
     }

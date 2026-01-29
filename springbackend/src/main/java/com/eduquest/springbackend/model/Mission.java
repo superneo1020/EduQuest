@@ -16,16 +16,16 @@ public class Mission {
     private Long id;
 
     @Column(nullable = false, length = 100, unique = true)
-    private String mission;
+    private String name;
 
     @Column(columnDefinition = "TEXT")
-    private String missionIcon;
+    private String icon;
 
     @Column(columnDefinition = "TEXT")
     private String description;
 
     @Column(nullable = false)
-    private Integer pointsReward = 0;
+    private Integer points = 0;
 
     @Column(insertable = false,
             updatable = false,
@@ -36,13 +36,14 @@ public class Mission {
     @ManyToMany(mappedBy = "missions")
     private Collection<AppUser> users = new ArrayList<>();
 
-    public Mission() {}
+    public Mission() {
+    }
 
-    public Mission(String mission, String missionIcon, String description, Integer pointsReward) {
-        this.mission = mission;
-        this.missionIcon = missionIcon;
+    public Mission(String name, String icon, String description, Integer points) {
+        this.name = name;
+        this.icon = icon;
         this.description = description;
-        this.pointsReward = pointsReward;
+        this.points = points;
     }
 
     public Long getId() {
@@ -53,20 +54,20 @@ public class Mission {
         this.id = id;
     }
 
-    public String getMission() {
-        return mission;
+    public String getName() {
+        return name;
     }
 
-    public void setMission(String mission) {
-        this.mission = mission;
+    public void setName(String name) {
+        this.name = name;
     }
 
-    public String getMissionIcon() {
-        return missionIcon;
+    public String getIcon() {
+        return icon;
     }
 
-    public void setMissionIcon(String missionIcon) {
-        this.missionIcon = missionIcon;
+    public void setIcon(String icon) {
+        this.icon = icon;
     }
 
     public String getDescription() {
@@ -77,12 +78,12 @@ public class Mission {
         this.description = description;
     }
 
-    public Integer getPointsReward() {
-        return pointsReward;
+    public Integer getPoints() {
+        return points;
     }
 
-    public void setPointsReward(Integer expReward) {
-        this.pointsReward = pointsReward;
+    public void setPoints(Integer points) {
+        this.points = points;
     }
 
     public Instant getCreatedAt() {
