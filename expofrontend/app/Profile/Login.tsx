@@ -6,11 +6,13 @@ import {
     TouchableOpacity,
     SafeAreaView,
     ActivityIndicator,
-    Alert,
+    KeyboardAvoidingView,
+    Platform
 } from "react-native";
 import React, { useState } from "react";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/src/auth/AuthContext";
+import { User, Lock } from "lucide-react-native"; // 建議加上圖標
 
 export default function Login() {
     const router = useRouter();
@@ -23,138 +25,101 @@ export default function Login() {
     const handleLogin = async () => {
         setLoading(true);
         setError(null);
-
         try {
             await signIn(username, password);
             router.replace("/");
         } catch (err: any) {
-            console.log("Login Error:", err);
-
-            if (err.response?.status === 401) {
-                setError("Incorrect account or password, please try again");
-            } else {
-                setError("Login failed. Please try again later.");
-            }
-
+            setError(err.response?.status === 401 ? "Account or password incorrect" : "Login failed, try again later");
             setPassword("");
         } finally {
             setLoading(false);
         }
     };
 
-
     return (
         <SafeAreaView style={styles.container}>
-            <Text style={styles.title}>Sign In</Text>
-            <Text style={styles.subtitle}>
-                Login to continue your learning adventure
-            </Text>
+            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{flex: 1}}>
+                <View style={styles.inner}>
+                    {/* Header Section */}
+                    <View style={styles.header}>
+                        <View style={styles.logoCircle}>
+                            <Text style={styles.logoEmoji}>🎓</Text>
+                        </View>
+                        <Text style={styles.title}>EduQuest</Text>
+                        <Text style={styles.subtitle}>Adventure starts with learning</Text>
+                    </View>
 
-            <View style={styles.form}>
-                <TextInput
-                    placeholder="User"
-                    placeholderTextColor="#999"
-                    value={username}
-                    onChangeText={(text) => {
-                        setUsername(text);
-                        setError(null);
-                    }}
-                    style={styles.input}
-                />
+                    {/* Form Section */}
+                    <View style={styles.form}>
+                        <View style={styles.inputWrapper}>
+                            <User size={20} color="#888" style={styles.inputIcon} />
+                            <TextInput
+                                placeholder="Username"
+                                value={username}
+                                onChangeText={setUsername}
+                                style={styles.input}
+                                placeholderTextColor="#AAA"
+                            />
+                        </View>
 
-                <TextInput
-                    placeholder="Password"
-                    placeholderTextColor="#999"
-                    value={password}
-                    onChangeText={(text) => {
-                        setPassword(text);
-                        setError(null);
-                    }}
-                    style={styles.input}
-                    secureTextEntry
-                />
+                        <View style={styles.inputWrapper}>
+                            <Lock size={20} color="#888" style={styles.inputIcon} />
+                            <TextInput
+                                placeholder="Password"
+                                value={password}
+                                onChangeText={setPassword}
+                                style={styles.input}
+                                secureTextEntry
+                                placeholderTextColor="#AAA"
+                            />
+                        </View>
 
-                {loading ? (
-                  <ActivityIndicator size="large" color="#007AFF" />
-                ) : (
-                  <TouchableOpacity style={styles.loginButton} onPress={handleLogin} disabled={!username || !password}>
-                      <Text style={styles.loginText}>Login</Text>
-                  </TouchableOpacity>
-                )}
-                {error && (
-                    <Text style={styles.errorText}>{error}</Text>
-                )}
+                        {error && <Text style={styles.errorText}>{error}</Text>}
 
+                        <TouchableOpacity
+                            style={[styles.loginButton, (!username || !password) && styles.disabledBtn]}
+                            onPress={handleLogin}
+                            disabled={!username || !password || loading}
+                        >
+                            {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.loginText}>Sign In</Text>}
+                        </TouchableOpacity>
+                    </View>
 
-                {loading ? (
-                  <ActivityIndicator size="large" color="#007AFF" />
-                ) : (
-                  <TouchableOpacity onPress={() => router.push("/Profile/Register")}>
-                      <Text style={styles.registerText}>
-                          Don’t have an account? Register
-                      </Text>
-                  </TouchableOpacity>
-                )}
-
-            </View>
+                    <TouchableOpacity onPress={() => router.push("/Profile/Register")}>
+                        <Text style={styles.registerText}>
+                            New here? <Text style={styles.registerLink}>Create Account</Text>
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+            </KeyboardAvoidingView>
         </SafeAreaView>
     );
 }
+
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: "#FFF",
+        backgroundColor: "#F7F9FB"
+    },
+    inner: {
+        flex: 1,
         paddingHorizontal: 30,
-        justifyContent: "center",
-    },
-    title: {
-        fontSize: 32,
-        fontWeight: "bold",
-        color: "#4CAF50",
-        textAlign: "center",
-    },
-    subtitle: {
-        fontSize: 14,
-        color: "#666",
-        textAlign: "center",
-        marginBottom: 40,
-        marginTop: 10,
-    },
-    form: {
-        gap: 18,
-    },
-    input: {
-        borderWidth: 1.5,
-        borderColor: "#4CAF50",
-        borderRadius: 10,
-        paddingVertical: 14,
-        paddingHorizontal: 16,
-        fontSize: 16,
-    },
-    loginButton: {
-        backgroundColor: "#4CAF50",
-        paddingVertical: 14,
-        borderRadius: 10,
-        marginTop: 10,
-    },
-    loginText: {
-        color: "#FFF",
-        fontSize: 18,
-        fontWeight: "bold",
-        textAlign: "center",
-    },
-    registerText: {
-        textAlign: "center",
-        marginTop: 16,
-        color: "#4CAF50",
-        fontWeight: "600",
-    },
-    errorText: {
-        color: "#E53935",
-        marginTop: 10,
-        textAlign: "center",
-        fontSize: 14,
-        fontWeight: "600",
-    },
-
+        justifyContent: "center" },
+    header: {
+        alignItems: "center",
+        marginBottom: 40 },
+    logoCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: "#E8F5E9", justifyContent: "center", alignItems: "center", marginBottom: 15 },
+    logoEmoji: { fontSize: 40 },
+    title: { fontSize: 32, fontWeight: "800", color: "#2D3436" },
+    subtitle: { fontSize: 16, color: "#636E72", marginTop: 5 },
+    form: { backgroundColor: "#FFF", padding: 25, borderRadius: 24, elevation: 4, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10 },
+    inputWrapper: { flexDirection: "row", alignItems: "center", backgroundColor: "#F1F3F5", borderRadius: 12, marginBottom: 15, paddingHorizontal: 15 },
+    inputIcon: { marginRight: 10 },
+    input: { flex: 1, paddingVertical: 14, fontSize: 16, color: "#2D3436" },
+    loginButton: { backgroundColor: "#4CAF50", paddingVertical: 16, borderRadius: 12, marginTop: 10, alignItems: "center" },
+    disabledBtn: { backgroundColor: "#A5D6A7" },
+    loginText: { color: "#FFF", fontSize: 18, fontWeight: "700" },
+    errorText: { color: "#FF5252", textAlign: "center", marginBottom: 10, fontWeight: "600" },
+    registerText: { textAlign: "center", marginTop: 25, color: "#636E72", fontSize: 15 },
+    registerLink: { color: "#4CAF50", fontWeight: "700" }
 });

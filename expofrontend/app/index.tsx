@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     View,
     Text,
@@ -7,9 +7,13 @@ import {
     ImageBackground,
     useWindowDimensions,
     SafeAreaView,
-    ActivityIndicator, Alert
+    ActivityIndicator,
+    Animated,
+    Dimensions,
+    Platform,
+    StatusBar
 } from 'react-native';
-import { Calculator, Languages, Atom, Brain, LogOut, User, Trophy, Clock, Target } from 'lucide-react-native';
+import { Calculator, Languages, Atom, Brain, LogOut, User, Trophy, Clock, Target, Sparkles, Star, Zap } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/src/auth/AuthContext';
 
@@ -20,7 +24,7 @@ export default function LandscapeOptimizedHome() {
     const { width, height } = useWindowDimensions();
 
 
-    const { token, loading, signOut } = useAuth();
+    const { token, loading, signOut, user } = useAuth();
 
     useEffect(() => {
 
@@ -48,39 +52,39 @@ export default function LandscapeOptimizedHome() {
         { id: 1, title: 'Math', icon: Calculator, color: '#4CAF50', route: '/games/math/math', pos: { x: '20%', y: '25%' } },
         { id: 2, title: 'Language', icon: Languages, color: '#2196F3', route: '/games/english/language', pos: { x: '70%', y: '20%' } },
         { id: 3, title: 'Science', icon: Atom, color: '#FF9800', route: '/games/science', pos: { x: '25%', y: '65%' } },
-        { id: 4, title: 'Memory', icon: Brain, color: '#9C27B0', route: '/games/memory',  pos: { x: '75%', y: '60%' } },
-        { id: 5, title: 'chatbot', icon: Bot, color: '#af4c5b', route: '/games/chatbot',  pos: { x: '85%', y: '80%' } },
-
         { id: 4, title: 'Memory', icon: Brain, color: '#9C27B0', route: '/games/memory/memory',  pos: { x: '75%', y: '60%' } },
+
+
+
     ];
 
     return (
         <SafeAreaView style={styles.container}>
-            {/* Header - 保持簡潔 */}
-            <View style={styles.header}>
-                <Text style={styles.headerTitle}>EduQuest</Text>
+            <StatusBar barStyle="dark-content" />
 
-                <View style={{ flexDirection: 'row', gap: 15 }}>
-                    {/* 個人資料按鈕 */}
-                    <TouchableOpacity onPress={() => router.push('/Profile/profile' as any)}>
-                        <User size={22} color="#333" />
+            {/* --- 美化後的 Header --- */}
+            <View style={styles.header}>
+                <View style={styles.headerLeft}>
+                    <Text style={styles.headerTitle}>EduQuest</Text>
+                    <View style={styles.userTag}>
+                        <View style={styles.onlineDot} />
+                        <Text style={styles.userTagText}>{user?.username || 'Guest'}</Text>
+                    </View>
+                </View>
+
+                <View style={styles.headerRight}>
+                    <TouchableOpacity
+                        style={styles.headerIconBtn}
+                        onPress={() => router.push('/Profile/profile' as any)}
+                    >
+                        <User size={26} color="#2D3436" />
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            padding: 10,           // 增加點擊區域
-                            backgroundColor: '#FFF0F0', // 增加背景色以便確認按鈕位置
-                            borderRadius: 8,
-                            zIndex: 999,           // 確保在最頂層
-                        }}
+                        style={styles.logoutBtn}
                         onPress={async () => {
-                            console.log("Button clicked! Triggering signOut...");
                             try {
                                 await signOut();
-                                // 由於 useEffect 會監聽 token，理論上會自動跳轉
-                                // 如果沒自動跳，我們加一行手動跳轉作為保險
                                 router.replace('/Profile/Login');
                             } catch (error) {
                                 console.error("Logout Error:", error);
@@ -88,16 +92,15 @@ export default function LandscapeOptimizedHome() {
                         }}
                     >
                         <LogOut size={22} color="#FF4757" />
-                        <Text style={{ color: '#FF4757', fontWeight: 'bold', marginLeft: 5 }}>Logout</Text>
+                        <Text style={styles.logoutText}>Exit</Text>
                     </TouchableOpacity>
                 </View>
             </View>
 
-            {/* 主內容區：橫屏時左右排列 */}
+            {/* 主內容區 */}
             <View style={[styles.mainContent, isLandscape ? { flexDirection: 'row' } : { flexDirection: 'column' }]}>
 
-                {/* 左側或中間：地圖區域 */}
-                {/* 左側或中間：地圖區域 */}
+                {/* 地圖區域 */}
                 <View style={styles.mapSection}>
                     <ImageBackground
                         source={require('../assets/images/map.jpg')}
@@ -105,7 +108,7 @@ export default function LandscapeOptimizedHome() {
                         resizeMode="cover"
                     >
                         {gameButtons.map((button) => {
-                            const IconComponent = button.icon; // 提取圖標組件
+                            const IconComponent = button.icon;
                             return (
                                 <TouchableOpacity
                                     key={button.id}
@@ -113,38 +116,46 @@ export default function LandscapeOptimizedHome() {
                                         styles.gameButton,
                                         { backgroundColor: button.color, left: button.pos.x as any, top: button.pos.y as any }
                                     ]}
-                                    // 修復這裡：加入跳轉邏輯
                                     onPress={() => router.push(button.route as any)}
                                 >
-                                    <IconComponent size={24} color="white" />
+                                    <IconComponent size={30} color="white" />
                                     <Text style={styles.buttonText}>{button.title}</Text>
                                 </TouchableOpacity>
                             );
                         })}
+                        {/* --- 獨立的懸浮 Chatbot 按鈕 --- */}
+                        <TouchableOpacity
+                            style={styles.floatingChatBtn}
+                            onPress={() => router.push('/games/chatbot' as any)}
+                        >
+                            <Bot size={32} color="white" />
+                            <View style={styles.chatBadge}>
+                                <Sparkles size={10} color="white" fill="white" />
+                            </View>
+                        </TouchableOpacity>
                     </ImageBackground>
                 </View>
 
-                {/* 右側：任務與數據面板 (橫屏時變窄，直屏時在下方) */}
-                <View style={[styles.sidePanel, isLandscape ? { width: 250 } : { height: 200 }]}>
+                {/* 右側面板 */}
+                <View style={[styles.sidePanel, isLandscape ? { width: 280 } : { height: 'auto', marginTop: 10 }]}>
                     <Text style={styles.panelTitle}>Progress</Text>
 
                     <View style={styles.statsGrid}>
                         <View style={styles.miniStat}>
-                            <Trophy size={18} color="#FFD700" />
-                            <Text style={styles.statVal}>150</Text>
+                            <Trophy size={24} color="#FFD700" />
+                            <Text style={styles.statVal}>
+                                {user?.points ?? 0}
+                            </Text>
                         </View>
-                        <View style={styles.miniStat}>
-                            <Clock size={18} color="#2196F3" />
-                            <Text style={styles.statVal}>45m</Text>
-                        </View>
+
                     </View>
 
                     <View style={styles.divider} />
 
                     <Text style={styles.panelTitle}>Daily Quest</Text>
-                    <TouchableOpacity style={styles.questCard}>
-                        <Target size={20} color="#FF4757" />
-                        <View style={{marginLeft: 10}}>
+                    <TouchableOpacity style={styles.questCard} activeOpacity={0.8}>
+                        <Target size={28} color="#FF4757" />
+                        <View style={{marginLeft: 15, flex: 1}}>
                             <Text style={styles.questTitle}>Math Mountain</Text>
                             <Text style={styles.questSub}>Earn 20 XP</Text>
                         </View>
@@ -158,30 +169,83 @@ export default function LandscapeOptimizedHome() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f0f0f0',
+        backgroundColor: '#F8F9FA',
     },
+    // Header 執美與字體加大
     header: {
-        height: 50,
+        height: 70, // 增加高度
         backgroundColor: 'white',
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 20,
         borderBottomWidth: 1,
-        borderBottomColor: '#eee',
-        zIndex: 100, // 重要：確保 Header 在地圖之上
-        elevation: 5,
+        borderBottomColor: '#F1F2F6',
+        elevation: 4,
+        zIndex: 100,
+    },
+    headerLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
     },
     headerTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
+        fontSize: 26, // 字體加大
+        fontWeight: '900',
         color: '#2D3436',
     },
+    userTag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F1F2F6',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+        marginLeft: 15,
+    },
+    onlineDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: '#4CAF50',
+        marginRight: 6,
+    },
+    userTagText: {
+        fontSize: 15,
+        fontWeight: '700',
+        color: '#636E72',
+    },
+    headerRight: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    headerIconBtn: {
+        width: 46,
+        height: 46,
+        borderRadius: 12,
+        backgroundColor: '#F8F9FA',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    logoutBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 15,
+        paddingVertical: 8,
+        backgroundColor: '#FFF0F0',
+        borderRadius: 12,
+    },
+    logoutText: {
+        color: '#FF4757',
+        fontWeight: '800',
+        fontSize: 16,
+        marginLeft: 6,
+    },
     mainContent: {
-        flex: 1, // 填滿 Header 以下所有空間
+        flex: 1,
     },
     mapSection: {
-        flex: 1, // 地圖佔據主要空間
+        flex: 1,
         backgroundColor: '#ddd',
         overflow: 'hidden',
     },
@@ -191,72 +255,103 @@ const styles = StyleSheet.create({
     },
     sidePanel: {
         backgroundColor: 'white',
-        padding: 15,
-        // 橫屏時加上左邊框
+        padding: 20,
         borderLeftWidth: 1,
         borderLeftColor: '#eee',
     },
     panelTitle: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        marginBottom: 10,
-        color: '#636E72',
+        fontSize: 20, // 字體加大
+        fontWeight: '800',
+        marginBottom: 15,
+        color: '#2D3436',
     },
     statsGrid: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        marginBottom: 15,
+        marginBottom: 20,
     },
     miniStat: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#F9F9F9',
-        padding: 8,
-        borderRadius: 10,
+        backgroundColor: '#F8F9FA',
+        padding: 12,
+        borderRadius: 15,
         width: '48%',
     },
     statVal: {
-        marginLeft: 5,
-        fontWeight: 'bold',
+        marginLeft: 10,
+        fontWeight: '900',
+        fontSize: 18, // 數值放大
     },
     divider: {
         height: 1,
         backgroundColor: '#eee',
-        marginVertical: 15,
+        marginVertical: 20,
     },
     questCard: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#FFF5F5',
-        padding: 12,
-        borderRadius: 15,
+        padding: 15,
+        borderRadius: 18,
         borderWidth: 1,
         borderColor: '#FFE3E3',
     },
     questTitle: {
-        fontSize: 14,
-        fontWeight: 'bold',
+        fontSize: 17, // 字體加大
+        fontWeight: '800',
+        color: '#2D3436',
     },
     questSub: {
-        fontSize: 12,
+        fontSize: 14,
         color: '#888',
+        fontWeight: '600',
     },
     gameButton: {
         position: 'absolute',
-        width: 66,
-        height: 66,
-        borderRadius: 33,
+        width: 78, // 按鈕變大
+        height: 78,
+        borderRadius: 39,
         justifyContent: 'center',
         alignItems: 'center',
-        borderWidth: 3,
+        borderWidth: 4,
         borderColor: 'white',
-        transform: [{ translateX: -33 }, { translateY: -33 }],
-        elevation: 5,
+        transform: [{ translateX: -39 }, { translateY: -39 }],
+        elevation: 8,
     },
     buttonText: {
         color: 'white',
-        fontSize: 10,
-        fontWeight: 'bold',
+        fontSize: 12,
+        fontWeight: '900',
+        marginTop: 2,
+    },
+    floatingChatBtn: {
+        position: 'absolute',
+        right: 25,
+        bottom: 25,
+        width: 70,
+        height: 70,
+        borderRadius: 35,
+        backgroundColor: '#6C5CE7', // 使用顯眼的紫色
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 10,
+        shadowColor: '#000',
+        shadowOpacity: 0.3,
+        shadowRadius: 5,
+        borderWidth: 3,
+        borderColor: 'white',
+    },
+    chatBadge: {
+        position: 'absolute',
+        top: 5,
+        right: 5,
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        backgroundColor: '#FFD700',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     loadingContainer: {
         flex: 1,
@@ -265,7 +360,7 @@ const styles = StyleSheet.create({
     },
     loadingText: {
         marginTop: 10,
-        fontSize: 16,
+        fontSize: 18,
         color: '#666',
     }
 });
