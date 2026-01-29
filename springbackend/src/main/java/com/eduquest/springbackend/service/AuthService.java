@@ -2,6 +2,8 @@ package com.eduquest.springbackend.service;
 
 import com.eduquest.springbackend.dao.RoleRepository;
 import com.eduquest.springbackend.dao.UserRepository;
+import com.eduquest.springbackend.dto.AuthResponseDto;
+import com.eduquest.springbackend.dto.UserDto;
 import com.eduquest.springbackend.exception.DuplicateResourceException;
 import com.eduquest.springbackend.model.AppUser;
 import com.eduquest.springbackend.model.Role;
@@ -12,6 +14,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,18 +27,20 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final UserDtoMapper userDtoMapper;
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
     public AuthService(UserRepository userRepository,
                        RoleRepository roleRepository,
                        AuthenticationManager authenticationManager,
                        PasswordEncoder passwordEncoder,
-                       JwtService jwtService) {
+                       JwtService jwtService, UserDtoMapper userDtoMapper) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.authenticationManager = authenticationManager;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+        this.userDtoMapper = userDtoMapper;
     }
 
     @Transactional
@@ -78,6 +83,15 @@ public class AuthService {
         } catch (Exception e) {
             throw new RuntimeException("Authentication failed", e);
         }
+    }
+
+    @Transactional
+    public AuthResponseDto loginAndGetUser(String username, String password) {
+        String token = login(username, password); // existing method or inline logic
+        AppUser user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+        UserDto userDto = userDtoMapper.toUser(user);
+        return new AuthResponseDto(token, userDto);
     }
 
     @Transactional
