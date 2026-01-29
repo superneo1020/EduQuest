@@ -4,6 +4,7 @@
     <modules>
       <module fileurl="file://$PROJECT_DIR$/EduQuest.iml" filepath="$PROJECT_DIR$/EduQuest.iml" />
       <module fileurl="file://$PROJECT_DIR$/expofrontend/expofrontend.iml" filepath="$PROJECT_DIR$/expofrontend/expofrontend.iml" />
+      <module fileurl="file://$PROJECT_DIR$/pythonbackend/pythonbackend.iml" filepath="$PROJECT_DIR$/pythonbackend/pythonbackend.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/springbackend.main.iml" filepath="$PROJECT_DIR$/.idea/modules/springbackend.main.iml" />
     </modules>
   </component>
