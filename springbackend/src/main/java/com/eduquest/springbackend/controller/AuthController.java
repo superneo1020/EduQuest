@@ -1,5 +1,6 @@
 package com.eduquest.springbackend.controller;
 
+import com.eduquest.springbackend.dto.AuthResponseDto;
 import com.eduquest.springbackend.model.AppUser;
 import com.eduquest.springbackend.service.AuthService;
 import jakarta.validation.Valid;
@@ -7,7 +8,10 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 
@@ -37,12 +41,10 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@Valid @RequestBody LoginRequest req) {
-        String token = authService.login(req.username().trim(), req.password());
+        AuthResponseDto authResponseDto = authService.loginAndGetUser(req.username().trim(), req.password());
         return ResponseEntity.ok(Map.of(
-                "token", token,
-                "user", req.username(),
-                "email", authService.getEmailByUsername(req.username()),
-                "points", authService.getPointsByUsername(req.username())
+                "token", authResponseDto.token(),
+                "user", authResponseDto.user()
         ));
     }
 }
