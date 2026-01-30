@@ -95,6 +95,20 @@ export default function GamesLayout() {
                     },
                 }}
             />
+            <Stack.Screen
+                name="platformer"
+                options={{
+                    headerShown: true,
+                    title: '2D Platformer',
+                    headerStyle: {
+                        backgroundColor: '#FF6B6B',
+                    },
+                    headerTintColor: 'white',
+                    headerTitleStyle: {
+                        fontWeight: 'bold',
+                    },
+              }}
+            />
         </Stack>
     );
 }

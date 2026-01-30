@@ -53,6 +53,8 @@ export default function LandscapeOptimizedHome() {
         { id: 2, title: 'Language', icon: Languages, color: '#2196F3', route: '/games/english/language', pos: { x: '70%', y: '20%' } },
         { id: 3, title: 'Science', icon: Atom, color: '#FF9800', route: '/games/science', pos: { x: '25%', y: '65%' } },
         { id: 4, title: 'Memory', icon: Brain, color: '#9C27B0', route: '/games/memory/memory',  pos: { x: '75%', y: '60%' } },
+        { id: 5, title: 'Platformer', icon: Zap, color: '#FF6B6B', route: '/games/platformer', pos: { x: '50%', y: '40%' } }, // New
+
 
 
 
