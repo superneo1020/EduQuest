@@ -1,37 +1,48 @@
 import React, { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView } from "react-native";
+import {
+    View,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    StyleSheet,
+    ActivityIndicator,
+    ScrollView,
+    SafeAreaView,
+    KeyboardAvoidingView,
+    Platform
+} from "react-native";
 import { router } from "expo-router";
 import axios from "axios";
+// 1. 確保引入圖標
+import { User, Lock, Mail } from "lucide-react-native";
 import { getApiBaseUrl } from "../../src/api/client";
 
 export default function Register() {
     const [username, setUsername] = useState("");
     const [email, setEmail] = useState("");
-    const [confirmEmail, setConfirmEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
     const [loading, setLoading] = useState(false);
-
-    // 新增：專門儲存要顯示在畫面上的錯誤訊息
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
     const handleRegister = async () => {
-        // 每次點擊按鈕先清除舊的錯誤
         setErrorMsg(null);
 
-        // 1. 前端基本驗證
-        if (!username || !email || !confirmEmail || !password) {
+        // 檢查欄位是否填齊
+        if (!username || !email || !password || !confirmPassword) {
             setErrorMsg("Please fill in all fields");
             return;
         }
 
-        if (email.toLowerCase() !== confirmEmail.toLowerCase()) {
-            setErrorMsg("The two email addresses entered are inconsistent.");
+        // 改為檢查密碼是否一致
+        if (password !== confirmPassword) {
+            setErrorMsg("Passwords do not match");
             return;
         }
 
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) {
-            setErrorMsg("Please enter a valid email address.");
+        // 檢查密碼長度 (選用，建議加上)
+        if (password.length < 6) {
+            setErrorMsg("Password must be at least 6 characters long");
             return;
         }
 
@@ -43,22 +54,12 @@ export default function Register() {
                 email,
                 password,
             });
-
-            // 註冊成功可以用 Alert，因為這是重大事件
             router.replace("/Profile/Login");
         } catch (error: any) {
             const serverData = error.response?.data;
-            let displayMsg = "Registration failed, please try again later.";
-
-            if (typeof serverData === 'string') {
-                displayMsg = serverData;
-            } else if (serverData?.message) {
-                displayMsg = serverData.message;
-            } else if (serverData?.errors) {
-                displayMsg = Object.values(serverData.errors).join("\n");
-            }
-
-            // 將後端錯誤設定到狀態中顯示
+            let displayMsg = "Registration failed, please try again.";
+            if (typeof serverData === 'string') displayMsg = serverData;
+            else if (serverData?.message) displayMsg = serverData.message;
             setErrorMsg(displayMsg);
         } finally {
             setLoading(false);
@@ -66,102 +67,107 @@ export default function Register() {
     };
 
     return (
-        <ScrollView contentContainerStyle={styles.container}>
-            <Text style={styles.title}>Create An Account</Text>
+            <SafeAreaView style={styles.container}>
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === "ios" ? "padding" : "height"}
+                    style={{ flex: 1 }}
+                >
+                    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+                        <View style={styles.header}>
+                            <Text style={styles.title}>Join Us</Text>
+                            <Text style={styles.subtitle}>Create an account to start your journey</Text>
+                        </View>
 
-            <TextInput
-                style={styles.input}
-                placeholder="Username"
-                placeholderTextColor="#999"
-                value={username}
-                onChangeText={(text) => { setUsername(text); setErrorMsg(null); }}
-                autoCapitalize="none"
-            />
+                        <View style={styles.card}>
+                            {/* Username Input */}
+                            <View style={styles.inputWrapper}>
+                                <User size={20} color="#888" style={styles.icon} />
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Username"
+                                    value={username}
+                                    onChangeText={(t) => { setUsername(t); setErrorMsg(null); }}
+                                    autoCapitalize="none"
+                                    placeholderTextColor="#AAA"
+                                />
+                            </View>
 
-            <TextInput
-                style={styles.input}
-                placeholder="Email"
-                placeholderTextColor="#999"
-                value={email}
-                onChangeText={(text) => { setEmail(text); setErrorMsg(null); }}
-                keyboardType="email-address"
-                autoCapitalize="none"
-            />
+                            {/* Email Input */}
+                            <View style={styles.inputWrapper}>
+                                <Mail size={20} color="#888" style={styles.icon} />
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Email"
+                                    value={email}
+                                    onChangeText={(t) => { setEmail(t); setErrorMsg(null); }}
+                                    keyboardType="email-address"
+                                    autoCapitalize="none"
+                                    placeholderTextColor="#AAA"
+                                />
+                            </View>
 
-            <TextInput
-                style={styles.input}
-                placeholder="Confirm Email"
-                placeholderTextColor="#999"
-                value={confirmEmail}
-                onChangeText={(text) => { setConfirmEmail(text); setErrorMsg(null); }}
-                keyboardType="email-address"
-                autoCapitalize="none"
-            />
+                            {/* Password Input */}
+                            <View style={styles.inputWrapper}>
+                                <Lock size={20} color="#888" style={styles.icon} />
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Password"
+                                    value={password}
+                                    onChangeText={(t) => { setPassword(t); setErrorMsg(null); }}
+                                    secureTextEntry
+                                    placeholderTextColor="#AAA"
+                                />
+                            </View>
 
-            <TextInput
-                style={styles.input}
-                placeholder="Password"
-                placeholderTextColor="#999"
-                secureTextEntry
-                value={password}
-                onChangeText={(text) => { setPassword(text); setErrorMsg(null); }}
-            />
+                            {/* Confirm Password Input - 修改這裡 */}
+                            <View style={styles.inputWrapper}>
+                                <Lock size={20} color="#888" style={styles.icon} />
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Confirm Password"
+                                    value={confirmPassword}
+                                    onChangeText={(t) => { setConfirmPassword(t); setErrorMsg(null); }}
+                                    secureTextEntry
+                                    placeholderTextColor="#AAA"
+                                />
+                            </View>
 
-            <TouchableOpacity
-                style={[styles.registerBtn, loading && { backgroundColor: "#aaa" }]}
-                onPress={handleRegister}
-                disabled={loading}
-            >
-                {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.registerText}>Register</Text>}
-            </TouchableOpacity>
+                            {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
 
-            {/* 新增：在按鈕下方的錯誤提示區域 */}
-            {errorMsg ? (
+                            <TouchableOpacity
+                                style={[styles.registerBtn, loading && { opacity: 0.7 }]}
+                                onPress={handleRegister}
+                                disabled={loading}
+                            >
+                                {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.registerText}>Create Account</Text>}
+                            </TouchableOpacity>
+                        </View>
 
-                    <Text style={styles.errorText}>{errorMsg}</Text>
-
-            ) : null}
-
-            <Text style={styles.loginLink} onPress={() => router.push("/Profile/Login")}>
-                Already have an account? Login →
-            </Text>
-        </ScrollView>
-    );
+                        <TouchableOpacity onPress={() => router.push("/Profile/Login")}>
+                            <Text style={styles.loginLink}>
+                                Already have an account? <Text style={{ color: '#4CAF50', fontWeight: '800' }}>Login</Text>
+                            </Text>
+                        </TouchableOpacity>
+                    </ScrollView>
+                </KeyboardAvoidingView>
+            </SafeAreaView>
+        );
 }
 
-const styles = StyleSheet.create({
-    container: { flexGrow: 1, justifyContent: "center", padding: 30, backgroundColor: '#fff' },
-    title: { fontSize: 30, fontWeight: "bold", color: "#4CAF50", textAlign: "center", marginBottom: 40 },
-    input: {
-        borderWidth: 1,
-        borderColor: "#aaa",
-        borderRadius: 10,
-        padding: 12,
-        marginBottom: 20,
-        fontSize: 16,
-    },
-    registerBtn: {
-        backgroundColor: "#4CAF50",
-        padding: 15,
-        borderRadius: 10,
-        marginTop: 10,
-        height: 55,
-        justifyContent: 'center'
-    },
-    registerText: { color: "#fff", fontWeight: "bold", textAlign: "center", fontSize: 18 },
 
-    errorText: {
-        color: "#E53935",
-        marginTop: 10,
-        textAlign: "center",
-        fontSize: 14,
-        fontWeight: "600",
-    },
-    loginLink: {
-        marginTop: 20,
-        textAlign: "center",
-        color: "#4CAF50",
-        fontWeight: "bold",
-        fontSize: 16,
-    },
+// 2. Styles 必須放在組件外面
+const styles = StyleSheet.create({
+    container: { flex: 1, backgroundColor: "#F7F9FB" },
+    scrollContent: { padding: 30, justifyContent: "center", flexGrow: 1 },
+    header: { marginBottom: 30, alignItems: 'center' },
+    title: { fontSize: 32, fontWeight: "800", color: "#2D3436" },
+    subtitle: { fontSize: 16, color: "#636E72", marginTop: 5, textAlign: 'center' },
+    card: { backgroundColor: "#FFF", borderRadius: 24, padding: 25, shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
+    inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F3F5', borderRadius: 12, marginBottom: 15, paddingHorizontal: 15 },
+    icon: { marginRight: 10 },
+    input: { flex: 1, paddingVertical: 14, fontSize: 16, color: '#2D3436' },
+    registerBtn: { backgroundColor: "#4CAF50", paddingVertical: 16, borderRadius: 12, marginTop: 10 },
+    registerText: { color: "#FFF", fontWeight: "700", textAlign: "center", fontSize: 18 },
+    errorText: { color: "#FF5252", textAlign: "center", marginVertical: 10, fontWeight: "600" },
+    loginLink: { marginTop: 25, textAlign: "center", color: "#636E72", fontSize: 15, fontWeight: '600' }
 });

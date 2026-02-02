@@ -788,7 +788,7 @@ const ListeningGame = () => {
                         </View>
 
                         <Text style={styles.resultTitle}>
-                            <Ionicons name="award" size={28} color="#4b6cb7" />
+                            <Ionicons name="trophy" size={28} color="#4b6cb7" />
                             <Text>  Quiz Results</Text>
                         </Text>
 
