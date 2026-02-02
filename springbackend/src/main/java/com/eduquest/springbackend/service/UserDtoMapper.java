@@ -1,5 +1,6 @@
 package com.eduquest.springbackend.service;
 
+import com.eduquest.springbackend.dto.UserDto;
 import com.eduquest.springbackend.dto.UserGameScoreDto;
 import com.eduquest.springbackend.dto.UserProfileDto;
 import com.eduquest.springbackend.model.AppUser;
@@ -16,12 +17,19 @@ import java.util.stream.Collectors;
 @Service
 public class UserDtoMapper {
 
+    public UserDto toUser(AppUser user) {
+        if (user == null) return null;
+        return  new UserDto(
+                user.getUsername(),
+                user.getEmail(),
+                user.getPoints(),
+                mapRoles(user.getRoles())
+        );
+    }
+
     public UserProfileDto toProfile(AppUser user, Page<UserGameScore> userGameScores) {
         if (user == null) return null;
         return new UserProfileDto(
-                user.getUsername(),
-                user.getEmail(),
-                mapRoles(user.getRoles()),
                 mapGameScores(user.getUserGameScores()),
                 userGameScores.getPageable().getPageNumber(),
                 userGameScores.getTotalPages(),
@@ -36,9 +44,12 @@ public class UserDtoMapper {
         if (game == null) return null;
         return new UserGameScoreDto(
                 game.getName(),
+                game.getType(),
+                game.getDifficulty(),
                 game.getIcon(),
                 game.getDescription(),
                 userGameScore.getScores(),
+                userGameScore.getPoints(),
                 userGameScore.getCreatedAt()
         );
     }

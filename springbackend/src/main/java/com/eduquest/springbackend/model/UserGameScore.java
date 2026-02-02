@@ -1,7 +1,7 @@
 package com.eduquest.springbackend.model;
 
 import jakarta.persistence.*;
-import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.PositiveOrZero;
 import org.hibernate.annotations.Generated;
 import org.hibernate.generator.EventType;
 
@@ -23,8 +23,11 @@ public class UserGameScore {
     private Game game;
 
     @Column(nullable = false)
-    @Min(value = 0)
+    @PositiveOrZero
     private Integer scores = 0;
+
+    @Column(name = "points", nullable = false)
+    private Integer points;
 
     @Column(name = "created_at",
             insertable = false,
@@ -35,10 +38,11 @@ public class UserGameScore {
 
     public UserGameScore() {}
 
-    public UserGameScore(AppUser user, Game game, Integer scores) {
+    public UserGameScore(AppUser user, Game game, Integer scores, Integer pointsEarned) {
         this.user = user;
         this.game = game;
         this.scores = scores;
+        this.points = pointsEarned;
     }
 
     public Long getId() {
@@ -71,6 +75,14 @@ public class UserGameScore {
 
     public void setScores(Integer scores) {
         this.scores = scores;
+    }
+
+    public Integer getPoints() {
+        return points;
+    }
+
+    public void setPoints(Integer points) {
+        this.points = points;
     }
 
     public Instant getCreatedAt() {
