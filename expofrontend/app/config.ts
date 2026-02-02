@@ -1,6 +1,10 @@
-// app/config.ts
+
+// app/config/index.ts
 export const Config = {
-    AI_BASE_URL: process.env.EXPO_PUBLIC_AI_BASE_URL || 'http://localhost:1234/v1',
-    AI_MODEL_NAME: process.env.EXPO_PUBLIC_AI_MODEL || 'local-model',
-    AI_ENABLED: process.env.EXPO_PUBLIC_AI_ENABLED === 'true' || false, // 默認禁用
+    // AI 服務配置
+    AI_BASE_URL: 'http://127.0.0.1:8000', // 與 chatbot.tsx 相同
+    AI_MODEL_NAME: 'llama', // 或你使用的模型名稱
+    AI_ENABLED: true,
+
+    // 其他配置...
 };

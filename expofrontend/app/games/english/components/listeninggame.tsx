@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Speech from 'expo-speech';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
+import AIService from '../../../services/AIService';
 
 const { width } = Dimensions.get('window');
 
@@ -420,7 +421,7 @@ const ListeningGame = () => {
         try {
             const accuracy = calculateAccuracy();
 
-            // 準備發送給 AI 的數據
+            // 使用 AIService 進行分析
             const aiRequestData = {
                 score: gameState.score,
                 accuracy: accuracy,
@@ -432,181 +433,12 @@ const ListeningGame = () => {
                 timestamp: new Date().toISOString()
             };
 
-            console.log('發送給 AI 的數據:', aiRequestData);
+            console.log('Sending data to AI service:', aiRequestData);
 
-            // 直接連接到 LM Studio 本地模型
-            // 修改 fetch 請求中的 system prompt
-            const response = await fetch('http://localhost:1234/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    model: 'local-model',
-                    messages: [
-                        {
-                            role: "system",
-                            content: "You are an English language learning expert. You MUST respond ONLY with valid, COMPLETE JSON format. Ensure the JSON is properly closed with all brackets. Do not include any other text or explanation."
-                        },
-                        {
-                            role: "user",
-                            content: `Analyze this English listening game performance and provide feedback in JSON format:
+            // 使用 AIService 進行分析
+            const aiAnalysis = await AIService.analyzeGameResults(aiRequestData);
 
-Game Difficulty: ${aiRequestData.difficulty}
-Total Score: ${aiRequestData.score}
-Accuracy: ${aiRequestData.accuracy}%
-Correct Answers: ${aiRequestData.correctAnswers}/${aiRequestData.totalQuestions}
-Max Streak: ${aiRequestData.maxStreak}
-
-Return EXACTLY this JSON structure:
-{
-  "feedback": "Your concise feedback here (max 15 words)",
-  "suggestions": ["First suggestion", "Second suggestion"],
-  "strengths": [],
-  "areas_to_improve": [],
-  "estimated_level": "",
-  "recommended_next_steps": []
-}`
-                        }
-                    ],
-                    temperature: 0.7,
-                    max_tokens: 300,  // 增加 tokens 確保完整回應
-                    stream: false
-                }),
-            });
-
-            if (!response.ok) {
-                throw new Error(`AI Service error: ${response.status}`);
-            }
-
-            const data = await response.json();
-            console.log('AI 原始響應:', data);
-
-            if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-                throw new Error('AI response format is incorrect');
-            }
-
-            const aiResponseText = data.choices[0].message.content;
-            console.log('AI 響應文本:', aiResponseText);
-
-            // 解析 AI 響應
-            let aiAnalysis: AIAnalysisResponse;
-
-            try {
-                // 清理響應文本
-                let cleanedText = aiResponseText.trim();
-
-                // 移除可能的 markdown 代碼塊
-                if (cleanedText.startsWith('```json')) {
-                    cleanedText = cleanedText.substring(7);
-                }
-                if (cleanedText.startsWith('```')) {
-                    cleanedText = cleanedText.substring(3);
-                }
-                if (cleanedText.endsWith('```')) {
-                    cleanedText = cleanedText.substring(0, cleanedText.length - 3);
-                }
-
-                cleanedText = cleanedText.trim();
-
-                console.log('清理後的文本:', cleanedText);
-
-                // === 新增：修復不完整的 JSON ===
-                // 檢查 JSON 是否完整，如果不完整則修復
-                let jsonStr = cleanedText;
-
-                // 統計大括號數量
-                const openBraces = (jsonStr.match(/{/g) || []).length;
-                const closeBraces = (jsonStr.match(/}/g) || []).length;
-
-                // 如果缺少結束大括號，則添加
-                if (openBraces > closeBraces) {
-                    console.log('檢測到不完整 JSON，嘗試修復...');
-                    jsonStr = jsonStr + '}';
-                }
-
-                // 如果 JSON 不以 { 開頭，嘗試找到並提取 JSON
-                if (!jsonStr.startsWith('{')) {
-                    const jsonStart = jsonStr.indexOf('{');
-                    if (jsonStart !== -1) {
-                        jsonStr = jsonStr.substring(jsonStart);
-                    }
-                }
-
-                console.log('修復後的 JSON:', jsonStr);
-                // === 修復結束 ===
-
-                // 嘗試解析 JSON
-                const parsed = JSON.parse(jsonStr);  // 使用修復後的 jsonStr
-
-                // 驗證必需字段
-                if (!parsed.feedback || !Array.isArray(parsed.suggestions)) {
-                    throw new Error('Missing required fields in AI response');
-                }
-
-                // 確保簡短
-                const truncateText = (text: string, maxWords: number = 15) => {
-                    const words = text.split(' ');
-                    if (words.length > maxWords) {
-                        return words.slice(0, maxWords).join(' ') + '...';
-                    }
-                    return text;
-                };
-
-                aiAnalysis = {
-                    feedback: truncateText(parsed.feedback, 15),
-                    suggestions: parsed.suggestions.slice(0, 3).map((s: string) => truncateText(s, 10)),
-                    strengths: parsed.strengths || [],
-                    areas_to_improve: parsed.areas_to_improve || [],
-                    estimated_level: parsed.estimated_level || "",
-                    recommended_next_steps: parsed.recommended_next_steps || []
-                };
-
-            } catch (parseError) {
-                console.error('AI 響應解析失敗:', parseError);
-                console.error('原始響應:', aiResponseText);
-
-                // 創建有意義的默認響應
-                let performanceLevel = '';
-                if (accuracy >= 80) performanceLevel = 'excellent';
-                else if (accuracy >= 60) performanceLevel = 'good';
-                else if (accuracy >= 40) performanceLevel = 'fair';
-                else performanceLevel = 'needs improvement';
-
-                let suggestionsList = [];
-                if (gameState.currentLevel === 'easy') {
-                    suggestionsList = [
-                        "Practice basic vocabulary daily",
-                        "Listen to simple English words",
-                        "Use flashcards for memorization"
-                    ];
-                } else if (gameState.currentLevel === 'medium') {
-                    suggestionsList = [
-                        "Listen to simple sentences",
-                        "Practice common phrases",
-                        "Watch English videos with subtitles"
-                    ];
-                } else {
-                    suggestionsList = [
-                        "Practice listening to conversations",
-                        "Focus on question patterns",
-                        "Try English podcasts for beginners"
-                    ];
-                }
-
-                aiAnalysis = {
-                    feedback: `You scored ${aiRequestData.score} points with ${accuracy}% accuracy. ${performanceLevel} performance!`,
-                    suggestions: suggestionsList.slice(0, 2),
-                    strengths: [],
-                    areas_to_improve: [],
-                    estimated_level: "",
-                    recommended_next_steps: []
-                };
-            }
-
-            console.log('最終 AI 分析結果:', aiAnalysis);
-
-
+            console.log('AI analysis result:', aiAnalysis);
 
             setGameState(prev => ({
                 ...prev,
@@ -615,32 +447,14 @@ Return EXACTLY this JSON structure:
             }));
 
         } catch (error: any) {
-            console.error('AI 分析錯誤:', error);
+            console.error('AI analysis error:', error);
 
-            // 創建一個有意義的默認響應
-            const accuracy = calculateAccuracy();
-            let suggestions = [];
-
-            if (gameState.currentLevel === 'easy') {
-                suggestions = ["Practice daily vocabulary", "Use word games"];
-            } else if (gameState.currentLevel === 'medium') {
-                suggestions = ["Listen to simple sentences", "Practice common phrases"];
-            } else {
-                suggestions = ["Try conversation practice", "Focus on question forms"];
-            }
-
-            const mockAnalysis: AIAnalysisResponse = {
-                feedback: `Your performance: ${gameState.score} points, ${accuracy}% accuracy. Good effort!`,
-                suggestions: suggestions,
-                strengths: [],
-                areas_to_improve: [],
-                estimated_level: "",
-                recommended_next_steps: []
-            };
+            // 使用 AIService 的默認響應
+            const defaultAnalysis = AIService.getDefaultResponse();
 
             setGameState(prev => ({
                 ...prev,
-                aiAnalysis: mockAnalysis,
+                aiAnalysis: defaultAnalysis,
                 showAIFeedback: true
             }));
         } finally {

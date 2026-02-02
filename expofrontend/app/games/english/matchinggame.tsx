@@ -1,7 +1,7 @@
 // app/games/MatchingGame.tsx
 import React from 'react';
 import { SafeAreaView, StatusBar } from 'react-native';
-import MatchingGameComponent from './components/matchinggame';
+import MatchingGameComponent from './components/writing';
 
 const MatchingGame = () => {
     return (
