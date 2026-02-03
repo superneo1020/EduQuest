@@ -13,6 +13,7 @@ import whisper, tempfile, os
 from fastapi import UploadFile, File
 import librosa
 import numpy as np
+import json
 
 whisper_model = None
 
@@ -90,6 +91,12 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     response: str
 
+class MathProblem(BaseModel):
+    """數學應用題回傳格式"""
+    question: str
+    options: list[str]
+    answer: str
+
 
 # ---------------------------------------------------------------------
 # Helpers
@@ -143,6 +150,43 @@ def chat_stream(req: ChatRequest) -> StreamingResponse:
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )
 
+@app.get("/api/math/generate")
+def generate_math_ai(difficulty: str = "easy"):
+    logger.info("Generating %s math problem using Llama 2 fallback", difficulty)
+
+    # 在 Prompt 裡極端強調只要 JSON，不要解釋
+    prompt = (
+        f"Generate ONE {difficulty} level math problem. "
+        "Return ONLY a raw JSON object. NO conversation, NO markdown. "
+        "Format: {\"question\": \"...\", \"options\": [\"...\"], \"answer\": \"...\"}"
+    )
+
+    try:
+        # --- 注意：這裡移除了 format="json" ---
+        resp = ollama.chat(
+            model=settings.model,
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        content = resp["message"]["content"].strip()
+        logger.info(f"AI Raw Output: {content}")
+
+        # 處理 Llama 2 可能會加上的 Markdown 標籤 ```json ... ```
+        if "```" in content:
+            content = content.split("```")[1]
+            if content.startswith("json"):
+                content = content[4:]
+
+        return json.loads(content.strip())
+
+    except Exception as e:
+        logger.error(f"Llama2 logic failed: {str(e)}")
+        # 這是保底機制，萬一 AI 亂說話導致 JSON 解析失敗，回傳一個固定題目，不讓前端崩潰
+        return {
+            "question": "If you have 5 apples and eat 2, how many are left?",
+            "options": ["2", "3", "4", "5"],
+            "answer": "3"
+        }
 
 @app.post("/stt")
 def speech_to_text(file: UploadFile = File(...)):
