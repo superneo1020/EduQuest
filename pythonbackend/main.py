@@ -14,6 +14,8 @@ from fastapi import UploadFile, File
 import librosa
 import numpy as np
 import json
+import re
+import random
 
 whisper_model = None
 
@@ -96,7 +98,13 @@ class MathProblem(BaseModel):
     question: str
     options: list[str]
     answer: str
+    explanation: str
 
+class CheckRequest(BaseModel):
+    question: str
+    user_steps: str
+    user_answer: str
+    correct_answer: Any
 
 # ---------------------------------------------------------------------
 # Helpers
@@ -152,42 +160,86 @@ def chat_stream(req: ChatRequest) -> StreamingResponse:
 
 @app.get("/api/math/generate")
 def generate_math_ai(difficulty: str = "easy"):
-    logger.info("Generating %s math problem using Llama 2 fallback", difficulty)
+    # 透過隨機關鍵字強制 AI 換題
+    topics = ["shopping", "traveling", "farming", "coding", "cooking"]
+    selected_topic = random.choice(topics)
 
-    # 在 Prompt 裡極端強調只要 JSON，不要解釋
     prompt = (
-        f"Generate ONE {difficulty} level math problem. "
-        "Return ONLY a raw JSON object. NO conversation, NO markdown. "
-        "Format: {\"question\": \"...\", \"options\": [\"...\"], \"answer\": \"...\"}"
+        f"Generate a NEW {difficulty} math word problem about {selected_topic}. "
+        "Output ONLY JSON: {\"question\":\"...\",\"answer\":\"...\",\"explanation\":\"...\"}"
     )
 
     try:
-        # --- 注意：這裡移除了 format="json" ---
-        resp = ollama.chat(
-            model=settings.model,
-            messages=[{"role": "user", "content": prompt}]
-        )
-
+        resp = ollama.chat(model=settings.model, messages=[{"role": "user", "content": prompt}])
         content = resp["message"]["content"].strip()
-        logger.info(f"AI Raw Output: {content}")
 
-        # 處理 Llama 2 可能會加上的 Markdown 標籤 ```json ... ```
-        if "```" in content:
-            content = content.split("```")[1]
-            if content.startswith("json"):
-                content = content[4:]
+        # 這是關鍵：強力抓取 {}
+        match = re.search(r'(\{.*\})', content, re.DOTALL)
+        if match:
+            return json.loads(match.group(1))
 
-        return json.loads(content.strip())
+        # 如果 Llama 2 沒給 JSON 但給了長文字，手動包裝
+        if len(content) > 20:
+            return {"question": content, "answer": "unknown", "explanation": "Check details in question."}
 
+        raise ValueError("AI Output too short")
     except Exception as e:
-        logger.error(f"Llama2 logic failed: {str(e)}")
-        # 這是保底機制，萬一 AI 亂說話導致 JSON 解析失敗，回傳一個固定題目，不讓前端崩潰
+        logger.error(f"Generate Failed: {e}")
+        # 保底題目也要換，不要永遠 Sarah
         return {
-            "question": "If you have 5 apples and eat 2, how many are left?",
-            "options": ["2", "3", "4", "5"],
-            "answer": "3"
+            "question": f"A store has {random.randint(20,50)} eggs and sells 12. How many are left?",
+            "answer": "unknown", # 這裡可以寫活
+            "explanation": "Subtraction"
+        }
+@app.post("/api/math/check")
+def check_math_answer(req: CheckRequest):
+    logger.info("AI checking student's work...")
+
+    prompt = (
+        "You are a math tutor. Analyze the following:\n"
+        f"Question: {req.question}\n"
+        f"Student's Steps: {req.user_steps}\n"
+        f"Student's Answer: {req.user_answer}\n"
+        f"Correct Answer: {req.correct_answer}\n"
+        "Rules: \n"
+        "1. Check if the answer and logic are correct.\n"
+        "2. Provide friendly feedback.\n"
+        "3. Output format must be JSON: {\"is_correct\": true/false, \"feedback\": \"...\"}"
+    )
+
+    try:
+        resp = ollama.chat(model=settings.model, messages=[{"role": "user", "content": prompt}])
+        content = resp["message"]["content"].strip()
+        logger.info(f"AI Check Raw Output: {content}")
+
+        # 嘗試從內容中找出 JSON 部分
+        match = re.search(r'(\{.*\})', content, re.DOTALL)
+        if match:
+            json_str = match.group(1)
+            # 替換掉可能導致解析失敗的換行符
+            json_str = json_str.replace('\n', '\\n').replace('\r', '\\r')
+            try:
+                return json.loads(json_str)
+            except Exception:
+                pass # 失敗了就進入下方的備援機制
+
+        # --- 備援機制 (Fallback) ---
+        # 如果 JSON 解析失敗，我們手動判斷對錯，並將 AI 的話全部塞進 feedback
+
+        # 簡單數字比對作為對錯判斷
+        is_right = str(req.user_answer).strip() == str(req.correct_answer).strip()
+
+        # 清理 content 中的 Markdown 標籤，避免顯示在 Alert 上很醜
+        clean_feedback = content.replace("```json", "").replace("```", "").strip()
+
+        return {
+            "is_correct": is_right,
+            "feedback": clean_feedback if len(clean_feedback) > 0 else "AI 老師給出了回饋，但格式不正確。"
         }
 
+    except Exception as e:
+        logger.error(f"Critical Check failed: {e}")
+        return {"is_correct": False, "feedback": "AI 老師暫時無法連線，請檢查你的答案是否正確。"}
 @app.post("/stt")
 def speech_to_text(file: UploadFile = File(...)):
     try:
