@@ -2,9 +2,13 @@
 -- This file populates the database with essential initial data
 
 -- Insert sample roles
-INSERT INTO roles (name) VALUES ('ROLE_USER'), ('ROLE_ADMIN'), ('ROLE_TEACHER') ON CONFLICT (name) DO NOTHING;
+INSERT INTO roles (name)
+VALUES
+    ('ROLE_USER'), ('ROLE_ADMIN'), ('ROLE_TEACHER')
+ON CONFLICT (name) DO NOTHING;
 
-INSERT INTO difficulty_rewards (difficulty, multiplier) VALUES
+INSERT INTO difficulty_rewards (difficulty, multiplier)
+VALUES
     ('EASY', 1), ('MEDIUM', 3), ('HARD', 5)
 ON CONFLICT (difficulty) DO UPDATE SET multiplier = EXCLUDED.multiplier;
 
@@ -85,6 +89,9 @@ VALUES
     ('MEMORY', 'Lightning Fast', 'HARD', 'Brain', 'Complete a memory game in record time', 40)
 ON CONFLICT (name) DO NOTHING;
 
+-- Delete only the default user game scores that will be reinserted
+DELETE FROM user_game_scores
+WHERE user_id IN (SELECT id FROM users WHERE username IN ('student1', 'student2', 'student3', 'teacher1', 'admin'));
 -- Insert sample game scores for leaderboard display
 INSERT INTO user_game_scores (user_id, game_id, scores)
 VALUES
@@ -119,6 +126,9 @@ VALUES
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM games WHERE name = 'Pattern Recognition'), 100)
 ON CONFLICT DO NOTHING;
 
+-- Delete only the default user missions that will be reinserted
+DELETE FROM user_missions
+WHERE user_id IN (SELECT id FROM users WHERE username IN ('student1', 'student2', 'student3', 'teacher1', 'admin'));
 -- Sample user mission completions
 INSERT INTO user_missions (user_id, mission_id, completed)
 VALUES
@@ -167,7 +177,7 @@ VALUES
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Storyteller'), TRUE),
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Experiment Log'), TRUE),
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Lightning Fast'), TRUE)
-ON CONFLICT (user_id, mission_id, date) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 -- Insert sample items for the shop
 INSERT INTO items (type, name, icon, description, price)
@@ -197,6 +207,9 @@ VALUES
     ('BADGE', 'Memory Master', 'Brain', 'Awarded for memory skills', 135)
 ON CONFLICT (name) DO NOTHING;
 
+-- Delete only the default user items that will be reinserted
+DELETE FROM user_items
+WHERE user_id IN (SELECT id FROM users WHERE username IN ('student1', 'student2', 'student3', 'teacher1', 'admin'));
 -- Insert sample user items
 INSERT INTO user_items (user_id, item_id)
 VALUES
