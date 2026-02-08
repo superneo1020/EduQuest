@@ -106,6 +106,8 @@ class CheckRequest(BaseModel):
     user_answer: str
     correct_answer: Any
 
+class SessionRecord(BaseModel):
+    history: list[dict]
 # ---------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------
@@ -160,86 +162,102 @@ def chat_stream(req: ChatRequest) -> StreamingResponse:
 
 @app.get("/api/math/generate")
 def generate_math_ai(difficulty: str = "easy"):
-    # 透過隨機關鍵字強制 AI 換題
     topics = ["shopping", "traveling", "farming", "coding", "cooking"]
     selected_topic = random.choice(topics)
 
+    # 強化 Prompt 規則：要求 AI 數字要靚，答案要係整數
     prompt = (
-        f"Generate a NEW {difficulty} math word problem about {selected_topic}. "
-        "Output ONLY JSON: {\"question\":\"...\",\"answer\":\"...\",\"explanation\":\"...\"}"
+        f"You are a math teacher. Create a {difficulty} word problem about {selected_topic} for a child.\n"
+        "Rules:\n"
+        "1. The answer must be a whole number (integer).\n"
+        "2. Keep the numbers simple (below 100).\n"
+        "3. Output ONLY JSON: {\"question\":\"...\",\"answer\":\"...\",\"explanation\":\"...\"}"
     )
 
     try:
         resp = ollama.chat(model=settings.model, messages=[{"role": "user", "content": prompt}])
         content = resp["message"]["content"].strip()
+        logger.info(f"Generated: {content}") # Terminal 監控
 
-        # 這是關鍵：強力抓取 {}
         match = re.search(r'(\{.*\})', content, re.DOTALL)
         if match:
             return json.loads(match.group(1))
 
-        # 如果 Llama 2 沒給 JSON 但給了長文字，手動包裝
-        if len(content) > 20:
-            return {"question": content, "answer": "unknown", "explanation": "Check details in question."}
-
-        raise ValueError("AI Output too short")
     except Exception as e:
-        logger.error(f"Generate Failed: {e}")
-        # 保底題目也要換，不要永遠 Sarah
-        return {
-            "question": f"A store has {random.randint(20,50)} eggs and sells 12. How many are left?",
-            "answer": "unknown", # 這裡可以寫活
-            "explanation": "Subtraction"
-        }
+        return {"question": "Default: 10 + 2?", "answer": "12", "explanation": "Error fallback"}
 @app.post("/api/math/check")
 def check_math_answer(req: CheckRequest):
     logger.info("AI checking student's work...")
 
+    # 1. 強化指令，叫 AI 不要廢話
     prompt = (
-        "You are a math tutor. Analyze the following:\n"
+        "You are a math tutor. Analyze this:\n"
         f"Question: {req.question}\n"
-        f"Student's Steps: {req.user_steps}\n"
         f"Student's Answer: {req.user_answer}\n"
         f"Correct Answer: {req.correct_answer}\n"
-        "Rules: \n"
-        "1. Check if the answer and logic are correct.\n"
-        "2. Provide friendly feedback.\n"
-        "3. Output format must be JSON: {\"is_correct\": true/false, \"feedback\": \"...\"}"
+        "--- RULES ---\n"
+        "1. Response MUST be a JSON object.\n"
+        "2. NO introductory text, NO 'Correct!' mark, NO markdown code blocks.\n"
+        "3. Format: {\"is_correct\": true/false, \"feedback\": \"...\"}"
     )
 
     try:
         resp = ollama.chat(model=settings.model, messages=[{"role": "user", "content": prompt}])
         content = resp["message"]["content"].strip()
-        logger.info(f"AI Check Raw Output: {content}")
 
-        # 嘗試從內容中找出 JSON 部分
+        # 2. 這是核心：更強大的過濾網
+        # 尋找第一個 '{' 和最後一個 '}' 之間的所有內容
         match = re.search(r'(\{.*\})', content, re.DOTALL)
+
         if match:
             json_str = match.group(1)
-            # 替換掉可能導致解析失敗的換行符
-            json_str = json_str.replace('\n', '\\n').replace('\r', '\\r')
+            # 處理掉 AI 有時候會噴出的非法換行符
+            json_str = json_str.replace('\n', ' ').replace('\r', ' ')
+
             try:
-                return json.loads(json_str)
-            except Exception:
-                pass # 失敗了就進入下方的備援機制
+                # 嘗試解析
+                result = json.loads(json_str)
+                # 即使解析成功，我們也要檢查 feedback 裡面有沒有 AI 偷塞的 "Correct!" 字眼
+                # 如果有，把它們清理掉，只留重點
+                clean_feedback = re.sub(r'^(✅ Correct!|❌ Incorrect!|Correct!|Incorrect!)\s*', '', result['feedback'])
+                result['feedback'] = clean_feedback
+                return result
+            except Exception as e:
+                logger.error(f"JSON Parse Error: {e}")
 
-        # --- 備援機制 (Fallback) ---
-        # 如果 JSON 解析失敗，我們手動判斷對錯，並將 AI 的話全部塞進 feedback
-
-        # 簡單數字比對作為對錯判斷
+        # --- Fallback (保底機制) ---
+        # 如果 Regex 沒抓到，或者 JSON 壞了，我們手動做一個 JSON 傳回前端
         is_right = str(req.user_answer).strip() == str(req.correct_answer).strip()
 
-        # 清理 content 中的 Markdown 標籤，避免顯示在 Alert 上很醜
-        clean_feedback = content.replace("```json", "").replace("```", "").strip()
+        # 把 AI 噴出來的廢話洗掉，只拿有用的文字
+        simple_feedback = content.split('}')[-1] if '}' in content else content
+        simple_feedback = simple_feedback.replace("✅ Correct!", "").replace("❌ Incorrect!", "").strip()
 
         return {
             "is_correct": is_right,
-            "feedback": clean_feedback if len(clean_feedback) > 0 else "AI 老師給出了回饋，但格式不正確。"
+            "feedback": simple_feedback if len(simple_feedback) > 5 else "Check your calculation steps again."
         }
 
     except Exception as e:
-        logger.error(f"Critical Check failed: {e}")
-        return {"is_correct": False, "feedback": "AI 老師暫時無法連線，請檢查你的答案是否正確。"}
+        logger.error(f"Check failed: {e}")
+        return {"is_correct": False, "feedback": "AI server is busy. Please check manually."}
+
+@app.post("/api/math/final_report")
+def generate_final_report(req: SessionRecord):
+    correct_count = sum(1 for h in req.history if h['is_correct'])
+
+    prompt = (
+        f"The student finished {len(req.history)} math problems and got {correct_count} correct.\n"
+        f"History: {json.dumps(req.history)}\n"
+        "Write a short, encouraging summary (max 80 words) in English. "
+        "Mention their strengths and one area to improve."
+    )
+
+    try:
+        resp = ollama.chat(model=settings.model, messages=[{"role": "user", "content": prompt}])
+        return {"summary": resp["message"]["content"].strip(), "accuracy": (correct_count/len(req.history))*100}
+    except:
+        return {"summary": "Great job! Keep practicing.", "accuracy": 0}
 @app.post("/stt")
 def speech_to_text(file: UploadFile = File(...)):
     try:
