@@ -1,12 +1,15 @@
 package com.eduquest.springbackend.model;
 
+import com.eduquest.springbackend.model.type.DifficultyType;
+import com.eduquest.springbackend.model.type.GameType;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Min;
 import org.hibernate.annotations.Generated;
 import org.hibernate.generator.EventType;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collection;
+import java.util.List;
 
 @Entity
 @Table(name = "missions")
@@ -15,8 +18,16 @@ public class Mission {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private GameType type;
+
     @Column(nullable = false, length = 100, unique = true)
     private String name;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private DifficultyType difficulty;
 
     @Column(columnDefinition = "TEXT")
     private String icon;
@@ -25,25 +36,29 @@ public class Mission {
     private String description;
 
     @Column(nullable = false)
-    private Integer points = 0;
+    @Min(value = 0, message = "Game scores must be at least 0")
+    private Integer scores = 0;
 
-    @Column(insertable = false,
+    @Column(nullable = false,
+            insertable = false,
             updatable = false,
-            columnDefinition = "TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP")
+            columnDefinition = "TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP")
     @Generated(event = {EventType.INSERT})
     private Instant createdAt;
 
-    @ManyToMany(mappedBy = "missions")
-    private Collection<AppUser> users = new ArrayList<>();
+    @OneToMany(mappedBy = "mission", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<UserMission> userMissions = new ArrayList<>();
 
     public Mission() {
     }
 
-    public Mission(String name, String icon, String description, Integer points) {
+    public Mission(GameType type, String name, DifficultyType difficulty, String icon, String description, Integer scores) {
+        this.type = type;
         this.name = name;
+        this.difficulty = difficulty;
         this.icon = icon;
         this.description = description;
-        this.points = points;
+        this.scores = scores;
     }
 
     public Long getId() {
@@ -54,12 +69,28 @@ public class Mission {
         this.id = id;
     }
 
+    public GameType getType() {
+        return type;
+    }
+
+    public void setType(GameType type) {
+        this.type = type;
+    }
+
     public String getName() {
         return name;
     }
 
     public void setName(String name) {
         this.name = name;
+    }
+
+    public DifficultyType getDifficulty() {
+        return difficulty;
+    }
+
+    public void setDifficulty(DifficultyType difficulty) {
+        this.difficulty = difficulty;
     }
 
     public String getIcon() {
@@ -78,23 +109,23 @@ public class Mission {
         this.description = description;
     }
 
-    public Integer getPoints() {
-        return points;
+    public Integer getScores() {
+        return scores;
     }
 
-    public void setPoints(Integer points) {
-        this.points = points;
+    public void setScores(Integer scores) {
+        this.scores = scores;
     }
 
     public Instant getCreatedAt() {
         return createdAt;
     }
 
-    public Collection<AppUser> getUsers() {
-        return users;
+    public List<UserMission> getUserMissions() {
+        return userMissions;
     }
 
-    public void setUsers(Collection<AppUser> users) {
-        this.users = users;
+    public void setUserMissions(List<UserMission> userMissions) {
+        this.userMissions = userMissions;
     }
 }

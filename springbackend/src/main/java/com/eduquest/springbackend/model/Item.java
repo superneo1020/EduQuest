@@ -1,7 +1,5 @@
 package com.eduquest.springbackend.model;
 
-import com.eduquest.springbackend.model.type.DifficultyType;
-import com.eduquest.springbackend.model.type.GameType;
 import jakarta.persistence.*;
 import org.hibernate.annotations.Generated;
 import org.hibernate.generator.EventType;
@@ -11,22 +9,17 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "games")
-public class Game {
+@Table(name = "items")
+public class Item {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private GameType type;
+    @Column(nullable = false, length = 20)
+    private String type;
 
     @Column(nullable = false, length = 50, unique = true)
     private String name;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private DifficultyType difficulty;
 
     @Column(columnDefinition = "TEXT")
     private String icon;
@@ -34,24 +27,27 @@ public class Game {
     @Column(columnDefinition = "TEXT")
     private String description;
 
-    @Column(nullable = false,
+    @Column(nullable = false)
+    private Integer price;
+
+    @Column(name = "created_at",
             insertable = false,
             updatable = false,
-            columnDefinition = "TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP")
+            columnDefinition = "TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP")
     @Generated(event = {EventType.INSERT})
     private Instant createdAt;
 
-    @OneToMany(mappedBy = "game", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<UserGameScore> userGameScores = new ArrayList<>();
+    @OneToMany(mappedBy = "item", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<UserItem> userItems = new ArrayList<>();
 
-    public Game() {}
+    public Item() {}
 
-    public Game(GameType type, String name, DifficultyType difficulty, String icon, String description) {
+    public Item(String type, String name, String icon, String description, Integer price) {
         this.type = type;
         this.name = name;
-        this.difficulty = difficulty;
         this.icon = icon;
         this.description = description;
+        this.price = price;
     }
 
     public Long getId() {
@@ -62,11 +58,11 @@ public class Game {
         this.id = id;
     }
 
-    public GameType getType() {
+    public String getType() {
         return type;
     }
 
-    public void setType(GameType type) {
+    public void setType(String type) {
         this.type = type;
     }
 
@@ -76,14 +72,6 @@ public class Game {
 
     public void setName(String name) {
         this.name = name;
-    }
-
-    public DifficultyType getDifficulty() {
-        return difficulty;
-    }
-
-    public void setDifficulty(DifficultyType difficulty) {
-        this.difficulty = difficulty;
     }
 
     public String getIcon() {
@@ -102,15 +90,23 @@ public class Game {
         this.description = description;
     }
 
-    public List<UserGameScore> getUserGameScores() {
-        return userGameScores;
+    public Integer getPrice() {
+        return price;
     }
 
-    public void setUserGameScores(List<UserGameScore> userGameScores) {
-        this.userGameScores = userGameScores;
+    public void setPrice(Integer price) {
+        this.price = price;
     }
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public List<UserItem> getUserItems() {
+        return userItems;
+    }
+
+    public void setUserItems(List<UserItem> userItems) {
+        this.userItems = userItems;
     }
 }
