@@ -11,7 +11,6 @@ public record UserGameScoreDto(
         String gameIcon,
         String gameDescription,
         Integer scores,
-        Integer points,
         Instant createdAt
 ) {
 }

@@ -1,15 +1,14 @@
 package com.eduquest.springbackend.model;
 
 import jakarta.persistence.*;
-import jakarta.validation.constraints.Min;
 import org.hibernate.annotations.Generated;
 import org.hibernate.generator.EventType;
 
 import java.time.Instant;
 
 @Entity
-@Table(name = "user_game_scores")
-public class UserGameScore {
+@Table(name = "user_items")
+public class UserItem {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -19,12 +18,8 @@ public class UserGameScore {
     private AppUser user;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "game_id", nullable = false)
-    private Game game;
-
-    @Column(nullable = false)
-    @Min(value = 0, message = "Game scores must be at least 0")
-    private Integer scores = 0;
+    @JoinColumn(name = "item_id", nullable = false)
+    private Item item;
 
     @Column(nullable = false,
             insertable = false,
@@ -33,12 +28,11 @@ public class UserGameScore {
     @Generated(event = {EventType.INSERT})
     private Instant createdAt;
 
-    public UserGameScore() {}
+    public UserItem() {}
 
-    public UserGameScore(AppUser user, Game game, Integer scores) {
+    public UserItem(AppUser user, Item item) {
         this.user = user;
-        this.game = game;
-        this.scores = scores;
+        this.item = item;
     }
 
     public Long getId() {
@@ -57,20 +51,12 @@ public class UserGameScore {
         this.user = user;
     }
 
-    public Game getGame() {
-        return game;
+    public Item getItem() {
+        return item;
     }
 
-    public void setGame(Game game) {
-        this.game = game;
-    }
-
-    public Integer getScores() {
-        return scores;
-    }
-
-    public void setScores(Integer scores) {
-        this.scores = scores;
+    public void setItem(Item item) {
+        this.item = item;
     }
 
     public Instant getCreatedAt() {

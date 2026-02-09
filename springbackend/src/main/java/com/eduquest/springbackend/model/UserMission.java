@@ -5,30 +5,39 @@ import org.hibernate.annotations.Generated;
 import org.hibernate.generator.EventType;
 
 import java.time.Instant;
+import java.time.LocalDate;
 
 @Entity
-@Table(name = "user_missions")
+@Table(name = "user_missions", uniqueConstraints = {
+        @UniqueConstraint(name = "user_missions_user_id_mission_id_date_key", columnNames = {"user_id", "mission_id", "date"})
+})
 public class UserMission {
-    @EmbeddedId
-    private UserMissionId id;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @MapsId("userId")
     @JoinColumn(name = "user_id", nullable = false)
     private AppUser user;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @MapsId("missionId")
     @JoinColumn(name = "mission_id", nullable = false)
     private Mission mission;
+
+    @Column(nullable = false,
+            insertable = false,
+            updatable = false,
+            columnDefinition = "DATE NOT NULL DEFAULT CURRENT_DATE")
+    @Generated(event = {EventType.INSERT})
+    private LocalDate date;
 
     @Column(nullable = false)
     private Boolean completed = false;
 
-    @Column(name = "created_at",
+    @Column(nullable = false,
             insertable = false,
             updatable = false,
-            columnDefinition = "TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP")
+            columnDefinition = "TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP")
     @Generated(event = {EventType.INSERT})
     private Instant createdAt;
 
@@ -37,14 +46,13 @@ public class UserMission {
     public UserMission(AppUser user, Mission mission) {
         this.user = user;
         this.mission = mission;
-        this.id = new UserMissionId(user.getId(), mission.getId());
     }
 
-    public UserMissionId getId() {
+    public Long getId() {
         return id;
     }
 
-    public void setId(UserMissionId id) {
+    public void setId(Long id) {
         this.id = id;
     }
 
@@ -70,6 +78,14 @@ public class UserMission {
 
     public void setCompleted(Boolean completed) {
         this.completed = completed;
+    }
+
+    public LocalDate getDate() {
+        return date;
+    }
+
+    public void setDate(LocalDate date) {
+        this.date = date;
     }
 
     public Instant getCreatedAt() {

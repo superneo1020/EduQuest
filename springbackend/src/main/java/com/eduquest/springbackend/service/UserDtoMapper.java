@@ -49,7 +49,6 @@ public class UserDtoMapper {
                 game.getIcon(),
                 game.getDescription(),
                 userGameScore.getScores(),
-                userGameScore.getPoints(),
                 userGameScore.getCreatedAt()
         );
     }
