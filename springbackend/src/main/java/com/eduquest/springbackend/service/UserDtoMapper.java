@@ -12,7 +12,6 @@ import org.springframework.stereotype.Service;
 
 import java.util.Collection;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 public class UserDtoMapper {
@@ -27,10 +26,10 @@ public class UserDtoMapper {
         );
     }
 
-    public UserProfileDto toProfile(AppUser user, Page<UserGameScore> userGameScores) {
-        if (user == null) return null;
+    public UserProfileDto toProfile(Page<UserGameScore> userGameScores) {
+        if (userGameScores == null) return null;
         return new UserProfileDto(
-                mapGameScores(user.getUserGameScores()),
+                mapGameScores(userGameScores.getContent()),
                 userGameScores.getPageable().getPageNumber(),
                 userGameScores.getTotalPages(),
                 userGameScores.getTotalElements(),
@@ -40,8 +39,8 @@ public class UserDtoMapper {
     }
 
     public UserGameScoreDto toGameScore(UserGameScore userGameScore) {
+        if (userGameScore == null || userGameScore.getGame() == null) return null;
         Game game = userGameScore.getGame();
-        if (game == null) return null;
         return new UserGameScoreDto(
                 game.getName(),
                 game.getType(),
@@ -62,6 +61,6 @@ public class UserDtoMapper {
     private List<UserGameScoreDto> mapGameScores(List<UserGameScore> userGameScores) {
         return userGameScores.stream()
                 .map(this::toGameScore)
-                .collect(Collectors.toList());
+                .toList();
     }
 }
