@@ -6,5 +6,5 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface UserGameScoreRepository extends JpaRepository<UserGameScore,Long> {
-    Page<UserGameScore> findByUserIdOrderByCreatedAtDesc(Long userId, Pageable pageable);
+    Page<UserGameScore> findByUserId(Long userId, Pageable pageable);
 }

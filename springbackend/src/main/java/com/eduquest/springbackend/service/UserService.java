@@ -64,24 +64,24 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public UserProfileDto showProfile(UserDetails userDetails, int currentPage) {
-        AppUser user = userRepository.findByUsername(userDetails.getUsername()).orElseThrow(
-                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        Long id = userRepository.findIdByUsername(userDetails.getUsername()).orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User ID not found"));
         final int pageSize = 10;
         Sort sort = Sort.by(Sort.Direction.DESC, "createdAt");
 
-        Page<UserGameScore> page = userGameScoreRepository.findByUserIdOrderByCreatedAtDesc(
-                user.getId(),
+        Page<UserGameScore> page = userGameScoreRepository.findByUserId(
+                id,
                 PageRequest.of(Math.max(0, currentPage), pageSize, sort)
         );
 
         if (page.getTotalPages() > 0 && currentPage >= page.getTotalPages()) {
             int lastPageIndex = page.getTotalPages() - 1;
-            page = userGameScoreRepository.findByUserIdOrderByCreatedAtDesc(
-                    user.getId(),
+            page = userGameScoreRepository.findByUserId(
+                    id,
                     PageRequest.of(lastPageIndex, pageSize, sort)
             );
         }
 
-        return userDtoMapper.toProfile(user, page);
+        return userDtoMapper.toProfile(page);
     }
 }
