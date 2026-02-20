@@ -165,26 +165,61 @@ def generate_math_ai(difficulty: str = "easy"):
     topics = ["shopping", "traveling", "farming", "coding", "cooking"]
     selected_topic = random.choice(topics)
 
-    # 強化 Prompt 規則：要求 AI 數字要靚，答案要係整數
+
+    if difficulty == "hard":
+        diff_rule = "Create a problem with 3 numbers and two operations (e.g., multiply then add). Answer must be a whole number."
+    elif difficulty == "medium":
+        diff_rule = "Create a multiplication or division problem. Answer must be a whole number."
+    else:
+        diff_rule = "Create a simple addition or subtraction problem."
+
     prompt = (
-        f"You are a math teacher. Create a {difficulty} word problem about {selected_topic} for a child.\n"
-        "Rules:\n"
-        "1. The answer must be a whole number (integer).\n"
-        "2. Keep the numbers simple (below 100).\n"
-        "3. Output ONLY JSON: {\"question\":\"...\",\"answer\":\"...\",\"explanation\":\"...\"}"
+        f"Generate a {difficulty} math problem about {selected_topic}.\n"
+        f"Rule: {diff_rule}\n"
+        "Return ONLY a JSON object with keys 'question', 'answer', and 'explanation'.\n"
+        "Example: {\"question\": \"...\", \"answer\": \"10\", \"explanation\": \"...\"}"
     )
 
     try:
-        resp = ollama.chat(model=settings.model, messages=[{"role": "user", "content": prompt}])
+        resp = ollama.chat(
+            model=settings.model,
+            messages=[{"role": "user", "content": prompt}],
+            options={"temperature": 0.1}
+        )
         content = resp["message"]["content"].strip()
-        logger.info(f"Generated: {content}") # Terminal 監控
+        logger.info(f"AI Raw Output ({difficulty}): {content}")
 
-        match = re.search(r'(\{.*\})', content, re.DOTALL)
-        if match:
-            return json.loads(match.group(1))
+        start = content.find('{')
+        end = content.rfind('}')
+
+        if start != -1 and end != -1:
+            json_str = content[start:end+1]
+
+            json_str = re.sub(r'[\n\r]', ' ', json_str)
+            json_str = re.sub(r',\s*}', '}', json_str)  # Remove trailing commas
+            json_str = re.sub(r',\s*]', ']', json_str)  # Remove trailing commas in arrays
+            json_str = re.sub(r'\s+', ' ', json_str)    # Normalize whitespace
+            json_str = json_str.strip()
+            
+            logger.info(f"Cleaned JSON string: {json_str}")
+
+            try:
+                data = json.loads(json_str)
+
+                data["answer"] = str(data.get("answer", "0"))
+                return data
+            except json.JSONDecodeError as e:
+                logger.error(f"JSON Parse Error: {e}")
 
     except Exception as e:
-        return {"question": "Default: 10 + 2?", "answer": "12", "explanation": "Error fallback"}
+        logger.error(f"AI Fetch Error: {e}")
+
+
+    return {
+        "question": f"A {selected_topic} worker works 8 hours a day for 5 days. How many hours in total?",
+        "answer": "40",
+        "explanation": "8 * 5 = 40"
+    }
 @app.post("/api/math/check")
 def check_math_answer(req: CheckRequest):
     logger.info("AI checking student's work...")
