@@ -6,29 +6,33 @@ const MAX_STEPS = 10;
 
 const AppliedMath = () => {
     const [loading, setLoading] = useState(false);
+    const [difficulty, setDifficulty] = useState<string | null>(null);
     const [data, setData] = useState<any>(null);
     const [userSteps, setUserSteps] = useState('');
     const [userFinalAnswer, setUserFinalAnswer] = useState('');
-
     const [currentStep, setCurrentStep] = useState(1);
     const [sessionHistory, setSessionHistory] = useState<any[]>([]);
     const [aiFeedback, setAiFeedback] = useState({ isCorrect: null as boolean | null, message: '' });
     const [isFinished, setIsFinished] = useState(false);
     const [finalReport, setFinalReport] = useState({ summary: '', accuracy: 0 });
 
-    const fetchQuestion = async () => {
+    const fetchQuestion = async (selectedDiff?: string) => {
+        const diff = selectedDiff || difficulty;
+        if (!diff) return; // 如果沒有難度，直接結束，不要發請求
+
         setLoading(true);
         setAiFeedback({ isCorrect: null, message: '' });
         setUserFinalAnswer('');
         setUserSteps('');
         try {
-            const res = await axios.get(`http://localhost:8000/api/math/generate?t=${Date.now()}`);
+            const res = await axios.get(`http://localhost:8000/api/math/generate?difficulty=${diff}&t=${Date.now()}`);
             setData(res.data);
-        } catch (e) { console.error("Fetch error", e); }
-        setLoading(false);
+        } catch (e) {
+            console.error("Fetch error", e);
+        } finally {
+            setLoading(false);
+        }
     };
-
-    useEffect(() => { fetchQuestion(); }, []);
 
     const handleCheckAnswer = async () => {
         if (!userFinalAnswer.trim()) return;
@@ -81,6 +85,23 @@ const AppliedMath = () => {
         );
     }
 
+    if (!difficulty) {
+        return (
+            <View style={styles.centerContainer}>
+                <Text style={styles.title}>Select Difficulty 🧠</Text>
+                <View style={styles.buttonSpacing}>
+                    <Button title="Easy (Add/Sub)" color="#4CAF50" onPress={() => { setDifficulty('easy'); fetchQuestion('easy'); }} />
+                </View>
+                <View style={styles.buttonSpacing}>
+                    <Button title="Medium (Mul/Div)" color="#FF9800" onPress={() => { setDifficulty('medium'); fetchQuestion('medium'); }} />
+                </View>
+                <View style={styles.buttonSpacing}>
+                    <Button title="Hard (Multi-step)" color="#F44336" onPress={() => { setDifficulty('hard'); fetchQuestion('hard'); }} />
+                </View>
+            </View>
+        );
+    }
+
     return (
         <ScrollView style={styles.container}>
             <View style={styles.header}>
@@ -127,6 +148,17 @@ const AppliedMath = () => {
 const styles = StyleSheet.create({
     container: { padding: 20, backgroundColor: '#fff' },
     header: { marginBottom: 20 },
+    centerContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+        backgroundColor: '#fff'
+    },
+    buttonSpacing: {
+        width: '80%',
+        marginVertical: 10,
+    },
     progressText: { fontSize: 16, fontWeight: 'bold', marginBottom: 5 },
     progressBarBg: { height: 8, backgroundColor: '#eee', borderRadius: 4 },
     progressBar: { height: 8, backgroundColor: '#4CAF50', borderRadius: 4 },
