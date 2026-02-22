@@ -1,6 +1,5 @@
 package com.eduquest.springbackend.model;
 
-import com.eduquest.springbackend.model.type.DifficultyType;
 import com.eduquest.springbackend.model.type.GameType;
 import jakarta.persistence.*;
 import org.hibernate.annotations.Generated;
@@ -24,9 +23,8 @@ public class Game {
     @Column(nullable = false, length = 50, unique = true)
     private String name;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private DifficultyType difficulty;
+    @Column(nullable = false, length = 20)
+    private String difficulty;
 
     @Column(columnDefinition = "TEXT")
     private String icon;
@@ -46,7 +44,7 @@ public class Game {
 
     public Game() {}
 
-    public Game(GameType type, String name, DifficultyType difficulty, String icon, String description) {
+    public Game(GameType type, String name, String difficulty, String icon, String description) {
         this.type = type;
         this.name = name;
         this.difficulty = difficulty;
@@ -78,11 +76,11 @@ public class Game {
         this.name = name;
     }
 
-    public DifficultyType getDifficulty() {
+    public String getDifficulty() {
         return difficulty;
     }
 
-    public void setDifficulty(DifficultyType difficulty) {
+    public void setDifficulty(String difficulty) {
         this.difficulty = difficulty;
     }
 

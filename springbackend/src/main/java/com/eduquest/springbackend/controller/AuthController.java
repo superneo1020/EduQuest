@@ -1,6 +1,6 @@
 package com.eduquest.springbackend.controller;
 
-import com.eduquest.springbackend.dto.AuthResponseDto;
+import com.eduquest.springbackend.dto.AuthResponse;
 import com.eduquest.springbackend.model.AppUser;
 import com.eduquest.springbackend.service.AuthService;
 import jakarta.validation.Valid;
@@ -32,7 +32,11 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest req) {
-        AppUser savedUser = authService.register(new AppUser(req.username().trim(), req.email().trim(), req.password()));
+        AppUser savedUser = authService.register(new AppUser(
+                req.username().trim(),
+                req.email().trim(),
+                req.password()
+        ));
         return ResponseEntity.ok(Map.of(
                 "id", savedUser.getId(),
                 "username", savedUser.getUsername(),
@@ -41,10 +45,10 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@Valid @RequestBody LoginRequest req) {
-        AuthResponseDto authResponseDto = authService.loginAndGetUser(req.username().trim(), req.password());
+        AuthResponse authResponse = authService.loginAndGetUser(req.username().trim(), req.password());
         return ResponseEntity.ok(Map.of(
-                "token", authResponseDto.token(),
-                "user", authResponseDto.user()
+                "token", authResponse.token(),
+                "user", authResponse.user()
         ));
     }
 }

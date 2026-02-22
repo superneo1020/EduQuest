@@ -1,6 +1,5 @@
 package com.eduquest.springbackend.model;
 
-import com.eduquest.springbackend.model.type.DifficultyType;
 import com.eduquest.springbackend.model.type.GameType;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Min;
@@ -25,9 +24,8 @@ public class Mission {
     @Column(nullable = false, length = 100, unique = true)
     private String name;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private DifficultyType difficulty;
+    @Column(nullable = false, length = 20)
+    private String difficulty;
 
     @Column(columnDefinition = "TEXT")
     private String icon;
@@ -52,7 +50,7 @@ public class Mission {
     public Mission() {
     }
 
-    public Mission(GameType type, String name, DifficultyType difficulty, String icon, String description, Integer scores) {
+    public Mission(GameType type, String name, String difficulty, String icon, String description, Integer scores) {
         this.type = type;
         this.name = name;
         this.difficulty = difficulty;
@@ -85,11 +83,11 @@ public class Mission {
         this.name = name;
     }
 
-    public DifficultyType getDifficulty() {
+    public String getDifficulty() {
         return difficulty;
     }
 
-    public void setDifficulty(DifficultyType difficulty) {
+    public void setDifficulty(String difficulty) {
         this.difficulty = difficulty;
     }
 

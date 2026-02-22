@@ -30,8 +30,7 @@ public class Item {
     @Column(nullable = false)
     private Integer price;
 
-    @Column(name = "created_at",
-            insertable = false,
+    @Column(insertable = false,
             updatable = false,
             columnDefinition = "TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP")
     @Generated(event = {EventType.INSERT})
