@@ -1,5 +1,6 @@
 package com.eduquest.springbackend.exception;
 
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.beans.TypeMismatchException;
@@ -127,6 +128,13 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(toExceptionWithMultiLine(HttpStatus.BAD_REQUEST, errors));
+    }
+
+    @ExceptionHandler(EntityNotFoundException.class)
+    public ResponseEntity<ExceptionDto> handleNotFound(EntityNotFoundException e) {
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(toException(HttpStatus.NOT_FOUND, e.getMessage()));
     }
 
     @ExceptionHandler(Exception.class)

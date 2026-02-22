@@ -4,7 +4,7 @@ import com.eduquest.springbackend.dao.GameRepository;
 import com.eduquest.springbackend.dao.RoleRepository;
 import com.eduquest.springbackend.dao.UserGameScoreRepository;
 import com.eduquest.springbackend.dao.UserRepository;
-import com.eduquest.springbackend.dto.UserGameScoreDto;
+import com.eduquest.springbackend.dto.GameScoreDto;
 import com.eduquest.springbackend.dto.UserProfileDto;
 import com.eduquest.springbackend.model.AppUser;
 import com.eduquest.springbackend.model.Role;
@@ -110,28 +110,26 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
-    public List<UserGameScoreDto> showBestGameRecord(UserDetails userDetails) {
+    public List<GameScoreDto> showBestGameRecord(UserDetails userDetails) {
         Long id = userRepository.findIdByUsername(userDetails.getUsername()).orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
-        List<UserGameScore> record = userGameScoreRepository.findAllHighestScoresByUserIdAsDto(id);
+        List<UserGameScore> record = userGameScoreRepository.findAllHighestScoresByUserId(id);
 
         return record.stream()
-                .map(userDtoMapper::toGameScore)
+                .map(userDtoMapper::fromGameScore)
                 .toList();
     }
 
     @Transactional(readOnly = true)
-    public List<UserGameScoreDto> showBestGameRecord(UserDetails userDetails, String gameName) {
+    public GameScoreDto showBestGameRecord(UserDetails userDetails, String gameName) {
         Long userId = userRepository.findIdByUsername(userDetails.getUsername()).orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
         Long gameId = gameRepository.findIdByName(gameName).orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Game not found"));
 
-        List<UserGameScore> record = userGameScoreRepository.findAllHighestScoresByUserIdAndGameIdAsDto(userId, gameId);
+        UserGameScore record = userGameScoreRepository.findHighestScoresByUserIdAndGameId(userId, gameId);
 
-        return record.stream()
-                .map(userDtoMapper::toGameScore)
-                .toList();
+        return userDtoMapper.fromGameScore(record);
     }
 }

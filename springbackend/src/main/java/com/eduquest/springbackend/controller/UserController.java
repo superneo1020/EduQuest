@@ -7,7 +7,9 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/user")
@@ -20,29 +22,13 @@ public class UserController {
     }
 
     @GetMapping("/profile")
-    public ResponseEntity<?> profile(@AuthenticationPrincipal UserDetails userDetails,
-                                     @PageableDefault(
-                                             sort = "createdAt",
-                                             direction = Sort.Direction.DESC
-                                     ) Pageable pageable) {
+    public ResponseEntity<?> profile(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PageableDefault(
+                    sort = "createdAt",
+                    direction = Sort.Direction.DESC
+            ) Pageable pageable
+    ) {
         return ResponseEntity.ok(userService.showProfile(userDetails, pageable));
-    }
-
-    @GetMapping({"/game/score", "/game/{name}/score"})
-    public ResponseEntity<?> game(@AuthenticationPrincipal UserDetails userDetails,
-                                  @PathVariable(required = false) String name,
-                                  @PageableDefault(
-                                          sort = "createdAt",
-                                          direction = Sort.Direction.DESC
-                                  ) Pageable pageable) {
-        return name != null ? ResponseEntity.ok(userService.showProfile(userDetails, pageable, name))
-                : ResponseEntity.ok(userService.showProfile(userDetails, pageable));
-    }
-
-    @GetMapping({"/game/best", "/game/{name}/best"})
-    public ResponseEntity<?> game(@AuthenticationPrincipal UserDetails userDetails,
-                                  @PathVariable(required = false) String name) {
-        return name != null ? ResponseEntity.ok(userService.showBestGameRecord(userDetails, name))
-                : ResponseEntity.ok(userService.showBestGameRecord(userDetails));
     }
 }

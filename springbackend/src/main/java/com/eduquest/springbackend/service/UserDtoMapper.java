@@ -1,13 +1,11 @@
 package com.eduquest.springbackend.service;
 
-import com.eduquest.springbackend.dto.UserDto;
-import com.eduquest.springbackend.dto.UserGameScoreDto;
-import com.eduquest.springbackend.dto.UserProfileDto;
+import com.eduquest.springbackend.dto.*;
 import com.eduquest.springbackend.model.AppUser;
-import com.eduquest.springbackend.model.Game;
 import com.eduquest.springbackend.model.Role;
 import com.eduquest.springbackend.model.UserGameScore;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 
 import java.util.Collection;
@@ -17,8 +15,7 @@ import java.util.List;
 public class UserDtoMapper {
 
     public UserDto toUser(AppUser user) {
-        if (user == null) return null;
-        return  new UserDto(
+        return new UserDto(
                 user.getUsername(),
                 user.getEmail(),
                 user.getPoints(),
@@ -27,7 +24,6 @@ public class UserDtoMapper {
     }
 
     public UserProfileDto toProfile(Page<UserGameScore> userGameScores) {
-        if (userGameScores == null) return null;
         return new UserProfileDto(
                 mapGameScores(userGameScores.getContent()),
                 userGameScores.getPageable().getPageNumber(),
@@ -38,15 +34,30 @@ public class UserDtoMapper {
         );
     }
 
-    public UserGameScoreDto toGameScore(UserGameScore userGameScore) {
-        if (userGameScore == null || userGameScore.getGame() == null) return null;
-        Game game = userGameScore.getGame();
-        return new UserGameScoreDto(
-                game.getName(),
-                game.getType(),
-                game.getDifficulty(),
-                game.getIcon(),
-                game.getDescription(),
+    public LeaderboardDto toLeaderboard(Slice<UserGameScore> userGameScores) {
+        return new LeaderboardDto(
+                mapUserScores(userGameScores.getContent()),
+                userGameScores.getPageable().getPageNumber(),
+                userGameScores.hasNext(),
+                userGameScores.hasPrevious()
+        );
+    }
+
+    public GameScoreDto fromGameScore(UserGameScore userGameScore) {
+        return new GameScoreDto(
+                userGameScore.getGame().getName(),
+                userGameScore.getGame().getType(),
+                userGameScore.getGame().getDifficulty(),
+                userGameScore.getGame().getIcon(),
+                userGameScore.getGame().getDescription(),
+                userGameScore.getScores(),
+                userGameScore.getCreatedAt()
+        );
+    }
+
+    public UserScoreDto fromUserScore(UserGameScore userGameScore) {
+        return new UserScoreDto(
+                userGameScore.getUser().getUsername(),
                 userGameScore.getScores(),
                 userGameScore.getCreatedAt()
         );
@@ -58,9 +69,15 @@ public class UserDtoMapper {
                 .toList();
     }
 
-    private List<UserGameScoreDto> mapGameScores(List<UserGameScore> userGameScores) {
+    private List<GameScoreDto> mapGameScores(List<UserGameScore> userGameScores) {
         return userGameScores.stream()
-                .map(this::toGameScore)
+                .map(this::fromGameScore)
+                .toList();
+    }
+
+    private List<UserScoreDto> mapUserScores(List<UserGameScore> userGameScores) {
+        return userGameScores.stream()
+                .map(this::fromUserScore)
                 .toList();
     }
 }

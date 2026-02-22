@@ -2,11 +2,9 @@ package com.eduquest.springbackend.dto;
 
 import java.util.List;
 
-public record UserProfileDto(
-        List<GameScoreDto> userGameScores,
+public record LeaderboardDto(
+        List<UserScoreDto> userGameScores,
         int currentPage,
-        int totalPages,
-        long totalItems,
         boolean hasNext,
         boolean hasPrevious
 ) {
