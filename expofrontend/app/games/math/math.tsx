@@ -24,7 +24,7 @@ const MathGamesIndex: React.FC = () => {
     return (
         <ScrollView style={styles.container}>
             <View style={styles.header}>
-                <Text style={styles.title}>Science Games</Text>
+                <Text style={styles.title}>Mathematics Games</Text>
                 <Text style={styles.subtitle}>Choose a game to start learning</Text>
             </View>
 
