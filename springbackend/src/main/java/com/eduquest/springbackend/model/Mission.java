@@ -16,7 +16,7 @@ public class Mission {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 20)
     private String type;
 
     @Column(nullable = false, length = 100, unique = true)
