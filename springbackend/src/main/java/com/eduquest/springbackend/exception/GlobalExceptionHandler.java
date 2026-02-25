@@ -5,7 +5,10 @@ import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.beans.TypeMismatchException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.InvalidDataAccessApiUsageException;
+import org.springframework.data.mapping.PropertyReferenceException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
@@ -135,6 +138,38 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.NOT_FOUND)
                 .body(toException(HttpStatus.NOT_FOUND, e.getMessage()));
+    }
+
+    @ExceptionHandler(PropertyReferenceException.class)
+    public ProblemDetail handlePropertyError(PropertyReferenceException e) {
+        // return 400 instead when database cannot get the field from sort in Pageable
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST,
+                "The specified sort field [" + e.getPropertyName() + "] does not exist"
+        );
+
+        problem.setTitle("Invalid pagination sorting parameters");
+        problem.setProperty("timestamp", Instant.now());
+        problem.setProperty("log", e.getMessage());
+
+        return problem;
+    }
+
+    @ExceptionHandler(InvalidDataAccessApiUsageException.class)
+    public ProblemDetail handleDatabaseUsageError(InvalidDataAccessApiUsageException e) {
+        // for native query (PostgreSQL)
+        // return 400 instead when database cannot get the field from sort in Pageable
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST,
+                "The database operation command {" + e.getRootCause() + "} is invalid."
+        );
+
+        problem.setTitle("Data access syntax error");
+        problem.setProperty("type", "DataAccessException");
+        problem.setProperty("timestamp", Instant.now());
+        problem.setProperty("log", e.getMessage());
+
+        return problem;
     }
 
     @ExceptionHandler(Exception.class)

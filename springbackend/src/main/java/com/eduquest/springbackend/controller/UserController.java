@@ -22,7 +22,7 @@ public class UserController {
     }
 
     @GetMapping("/profile")
-    public ResponseEntity<?> profile(
+    public ResponseEntity<?> getProfile(
             @AuthenticationPrincipal UserDetails userDetails,
             @PageableDefault(
                     sort = "createdAt",

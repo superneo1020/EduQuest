@@ -1,6 +1,5 @@
 package com.eduquest.springbackend.model;
 
-import com.eduquest.springbackend.model.type.GameType;
 import jakarta.persistence.*;
 import org.hibernate.annotations.Generated;
 import org.hibernate.generator.EventType;
@@ -16,9 +15,8 @@ public class Game {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private GameType type;
+    private String type;
 
     @Column(nullable = false, length = 50, unique = true)
     private String name;
@@ -44,7 +42,7 @@ public class Game {
 
     public Game() {}
 
-    public Game(GameType type, String name, String difficulty, String icon, String description) {
+    public Game(String type, String name, String difficulty, String icon, String description) {
         this.type = type;
         this.name = name;
         this.difficulty = difficulty;
@@ -60,11 +58,11 @@ public class Game {
         this.id = id;
     }
 
-    public GameType getType() {
+    public String getType() {
         return type;
     }
 
-    public void setType(GameType type) {
+    public void setType(String type) {
         this.type = type;
     }
 

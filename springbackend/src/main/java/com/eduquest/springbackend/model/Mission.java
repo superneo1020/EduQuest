@@ -1,6 +1,5 @@
 package com.eduquest.springbackend.model;
 
-import com.eduquest.springbackend.model.type.GameType;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Min;
 import org.hibernate.annotations.Generated;
@@ -17,9 +16,8 @@ public class Mission {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private GameType type;
+    private String type;
 
     @Column(nullable = false, length = 100, unique = true)
     private String name;
@@ -50,7 +48,7 @@ public class Mission {
     public Mission() {
     }
 
-    public Mission(GameType type, String name, String difficulty, String icon, String description, Integer scores) {
+    public Mission(String type, String name, String difficulty, String icon, String description, Integer scores) {
         this.type = type;
         this.name = name;
         this.difficulty = difficulty;
@@ -67,11 +65,11 @@ public class Mission {
         this.id = id;
     }
 
-    public GameType getType() {
+    public String getType() {
         return type;
     }
 
-    public void setType(GameType type) {
+    public void setType(String type) {
         this.type = type;
     }
 

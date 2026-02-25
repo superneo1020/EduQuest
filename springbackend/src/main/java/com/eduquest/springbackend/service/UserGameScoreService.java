@@ -1,9 +1,11 @@
 package com.eduquest.springbackend.service;
 
+import com.eduquest.springbackend.Util.PageableUtils;
 import com.eduquest.springbackend.dao.GameRepository;
 import com.eduquest.springbackend.dao.UserGameScoreRepository;
 import com.eduquest.springbackend.dao.UserRepository;
 import com.eduquest.springbackend.dto.LeaderboardDto;
+import com.eduquest.springbackend.dto.LeaderboardScoreDto;
 import com.eduquest.springbackend.dto.UserGameScoreRequest;
 import com.eduquest.springbackend.dto.UserGameScoreResponse;
 import com.eduquest.springbackend.model.AppUser;
@@ -18,6 +20,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Set;
+
 @Service
 public class UserGameScoreService {
 
@@ -26,6 +30,10 @@ public class UserGameScoreService {
     private final GameRepository gameRepository;
     private final EntityManager entityManager;
     private final UserDtoMapper userDtoMapper;
+
+    private final Set<String> LEADERBOARD_SCORE_DTO_FIELD = Set.of(
+            "username", "scores", "createdAt"
+    );
 
     public UserGameScoreService(UserGameScoreRepository userGameScoreRepository,
                                 UserRepository userRepository,
@@ -68,7 +76,10 @@ public class UserGameScoreService {
         Long gameId = gameRepository.findIdByName(gameName).orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Game not found"));
 
-        Slice<UserGameScore> slice = userGameScoreRepository.findAllHighestScoresByGameId(gameId, pageable);
+        Pageable cleanPageable = PageableUtils.filterSort(pageable, LEADERBOARD_SCORE_DTO_FIELD);
+
+        Slice<LeaderboardScoreDto> slice = userGameScoreRepository.findAllHighestScoresByGameId(gameId, cleanPageable);
+
         return userDtoMapper.toLeaderboard(slice);
     }
 }
