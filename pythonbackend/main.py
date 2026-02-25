@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     )
     host: str = "0.0.0.0"
     port: int = 8000
-    model: str = "llama2"
+    model: str = "gemma3"
     cors_origins: list[str] = Field(default_factory=lambda: ["*"])
     log_level: str = "INFO"
 
