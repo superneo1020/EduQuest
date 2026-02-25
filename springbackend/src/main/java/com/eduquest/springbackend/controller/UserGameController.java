@@ -24,7 +24,7 @@ public class UserGameController {
     }
 
     @GetMapping({"/score", "/{name}/score"})
-    public ResponseEntity<?> game(
+    public ResponseEntity<?> getGameScore(
             @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable(required = false) String name,
             @PageableDefault(
@@ -38,7 +38,7 @@ public class UserGameController {
     }
 
     @GetMapping({"/best", "/{name}/best"})
-    public ResponseEntity<?> game(
+    public ResponseEntity<?> getBestGameScore(
             @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable(required = false) String name
     ) {

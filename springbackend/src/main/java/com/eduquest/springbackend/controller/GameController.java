@@ -2,7 +2,6 @@ package com.eduquest.springbackend.controller;
 
 import com.eduquest.springbackend.service.UserGameScoreService;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,12 +20,9 @@ public class GameController {
     }
 
     @GetMapping("/{name}/leaderboard")
-    public ResponseEntity<?> leaderboard(
+    public ResponseEntity<?> getLeaderboard(
             @PathVariable String name,
-            @PageableDefault(
-                    sort = "created_at",
-                    direction = Sort.Direction.DESC
-            ) Pageable pageable
+            @PageableDefault Pageable pageable
     ) {
         return ResponseEntity.ok(userGameScoreService.showLeaderboard(name, pageable));
     }

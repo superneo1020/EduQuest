@@ -1,16 +1,15 @@
 package com.eduquest.springbackend.service;
 
+import com.eduquest.springbackend.Util.PageableUtils;
 import com.eduquest.springbackend.dao.GameRepository;
 import com.eduquest.springbackend.dao.RoleRepository;
 import com.eduquest.springbackend.dao.UserGameScoreRepository;
 import com.eduquest.springbackend.dao.UserRepository;
-import com.eduquest.springbackend.dto.GameScoreDto;
+import com.eduquest.springbackend.dto.UserGameScoreDto;
 import com.eduquest.springbackend.dto.UserProfileDto;
 import com.eduquest.springbackend.model.AppUser;
 import com.eduquest.springbackend.model.Role;
-import com.eduquest.springbackend.model.UserGameScore;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -19,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class UserService {
@@ -27,6 +27,10 @@ public class UserService {
     private final UserDtoMapper userDtoMapper;
     private final UserGameScoreRepository userGameScoreRepository;
     private final GameRepository gameRepository;
+
+    private final Set<String> USER_PROFILE_DTO_FIELD = Set.of(
+            "gameName", "gameType", "gameDifficulty", "gameIcon", "gameDescription", "scores", "createdAt"
+    );
 
     public UserService(UserRepository userRepository,
                        RoleRepository roleRepository,
@@ -74,16 +78,9 @@ public class UserService {
         Long id = userRepository.findIdByUsername(userDetails.getUsername()).orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
-        Page<UserGameScore> page = userGameScoreRepository.findByUserId(id, pageable);
+        Pageable cleanPageable = PageableUtils.filterSort(pageable, USER_PROFILE_DTO_FIELD);
 
-        if (page.getTotalPages() > 0 && pageable.getPageNumber() >= page.getTotalPages()) {
-            Pageable lastPageable = PageRequest.of(
-                    page.getTotalPages() - 1,
-                    pageable.getPageSize(),
-                    pageable.getSort()
-            );
-            page = userGameScoreRepository.findByUserId(id, lastPageable);
-        }
+        Page<UserGameScoreDto> page = userGameScoreRepository.findUserGameScoresByUserId(id, cleanPageable);
 
         return userDtoMapper.toProfile(page);
     }
@@ -95,41 +92,28 @@ public class UserService {
         Long gameId = gameRepository.findIdByName(gameName).orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Game not found"));
 
-        Page<UserGameScore> page = userGameScoreRepository.findByUserIdAndGameId(userId, gameId, pageable);
+        Pageable cleanPageable = PageableUtils.filterSort(pageable, USER_PROFILE_DTO_FIELD);
 
-        if (page.getTotalPages() > 0 && pageable.getPageNumber() >= page.getTotalPages()) {
-            Pageable lastPageable = PageRequest.of(
-                    page.getTotalPages() - 1,
-                    pageable.getPageSize(),
-                    pageable.getSort()
-            );
-            page = userGameScoreRepository.findByUserIdAndGameId(userId, gameId, lastPageable);
-        }
+        Page<UserGameScoreDto> page = userGameScoreRepository.findUserGameScoresByUserIdAndGameId(userId, gameId, cleanPageable);
 
         return userDtoMapper.toProfile(page);
     }
 
     @Transactional(readOnly = true)
-    public List<GameScoreDto> showBestGameRecord(UserDetails userDetails) {
+    public List<UserGameScoreDto> showBestGameRecord(UserDetails userDetails) {
         Long id = userRepository.findIdByUsername(userDetails.getUsername()).orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
-        List<UserGameScore> record = userGameScoreRepository.findAllHighestScoresByUserId(id);
-
-        return record.stream()
-                .map(userDtoMapper::fromGameScore)
-                .toList();
+        return userGameScoreRepository.findAllHighestScoresByUserId(id);
     }
 
     @Transactional(readOnly = true)
-    public GameScoreDto showBestGameRecord(UserDetails userDetails, String gameName) {
+    public UserGameScoreDto showBestGameRecord(UserDetails userDetails, String gameName) {
         Long userId = userRepository.findIdByUsername(userDetails.getUsername()).orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
         Long gameId = gameRepository.findIdByName(gameName).orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Game not found"));
 
-        UserGameScore record = userGameScoreRepository.findHighestScoresByUserIdAndGameId(userId, gameId);
-
-        return userDtoMapper.fromGameScore(record);
+        return userGameScoreRepository.findHighestScoresByUserIdAndGameId(userId, gameId);
     }
 }

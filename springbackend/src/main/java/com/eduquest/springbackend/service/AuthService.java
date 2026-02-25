@@ -88,29 +88,10 @@ public class AuthService {
 
     @Transactional
     public AuthResponse loginAndGetUser(String username, String password) {
-        String token = login(username, password); // existing method or inline logic
+        String token = login(username, password);
         AppUser user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
         UserDto userDto = userDtoMapper.toUser(user);
         return new AuthResponse(token, userDto);
-    }
-
-    @Transactional
-    public String testEncoder(String rawPassword) {
-        String encodedPassword = passwordEncoder.encode(rawPassword);
-        return "Raw: " + rawPassword + "\nEncoded: " + encodedPassword +
-                "\nMatches: " + passwordEncoder.matches(rawPassword, encodedPassword);
-    }
-
-    public String getEmailByUsername(String username) {
-        return userRepository.findByUsername(username)
-                .map(AppUser::getEmail)
-                .orElse("No Email");
-    }
-
-    public Integer getPointsByUsername(String username) {
-        return userRepository.findByUsername(username)
-                .map(AppUser::getPoints)
-                .orElse(0);
     }
 }

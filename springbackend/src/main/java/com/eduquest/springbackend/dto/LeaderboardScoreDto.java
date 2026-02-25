@@ -2,9 +2,9 @@ package com.eduquest.springbackend.dto;
 
 import java.time.Instant;
 
-public record UserScoreDto(
+public record LeaderboardScoreDto(
         String username,
-        Integer score,
+        Integer scores,
         Instant createdAt
 ) {
 }
