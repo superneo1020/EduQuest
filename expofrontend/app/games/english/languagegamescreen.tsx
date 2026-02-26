@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import ListeningGame from './components/listeninggame';
-import MatchingGame from './components/matchinggame';
+import MatchingGame from './components/writing';
 
 const LanguageGameScreen = () => {
   const params = useLocalSearchParams();
