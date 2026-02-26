@@ -2,7 +2,7 @@ package com.eduquest.springbackend.service;
 
 import com.eduquest.springbackend.dao.RoleRepository;
 import com.eduquest.springbackend.dao.UserRepository;
-import com.eduquest.springbackend.dto.AuthResponseDto;
+import com.eduquest.springbackend.dto.AuthResponse;
 import com.eduquest.springbackend.dto.UserDto;
 import com.eduquest.springbackend.exception.DuplicateResourceException;
 import com.eduquest.springbackend.model.AppUser;
@@ -34,7 +34,8 @@ public class AuthService {
                        RoleRepository roleRepository,
                        AuthenticationManager authenticationManager,
                        PasswordEncoder passwordEncoder,
-                       JwtService jwtService, UserDtoMapper userDtoMapper) {
+                       JwtService jwtService,
+                       UserDtoMapper userDtoMapper) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.authenticationManager = authenticationManager;
@@ -86,30 +87,11 @@ public class AuthService {
     }
 
     @Transactional
-    public AuthResponseDto loginAndGetUser(String username, String password) {
-        String token = login(username, password); // existing method or inline logic
+    public AuthResponse loginAndGetUser(String username, String password) {
+        String token = login(username, password);
         AppUser user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
         UserDto userDto = userDtoMapper.toUser(user);
-        return new AuthResponseDto(token, userDto);
-    }
-
-    @Transactional
-    public String testEncoder(String rawPassword) {
-        String encodedPassword = passwordEncoder.encode(rawPassword);
-        return "Raw: " + rawPassword + "\nEncoded: " + encodedPassword +
-                "\nMatches: " + passwordEncoder.matches(rawPassword, encodedPassword);
-    }
-
-    public String getEmailByUsername(String username) {
-        return userRepository.findByUsername(username)
-                .map(AppUser::getEmail)
-                .orElse("No Email");
-    }
-
-    public Integer getPointsByUsername(String username) {
-        return userRepository.findByUsername(username)
-                .map(AppUser::getPoints)
-                .orElse(0);
+        return new AuthResponse(token, userDto);
     }
 }

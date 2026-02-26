@@ -1,7 +1,6 @@
 package com.eduquest.springbackend.model;
 
 import jakarta.persistence.*;
-import jakarta.validation.constraints.Min;
 import org.hibernate.annotations.Generated;
 import org.hibernate.generator.EventType;
 
@@ -10,8 +9,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "missions")
-public class Mission {
+@Table(name = "items")
+public class Item {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -19,11 +18,8 @@ public class Mission {
     @Column(nullable = false, length = 20)
     private String type;
 
-    @Column(nullable = false, length = 100, unique = true)
+    @Column(nullable = false, length = 50, unique = true)
     private String name;
-
-    @Column(nullable = false, length = 20)
-    private String difficulty;
 
     @Column(columnDefinition = "TEXT")
     private String icon;
@@ -32,29 +28,25 @@ public class Mission {
     private String description;
 
     @Column(nullable = false)
-    @Min(value = 0, message = "Game scores must be at least 0")
-    private Integer scores = 0;
+    private Integer price;
 
-    @Column(nullable = false,
-            insertable = false,
+    @Column(insertable = false,
             updatable = false,
-            columnDefinition = "TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP")
+            columnDefinition = "TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP")
     @Generated(event = {EventType.INSERT})
     private Instant createdAt;
 
-    @OneToMany(mappedBy = "mission", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<UserMission> userMissions = new ArrayList<>();
+    @OneToMany(mappedBy = "item", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<UserItem> userItems = new ArrayList<>();
 
-    public Mission() {
-    }
+    public Item() {}
 
-    public Mission(String type, String name, String difficulty, String icon, String description, Integer scores) {
+    public Item(String type, String name, String icon, String description, Integer price) {
         this.type = type;
         this.name = name;
-        this.difficulty = difficulty;
         this.icon = icon;
         this.description = description;
-        this.scores = scores;
+        this.price = price;
     }
 
     public Long getId() {
@@ -81,14 +73,6 @@ public class Mission {
         this.name = name;
     }
 
-    public String getDifficulty() {
-        return difficulty;
-    }
-
-    public void setDifficulty(String difficulty) {
-        this.difficulty = difficulty;
-    }
-
     public String getIcon() {
         return icon;
     }
@@ -105,23 +89,23 @@ public class Mission {
         this.description = description;
     }
 
-    public Integer getScores() {
-        return scores;
+    public Integer getPrice() {
+        return price;
     }
 
-    public void setScores(Integer scores) {
-        this.scores = scores;
+    public void setPrice(Integer price) {
+        this.price = price;
     }
 
     public Instant getCreatedAt() {
         return createdAt;
     }
 
-    public List<UserMission> getUserMissions() {
-        return userMissions;
+    public List<UserItem> getUserItems() {
+        return userItems;
     }
 
-    public void setUserMissions(List<UserMission> userMissions) {
-        this.userMissions = userMissions;
+    public void setUserItems(List<UserItem> userItems) {
+        this.userItems = userItems;
     }
 }
