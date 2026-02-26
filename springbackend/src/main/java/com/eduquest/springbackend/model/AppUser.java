@@ -1,7 +1,9 @@
 package com.eduquest.springbackend.model;
 
 import jakarta.persistence.*;
-import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Min;
+import org.hibernate.annotations.Generated;
+import org.hibernate.generator.EventType;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -10,7 +12,6 @@ import java.util.List;
 @Entity
 @Table(name = "users")
 public class AppUser {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -24,8 +25,9 @@ public class AppUser {
     @Column(nullable = false)
     private String password;
 
-    @Column(nullable = false)
-    @PositiveOrZero
+    @Column(nullable = false, insertable = false)
+    @Generated(event = {EventType.INSERT, EventType.UPDATE})
+    @Min(value = 0, message = "User points must be at least 0")
     private Integer points = 0;
 
     @ManyToMany(fetch = FetchType.EAGER)
@@ -39,13 +41,11 @@ public class AppUser {
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<UserGameScore> userGameScores = new ArrayList<>();
 
-    @ManyToMany
-    @JoinTable(
-            name = "user_missions",
-            joinColumns = @JoinColumn(name = "user_id"),
-            inverseJoinColumns = @JoinColumn(name = "mission_id")
-    )
-    private Collection<Mission> missions = new ArrayList<>();
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<UserMission> userMissions = new ArrayList<>();
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<UserItem> userItems = new ArrayList<>();
 
     public AppUser() {}
 
@@ -87,6 +87,14 @@ public class AppUser {
         this.password = password;
     }
 
+    public Integer getPoints() {
+        return points;
+    }
+
+    public void setPoints(Integer points) {
+        this.points = points;
+    }
+
     public Collection<Role> getRoles() {
         return roles;
     }
@@ -103,19 +111,19 @@ public class AppUser {
         this.userGameScores = userGameScores;
     }
 
-    public Collection<Mission> getMissions() {
-        return missions;
+    public List<UserMission> getUserMissions() {
+        return userMissions;
     }
 
-    public void setMissions(Collection<Mission> missions) {
-        this.missions = missions;
+    public void setUserMissions(List<UserMission> userMissions) {
+        this.userMissions = userMissions;
     }
 
-    public Integer getPoints() {
-        return points;
+    public List<UserItem> getUserItems() {
+        return userItems;
     }
 
-    public void setPoints(Integer points) {
-        this.points = points;
+    public void setUserItems(List<UserItem> userItems) {
+        this.userItems = userItems;
     }
 }

@@ -1,9 +1,10 @@
 package com.eduquest.springbackend.model;
 
-import com.eduquest.springbackend.model.type.DifficultyType;
-import com.eduquest.springbackend.model.type.GameType;
 import jakarta.persistence.*;
+import org.hibernate.annotations.Generated;
+import org.hibernate.generator.EventType;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -14,15 +15,14 @@ public class Game {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private GameType type;
+    @Column(nullable = false, length = 20)
+    private String type;
 
     @Column(nullable = false, length = 50, unique = true)
     private String name;
 
-    @Enumerated(EnumType.STRING)
-    private DifficultyType difficulty;
+    @Column(nullable = false, length = 20)
+    private String difficulty;
 
     @Column(columnDefinition = "TEXT")
     private String icon;
@@ -30,12 +30,19 @@ public class Game {
     @Column(columnDefinition = "TEXT")
     private String description;
 
+    @Column(nullable = false,
+            insertable = false,
+            updatable = false,
+            columnDefinition = "TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP")
+    @Generated(event = {EventType.INSERT})
+    private Instant createdAt;
+
     @OneToMany(mappedBy = "game", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<UserGameScore> userGameScores = new ArrayList<>();
 
     public Game() {}
 
-    public Game(GameType type, String name, DifficultyType difficulty, String icon, String description) {
+    public Game(String type, String name, String difficulty, String icon, String description) {
         this.type = type;
         this.name = name;
         this.difficulty = difficulty;
@@ -51,11 +58,11 @@ public class Game {
         this.id = id;
     }
 
-    public GameType getType() {
+    public String getType() {
         return type;
     }
 
-    public void setType(GameType type) {
+    public void setType(String type) {
         this.type = type;
     }
 
@@ -67,11 +74,11 @@ public class Game {
         this.name = name;
     }
 
-    public DifficultyType getDifficulty() {
+    public String getDifficulty() {
         return difficulty;
     }
 
-    public void setDifficulty(DifficultyType difficulty) {
+    public void setDifficulty(String difficulty) {
         this.difficulty = difficulty;
     }
 
@@ -97,5 +104,9 @@ public class Game {
 
     public void setUserGameScores(List<UserGameScore> userGameScores) {
         this.userGameScores = userGameScores;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
     }
 }
