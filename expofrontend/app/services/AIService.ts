@@ -1,3 +1,5 @@
+
+// 首先在文件頂部導入 AIService
 // app/services/AIService.ts
 import { Config } from '../config';
 
@@ -27,110 +29,105 @@ class AIService {
     private enabled: boolean;
 
     constructor() {
-        this.baseURL = Config.AI_BASE_URL;
-        this.modelName = Config.AI_MODEL_NAME;
-        this.enabled = Config.AI_ENABLED;
+        // 使用與 chatbot.tsx 相同的後端地址
+        this.baseURL = 'http://127.0.0.1:8000';  // 或 Config.AI_BASE_URL
+        this.modelName = Config.AI_MODEL_NAME || 'llama';
+        this.enabled = Config.AI_ENABLED !== false;
     }
 
     async analyzeGameResults(request: AIAnalysisRequest): Promise<AIAnalysisResponse> {
         if (!this.enabled) {
-            console.log('AI 分析功能已禁用');
+            console.log('AI analysis function disabled');
             return this.getDefaultResponse();
         }
 
         try {
-            console.log('正在連接到 AI 服務:', this.baseURL);
-            console.log('使用的模型:', this.modelName);
+            console.log('Connecting to AI service:', this.baseURL);
+            console.log('Using model:', this.modelName);
 
+            // 使用與 chatbot.tsx 相同的請求格式
             const prompt = this.createAnalysisPrompt(request);
-            console.log('生成的提示詞:', prompt);
 
-            // 根據 LM Studio 的 API 格式調整請求
-            // 在 analyzeGameResults 方法中修改 system prompt
-            const requestBody = {
-                model: this.modelName,
-                messages: [
-                    {
-                        role: "system",
-                        content: "You are a language learning expert specializing in analyzing English listening game performance. Please ensure all feedback is concise and brief (maximum 10 words per item). Return analysis results in JSON format."
-                    },
-                    {
-                        role: "user",
-                        content: prompt
-                    }
-                ],
-                temperature: 0.7,
-                max_tokens: 400,
-                stream: false
-            };
-            console.log('發送請求體:', JSON.stringify(requestBody, null, 2));
-
-            const response = await fetch(`${this.baseURL}/chat/completions`, {
+            // 根據 chatbot.tsx 的格式，使用 /chat 端點
+            const response = await fetch(`${this.baseURL}/chat`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(requestBody),
+                body: JSON.stringify({
+                    prompt: prompt
+                }),
             });
 
-            console.log('AI 服務響應狀態:', response.status);
-            console.log('AI 服務響應頭:', response.headers);
+            console.log('AI service response status:', response.status);
 
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error('AI 服務錯誤詳情:', errorText);
-                throw new Error(`AI服務錯誤: ${response.status} ${response.statusText}\n${errorText}`);
+                console.error('AI service error details:', errorText);
+                throw new Error(`AI service error: ${response.status} ${response.statusText}`);
             }
 
             const data = await response.json();
-            console.log('AI 原始響應:', data);
+            console.log('AI raw response:', data);
 
-            if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-                console.error('AI 響應格式錯誤:', data);
-                throw new Error('AI 響應格式不正確');
+            // 根據 chatbot.tsx 的響應格式解析
+            const aiResponseText = data.response || data.choices?.[0]?.message?.content;
+
+            if (!aiResponseText) {
+                console.error('AI response format error:', data);
+                throw new Error('AI response format incorrect');
             }
 
-            const aiResponse = data.choices[0].message.content;
-            console.log('AI 響應內容:', aiResponse);
+            console.log('AI response content:', aiResponseText);
 
-            return this.parseAIResponse(aiResponse, request);
+            return this.parseAIResponse(aiResponseText);
+
         } catch (error: any) {
-            console.error('AI分析失敗:', error);
+            console.error('AI analysis failed:', error);
 
             // 提供友好的錯誤信息
             let errorMessage = 'AI analysis service temporarily unavailable.';
 
             if (error.message.includes('Network request failed') ||
                 error.message.includes('Failed to fetch')) {
-                errorMessage = 'Unable to connect to AI service. Please ensure:\n1. LM Studio is running\n2. Service address is correct\n3. No firewall blocking connections';
+                errorMessage = 'Unable to connect to AI service. Please ensure:\n1. Backend server is running\n2. Service address is correct\n3. No firewall blocking connections';
             } else if (error.message.includes('404')) {
-                errorMessage = 'AI service not found. Please check if LM Studio is correctly started and API service is configured.';
+                errorMessage = 'AI service not found. Please check if backend is correctly started.';
             }
 
-            throw new Error(errorMessage);
+            // 返回默認響應而不是拋出錯誤
+            console.log('Returning default response due to error');
+            return this.getDefaultResponse();
         }
     }
 
     private createAnalysisPrompt(request: AIAnalysisRequest): string {
-        return `You are analyzing English listening game performance.
+        return `You are an English language learning expert. Analyze this listening game performance and provide feedback in JSON format.
 
 Performance Data:
-- Difficulty: ${request.difficulty}
-- Score: ${request.score}
+- Difficulty Level: ${request.difficulty}
+- Total Score: ${request.score}
 - Accuracy: ${request.accuracy}%
-- Correct: ${request.correctAnswers}/${request.totalQuestions}
+- Correct Answers: ${request.correctAnswers}/${request.totalQuestions}
 - Max Streak: ${request.maxStreak}
+- Game Type: ${request.gameType}
 
-Return ONLY this JSON structure, no other text:
+Please provide analysis in this JSON format:
 {
-  "feedback": "Brief performance feedback (max 15 words)",
-  "suggestions": ["First learning tip", "Second learning tip"]
-}`;
+    "feedback": "Brief performance summary (max 15 words)",
+    "suggestions": ["Suggestion 1", "Suggestion 2", "Suggestion 3"],
+    "strengths": ["Strength 1", "Strength 2"],
+    "areas_to_improve": ["Area 1", "Area 2"],
+    "estimated_level": "e.g., Beginner/Intermediate/Advanced",
+    "recommended_next_steps": ["Step 1", "Step 2"]
+}
+
+Make sure to return ONLY valid JSON, no other text.`;
     }
 
-    private parseAIResponse(response: string, request?: AIAnalysisRequest): AIAnalysisResponse {
+    private parseAIResponse(response: string): AIAnalysisResponse {
         try {
-            console.log('嘗試解析 AI 響應:', response);
+            console.log('Attempting to parse AI response:', response);
 
             // 清理響應文本，移除可能的 markdown 代碼塊
             let cleanedResponse = response.trim();
@@ -148,38 +145,40 @@ Return ONLY this JSON structure, no other text:
 
             cleanedResponse = cleanedResponse.trim();
 
-            console.log('清理後的響應:', cleanedResponse);
+            console.log('Cleaned response:', cleanedResponse);
 
             // 嘗試解析 JSON
             const parsed = JSON.parse(cleanedResponse);
 
             // 簡化響應內容
-            const simplifyText = (text: string) => {
-                if (text.split(' ').length > 10) {
-                    // 如果超過10個單字，截斷並添加...
-                    return text.split(' ').slice(0, 10).join(' ') + '...';
+            const simplifyText = (text: string, maxWords: number = 15) => {
+                if (!text) return "";
+                const words = text.split(' ');
+                if (words.length > maxWords) {
+                    return words.slice(0, maxWords).join(' ') + '...';
                 }
                 return text;
             };
 
             // 簡化數組中的每個項目
-            const simplifyArray = (arr: string[]) => {
-                return arr.map(item => simplifyText(item));
+            const simplifyArray = (arr: string[], maxWords: number = 8) => {
+                if (!Array.isArray(arr)) return [];
+                return arr.map(item => simplifyText(item, maxWords));
             };
 
             return {
-                feedback: parsed.feedback ? simplifyText(parsed.feedback) : "表現良好",
-                suggestions: Array.isArray(parsed.suggestions) ? simplifyArray(parsed.suggestions) : [],
-                strengths: Array.isArray(parsed.strengths) ? simplifyArray(parsed.strengths) : [],
-                areas_to_improve: Array.isArray(parsed.areas_to_improve) ? simplifyArray(parsed.areas_to_improve) : [],
-                estimated_level: parsed.estimated_level || "待評估",
-                recommended_next_steps: Array.isArray(parsed.recommended_next_steps) ? simplifyArray(parsed.recommended_next_steps) : []
+                feedback: parsed.feedback ? simplifyText(parsed.feedback, 15) : "Good performance! Keep practicing.",
+                suggestions: Array.isArray(parsed.suggestions) ? simplifyArray(parsed.suggestions, 8) : [],
+                strengths: Array.isArray(parsed.strengths) ? simplifyArray(parsed.strengths, 8) : [],
+                areas_to_improve: Array.isArray(parsed.areas_to_improve) ? simplifyArray(parsed.areas_to_improve, 8) : [],
+                estimated_level: parsed.estimated_level || "To be assessed",
+                recommended_next_steps: Array.isArray(parsed.recommended_next_steps) ? simplifyArray(parsed.recommended_next_steps, 8) : []
             };
         } catch (error) {
-            console.error('解析AI響應失敗:', error);
-            console.error('原始響應:', response);
+            console.error('Failed to parse AI response:', error);
+            console.error('Original response:', response);
 
-            // 如果解析失敗，創建一個簡短的默認響應
+            // 如果解析失敗，返回默認響應
             return this.getDefaultResponse();
         }
     }
@@ -187,11 +186,11 @@ Return ONLY this JSON structure, no other text:
     private getDefaultResponse(): AIAnalysisResponse {
         return {
             feedback: "AI analysis feature temporarily unavailable",
-            suggestions: ["Continue practicing", "Listen to more English", "Try new difficulty"],
-            strengths: ["Active participation"],
-            areas_to_improve: ["Need more practice"],
+            suggestions: ["Continue practicing", "Listen to more English content", "Try different difficulty levels"],
+            strengths: ["Active participation in learning"],
+            areas_to_improve: ["Could use more focused practice"],
             estimated_level: "To be assessed",
-            recommended_next_steps: ["Daily practice"]
+            recommended_next_steps: ["Practice daily", "Review mistakes", "Set learning goals"]
         };
     }
 }
