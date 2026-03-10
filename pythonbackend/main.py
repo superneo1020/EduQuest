@@ -190,12 +190,7 @@ def generate_math_ai(difficulty: str = "easy"):
                 "num_predict": 150,
                 "num_thread": 4
             }
-            options={
-                "temperature": 0.1,    # 降低隨機性，讓 AI 更專注
-                "num_predict": 128,    # 限制 AI 最多只產生 128 個 token (題目很短，這足夠了)
-                "top_k": 20,           # 減少候選詞數量，加快運算
-                "num_thread": 4        # 根據你的 CPU 核心數設定，強制並行運算
-            }
+
         )
         content = resp["message"]["content"].strip()
         logger.info(f"AI Raw Output ({difficulty}): {content}")
