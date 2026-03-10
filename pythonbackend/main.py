@@ -17,15 +17,20 @@ import json
 import re
 import random
 import threading
+import time
 
 whisper_model = None
-math_queue = []
+math_queues = {
+    "easy": [],
+    "medium": [],
+    "hard": []
+}
 
 def get_whisper_model():
     global whisper_model
     if whisper_model is None:
         logger.info("Loading Whisper model...")
-        whisper_model = whisper.load_model("base")   
+        whisper_model = whisper.load_model("base")
         logger.info("Whisper model loaded")
     return whisper_model
 
@@ -49,7 +54,7 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(message)s",
     datefmt="%H:%M:%S",
 )
-logger = logging.getLogger("llama-service")
+logger = logging.getLogger("gemma-service")
 
 # ---------------------------------------------------------------------
 # Lifespan
@@ -57,22 +62,19 @@ logger = logging.getLogger("llama-service")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Ensuring model %s is available …", settings.model)
-    try:
-        ollama.pull(settings.model)
-    except Exception as e:
-        logger.error("Could not pull model: %s", e)
-        raise RuntimeError(f"Model {settings.model} unavailable") from e
-    logger.info("Model %s ready", settings.model)
+    ollama.pull(settings.model)
+
+    # 確保執行緒啟動
+    for diff in ["easy", "medium", "hard"]:
+        logger.info(f"Spawning thread for {diff}")
+        threading.Thread(target=refill_queue, args=(diff,), daemon=True).start()
     yield
-    logger.info("Shutting down")
 
 
 # ---------------------------------------------------------------------
 # App
 # ---------------------------------------------------------------------
 app = FastAPI(
-    title="Local LLaMA-2 API",
-    version="0.1.0",
     lifespan=lifespan,
 )
 
@@ -127,6 +129,68 @@ def chat_sync(prompt: str) -> str:
             detail="Model inference failed",
         ) from exc
 
+# ---------------------------------------------------------------------
+# Math Logic (核心生成)
+# ---------------------------------------------------------------------
+def generate_math_ai_logic(difficulty: str = "easy"):
+    # 限制解釋長度，防止模型因為輸出過長而截斷 JSON
+    prompt = (
+        f"Create ONE {difficulty} math problem. "
+        "Strictly return ONLY a JSON object. "
+        "Format: {\"question\": \"string\", \"answer\": \"string\", \"explanation\": \"string\"}. "
+        "No conversational text, no backticks, no markdown. "
+        "Keep the explanation concise (under 50 words)."
+    )
+
+    try:
+        resp = ollama.chat(
+            model=settings.model,
+            messages=[{"role": "user", "content": prompt}],
+            options={"temperature": 0.7, "num_predict": 400}
+        )
+        content = resp["message"]["content"].strip()
+
+        # 尋找第一個 { 到最後一個 }
+        start = content.find('{')
+        end = content.rfind('}')
+
+        if start != -1 and end != -1:
+            json_str = content[start:end+1]
+            try:
+                data = json.loads(json_str)
+                return data
+            except json.JSONDecodeError:
+                # 嘗試簡單修正：補上缺失的結尾
+                if not json_str.endswith('}'):
+                    json_str += '}'
+                    return json.loads(json_str)
+
+        logger.error(f"Failed to extract JSON from: {content}")
+        return None
+    except Exception as e:
+        logger.error(f"Generation error: {e}")
+        return None
+
+is_refilling = {"easy": False, "medium": False, "hard": False}
+def refill_queue(difficulty: str = "easy"):
+    global math_queues, is_refilling
+    if is_refilling[difficulty]: return
+
+    is_refilling[difficulty] = True
+    logger.info(f"Starting background refill for: {difficulty}") # 新增這行
+    try:
+        while len(math_queues[difficulty]) < 5:
+            logger.info(f"Refilling {difficulty} queue... Current size: {len(math_queues[difficulty])}")
+            new_prob = generate_math_ai_logic(difficulty)
+            if new_prob:
+                math_queues[difficulty].append(new_prob)
+            else:
+                logger.error(f"Failed to generate {difficulty} problem. Retrying in 5s...")
+                time.sleep(5) # 失敗時暫停久一點
+    finally:
+        is_refilling[difficulty] = False
+    logger.info(f"{difficulty.capitalize()} queue refill complete.")
+
 
 # ---------------------------------------------------------------------
 # Routes
@@ -162,153 +226,83 @@ def chat_stream(req: ChatRequest) -> StreamingResponse:
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )
 
+@app.post("/api/math/init_session")
+def init_session(difficulty: str):
+    global math_queues
+    if difficulty not in math_queues: difficulty = "easy"
+
+    math_queues[difficulty] = []
+    logger.info(f"Generating 10 {difficulty} problems...")
+
+    # 這裡直接循環生成，不要再開 Thread，因為這是一個初始化請求
+    for _ in range(10):
+        problem = generate_math_ai_logic(difficulty)
+        if problem:
+            problem["difficulty"] = difficulty
+            math_queues[difficulty].append(problem)
+
+    return {"status": "success", "count": len(math_queues[difficulty])}
+
 @app.get("/api/math/generate")
-def generate_math_ai(difficulty: str = "easy"):
-    topics = ["shopping", "traveling", "farming", "coding", "cooking"]
-    selected_topic = random.choice(topics)
+def get_math_on_demand(difficulty: str = "easy"):
+    # 增加 Log，看看是否有確實進入此函式
+    logger.info(f"--- 請求生成題目: {difficulty} ---")
+    problem = generate_math_ai_logic(difficulty)
 
+    if problem:
+        problem["difficulty"] = difficulty
+        logger.info(f"--- 生成成功: {problem['question'][:30]}... ---")
+        return problem
 
-    if difficulty == "hard":
-        diff_rule = "Create a problem with 3 numbers and two operations (e.g., multiply then add). Answer must be a whole number."
-    elif difficulty == "medium":
-        diff_rule = "Create a multiplication or division problem. Answer must be a whole number."
-    else:
-        diff_rule = "Create a simple addition or subtraction problem."
+    logger.error("--- 生成失敗，返回 500 ---")
+    raise HTTPException(status_code=500, detail="Failed to generate question")
 
+@app.post("/api/math/check")
+def check_math_answer(req: CheckRequest):
+    clean_user = str(req.user_answer).strip().lower().replace(" ", "")
+    clean_correct = str(req.correct_answer).strip().lower().replace(" ", "")
+
+    # 先做硬核判斷
+    is_correct_logic = (clean_user == clean_correct)
+
+    # 強化 Prompt，要求 AI 必須解釋「為什麼」
     prompt = (
-        f"JSON ONLY. {difficulty} math problem about {selected_topic}. "
-        f"Rule: {diff_rule}. "
-        "Format: {\"question\":\"...\",\"answer\":\"...\",\"explanation\":\"...\"}"
+        f"Math Teacher Mode. \n"
+        f"Question: {req.question}\n"
+        f"Student Answer: {req.user_answer}\n"
+        f"Correct Answer: {req.correct_answer}\n"
+        "--- TASK ---\n"
+        "1. Compare values. \n"
+        "2. If wrong, explain the subtraction/addition error step-by-step.\n"
+        "3. If right, give a short praise.\n"
+        "--- OUTPUT FORMAT (STRICT JSON) ---\n"
+        "{\"is_correct\": bool, \"feedback\": \"Your explanation here\"}"
     )
 
     try:
         resp = ollama.chat(
             model=settings.model,
             messages=[{"role": "user", "content": prompt}],
-            options={
-                "temperature": 0.1,
-                "num_predict": 150,
-                "num_thread": 4
-            }
-
+            options={"temperature": 0.3} # 判斷時保持低隨機性
         )
         content = resp["message"]["content"].strip()
-        logger.info(f"AI Raw Output ({difficulty}): {content}")
-
-        start = content.find('{')
-        end = content.rfind('}')
-
-        if start != -1 and end != -1:
-            json_str = content[start:end+1]
-
-            json_str = re.sub(r'[\n\r]', ' ', json_str)
-            json_str = re.sub(r',\s*}', '}', json_str)  # Remove trailing commas
-            json_str = re.sub(r',\s*]', ']', json_str)  # Remove trailing commas in arrays
-            json_str = re.sub(r'\s+', ' ', json_str)    # Normalize whitespace
-            json_str = json_str.strip()
-
-            logger.info(f"Cleaned JSON string: {json_str}")
-
-            try:
-                data = json.loads(json_str)
-
-                data["answer"] = str(data.get("answer", "0"))
-                return data
-            except json.JSONDecodeError as e:
-                logger.error(f"JSON Parse Error: {e}")
-
-        # Get JSON
         match = re.search(r'(\{.*\})', content, re.DOTALL)
-        if match:
-            json_str = match.group(1).replace('\n', ' ')
-            data = json.loads(json_str)
-            data["answer"] = str(data.get("answer", "0"))
-            return data
-    except Exception as e:
-        logger.error(f"Logic generation error: {e}")
 
-    # A backup question in case the AI is error.
+        if match:
+            result = json.loads(match.group(1))
+            # 修正：確保 feedback 欄位一定存在
+            if "feedback" not in result:
+                result["feedback"] = "Good attempt!" if is_correct_logic else f"The answer should be {req.correct_answer}."
+            return result
+
+    except Exception as e:
+        logger.error(f"Check error: {e}")
+
+    # 保底回傳
     return {
-        "question": f"A {selected_topic} worker works 8 hours a day for 5 days. Total hours?",
-        "answer": "40",
-        "explanation": "8 * 5 = 40"
+        "is_correct": is_correct_logic,
+        "feedback": f"The correct calculation is: {req.question.replace('?', '')} = {req.correct_answer}"
     }
-
-def get_math_prefetched():
-    global math_queue
-    if math_queue:
-        problem = math_queue.pop(0)
-
-        threading.Thread(target=refill_queue, daemon=True).start()
-        return problem
-
-    # 如果 Queue 咁啱係空嘅 (例如啟動太快)
-    return generate_math_ai("easy")
-
-def refill_queue():
-    global math_queue
-    while len(math_queue) < 5:
-        logger.info("Refilling math queue...")
-        new_prob = generate_math_ai("easy")
-        if new_prob:
-            math_queue.append(new_prob)
-    logger.info(f"Queue refill complete. Size: {len(math_queue)}")
-@app.post("/api/math/check")
-def check_math_answer(req: CheckRequest):
-    logger.info("AI checking student's work...")
-
-    # 1. 強化指令，叫 AI 不要廢話
-    prompt = (
-        "You are a math tutor. Analyze this:\n"
-        f"Question: {req.question}\n"
-        f"Student's Answer: {req.user_answer}\n"
-        f"Correct Answer: {req.correct_answer}\n"
-        "--- RULES ---\n"
-        "1. Response MUST be a JSON object.\n"
-        "2. NO introductory text, NO 'Correct!' mark, NO markdown code blocks.\n"
-        "3. Format: {\"is_correct\": true/false, \"feedback\": \"...\"}"
-    )
-
-    try:
-        resp = ollama.chat(model=settings.model, messages=[{"role": "user", "content": prompt}])
-        content = resp["message"]["content"].strip()
-
-        # 2. 這是核心：更強大的過濾網
-        # 尋找第一個 '{' 和最後一個 '}' 之間的所有內容
-        match = re.search(r'(\{.*\})', content, re.DOTALL)
-
-        if match:
-            json_str = match.group(1)
-            # Remove illegal line breaks that AI sometimes spews out.
-            json_str = json_str.replace('\n', ' ').replace('\r', ' ')
-
-            try:
-
-                result = json.loads(json_str)
-                # 即使解析成功，我們也要檢查 feedback 裡面有沒有 AI 偷塞的 "Correct!" 字眼
-                # 如果有，把它們清理掉，只留重點
-                clean_feedback = re.sub(r'^(✅ Correct!|❌ Incorrect!|Correct!|Incorrect!)\s*', '', result['feedback'])
-                result['feedback'] = clean_feedback
-                return result
-            except Exception as e:
-                logger.error(f"JSON Parse Error: {e}")
-
-        # --- Fallback (保底機制) ---
-        # 如果 Regex 沒抓到，或者 JSON 壞了，我們手動做一個 JSON 傳回前端
-        is_right = str(req.user_answer).strip() == str(req.correct_answer).strip()
-
-        # 把 AI 噴出來的廢話洗掉，只拿有用的文字
-        simple_feedback = content.split('}')[-1] if '}' in content else content
-        simple_feedback = simple_feedback.replace("✅ Correct!", "").replace("❌ Incorrect!", "").strip()
-
-        return {
-            "is_correct": is_right,
-            "feedback": simple_feedback if len(simple_feedback) > 5 else "Check your calculation steps again."
-        }
-
-    except Exception as e:
-        logger.error(f"Check failed: {e}")
-        return {"is_correct": False, "feedback": "AI server is busy. Please check manually."}
 
 @app.post("/api/math/final_report")
 def generate_final_report(req: SessionRecord):
@@ -332,25 +326,25 @@ def speech_to_text(file: UploadFile = File(...)):
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
             tmp.write(file.file.read())
             tmp_path = tmp.name
-        
+
         try:
             # Load audio using librosa (no ffmpeg required)
             audio, sr = librosa.load(tmp_path, sr=16000)
-            
+
             # Whisper expects audio in float32 format between -1 and 1
             audio = audio.astype(np.float32)
             if audio.max() > 1.0:
                 audio = audio / (audio.max() + 1e-9)
-            
+
             # Use Whisper's transcribe with audio array directly
             model = get_whisper_model()
             result = model.transcribe(audio, language="en")
-            
+
             os.remove(tmp_path)
-            
+
             logger.info("STT result: %s", result["text"][:50])
             return {"text": result["text"].strip()}
-            
+
         except Exception as e:
             logger.exception("STT processing failed")
             raise HTTPException(
