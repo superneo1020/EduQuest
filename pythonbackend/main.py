@@ -2,7 +2,7 @@ from __future__ import annotations
 import logging
 import os
 from contextlib import asynccontextmanager
-from typing import  ny
+from typing import Any
 
 import ollama
 from fastapi import FastAPI, HTTPException, status
@@ -29,8 +29,7 @@ def get_whisper_model():
         logger.info("Whisper model loaded")
     return whisper_model
 
-# -----------------------------------
-# ----------------------------------
+# ---------------------------------------------------------------------
 # Settings
 # ---------------------------------------------------------------------
 class Settings(BaseSettings):
@@ -60,7 +59,6 @@ async def lifespan(app: FastAPI):
     logger.info("Ensuring model %s is available …", settings.model)
     try:
         ollama.pull(settings.model)
-        threading.Thread(target=refill_queue, daemon=True).start()
     except Exception as e:
         logger.error("Could not pull model: %s", e)
         raise RuntimeError(f"Model {settings.model} unavailable") from e
@@ -98,6 +96,7 @@ class ChatResponse(BaseModel):
     response: str
 
 class MathProblem(BaseModel):
+
     question: str
     options: list[str]
     answer: str
@@ -168,13 +167,13 @@ def generate_math_ai(difficulty: str = "easy"):
     topics = ["shopping", "traveling", "farming", "coding", "cooking"]
     selected_topic = random.choice(topics)
 
+
     if difficulty == "hard":
-        diff_rule = "Create a problem with 3 numbers and two operations. Answer must be a whole number."
+        diff_rule = "Create a problem with 3 numbers and two operations (e.g., multiply then add). Answer must be a whole number."
     elif difficulty == "medium":
-        diff_rule = "Create a multiplication or division problem."
+        diff_rule = "Create a multiplication or division problem. Answer must be a whole number."
     else:
         diff_rule = "Create a simple addition or subtraction problem."
-
 
     prompt = (
         f"JSON ONLY. {difficulty} math problem about {selected_topic}. "
@@ -191,8 +190,37 @@ def generate_math_ai(difficulty: str = "easy"):
                 "num_predict": 150,
                 "num_thread": 4
             }
+            options={
+                "temperature": 0.1,    # 降低隨機性，讓 AI 更專注
+                "num_predict": 128,    # 限制 AI 最多只產生 128 個 token (題目很短，這足夠了)
+                "top_k": 20,           # 減少候選詞數量，加快運算
+                "num_thread": 4        # 根據你的 CPU 核心數設定，強制並行運算
+            }
         )
         content = resp["message"]["content"].strip()
+        logger.info(f"AI Raw Output ({difficulty}): {content}")
+
+        start = content.find('{')
+        end = content.rfind('}')
+
+        if start != -1 and end != -1:
+            json_str = content[start:end+1]
+
+            json_str = re.sub(r'[\n\r]', ' ', json_str)
+            json_str = re.sub(r',\s*}', '}', json_str)  # Remove trailing commas
+            json_str = re.sub(r',\s*]', ']', json_str)  # Remove trailing commas in arrays
+            json_str = re.sub(r'\s+', ' ', json_str)    # Normalize whitespace
+            json_str = json_str.strip()
+
+            logger.info(f"Cleaned JSON string: {json_str}")
+
+            try:
+                data = json.loads(json_str)
+
+                data["answer"] = str(data.get("answer", "0"))
+                return data
+            except json.JSONDecodeError as e:
+                logger.error(f"JSON Parse Error: {e}")
 
         # Get JSON
         match = re.search(r'(\{.*\})', content, re.DOTALL)
@@ -250,6 +278,8 @@ def check_math_answer(req: CheckRequest):
         resp = ollama.chat(model=settings.model, messages=[{"role": "user", "content": prompt}])
         content = resp["message"]["content"].strip()
 
+        # 2. 這是核心：更強大的過濾網
+        # 尋找第一個 '{' 和最後一個 '}' 之間的所有內容
         match = re.search(r'(\{.*\})', content, re.DOTALL)
 
         if match:
