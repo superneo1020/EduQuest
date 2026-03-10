@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, Button, StyleSheet, ScrollView } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView } from 'react-native';
 import axios from 'axios';
 
 const MAX_STEPS = 10;
@@ -16,19 +16,19 @@ const AppliedMath = () => {
     const [isFinished, setIsFinished] = useState(false);
     const [finalReport, setFinalReport] = useState({ summary: '', accuracy: 0 });
 
-    const fetchQuestion = async (selectedDiff?: string) => {
-        const diff = selectedDiff || difficulty;
-        if (!diff) return; // 如果沒有難度，直接結束，不要發請求
-
+    // 在你的 AppliedMath 組件中
+    // 檢查你的 setData 是否有賦予預設值，或者在失敗時做了什麼？
+    const handleDifficultySelect = async (diff: string) => {
+        setDifficulty(diff);
         setLoading(true);
-        setAiFeedback({ isCorrect: null, message: '' });
-        setUserFinalAnswer('');
-        setUserSteps('');
         try {
             const res = await axios.get(`http://localhost:8000/api/math/generate?difficulty=${diff}&t=${Date.now()}`);
+            console.log("=== API 成功回應 ===", res.data);
             setData(res.data);
         } catch (e) {
-            console.error("Fetch error", e);
+            console.error("=== API 請求失敗！後端沒開 ===", e);
+            setData(null); // ← 關鍵：清除舊資料
+            alert("後端服務未啟動，請確認 Server 狀態");
         } finally {
             setLoading(false);
         }
@@ -39,10 +39,7 @@ const AppliedMath = () => {
         setLoading(true);
         try {
             const res = await axios.post('http://localhost:8000/api/math/check', {
-                question: data.question,
-                user_steps: userSteps,
-                user_answer: userFinalAnswer,
-                correct_answer: data.answer
+                question: data.question, user_steps: userSteps, user_answer: userFinalAnswer, correct_answer: data.answer
             });
             const { is_correct, feedback } = res.data;
             setAiFeedback({ isCorrect: is_correct, message: feedback });
@@ -51,15 +48,18 @@ const AppliedMath = () => {
         setLoading(false);
     };
 
-    const handleNext = () => {
-        if (currentStep < MAX_STEPS) {
-            setCurrentStep(s => s + 1);
-            fetchQuestion();
-        } else {
-            generateFinalSummary();
+    const handleNext = async () => {
+        setLoading(true);
+        try {
+            const res = await axios.get(`http://localhost:8000/api/math/generate?difficulty=${difficulty}&t=${Date.now()}`);
+            setData(res.data);
+        } catch (e) {
+            console.error("=== API 請求失敗！後端沒開 ===", e);
+            setData(null); // ← 清除舊資料
+        } finally {
+            setLoading(false);
         }
     };
-
     const generateFinalSummary = async () => {
         setLoading(true);
         try {
@@ -70,109 +70,52 @@ const AppliedMath = () => {
         setLoading(false);
     };
 
-    if (isFinished) {
-        return (
-            <ScrollView style={styles.container}>
-                <Text style={styles.title}>Session Report 🎓</Text>
-                <View style={styles.reportBox}>
-                    <Text style={styles.accuracyText}>Accuracy: {finalReport.accuracy.toFixed(0)}%</Text>
-                    <Text style={styles.summaryText}>{finalReport.summary}</Text>
-                </View>
-                <Button title="Restart Practice" onPress={() => {
-                    setCurrentStep(1); setSessionHistory([]); setIsFinished(false); fetchQuestion();
-                }} />
-            </ScrollView>
-        );
-    }
-
-    if (!difficulty) {
-        return (
-            <View style={styles.centerContainer}>
-                <Text style={styles.title}>Select Difficulty 🧠</Text>
-                <View style={styles.buttonSpacing}>
-                    <Button title="Easy (Add/Sub)" color="#4CAF50" onPress={() => { setDifficulty('easy'); fetchQuestion('easy'); }} />
-                </View>
-                <View style={styles.buttonSpacing}>
-                    <Button title="Medium (Mul/Div)" color="#FF9800" onPress={() => { setDifficulty('medium'); fetchQuestion('medium'); }} />
-                </View>
-                <View style={styles.buttonSpacing}>
-                    <Button title="Hard (Multi-step)" color="#F44336" onPress={() => { setDifficulty('hard'); fetchQuestion('hard'); }} />
-                </View>
-            </View>
-        );
-    }
+    // 選擇難度介面：使用绝对定位确保点击区域在最上层
+    if (!difficulty) return (
+        <View style={styles.fullscreenContainer}>
+            <Text style={styles.title}>Select Difficulty</Text>
+            <TouchableOpacity style={[styles.button, { backgroundColor: '#4CAF50' }]} onPress={() => handleDifficultySelect('easy')}><Text style={styles.buttonText}>Easy</Text></TouchableOpacity>
+            <TouchableOpacity style={[styles.button, { backgroundColor: '#FF9800' }]} onPress={() => handleDifficultySelect('medium')}><Text style={styles.buttonText}>Medium</Text></TouchableOpacity>
+            <TouchableOpacity style={[styles.button, { backgroundColor: '#F44336' }]} onPress={() => handleDifficultySelect('hard')}><Text style={styles.buttonText}>Hard</Text></TouchableOpacity>
+        </View>
+    );
 
     return (
-        <ScrollView style={styles.container}>
-            <View style={styles.header}>
-                <Text style={styles.progressText}>Question {currentStep} / {MAX_STEPS}</Text>
-                <View style={styles.progressBarBg}>
-                    <View style={[styles.progressBar, { width: `${(currentStep / MAX_STEPS) * 100}%` }]} />
-                </View>
-            </View>
 
-            <View style={styles.questionBox}>
-                {/* 使用 data?.question 確保 data 不是 null 的時候才讀取 */}
-                <Text style={styles.questionText}>
-                    {data ? data.question : "Loading question..."}
-                </Text>
-            </View>
+        <SafeAreaView style={{ flex: 1 }}>
+            <Text style={{ color: 'red' }}>
+                當前題目難度: {data?.difficulty || '尚未載入'}
+            </Text>
+            <ScrollView contentContainerStyle={styles.scrollContainer}>
+                <Text>Q {currentStep} / {MAX_STEPS}</Text>
+                <View style={styles.questionBox}><Text style={styles.questionText}>{data?.question || "Loading..."}</Text></View>
+                <TextInput style={styles.textArea} multiline placeholder="Workings..." value={userSteps} onChangeText={setUserSteps} />
+                <TextInput style={styles.input} keyboardType="numeric" placeholder="Answer" value={userFinalAnswer} onChangeText={setUserFinalAnswer} />
 
-            <TextInput
-                multiline placeholder="Show your work here (optional)..."
-                value={userSteps} onChangeText={setUserSteps}
-                style={styles.textArea}
-            />
-
-            <TextInput
-                placeholder="Final Answer (Number)" keyboardType="numeric"
-                value={userFinalAnswer} onChangeText={setUserFinalAnswer}
-                style={styles.input}
-            />
-
-            {aiFeedback.isCorrect === null ? (
-                <Button title={loading ? "Checking..." : "Submit Answer"} onPress={handleCheckAnswer} disabled={loading} />
-            ) : (
-                <View style={[styles.feedbackBox, { borderColor: aiFeedback.isCorrect ? '#4CAF50' : '#F44336' }]}>
-                    <Text style={styles.feedbackTitle}>{aiFeedback.isCorrect ? "✅ Correct!" : "❌ Not Quite"}</Text>
-                    <Text style={styles.feedbackMsg}>{aiFeedback.message}</Text>
-                    <View style={{marginTop: 15}}>
-                        <Button title={currentStep === MAX_STEPS ? "See Final Report" : "Next Question"} onPress={handleNext} color="#4CAF50" />
+                {aiFeedback.isCorrect === null ? (
+                    <TouchableOpacity style={[styles.button, { backgroundColor: '#2196F3' }]} onPress={handleCheckAnswer}><Text style={styles.buttonText}>{loading ? "Checking..." : "Submit"}</Text></TouchableOpacity>
+                ) : (
+                    <View style={styles.feedbackBox}>
+                        <Text>{aiFeedback.message}</Text>
+                        <TouchableOpacity style={[styles.button, { backgroundColor: '#4CAF50' }]} onPress={handleNext}><Text style={styles.buttonText}>Next</Text></TouchableOpacity>
                     </View>
-                </View>
-            )}
-        </ScrollView>
+                )}
+            </ScrollView>
+        </SafeAreaView>
     );
 };
 
 const styles = StyleSheet.create({
-    container: { padding: 20, backgroundColor: '#fff' },
-    header: { marginBottom: 20 },
-    centerContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 20,
-        backgroundColor: '#fff'
-    },
-    buttonSpacing: {
-        width: '80%',
-        marginVertical: 10,
-    },
-    progressText: { fontSize: 16, fontWeight: 'bold', marginBottom: 5 },
-    progressBarBg: { height: 8, backgroundColor: '#eee', borderRadius: 4 },
-    progressBar: { height: 8, backgroundColor: '#4CAF50', borderRadius: 4 },
+    fullscreenContainer: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff', zIndex: 100 },
+    scrollContainer: { padding: 20 },
+    button: { padding: 18, borderRadius: 12, marginVertical: 10, width: '85%', alignItems: 'center', elevation: 5 },
+    buttonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+    title: { fontSize: 26, fontWeight: 'bold', marginBottom: 30 },
     questionBox: { backgroundColor: '#f0f4f8', padding: 20, borderRadius: 12, marginBottom: 20 },
-    questionText: { fontSize: 18, lineHeight: 26 },
-    textArea: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 15, minHeight: 80, marginBottom: 15, textAlignVertical: 'top' },
+    questionText: { fontSize: 18 },
+    textArea: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 15, minHeight: 100, marginBottom: 15 },
     input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 15, marginBottom: 20 },
-    feedbackBox: { padding: 15, borderRadius: 8, borderLeftWidth: 8, backgroundColor: '#f9f9f9' },
-    feedbackTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 5 },
-    feedbackMsg: { fontSize: 16 },
-    reportBox: { backgroundColor: '#fff9c4', padding: 20, borderRadius: 12, marginBottom: 30 },
-    accuracyText: { fontSize: 24, fontWeight: 'bold', color: '#f57f17', textAlign: 'center', marginBottom: 10 },
-    summaryText: { fontSize: 16, lineHeight: 24 },
-    title: { fontSize: 28, fontWeight: 'bold', textAlign: 'center', marginVertical: 20 }
+    feedbackBox: { padding: 15, borderRadius: 8, borderLeftWidth: 8, borderColor: '#4CAF50', backgroundColor: '#f9f9f9' }
 });
 
 export default AppliedMath;
