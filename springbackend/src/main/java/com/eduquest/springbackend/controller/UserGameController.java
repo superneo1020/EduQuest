@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/user/game")
 public class UserGameController {
+
     private final UserService userService;
     private final UserGameScoreService userGameScoreService;
 
