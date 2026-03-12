@@ -46,8 +46,8 @@ const LanguageGamesPage = () => {
             native: true
         },
         {
-            id: 'matching',
-            title: 'Word matching game',
+            id: 'writing',
+            title: 'Writing Game',
             description: 'Match English words with their Chinese meanings or images',
             icon: 'game-controller-outline',
             color: '#6a11cb',
