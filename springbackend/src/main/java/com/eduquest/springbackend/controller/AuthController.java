@@ -24,11 +24,16 @@ public class AuthController {
         this.authService = authService;
     }
 
-    public record RegisterRequest(@NotBlank @Size(max = 20) String username,
-                                  @NotBlank @Email @Size(max = 50) String email,
-                                  @NotBlank @Size(max = 255) String password) {}
-    public record LoginRequest(@NotBlank @Size(max = 20) String username,
-                               @NotBlank @Size(max = 255) String password) {}
+    public record RegisterRequest(
+            @NotBlank @Size(max = 20) String username,
+            @NotBlank @Email @Size(max = 50) String email,
+            @NotBlank @Size(max = 255) String password
+    ) {}
+
+    public record LoginRequest(
+            @NotBlank @Size(max = 20) String username,
+            @NotBlank @Size(max = 255) String password
+    ) {}
 
     @PostMapping("/register")
     public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest req) {
@@ -40,7 +45,8 @@ public class AuthController {
         return ResponseEntity.ok(Map.of(
                 "id", savedUser.getId(),
                 "username", savedUser.getUsername(),
-                "email", savedUser.getEmail()));
+                "email", savedUser.getEmail())
+        );
     }
 
     @PostMapping("/login")

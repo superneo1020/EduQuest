@@ -7,9 +7,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 
-import java.util.Collection;
-import java.util.List;
-
 @Service
 public class UserDtoMapper {
 
@@ -18,12 +15,12 @@ public class UserDtoMapper {
                 user.getUsername(),
                 user.getEmail(),
                 user.getPoints(),
-                mapRoles(user.getRoles())
+                user.getRoles().stream().map(Role::getName).toList()
         );
     }
 
-    public UserProfileDto toProfile(Page<UserGameScoreDto> userGameScores) {
-        return new UserProfileDto(
+    public UserGameRecordDto toGameRecord(Page<UserGameScoreDto> userGameScores) {
+        return new UserGameRecordDto(
                 userGameScores.getContent(),
                 userGameScores.getPageable().getPageNumber(),
                 userGameScores.getTotalPages(),
@@ -40,11 +37,5 @@ public class UserDtoMapper {
                 leaderboardScores.hasNext(),
                 leaderboardScores.hasPrevious()
         );
-    }
-
-    private List<String> mapRoles(Collection<Role> roles) {
-        return roles.stream()
-                .map(Role::getName)
-                .toList();
     }
 }

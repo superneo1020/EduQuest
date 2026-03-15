@@ -1,0 +1,20 @@
+package com.eduquest.springbackend.dao;
+
+import com.eduquest.springbackend.dto.UserItemDto;
+import com.eduquest.springbackend.model.UserItem;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import java.util.List;
+
+public interface UserItemRepository extends JpaRepository<UserItem,Long> {
+
+    @Query(value = "SELECT new com.eduquest.springbackend.dto.UserItemDto( " +
+            "i.name, i.type, i.icon, i.description, ui.createdAt" +
+            ") " +
+            "FROM UserItem ui " +
+            "JOIN ui.item i " +
+            "WHERE ui.user.username = :username ")
+    List<UserItemDto> findAllByUsername(@Param("username") String username);
+}
