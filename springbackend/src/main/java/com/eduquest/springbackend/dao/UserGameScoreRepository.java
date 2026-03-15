@@ -65,7 +65,7 @@ public interface UserGameScoreRepository extends JpaRepository<UserGameScore,Lon
             "WHERE g.name = :name " +
             "AND ugs.id IN ( " +
             "   SELECT DISTINCT ON (user_id) id FROM user_game_scores " +
-            "   WHERE name = :name " +
+            "   WHERE g.name = :name " +
             "   ORDER BY user_id, scores DESC, created_at " +
             ") " +
             "ORDER BY ugs.scores DESC, ugs.created_at ",
