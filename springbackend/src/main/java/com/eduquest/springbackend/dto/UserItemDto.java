@@ -2,13 +2,11 @@ package com.eduquest.springbackend.dto;
 
 import java.time.Instant;
 
-public record UserGameScoreDto(
+public record UserItemDto(
         String name,
         String type,
-        String difficulty,
         String icon,
         String description,
-        Integer scores,
         Instant createdAt
 ) {
 }
