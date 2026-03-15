@@ -22,7 +22,7 @@ public interface UserGameScoreRepository extends JpaRepository<UserGameScore,Lon
             "WHERE u.username = :user " +
             "AND g.name = :game ",
             nativeQuery = true)
-    Page<UserGameScoreDto> findUserGameScoresByUserIdAndGameId(
+    Page<UserGameScoreDto> findUserGameScoresByUserUsernameAndGameName(
             @Param("user") String user,
             @Param("game") String game,
             Pageable pageable
@@ -35,7 +35,7 @@ public interface UserGameScoreRepository extends JpaRepository<UserGameScore,Lon
             "JOIN users u ON ugs.user_id = u.id " +
             "WHERE u.username = :username ",
             nativeQuery = true)
-    Page<UserGameScoreDto> findUserGameScoresByUserId(@Param("username") String username, Pageable pageable);
+    Page<UserGameScoreDto> findUserGameScoresByUserUsername(@Param("username") String username, Pageable pageable);
 
     @Query(value = "SELECT DISTINCT ON (g.id) g.name, g.type, g.difficulty, g.icon, g.description, " +
             "ugs.scores, ugs.created_at AS createdAt " +
@@ -45,7 +45,7 @@ public interface UserGameScoreRepository extends JpaRepository<UserGameScore,Lon
             "WHERE u.username = :username " +
             "ORDER BY g.id, ugs.scores DESC, ugs.created_at DESC",
             nativeQuery = true)
-    List<UserGameScoreDto> findAllHighestScoresByUserId(@Param("username") String username);
+    List<UserGameScoreDto> findAllHighestScoresByUserUsername(@Param("username") String username);
 
     @Query(value = "SELECT DISTINCT ON (g.id) g.name, g.type, g.difficulty, g.icon, g.description, " +
             "ugs.scores, ugs.created_at AS createdAt " +
@@ -56,7 +56,10 @@ public interface UserGameScoreRepository extends JpaRepository<UserGameScore,Lon
             "AND g.name = :game " +
             "ORDER BY g.id, ugs.scores DESC, ugs.created_at",
             nativeQuery = true)
-    UserGameScoreDto findHighestScoresByUserIdAndGameId(@Param("user") String user, @Param("game") String game);
+    UserGameScoreDto findHighestScoresByUserUsernameAndGameName(
+            @Param("user") String user,
+            @Param("game") String game
+    );
 
     @Query(value = "SELECT u.username, ugs.scores, ugs.created_at AS createdAt " +
             "FROM user_game_scores ugs " +
@@ -65,10 +68,13 @@ public interface UserGameScoreRepository extends JpaRepository<UserGameScore,Lon
             "WHERE g.name = :name " +
             "AND ugs.id IN ( " +
             "   SELECT DISTINCT ON (user_id) id FROM user_game_scores " +
-            "   WHERE g.name = :name " +
+            "   WHERE game_id = g.id " +
             "   ORDER BY user_id, scores DESC, created_at " +
             ") " +
             "ORDER BY ugs.scores DESC, ugs.created_at ",
             nativeQuery = true)
-    Slice<LeaderboardScoreDto> findAllHighestScoresByGameId(@Param("name") String name, Pageable pageable);
+    Slice<LeaderboardScoreDto> findAllHighestScoresByGameName(
+            @Param("name") String name,
+            Pageable pageable
+    );
 }
