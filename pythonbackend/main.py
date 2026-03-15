@@ -160,6 +160,36 @@ def chat_stream(req: ChatRequest) -> StreamingResponse:
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )
 
+@app.get("/api/math/batch_generate")
+def batch_generate_math(difficulty: str = "easy", count: int = 10):
+    rules = {
+        "easy": "addition and subtraction within 100.",
+        "medium": "multiplication and division within 200.",
+        "hard": "complex two-step operations (e.g. 14 * 5 + 22) with results within 1000."
+    }
+
+    prompt = (
+        f"Generate {count} math problems for {difficulty} level. Rule: {rules.get(difficulty)}\n"
+        "Return ONLY a JSON array of objects: [{\"question\": \"...\", \"answer\": \"...\"}]\n"
+        "The 'answer' field must be a string containing only the integer result."
+    )
+
+    try:
+        resp = ollama.chat(model=settings.model, messages=[{"role": "user", "content": prompt}])
+        content = resp["message"]["content"].strip()
+
+        # 使用正則表達式抓取 JSON 部分，避免 AI 廢話
+        match = re.search(r'(\[.*\])', content, re.DOTALL)
+        if match:
+            return json.loads(match.group(1))
+
+        # 如果格式不對，拋出錯誤觸發前端 Fallback
+        raise ValueError("AI output format invalid")
+    except Exception as e:
+        logger.error(f"AI Generation Error: {e}")
+        # 保底題目
+        return [{"question": "5 + 5", "answer": "10"}] * count
+
 @app.get("/api/math/generate")
 def generate_math_ai(difficulty: str = "easy"):
     topics = ["shopping", "traveling", "farming", "coding", "cooking"]

@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -21,14 +22,17 @@ public class UserController {
         this.userService = userService;
     }
 
-    @GetMapping("/profile")
-    public ResponseEntity<?> getProfile(
+    @GetMapping({"/score", "/{name}/score"})
+    public ResponseEntity<?> getGameScore(
             @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable(required = false) String name,
             @PageableDefault(
                     sort = "createdAt",
                     direction = Sort.Direction.DESC
             ) Pageable pageable
     ) {
-        return ResponseEntity.ok(userService.showProfile(userDetails, pageable));
+        return name != null
+                ? ResponseEntity.ok(userService.showProfile(userDetails, pageable, name))
+                : ResponseEntity.ok(userService.showProfile(userDetails, pageable));
     }
 }
