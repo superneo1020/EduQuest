@@ -12,11 +12,11 @@ const GAME_CATEGORIES = [
     "Speed Calculation",
     "AI Math Adventure",
     "Listening multiple choice questions",
-    "Word matching game",
+    "Word matching game", 
     "Sentence Reordering Game",
     "Animal sorting game",
     "Human Body Puzzle"
-];
+].sort(); // Sort alphabetically for consistent ordering
 
 const { width } = Dimensions.get('window');
 

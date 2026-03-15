@@ -104,7 +104,8 @@ VALUES
     ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM games WHERE name = 'AI Math Adventure'), 75),
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM games WHERE name = 'AI Math Adventure'), 92),
 
-    -- Word matching game (EASY)
+    -- Word matching g
+    -- ame (EASY)
     ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM games WHERE name = 'Word matching game'), 98),
     ((SELECT id FROM users WHERE username = 'student3'), (SELECT id FROM games WHERE name = 'Word matching game'), 70),
 
