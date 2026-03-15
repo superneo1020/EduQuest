@@ -4,24 +4,57 @@
 -- Drop existing tables if they exist (handled by spring.jpa.hibernate.ddl-auto=create-drop)
 -- DROP TABLE IF EXISTS user_roles, refresh_tokens, users, roles CASCADE;
 
--- 1. roles table
+
+CREATE TABLE IF NOT EXISTS schools (
+    id BIGSERIAL PRIMARY KEY,
+    name VARCHAR(100) UNIQUE NOT NULL,
+    address VARCHAR(255) NOT NULL,
+    phone VARCHAR(15) NOT NULL,
+    email VARCHAR(50) UNIQUE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+;;;
+
+CREATE TABLE IF NOT EXISTS classes (
+    id BIGSERIAL PRIMARY KEY,
+    school_id BIGINT NOT NULL,
+    grade VARCHAR(20) NOT NULL,
+    name VARCHAR(50) UNIQUE NOT NULL,
+    academic_year VARCHAR(4) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE CASCADE
+);
+;;;
+
+CREATE INDEX IF NOT EXISTS idx_classes_school_id ON classes(school_id);
+;;;
+
 CREATE TABLE IF NOT EXISTS roles (
      id BIGSERIAL PRIMARY KEY,
      name VARCHAR(20) UNIQUE NOT NULL
 );
 ;;;
 
--- 2. users table
 CREATE TABLE IF NOT EXISTS users (
     id BIGSERIAL PRIMARY KEY,
     username VARCHAR(20) UNIQUE NOT NULL,
     email VARCHAR(50) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
-    points INT NOT NULL DEFAULT 0 CHECK (points >= 0)
+    points INT NOT NULL DEFAULT 0 CHECK (points >= 0),
+    school_id BIGINT NOT NULL,
+    class_id BIGINT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE CASCADE,
+    FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE
 );
 ;;;
 
--- 3. Join table for users and roles
+CREATE INDEX IF NOT EXISTS idx_users_school_id ON users(school_id);
+;;;
+CREATE INDEX IF NOT EXISTS idx_users_class_id ON users(class_id);
+;;;
+
 CREATE TABLE IF NOT EXISTS user_roles (
     user_id BIGINT NOT NULL,
     role_id BIGINT NOT NULL,
@@ -31,18 +64,71 @@ CREATE TABLE IF NOT EXISTS user_roles (
 );
 ;;;
 
--- Create indexes for user roles performance
 CREATE INDEX IF NOT EXISTS idx_user_roles_user_id ON user_roles(user_id);
+;;;
 CREATE INDEX IF NOT EXISTS idx_user_roles_role_id ON user_roles(role_id);
+;;;
 
--- 4. Difficulty with rewards
+CREATE TABLE IF NOT EXISTS user_profiles (
+     id BIGSERIAL PRIMARY KEY,
+     user_id BIGINT UNIQUE NOT NULL,
+     nickname VARCHAR(50),
+     equipped_items JSONB DEFAULT '{"AVATAR": null, "BADGE": null, "BACKGROUND": null}',
+     preferences JSONB DEFAULT '{"theme": "DARK", "sound": true, "notifications": false}',
+     privacy_settings JSONB DEFAULT '{"show_email": true, "show_school": true, "show_class": true}',
+     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+;;;
+
+CREATE INDEX IF NOT EXISTS idx_user_profiles_user_id ON user_profiles(user_id);
+;;;
+
+CREATE TABLE IF NOT EXISTS activities (
+    id BIGSERIAL PRIMARY KEY,
+    creator_id BIGINT NOT NULL,
+    name VARCHAR(50) UNIQUE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    start_date DATE NOT NULL CHECK (start_date >= CURRENT_DATE),
+    end_date DATE NOT NULL CHECK (end_date >= start_date),
+    score INT NOT NULL DEFAULT 0 CHECK (score >= 0),
+    FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE
+);
+;;;
+
+CREATE INDEX IF NOT EXISTS idx_activities_creator_id ON activities(creator_id);
+;;;
+
+CREATE TABLE IF NOT EXISTS user_activities (
+    id BIGSERIAL PRIMARY KEY,
+    activity_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    role_in_group VARCHAR(50) NOT NULL,
+    completed BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (activity_id, user_id),
+    FOREIGN KEY (activity_id) REFERENCES activities(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+;;;
+
+CREATE INDEX IF NOT EXISTS idx_user_activities_activity_id ON user_activities(activity_id);
+;;;
+CREATE INDEX IF NOT EXISTS idx_user_activities_user_id ON user_activities(user_id);
+;;;
+
+-- Difficulty with rewards
 CREATE TABLE IF NOT EXISTS difficulty_rewards (
     difficulty VARCHAR(20) PRIMARY KEY,
     multiplier INT NOT NULL DEFAULT 1 CHECK (multiplier >= 1)
 );
 ;;;
 
--- 5. Games
+CREATE INDEX IF NOT EXISTS idx_difficulty_rewards_difficulty ON difficulty_rewards(difficulty);
+;;;
+
 CREATE TABLE IF NOT EXISTS games (
     id BIGSERIAL PRIMARY KEY,
     type VARCHAR(20) NOT NULL CHECK (type IN ('ENGLISH','MATH','MEMORY','SCIENCE')),
@@ -55,7 +141,6 @@ CREATE TABLE IF NOT EXISTS games (
 );
 ;;;
 
--- 6. User Game Scores
 CREATE TABLE IF NOT EXISTS user_game_scores (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL,
@@ -68,13 +153,14 @@ CREATE TABLE IF NOT EXISTS user_game_scores (
 ;;;
 
 -- Index for leaderboard queries per game (fast ORDER BY)
-CREATE INDEX IF NOT EXISTS idx_game_scores_game_scores ON user_game_scores (game_id, scores DESC);
+CREATE INDEX IF NOT EXISTS idx_user_game_scores_leaderboard
+ON user_game_scores (game_id, user_id, scores DESC, created_at)
+INCLUDE (id);
 ;;;
 -- Index to fetch recent updates per user
 CREATE INDEX IF NOT EXISTS idx_user_game_scores_user_created ON user_game_scores (user_id, created_at DESC);
 ;;;
 
--- 7. Missions
 CREATE TABLE IF NOT EXISTS missions (
     id BIGSERIAL PRIMARY KEY,
     type VARCHAR(20) NOT NULL CHECK (type IN ('ENGLISH','MATH','MEMORY','SCIENCE')),
@@ -83,26 +169,32 @@ CREATE TABLE IF NOT EXISTS missions (
     icon TEXT,
     description TEXT,
     scores INT NOT NULL DEFAULT 0 CHECK (scores >= 0),
+    requirements JSONB NOT NULL DEFAULT '{}',
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (difficulty) REFERENCES difficulty_rewards(difficulty) ON UPDATE CASCADE
 );
 ;;;
 
--- 8. User Missions
 CREATE TABLE IF NOT EXISTS user_missions (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL,
     mission_id BIGINT NOT NULL,
     date DATE NOT NULL DEFAULT CURRENT_DATE,
+    progress JSONB NOT NULL DEFAULT '{}',
     completed BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (user_id, mission_id, date),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (mission_id) REFERENCES missions(id) ON DELETE CASCADE
 );
 ;;;
 
--- 9. Item
+CREATE INDEX IF NOT EXISTS idx_user_missions_user_id ON user_missions(user_id);
+;;;
+CREATE INDEX IF NOT EXISTS idx_user_missions_mission_id ON user_missions(mission_id);
+;;;
+
 CREATE TABLE IF NOT EXISTS items (
     id BIGSERIAL PRIMARY KEY,
     type VARCHAR(20) NOT NULL,
@@ -114,7 +206,6 @@ CREATE TABLE IF NOT EXISTS items (
 );
 ;;;
 
--- 10. User Item
 CREATE TABLE IF NOT EXISTS user_items (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL,
@@ -124,6 +215,13 @@ CREATE TABLE IF NOT EXISTS user_items (
     FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE
 );
 ;;;
+
+CREATE INDEX IF NOT EXISTS idx_user_items_user_id ON user_items(user_id);
+;;;
+CREATE INDEX IF NOT EXISTS idx_user_items_item_id ON user_items(item_id);
+;;;
+
+
 
 
 
@@ -174,8 +272,11 @@ DROP TRIGGER IF EXISTS trg_game_points ON user_game_scores;
 ;;;
 CREATE TRIGGER trg_game_points
     AFTER INSERT OR UPDATE OR DELETE ON user_game_scores
-    FOR EACH ROW EXECUTE FUNCTION fn_sync_game_points();
+    FOR EACH ROW
+    EXECUTE FUNCTION fn_sync_game_points();
 ;;;
+
+
 
 
 
@@ -221,8 +322,57 @@ DROP TRIGGER IF EXISTS trg_mission_points ON user_missions;
 ;;;
 CREATE TRIGGER trg_mission_points
     AFTER INSERT OR UPDATE OR DELETE ON user_missions
-    FOR EACH ROW EXECUTE FUNCTION fn_sync_mission_points();
+    FOR EACH ROW
+    EXECUTE FUNCTION fn_sync_mission_points();
 ;;;
+
+
+
+
+-- Add trigger for sync activity scores
+CREATE OR REPLACE FUNCTION fn_sync_activity_points()
+    RETURNS TRIGGER AS $$
+DECLARE
+    v_activity_score INT;
+BEGIN
+    -- get score from activity id
+    SELECT a.score INTO v_activity_score
+    FROM activities a
+    WHERE a.id = CASE
+        WHEN TG_OP = 'DELETE' THEN OLD.activity_id
+        ELSE NEW.activity_id
+    END;
+
+    -- make sure score is at least 0
+    v_activity_score := COALESCE(v_activity_score, 0);
+
+    -- update points in user table based on operation and completeness
+    IF (TG_OP = 'INSERT' AND NEW.completed) THEN
+        UPDATE users SET points = points + v_activity_score WHERE id = NEW.user_id;
+    ELSIF (TG_OP = 'UPDATE') THEN
+        IF (NOT OLD.completed AND NEW.completed) THEN
+            UPDATE users SET points = points + v_activity_score WHERE id = NEW.user_id;
+        ELSIF (OLD.completed AND NOT NEW.completed) THEN
+            UPDATE users SET points = GREATEST(0, points - v_activity_score) WHERE id = NEW.user_id;
+        END IF;
+    ELSIF (TG_OP = 'DELETE' AND OLD.completed) THEN
+        UPDATE users SET points = GREATEST(0, points - v_activity_score) WHERE id = OLD.user_id;
+    END IF;
+
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+;;;
+
+DROP TRIGGER IF EXISTS trg_activity_points ON user_activities;
+;;;
+CREATE TRIGGER trg_activity_points
+    AFTER INSERT OR UPDATE OR DELETE ON user_activities
+    FOR EACH ROW EXECUTE FUNCTION fn_sync_activity_points();
+;;;
+
+
+
 
 
 CREATE OR REPLACE FUNCTION fn_sync_user_item_purchase()
@@ -249,5 +399,54 @@ DROP TRIGGER IF EXISTS trg_user_item_purchase ON user_items;
 ;;;
 CREATE TRIGGER trg_user_item_purchase
     AFTER INSERT OR DELETE ON user_items
-    FOR EACH ROW EXECUTE FUNCTION fn_sync_user_item_purchase();
+    FOR EACH ROW
+    EXECUTE FUNCTION fn_sync_user_item_purchase();
+;;;
+
+
+
+
+
+CREATE OR REPLACE FUNCTION update_timestamp()
+    RETURNS TRIGGER AS $$
+BEGIN
+    -- check if any column has changed
+    IF (OLD IS DISTINCT FROM NEW) THEN
+        NEW.updated_at = CURRENT_TIMESTAMP;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+;;;
+
+DROP TRIGGER IF EXISTS  trg_users_updated_at ON users;
+;;;
+CREATE TRIGGER trg_users_updated_at
+    BEFORE UPDATE ON users
+    FOR EACH ROW
+    EXECUTE FUNCTION update_timestamp();
+;;;
+
+DROP TRIGGER IF EXISTS  trg_user_profiles_updated_at ON user_profiles;
+;;;
+CREATE TRIGGER trg_user_profiles_updated_at
+    BEFORE UPDATE ON user_profiles
+    FOR EACH ROW
+    EXECUTE FUNCTION update_timestamp();
+;;;
+
+DROP TRIGGER IF EXISTS  trg_user_missions_updated_at ON user_missions;
+;;;
+CREATE TRIGGER trg_user_missions_updated_at
+    BEFORE UPDATE ON user_missions
+    FOR EACH ROW
+    EXECUTE FUNCTION update_timestamp();
+;;;
+
+DROP TRIGGER IF EXISTS  trg_user_activities_updated_at ON user_activities;
+;;;
+CREATE TRIGGER trg_user_activities_updated_at
+    BEFORE UPDATE ON user_activities
+    FOR EACH ROW
+EXECUTE FUNCTION update_timestamp();
 ;;;

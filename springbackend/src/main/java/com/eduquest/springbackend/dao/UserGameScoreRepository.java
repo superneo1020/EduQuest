@@ -43,7 +43,7 @@ public interface UserGameScoreRepository extends JpaRepository<UserGameScore,Lon
             "JOIN games g ON ugs.game_id = g.id " +
             "JOIN users u ON ugs.user_id = u.id " +
             "WHERE u.username = :username " +
-            "ORDER BY g.id, ugs.scores DESC, ugs.created_at DESC",
+            "ORDER BY g.id, ugs.scores DESC, ugs.created_at",
             nativeQuery = true)
     List<UserGameScoreDto> findAllHighestScoresByUserUsername(@Param("username") String username);
 
@@ -71,7 +71,7 @@ public interface UserGameScoreRepository extends JpaRepository<UserGameScore,Lon
             "   WHERE game_id = g.id " +
             "   ORDER BY user_id, scores DESC, created_at " +
             ") " +
-            "ORDER BY ugs.scores DESC, ugs.created_at ",
+            "ORDER BY ugs.scores DESC, ugs.created_at",
             nativeQuery = true)
     Slice<LeaderboardScoreDto> findAllHighestScoresByGameName(
             @Param("name") String name,
