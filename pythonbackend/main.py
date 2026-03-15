@@ -17,18 +17,7 @@ import json
 import re
 import random
 
-import threading
-import time
-
 whisper_model = None
-
-# Simple cache for generated questions
-question_cache = {
-    "easy": [],
-    "medium": [], 
-    "hard": []
-}
-cache_lock = threading.Lock()
 
 def get_whisper_model():
     global whisper_model
@@ -173,37 +162,64 @@ def chat_stream(req: ChatRequest) -> StreamingResponse:
 
 @app.get("/api/math/generate")
 def generate_math_ai(difficulty: str = "easy"):
-    # 1. 將規則寫死在 Prompt 中，並增加「強制格式」的警告
+    topics = ["shopping", "traveling", "farming", "coding", "cooking"]
+    selected_topic = random.choice(topics)
+
+
+    if difficulty == "hard":
+        diff_rule = "Create a problem with 3 numbers and two operations (e.g., multiply then add). Answer must be a whole number."
+    elif difficulty == "medium":
+        diff_rule = "Create a multiplication or division problem. Answer must be a whole number."
+    else:
+        diff_rule = "Create a simple addition or subtraction problem."
+
     prompt = (
-        f"Generate a unique {difficulty} math problem. "
-        "Output ONLY raw JSON. No markdown, no explanations, no prefix/suffix. "
-        "Strict JSON schema: {\"question\": \"string\", \"answer\": \"string\", \"explanation\": \"string\"}"
+        f"Generate a {difficulty} math problem about {selected_topic}.\n"
+        f"Rule: {diff_rule}\n"
+        "Return ONLY a JSON object with keys 'question', 'answer', and 'explanation'.\n"
+        "Example: {\"question\": \"...\", \"answer\": \"10\", \"explanation\": \"...\"}"
     )
 
-    def call_ai():
-        return ollama.chat(
+    try:
+        resp = ollama.chat(
             model=settings.model,
             messages=[{"role": "user", "content": prompt}],
-            options={"temperature": 0.5, "num_predict": 100}
-        )["message"]["content"].strip()
+            options={"temperature": 0.1}
+        )
+        content = resp["message"]["content"].strip()
+        logger.info(f"AI Raw Output ({difficulty}): {content}")
 
-    # 2. 增加一次自動重試的邏輯，而不是直接 fallback
-    for i in range(2):
-        try:
-            raw_content = call_ai()
-            # 清理字串，只留下 JSON 部分
-            match = re.search(r'\{.*\}', raw_content, re.DOTALL)
-            if match:
-                return json.loads(match.group(0))
-        except Exception as e:
-            logger.warning(f"Generation attempt {i+1} failed: {e}")
-            time.sleep(1) # 讓模型稍微冷靜一下
+        start = content.find('{')
+        end = content.rfind('}')
 
-    # 3. 只有在兩次重試都失敗時，才記錄嚴重錯誤，不使用硬編碼的備用題
-    logger.error("AI failed to generate a valid JSON after 2 attempts.")
-    raise HTTPException(status_code=500, detail="AI generation failed, please try again.")
+        if start != -1 and end != -1:
+            json_str = content[start:end+1]
+
+            json_str = re.sub(r'[\n\r]', ' ', json_str)
+            json_str = re.sub(r',\s*}', '}', json_str)  # Remove trailing commas
+            json_str = re.sub(r',\s*]', ']', json_str)  # Remove trailing commas in arrays
+            json_str = re.sub(r'\s+', ' ', json_str)    # Normalize whitespace
+            json_str = json_str.strip()
+
+            logger.info(f"Cleaned JSON string: {json_str}")
+
+            try:
+                data = json.loads(json_str)
+
+                data["answer"] = str(data.get("answer", "0"))
+                return data
+            except json.JSONDecodeError as e:
+                logger.error(f"JSON Parse Error: {e}")
+
+    except Exception as e:
+        logger.error(f"AI Fetch Error: {e}")
 
 
+    return {
+        "question": f"A {selected_topic} worker works 8 hours a day for 5 days. How many hours in total?",
+        "answer": "40",
+        "explanation": "8 * 5 = 40"
+    }
 @app.post("/api/math/check")
 def check_math_answer(req: CheckRequest):
     logger.info("AI checking student's work...")

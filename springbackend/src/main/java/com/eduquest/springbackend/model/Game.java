@@ -1,5 +1,6 @@
 package com.eduquest.springbackend.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import org.hibernate.annotations.Generated;
 import org.hibernate.generator.EventType;
@@ -38,6 +39,7 @@ public class Game {
     private Instant createdAt;
 
     @OneToMany(mappedBy = "game", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnore
     private List<UserGameScore> userGameScores = new ArrayList<>();
 
     public Game() {}
