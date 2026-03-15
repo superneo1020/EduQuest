@@ -67,7 +67,7 @@ export default function CalculationGame() {
         setIsSaving(true);
         try {
             const payload = {
-                gameId: 1, // 確保 ID 與資料庫 games 表一致 (AI Math)
+                gameName: "Speed Calculation",
                 scores: finalPoints,
                 difficulty: difficulty
             };
