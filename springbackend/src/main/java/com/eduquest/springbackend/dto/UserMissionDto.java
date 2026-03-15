@@ -1,14 +1,14 @@
 package com.eduquest.springbackend.dto;
 
-import java.time.Instant;
+import java.time.LocalDate;
 
-public record UserGameScoreDto(
-        String name,
+public record UserMissionDto(
         String type,
+        String name,
         String difficulty,
         String icon,
         String description,
         Integer scores,
-        Instant createdAt
+        LocalDate date
 ) {
 }
