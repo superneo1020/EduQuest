@@ -134,10 +134,10 @@ const AppliedMath = () => {
             // 3. 執行存分邏輯
             try {
                 // Use hardcoded game ID for AI Math Adventure (gameId: 2)
-                const gameId = 2;
+                const gameName = "AI Math Adventure"
 
                 await axios.post('http://localhost:8080/api/user/game/score',
-                    { gameId, scores: finalScore },
+                    { gameName, scores: finalScore },
                     { headers: { 'Authorization': `Bearer ${token}` } }
                 );
 
@@ -145,10 +145,9 @@ const AppliedMath = () => {
 
                 // ... 在 generateFinalSummary 函數內
                 const scorePayload = {
-                    gameId,
-                    scores: finalScore,
-                    difficulty: difficulty // 加入這一行，傳送 'easy', 'medium' 或 'hard'
-                };
+                    gameName: "AI Math Adventure",
+                    scores: finalScore
+                                    };
 
                 await axios.post('http://localhost:8080/api/user/game/score',
                     scorePayload,
@@ -158,7 +157,7 @@ const AppliedMath = () => {
                 console.error("主要存分失敗，嘗試後備方案:", scoreError);
                 // 後備方案依然使用計算好的 finalScore
                 await axios.post('http://localhost:8080/api/user/game/score',
-                    { gameId: 2, scores: finalScore },
+                    { gameName: "AI Math Adventure", scores: finalScore },
                     { headers: { 'Authorization': `Bearer ${token}` } }
                 );
             }
