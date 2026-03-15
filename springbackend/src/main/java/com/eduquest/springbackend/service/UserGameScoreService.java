@@ -4,80 +4,94 @@ import com.eduquest.springbackend.Util.PageableUtils;
 import com.eduquest.springbackend.dao.GameRepository;
 import com.eduquest.springbackend.dao.UserGameScoreRepository;
 import com.eduquest.springbackend.dao.UserRepository;
-import com.eduquest.springbackend.dto.LeaderboardDto;
-import com.eduquest.springbackend.dto.UserGameScoreRequest;
-import com.eduquest.springbackend.dto.UserGameScoreResponse;
+import com.eduquest.springbackend.dto.*;
 import com.eduquest.springbackend.model.AppUser;
 import com.eduquest.springbackend.model.Game;
 import com.eduquest.springbackend.model.UserGameScore;
-import jakarta.persistence.EntityManager;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.List;
 import java.util.Set;
 
 @Service
 public class UserGameScoreService {
 
-    private final UserGameScoreRepository userGameScoreRepository;
+    private final UserGameScoreRepository userGameScoreRepo;
     private final UserRepository userRepo;
     private final GameRepository gameRepo;
-    private final EntityManager entityManager;
+
     private final UserDtoMapper userDtoMapper;
 
     private final Set<String> LEADERBOARD_SCORE_DTO_FIELD = Set.of(
             "username", "scores", "createdAt"
     );
 
-    public UserGameScoreService(UserGameScoreRepository userGameScoreRepository,
+    private final Set<String> USER_PROFILE_DTO_FIELD = Set.of(
+            "gameName", "gameType", "gameDifficulty", "gameIcon", "gameDescription", "scores", "createdAt"
+    );
+
+
+    public UserGameScoreService(UserGameScoreRepository userGameScoreRepo,
                                 UserRepository userRepo,
                                 GameRepository gameRepo,
-                                EntityManager entityManager,
-                                UserDtoMapper userDtoMapper) {
-        this.userGameScoreRepository = userGameScoreRepository;
+                                UserDtoMapper userDtoMapper
+    ) {
+        this.userGameScoreRepo = userGameScoreRepo;
         this.userRepo = userRepo;
         this.gameRepo = gameRepo;
-        this.entityManager = entityManager;
         this.userDtoMapper = userDtoMapper;
     }
 
     @Transactional
-    public UserGameScoreResponse saveUserGameScore(UserDetails userDetails, UserGameScoreRequest req) {
-        AppUser user = userRepo.findByUsername(userDetails.getUsername())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+    public UserGameScoreResponse createUserGameScore(String username, UserGameScoreRequest req) {
 
-        Game game = gameRepo.findById(req.gameId())
-                .orElseThrow(() -> new RuntimeException("Game not found"));
+        AppUser user = userRepo.getReferenceByUsername(username).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found: " + username));
+        Game game = gameRepo.getReferenceByName(req.gameName()).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "Game not found: " + req.gameName()));
 
         UserGameScore userGameScore = new UserGameScore(user, game, req.scores());
-        UserGameScore savedScore = userGameScoreRepository.save(userGameScore);
-        entityManager.refresh(user);
+        UserGameScore savedScore = userGameScoreRepo.save(userGameScore);
 
         return new UserGameScoreResponse(
                 savedScore.getId(),
-                user.getId(),
-                game.getId(),
-                game.getType(),
-                game.getDifficulty(),
                 savedScore.getScores(),
-                savedScore.getCreatedAt(),
-                user.getPoints()
+                savedScore.getCreatedAt()
         );
     }
 
     @Transactional(readOnly = true)
     public LeaderboardDto showLeaderboard(String gameName, Pageable pageable) {
-        Long gameId = gameRepo.findIdByName(gameName).orElseThrow(
-                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Game not found"));
-
         Pageable cleanPageable = PageableUtils.filterSort(pageable, LEADERBOARD_SCORE_DTO_FIELD);
-
-        var slice = userGameScoreRepository.findAllHighestScoresByGameId(gameId, cleanPageable);
-
+        var slice = userGameScoreRepo.findAllHighestScoresByGameId(gameName, cleanPageable);
         return userDtoMapper.toLeaderboard(slice);
+    }
+
+    @Transactional(readOnly = true)
+    public UserGameRecordDto showGameRecord(String username, Pageable pageable) {
+        Pageable cleanPageable = PageableUtils.filterSort(pageable, USER_PROFILE_DTO_FIELD);
+        var page = userGameScoreRepo.findUserGameScoresByUserId(username, cleanPageable);
+        return userDtoMapper.toGameRecord(page);
+    }
+
+    @Transactional(readOnly = true)
+    public UserGameRecordDto showGameRecord(String username, Pageable pageable, String gameName) {
+        Pageable cleanPageable = PageableUtils.filterSort(pageable, USER_PROFILE_DTO_FIELD);
+        var page = userGameScoreRepo.findUserGameScoresByUserIdAndGameId(username, gameName, cleanPageable);
+        return userDtoMapper.toGameRecord(page);
+    }
+
+    @Transactional(readOnly = true)
+    public List<UserGameScoreDto> showBestGameRecord(String username) {
+        return userGameScoreRepo.findAllHighestScoresByUserId(username);
+    }
+
+    @Transactional(readOnly = true)
+    public UserGameScoreDto showBestGameRecord(String username, String gameName) {
+        return userGameScoreRepo.findHighestScoresByUserIdAndGameId(username, gameName);
     }
 }

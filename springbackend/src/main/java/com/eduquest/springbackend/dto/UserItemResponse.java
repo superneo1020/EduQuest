@@ -2,9 +2,8 @@ package com.eduquest.springbackend.dto;
 
 import java.time.Instant;
 
-public record UserGameScoreResponse(
+public record UserItemResponse(
         Long id,
-        Integer scores,
         Instant createdAt
 ) {
 }

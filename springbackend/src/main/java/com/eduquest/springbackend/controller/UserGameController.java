@@ -2,7 +2,6 @@ package com.eduquest.springbackend.controller;
 
 import com.eduquest.springbackend.dto.UserGameScoreRequest;
 import com.eduquest.springbackend.service.UserGameScoreService;
-import com.eduquest.springbackend.service.UserService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -16,16 +15,14 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/user/game")
 public class UserGameController {
 
-    private final UserService userService;
     private final UserGameScoreService userGameScoreService;
 
-    public UserGameController(UserService userService, UserGameScoreService userGameScoreService) {
-        this.userService = userService;
+    public UserGameController(UserGameScoreService userGameScoreService) {
         this.userGameScoreService = userGameScoreService;
     }
 
     @GetMapping({"/score", "/{name}/score"})
-    public ResponseEntity<?> getGameScore(
+    public ResponseEntity<?> getMyGameScore(
             @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable(required = false) String name,
             @PageableDefault(
@@ -34,25 +31,25 @@ public class UserGameController {
             ) Pageable pageable
     ) {
         return name != null
-                ? ResponseEntity.ok(userService.showProfile(userDetails, pageable, name))
-                : ResponseEntity.ok(userService.showProfile(userDetails, pageable));
+                ? ResponseEntity.ok(userGameScoreService.showGameRecord(userDetails.getUsername(), pageable, name))
+                : ResponseEntity.ok(userGameScoreService.showGameRecord(userDetails.getUsername(), pageable));
     }
 
     @GetMapping({"/best", "/{name}/best"})
-    public ResponseEntity<?> getBestGameScore(
+    public ResponseEntity<?> getMyBestGameScore(
             @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable(required = false) String name
     ) {
         return name != null
-                ? ResponseEntity.ok(userService.showBestGameRecord(userDetails, name))
-                : ResponseEntity.ok(userService.showBestGameRecord(userDetails));
+                ? ResponseEntity.ok(userGameScoreService.showBestGameRecord(userDetails.getUsername(), name))
+                : ResponseEntity.ok(userGameScoreService.showBestGameRecord(userDetails.getUsername()));
     }
 
     @PostMapping("/score")
-    public ResponseEntity<?> saveGameScore(
+    public ResponseEntity<?> createMyGameScore(
             @AuthenticationPrincipal UserDetails userDetails,
             @Valid @RequestBody UserGameScoreRequest request
     ) {
-        return ResponseEntity.ok(userGameScoreService.saveUserGameScore(userDetails, request));
+        return ResponseEntity.ok(userGameScoreService.createUserGameScore(userDetails.getUsername(), request));
     }
 }
