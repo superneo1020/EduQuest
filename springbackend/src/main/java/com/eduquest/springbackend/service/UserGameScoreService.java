@@ -67,31 +67,31 @@ public class UserGameScoreService {
     @Transactional(readOnly = true)
     public LeaderboardDto showLeaderboard(String gameName, Pageable pageable) {
         Pageable cleanPageable = PageableUtils.filterSort(pageable, LEADERBOARD_SCORE_DTO_FIELD);
-        var slice = userGameScoreRepo.findAllHighestScoresByGameId(gameName, cleanPageable);
+        var slice = userGameScoreRepo.findAllHighestScoresByGameName(gameName, cleanPageable);
         return userDtoMapper.toLeaderboard(slice);
     }
 
     @Transactional(readOnly = true)
     public UserGameRecordDto showGameRecord(String username, Pageable pageable) {
         Pageable cleanPageable = PageableUtils.filterSort(pageable, USER_PROFILE_DTO_FIELD);
-        var page = userGameScoreRepo.findUserGameScoresByUserId(username, cleanPageable);
+        var page = userGameScoreRepo.findUserGameScoresByUserUsername(username, cleanPageable);
         return userDtoMapper.toGameRecord(page);
     }
 
     @Transactional(readOnly = true)
     public UserGameRecordDto showGameRecord(String username, Pageable pageable, String gameName) {
         Pageable cleanPageable = PageableUtils.filterSort(pageable, USER_PROFILE_DTO_FIELD);
-        var page = userGameScoreRepo.findUserGameScoresByUserIdAndGameId(username, gameName, cleanPageable);
+        var page = userGameScoreRepo.findUserGameScoresByUserUsernameAndGameName(username, gameName, cleanPageable);
         return userDtoMapper.toGameRecord(page);
     }
 
     @Transactional(readOnly = true)
     public List<UserGameScoreDto> showBestGameRecord(String username) {
-        return userGameScoreRepo.findAllHighestScoresByUserId(username);
+        return userGameScoreRepo.findAllHighestScoresByUserUsername(username);
     }
 
     @Transactional(readOnly = true)
     public UserGameScoreDto showBestGameRecord(String username, String gameName) {
-        return userGameScoreRepo.findHighestScoresByUserIdAndGameId(username, gameName);
+        return userGameScoreRepo.findHighestScoresByUserUsernameAndGameName(username, gameName);
     }
 }
