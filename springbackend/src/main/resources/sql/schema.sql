@@ -9,8 +9,8 @@ CREATE TABLE IF NOT EXISTS schools (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(100) UNIQUE NOT NULL,
     address VARCHAR(255) NOT NULL,
-    phone VARCHAR(15) NOT NULL,
-    email VARCHAR(50) UNIQUE NOT NULL,
+    phone VARCHAR(20) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 ;;;
@@ -18,41 +18,57 @@ CREATE TABLE IF NOT EXISTS schools (
 CREATE TABLE IF NOT EXISTS classes (
     id BIGSERIAL PRIMARY KEY,
     school_id BIGINT NOT NULL,
-    grade VARCHAR(20) NOT NULL,
-    name VARCHAR(50) UNIQUE NOT NULL,
-    academic_year VARCHAR(4) NOT NULL,
+    grade VARCHAR(10) NOT NULL,
+    suffix VARCHAR(10) NOT NULL,
+    full_name VARCHAR(25) GENERATED ALWAYS AS (grade || suffix) STORED,
+    academic_year VARCHAR(10) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (school_id, grade, suffix, academic_year),
     FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE CASCADE
 );
 ;;;
 
 CREATE INDEX IF NOT EXISTS idx_classes_school_id ON classes(school_id);
 ;;;
-
-CREATE TABLE IF NOT EXISTS roles (
-     id BIGSERIAL PRIMARY KEY,
-     name VARCHAR(20) UNIQUE NOT NULL
-);
+CREATE INDEX idx_classes_full_name ON classes (full_name);
 ;;;
 
 CREATE TABLE IF NOT EXISTS users (
     id BIGSERIAL PRIMARY KEY,
     username VARCHAR(20) UNIQUE NOT NULL,
-    email VARCHAR(50) UNIQUE NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
     points INT NOT NULL DEFAULT 0 CHECK (points >= 0),
-    school_id BIGINT NOT NULL,
-    class_id BIGINT NOT NULL,
+    school_id BIGINT,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE CASCADE,
-    FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE
+    FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE SET NULL
 );
 ;;;
 
 CREATE INDEX IF NOT EXISTS idx_users_school_id ON users(school_id);
 ;;;
-CREATE INDEX IF NOT EXISTS idx_users_class_id ON users(class_id);
+
+CREATE TABLE IF NOT EXISTS class_members (
+    id BIGSERIAL PRIMARY KEY,
+    class_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    role_in_class VARCHAR(20) DEFAULT 'student' CHECK (role_in_class IN ('student', 'teacher', 'assistant')),
+    UNIQUE (class_id, user_id),
+    FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+;;;
+
+CREATE INDEX IF NOT EXISTS idx_class_members_class_id ON class_members(class_id);
+;;;
+CREATE INDEX IF NOT EXISTS idx_class_members_user_id ON class_members(user_id);
+;;;
+
+CREATE TABLE IF NOT EXISTS roles (
+     id BIGSERIAL PRIMARY KEY,
+     name VARCHAR(20) UNIQUE NOT NULL
+);
 ;;;
 
 CREATE TABLE IF NOT EXISTS user_roles (
@@ -88,11 +104,14 @@ CREATE INDEX IF NOT EXISTS idx_user_profiles_user_id ON user_profiles(user_id);
 CREATE TABLE IF NOT EXISTS activities (
     id BIGSERIAL PRIMARY KEY,
     creator_id BIGINT NOT NULL,
-    name VARCHAR(50) UNIQUE NOT NULL,
+    name VARCHAR(50) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     start_date DATE NOT NULL CHECK (start_date >= CURRENT_DATE),
     end_date DATE NOT NULL CHECK (end_date >= start_date),
     score INT NOT NULL DEFAULT 0 CHECK (score >= 0),
+    icon TEXT,
+    description TEXT,
+    UNIQUE (creator_id, name),
     FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE
 );
 ;;;
