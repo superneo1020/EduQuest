@@ -43,29 +43,22 @@ ON CONFLICT (user_id, role_id) DO NOTHING;
 INSERT INTO games (type, name, difficulty, icon, description)
 VALUES
     -- Math Games
-    ('MATH', 'Math Challenge', 'EASY', 'Calculator', 'Basic arithmetic practice with addition and subtraction.'),
-    ('MATH', 'Multiplication Master', 'MEDIUM', 'Calculator', 'Test your multiplication skills with timed challenges.'),
-    ('MATH', 'Algebra Adventure', 'HARD', 'Calculator', 'Solve complex algebraic equations and advance through levels.'),
-    
-    -- English Games
-    ('ENGLISH', 'Word Matching Game', 'EASY', 'Languages', 'Match words with their definitions or images.'),
-    ('ENGLISH', 'Listening Comprehension', 'MEDIUM', 'Languages', 'Listen to audio and answer multiple choice questions.'),
-    ('ENGLISH', 'Sentence Builder', 'HARD', 'Languages', 'Rearrange words to form grammatically correct sentences.'),
-    ('ENGLISH', 'Vocabulary Quest', 'MEDIUM', 'Languages', 'Learn new words through interactive challenges.'),
-    
-    -- Science Games
-    ('SCIENCE', 'Animal Classification', 'EASY', 'Atom', 'Sort animals into their correct biological categories.'),
-    ('SCIENCE', 'Human Body Explorer', 'MEDIUM', 'Brain', 'Identify and place organs in the correct positions.'),
-    ('SCIENCE', 'Chemistry Lab', 'HARD', 'Atom', 'Balance chemical equations and learn about reactions.'),
-    ('SCIENCE', 'Physics Playground', 'MEDIUM', 'Atom', 'Explore basic physics concepts through interactive simulations.'),
-    
-    -- Memory Games
-    ('MEMORY', 'Card Matching', 'EASY', 'Brain', 'Classic memory card matching game with educational content.'),
-    ('MEMORY', 'Sequence Master', 'MEDIUM', 'Brain', 'Remember and repeat increasingly complex sequences.'),
-    ('MEMORY', 'Pattern Recognition', 'HARD', 'Brain', 'Identify and complete complex visual patterns.')
-ON CONFLICT (name) DO NOTHING;
-;;;
+    ('MATH', 'Speed Calculation', 'EASY', 'Calculator', '快速心算挑戰，提升你的運算速度。'),
+    ('MATH', 'AI Math Adventure', 'HARD', 'Robot', '結合人工智慧的高難度數學邏輯冒險。'),
 
+    -- English Games
+    ('ENGLISH', 'Listening multiple choice questions', 'MEDIUM', 'Headphones', '聽力多選題測試，增強英文聽解能力。'),
+    ('ENGLISH', 'Word matching game', 'EASY', 'ABC', '經典單字配對，幫助記住基礎字彙。'),
+    ('ENGLISH', 'Sentence Reordering Game', 'HARD', 'Book', '句子重組挑戰，強化英文語法結構。'),
+
+    -- Science Games
+    ('SCIENCE', 'Animal sorting game', 'EASY', 'Leaf', '根據特徵對不同動物進行分類。'),
+    ('SCIENCE', 'Human Body Puzzle', 'MEDIUM', 'Brain', '人體器官拼圖，學習解剖學基礎知識。')
+ON CONFLICT (name) DO UPDATE SET
+                                 type = EXCLUDED.type,
+                                 difficulty = EXCLUDED.difficulty,
+                                 description = EXCLUDED.description;
+;;;
 -- Insert comprehensive missions
 INSERT INTO missions (type, name, difficulty, icon, description, scores)
 VALUES
@@ -102,35 +95,27 @@ WHERE user_id IN (SELECT id FROM users WHERE username IN ('student1', 'student2'
 -- Insert sample game scores for leaderboard display
 INSERT INTO user_game_scores (user_id, game_id, scores)
 VALUES
-    -- Student1 scores
-    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM games WHERE name = 'Math Challenge'), 85),
-    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM games WHERE name = 'Word Matching Game'), 92),
-    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM games WHERE name = 'Animal Classification'), 78),
-    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM games WHERE name = 'Card Matching'), 88),
-    
-    -- Student2 scores (higher performer)
-    ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM games WHERE name = 'Multiplication Master'), 95),
-    ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM games WHERE name = 'Listening Comprehension'), 88),
-    ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM games WHERE name = 'Human Body Explorer'), 91),
-    ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM games WHERE name = 'Sequence Master'), 85),
-    ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM games WHERE name = 'Algebra Adventure'), 79),
-    
-    -- Student3 scores (beginner)
-    ((SELECT id FROM users WHERE username = 'student3'), (SELECT id FROM games WHERE name = 'Math Challenge'), 65),
-    ((SELECT id FROM users WHERE username = 'student3'), (SELECT id FROM games WHERE name = 'Word Matching Game'), 72),
-    ((SELECT id FROM users WHERE username = 'student3'), (SELECT id FROM games WHERE name = 'Card Matching'), 80),
-    
-    -- Teacher1 scores (demonstration)
-    ((SELECT id FROM users WHERE username = 'teacher1'), (SELECT id FROM games WHERE name = 'Math Challenge'), 100),
-    ((SELECT id FROM users WHERE username = 'teacher1'), (SELECT id FROM games WHERE name = 'Sentence Builder'), 95),
-    ((SELECT id FROM users WHERE username = 'teacher1'), (SELECT id FROM games WHERE name = 'Chemistry Lab'), 88),
-    ((SELECT id FROM users WHERE username = 'teacher1'), (SELECT id FROM games WHERE name = 'Pattern Recognition'), 92),
-    
-    -- Admin scores (top performer)
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM games WHERE name = 'Algebra Adventure'), 98),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM games WHERE name = 'Vocabulary Quest'), 96),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM games WHERE name = 'Physics Playground'), 94),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM games WHERE name = 'Pattern Recognition'), 100)
+    -- Speed Calculation (EASY)
+    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM games WHERE name = 'Speed Calculation'), 95),
+    ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM games WHERE name = 'Speed Calculation'), 88),
+    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM games WHERE name = 'Speed Calculation'), 100),
+
+    -- AI Math Adventure (HARD)
+    ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM games WHERE name = 'AI Math Adventure'), 75),
+    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM games WHERE name = 'AI Math Adventure'), 92),
+
+    -- Word matching g
+    -- ame (EASY)
+    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM games WHERE name = 'Word matching game'), 98),
+    ((SELECT id FROM users WHERE username = 'student3'), (SELECT id FROM games WHERE name = 'Word matching game'), 70),
+
+    -- Sentence Reordering Game (HARD)
+    ((SELECT id FROM users WHERE username = 'teacher1'), (SELECT id FROM games WHERE name = 'Sentence Reordering Game'), 95),
+    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM games WHERE name = 'Sentence Reordering Game'), 88),
+
+    -- Animal sorting game (EASY)
+    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM games WHERE name = 'Animal sorting game'), 85),
+    ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM games WHERE name = 'Animal sorting game'), 92)
 ON CONFLICT DO NOTHING;
 ;;;
 

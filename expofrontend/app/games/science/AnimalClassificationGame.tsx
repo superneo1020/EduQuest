@@ -11,6 +11,7 @@ import {
     Image,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import GameScoreService, { GameResult } from '../../services/GameScoreService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -45,13 +46,6 @@ interface Category {
     id: string;
     name: string;
     color: string;
-}
-
-interface GameResult {
-    correct: number;
-    wrong: number;
-    total: number;
-    score: number;
 }
 
 interface PositionedAnimal extends Animal {
