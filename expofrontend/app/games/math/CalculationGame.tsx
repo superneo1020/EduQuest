@@ -1,395 +1,286 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-    View,
-    Text,
-    StyleSheet,
-    TouchableOpacity,
-    SafeAreaView,
-    Alert,
-} from 'react-native';
-import { ArrowLeft, Trophy, Clock } from 'lucide-react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert, ActivityIndicator } from 'react-native';
+import { ArrowLeft, Trophy, Clock, Brain, Star } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
+import axios from 'axios';
+import { useAuth } from "@/src/auth/AuthContext";
 
-export default function MathGameScreen() {
+export default function CalculationGame() {
     const router = useRouter();
+    const { token } = useAuth();
+
+    // 狀態管理
+    const [gameStarted, setGameStarted] = useState(false);
+    const [difficulty, setDifficulty] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [questions, setQuestions] = useState<any[]>([]);
+    const [currentIndex, setCurrentIndex] = useState(0);
     const [score, setScore] = useState(0);
-    const [level, setLevel] = useState(1);
-    const [question, setQuestion] = useState('');
-    const [options, setOptions] = useState<number[]>([]);
-    const [correctAnswer, setCorrectAnswer] = useState(0);
-    const [timeLeft, setTimeLeft] = useState(30);
-    const [gameActive, setGameActive] = useState(true);
-    const [questionsAnswered, setQuestionsAnswered] = useState(0);
-    const [streak, setStreak] = useState(0);
-    const [isProcessing, setIsProcessing] = useState(false);
+    const [timeLeft, setTimeLeft] = useState(90);
+    const [gameActive, setGameActive] = useState(false);
+    const [gameEnded, setGameEnded] = useState(false);
+    const [options, setOptions] = useState<string[]>([]);
+    const [isSaving, setIsSaving] = useState(false);
 
-    const TOTAL_QUESTIONS = 40;
+    const TOTAL_QUESTIONS = 10;
 
-    // --- 1. 先定義最基礎的生成題目函數 ---
-    const generateQuestion = useCallback(() => {
-        let maxNum = 10;
-        let ops = ['+'];
-
-        if (level === 1) {
-            maxNum = 10;
-            ops = ['+', '-'];
-        } else if (level === 2) {
-            maxNum = 20;
-            ops = ['+', '-', '*'];
-        } else if (level === 3) {
-            maxNum = 50;
-            ops = ['+', '-', '*', '/'];
-        } else {
-            maxNum = 100;
-            ops = ['+', '-', '*', '/'];
+    // --- 1. 從 AI 獲取 10 題 ---
+    const fetchQuestions = async (selectedDiff: string) => {
+        setLoading(true);
+        setDifficulty(selectedDiff);
+        try {
+            // 注意：請確保 IP 在實機測試時正確 (例如 192.168.x.x)
+            const res = await axios.get(`http://localhost:8000/api/math/batch_generate?difficulty=${selectedDiff}&count=${TOTAL_QUESTIONS}`);
+            setQuestions(res.data);
+            setCurrentIndex(0);
+            setScore(0);
+            setTimeLeft(selectedDiff === 'hard' ? 120 : 90);
+            setupOptions(res.data[0]);
+            setGameStarted(true);
+            setGameActive(true);
+        } catch (e) {
+            console.error(e);
+            Alert.alert("Error", "AI is busy generating problems. Please try again.");
+        } finally {
+            setLoading(false);
         }
+    };
 
-        const operator = ops[Math.floor(Math.random() * ops.length)];
-        let questionText = '';
-        let answer = 0;
+    // --- 2. 隨機生成 4 個選項 ---
+    const setupOptions = (qData: any) => {
+        if (!qData) return;
+        const correctAnswer = qData.answer;
+        const correctNum = parseInt(correctAnswer);
+        const opts = new Set<string>();
+        opts.add(correctAnswer);
 
-        switch (operator) {
-            case '+':
-                const a1 = Math.floor(Math.random() * maxNum) + 1;
-                const a2 = Math.floor(Math.random() * maxNum) + 1;
-                questionText = `${a1} + ${a2} = ?`;
-                answer = a1 + a2;
-                break;
-            case '-':
-                const s1 = Math.floor(Math.random() * maxNum) + 10;
-                const s2 = Math.floor(Math.random() * s1) + 1;
-                questionText = `${s1} - ${s2} = ?`;
-                answer = s1 - s2;
-                break;
-            case '*':
-                const m1 = Math.floor(Math.random() * (level * 3)) + 2;
-                const m2 = Math.floor(Math.random() * 9) + 2;
-                questionText = `${m1} × ${m2} = ?`;
-                answer = m1 * m2;
-                break;
-            case '/':
-                const divisor = Math.floor(Math.random() * (level + 3)) + 2;
-                const quotient = Math.floor(Math.random() * 10) + 1;
-                const dividend = divisor * quotient;
-                questionText = `${dividend} ÷ ${divisor} = ?`;
-                answer = quotient;
-                break;
+        while (opts.size < 4) {
+            const offset = Math.floor(Math.random() * 20) - 10;
+            const fake = (correctNum + offset).toString();
+            if (parseInt(fake) >= 0 && fake !== correctAnswer) opts.add(fake);
         }
+        setOptions(Array.from(opts).sort(() => Math.random() - 0.5));
+    };
 
-        const optionsList = [answer];
-        while (optionsList.length < 4) {
-            const variation = Math.floor(Math.random() * 5) + 1;
-            const opt = Math.random() > 0.5 ? answer + variation : answer - variation;
-            if (!optionsList.includes(opt) && opt >= 0) optionsList.push(opt);
-        }
+    // --- 3. 儲存分數到 Spring Boot ---
+    const saveScoreToLeaderboard = async (finalPoints: number) => {
+        setIsSaving(true);
+        try {
+            const payload = {
+                gameName: "Speed Calculation",
+                scores: finalPoints,
+                difficulty: difficulty
+            };
 
-        setQuestion(questionText);
-        setOptions(optionsList.sort(() => Math.random() - 0.5));
-        setCorrectAnswer(answer);
-    }, [level]);
+            await axios.post('http://localhost:8080/api/user/game/score', payload, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
 
-    // --- 2. 定義重置遊戲 (依賴 generateQuestion) ---
-    const resetGame = useCallback(() => {
-        setScore(0);
-        setLevel(1);
-        setTimeLeft(90);
-        setGameActive(true);
-        setQuestionsAnswered(0);
-        setStreak(0);
-        generateQuestion();
-    }, [generateQuestion]);
-
-    // --- 3. 定義檢查答案 ---
-    const checkAnswer = useCallback((selectedAnswer: number) => {
-        // 如果遊戲結束或是正在處理中，直接 return，防止重複點擊
-        if (!gameActive || isProcessing) return;
-
-        setIsProcessing(true); // 立即鎖定按鈕
-
-        const isCorrect = selectedAnswer === correctAnswer;
-        const nextCount = questionsAnswered + 1;
-        setQuestionsAnswered(nextCount);
-
-        if (isCorrect) {
-            setScore(prev => prev + 10);
-            setStreak(prev => prev + 1);
-            if (nextCount % 10 === 0 || streak + 1 >= 5) {
-                setLevel(prev => Math.min(prev + 1, 4));
-                setStreak(0);
-            }
-        } else {
-            setStreak(0);
-            if (level > 1) setLevel(prev => prev - 1);
-        }
-
-        if (nextCount >= TOTAL_QUESTIONS) {
-            setGameActive(false);
-            setIsProcessing(false); // 遊戲結束解鎖
-            Alert.alert("Mission Complete!", `Finished ${TOTAL_QUESTIONS} questions!`, [
-                { text: "Finish", onPress: () => router.back() }
+            Alert.alert("Mission Complete!", `Base Score: ${finalPoints}\nRankings updated!`, [
+                { text: "Leaderboard", onPress: () => router.push('/rank/leaderboard') },
+                { text: "Home", onPress: () => router.push('/') }
             ]);
-        } else {
-            // 延遲後生成新題目，並解鎖
-            setTimeout(() => {
-                generateQuestion();
-                setIsProcessing(false); // 生成新題目後才解鎖，允許下一次點擊
-            }, 300);
+        } catch (e) {
+            Alert.alert("Notice", "Game finished! (Score sync failed)");
+        } finally {
+            setIsSaving(false);
         }
-    }, [gameActive, isProcessing, correctAnswer, questionsAnswered, streak, level, generateQuestion]);
-    // --- 4. 定義結束遊戲 ---
-    const endGame = useCallback(() => {
-        setGameActive(false);
-        Alert.alert('Time\'s Up!', `Final score: ${score}`, [
-            { text: 'Play Again', onPress: resetGame },
-            { text: 'Back', onPress: () => router.back() }
-        ]);
-    }, [score, resetGame]);
+    };
 
-    // --- 5. 最後才是 useEffect 鉤子 ---
-    useEffect(() => {
-        generateQuestion();
-    }, [generateQuestion]);
+    // --- 4. 處理答題 ---
+    const handleAnswer = (selected: string) => {
+        if (!gameActive || isSaving) return;
 
+        const isCorrect = selected === questions[currentIndex].answer;
+        const newScore = isCorrect ? score + 10 : score;
+
+        if (isCorrect) setScore(newScore);
+
+        if (currentIndex + 1 < TOTAL_QUESTIONS) {
+            const nextIdx = currentIndex + 1;
+            setCurrentIndex(nextIdx);
+            setupOptions(questions[nextIdx]);
+        } else {
+            setGameActive(false);
+            setGameEnded(true);
+        }
+    };
+
+    // 計時器邏輯
     useEffect(() => {
         let timer: any;
-        if (timeLeft > 0 && gameActive) {
-            timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
+        if (gameActive && timeLeft > 0) {
+            timer = setInterval(() => setTimeLeft(t => t - 1), 1000);
         } else if (timeLeft === 0 && gameActive) {
-            endGame();
+            setGameActive(false);
+            setGameEnded(true);
         }
-        return () => timer && clearTimeout(timer);
-    }, [timeLeft, gameActive, endGame]);
+        return () => clearInterval(timer);
+    }, [gameActive, timeLeft]);
 
+    // 介面 A: 難度選擇
+    // 在 CalculationGame 內替換掉原有的 !gameStarted 判斷部分
+    if (!gameStarted) {
+        return (
+            <SafeAreaView style={styles.centerContainer}>
+                <Trophy size={60} color="#2196F3" style={{ marginBottom: 20 }} />
+                <Text style={styles.mainTitle}>Speed Calculation</Text>
+                <Text style={styles.subTitle}>Beat the clock with AI math!</Text>
+
+                {loading ? (
+                    <View style={{ marginTop: 20, alignItems: 'center' }}>
+                        <ActivityIndicator size="large" color="#2196F3" />
+                        <Text style={styles.loadingText}>AI is crafting 10 problems...</Text>
+                    </View>
+                ) : (
+                    <View style={styles.menuGrid}>
+                        <TouchableOpacity
+                            style={[styles.diffCard, { backgroundColor: '#E8F5E9', borderColor: '#4CAF50' }]}
+                            onPress={() => fetchQuestions('easy')}
+                        >
+                            <Star size={24} color="#4CAF50" />
+                            <View>
+                                <Text style={[styles.diffBtnText, { color: '#2E7D32' }]}>Easy</Text>
+                                <Text style={styles.diffDesc}>Relaxed pace (90s)</Text>
+                            </View>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.diffCard, { backgroundColor: '#FFF3E0', borderColor: '#FF9800' }]}
+                            onPress={() => fetchQuestions('medium')}
+                        >
+                            <Star size={24} color="#FF9800" />
+                            <View>
+                                <Text style={[styles.diffBtnText, { color: '#EF6C00' }]}>Medium</Text>
+                                <Text style={styles.diffDesc}>Standard challenge (90s)</Text>
+                            </View>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.diffCard, { backgroundColor: '#FFEBEE', borderColor: '#F44336' }]}
+                            onPress={() => fetchQuestions('hard')}
+                        >
+                            <Star size={24} color="#F44336" />
+                            <View>
+                                <Text style={[styles.diffBtnText, { color: '#C62828' }]}>Hard</Text>
+                                <Text style={styles.diffDesc}>Expert speed (120s)</Text>
+                            </View>
+                        </TouchableOpacity>
+                    </View>
+                )}
+            </SafeAreaView>
+        );
+    }
+
+    // 介面 C: 遊戲結算畫面
+    if (gameEnded) {
+        const correctAnswers = score / 10;
+        const accuracy = Math.round((correctAnswers / TOTAL_QUESTIONS) * 100);
+        
+        return (
+            <SafeAreaView style={styles.centerContainer}>
+                <Trophy size={80} color="#FFD700" style={{ marginBottom: 20 }} />
+                <Text style={styles.mainTitle}>Mission Complete!</Text>
+                <Text style={styles.subTitle}>Here's your performance</Text>
+                
+                <View style={styles.scoreCard}>
+                    <View style={styles.scoreRow}>
+                        <Text style={styles.scoreLabel}>Final Score</Text>
+                        <Text style={styles.scoreValue}>{score}</Text>
+                    </View>
+                    <View style={styles.scoreRow}>
+                        <Text style={styles.scoreLabel}>Correct Answers</Text>
+                        <Text style={styles.scoreValue}>{correctAnswers}/{TOTAL_QUESTIONS}</Text>
+                    </View>
+                    <View style={styles.scoreRow}>
+                        <Text style={styles.scoreLabel}>Accuracy</Text>
+                        <Text style={styles.scoreValue}>{accuracy}%</Text>
+                    </View>
+                    <View style={styles.scoreRow}>
+                        <Text style={styles.scoreLabel}>Difficulty</Text>
+                        <Text style={styles.scoreValue}>{difficulty?.toUpperCase()}</Text>
+                    </View>
+                </View>
+
+                {isSaving ? (
+                    <View style={{ marginTop: 20 }}>
+                        <ActivityIndicator size="large" color="#4CAF50" />
+                        <Text style={styles.loadingText}>Saving score...</Text>
+                    </View>
+                ) : (
+                    <View style={styles.menuGrid}>
+                        <TouchableOpacity style={[styles.diffBtn, { backgroundColor: '#E8F5E9' }]} onPress={() => saveScoreToLeaderboard(score)}>
+                            <Trophy size={24} color="#4CAF50" />
+                            <Text style={[styles.diffBtnText, { color: '#2E7D32' }]}>Save Score</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={[styles.diffBtn, { backgroundColor: '#FFF3E0' }]} onPress={() => router.push('/')}>
+                            <Star size={24} color="#FF9800" />
+                            <Text style={[styles.diffBtnText, { color: '#EF6C00' }]}>Home</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
+            </SafeAreaView>
+        );
+    }
+
+    // 介面 B: 遊戲進行中
     return (
         <SafeAreaView style={styles.container}>
-            {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity
-                    onPress={() => router.back()}
-                    style={styles.backButton}
-                >
-                    <ArrowLeft size={24} color="#333" />
-                </TouchableOpacity>
+                <TouchableOpacity onPress={() => router.back()}><ArrowLeft size={24} color="#333" /></TouchableOpacity>
                 <View style={styles.stats}>
-                    <View style={styles.stat}>
-                        <Trophy size={20} color="#FFD700" />
-                        <Text style={styles.statText}>{score}</Text>
-                    </View>
-                    <View style={styles.stat}>
-                        <Clock size={20} color="#FF6B6B" />
-                        <Text style={[styles.statText, timeLeft <= 10 && styles.lowTime]}>
-                            {timeLeft}s
-                        </Text>
-                    </View>
+                    <View style={styles.stat}><Trophy size={18} color="#FFD700" /><Text style={styles.statText}>{score}</Text></View>
+                    <View style={styles.stat}><Clock size={18} color="#FF6B6B" /><Text style={styles.statText}>{timeLeft}s</Text></View>
                 </View>
             </View>
 
-            {/* Game Area */}
             <View style={styles.gameArea}>
-                <Text style={styles.gameTitle}>Math Challenge</Text>
-                <Text style={styles.levelText}>Level {level}</Text>
+                <Text style={styles.progressText}>Question {currentIndex + 1} / {TOTAL_QUESTIONS}</Text>
 
-                {/* Progress Indicator */}
-                <View style={styles.progressContainer}>
-                    <Text style={styles.progressText}>
-                        Questions: {questionsAnswered}
-                    </Text>
+                <View style={styles.questionCard}>
+                    <Text style={styles.questionText}>{questions[currentIndex]?.question} = ?</Text>
                 </View>
 
-                <Text style={styles.question}>{question}</Text>
-
-                <View style={styles.optionsContainer}>
-                    {options.map((option, index) => (
-                        <TouchableOpacity
-                            key={index}
-                            style={[
-                                styles.optionButton,
-                                (!gameActive || isProcessing) && styles.disabledButton
-                            ]}
-                            onPress={() => checkAnswer(option)}
-                            disabled={!gameActive || isProcessing}
-                        >
-                            <Text style={styles.optionText}>{option}</Text>
+                <View style={styles.optionsGrid}>
+                    {options.map((opt, i) => (
+                        <TouchableOpacity key={i} style={styles.optionBtn} onPress={() => handleAnswer(opt)} disabled={isSaving}>
+                            <Text style={styles.optionText}>{opt}</Text>
                         </TouchableOpacity>
                     ))}
                 </View>
 
-                <View style={styles.buttonsContainer}>
-                    <TouchableOpacity
-                        style={[styles.resetButton, styles.smallButton]}
-                        onPress={resetGame}
-                    >
-                        <Text style={styles.resetButtonText}>Restart</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={[styles.menuButton, styles.smallButton]}
-                        onPress={() => router.back()}
-                    >
-                        <Text style={styles.menuButtonText}>Menu</Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* Time Warning */}
-                {timeLeft <= 10 && (
-                    <View style={styles.timeWarning}>
-                        <Text style={styles.timeWarningText}>
-                            ⚠️ Hurry up! {timeLeft}s left!
-                        </Text>
-                    </View>
-                )}
+                {isSaving && <ActivityIndicator style={{ marginTop: 20 }} color="#4CAF50" />}
             </View>
         </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#f0f8ff',
-    },
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingVertical: 15,
-        backgroundColor: 'white',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-    },
-    backButton: {
-        padding: 8,
-    },
-    stats: {
-        flexDirection: 'row',
-        gap: 15,
-    },
-    stat: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: 'white',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 20,
-        gap: 4,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-    },
-    statText: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#333',
-    },
-    lowTime: {
-        color: '#FF6B6B',
-        fontWeight: 'bold',
-    },
-    gameArea: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        paddingHorizontal: 20,
-    },
-    gameTitle: {
-        fontSize: 28,
-        fontWeight: 'bold',
-        marginBottom: 10,
-        color: '#2c3e50',
-        textAlign: 'center',
-    },
-levelText: {
-  fontSize: 18,
-  fontWeight: 'bold',
-  color: '#27ae60',
-  marginBottom: 10,
-},
-    progressContainer: {
-        marginBottom: 20,
-    },
-    progressText: {
-        fontSize: 16,
-        color: '#666',
-        fontWeight: '600',
-    },
-    question: {
-        fontSize: 36,
-        fontWeight: 'bold',
-        marginBottom: 40,
-        color: '#2c3e50',
-        textAlign: 'center',
-        minHeight: 50,
-    },
-    optionsContainer: {
-        width: '100%',
-        gap: 15,
-        marginBottom: 30,
-    },
-    optionButton: {
-        backgroundColor: '#3498db',
-        padding: 20,
-        borderRadius: 12,
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-        elevation: 3,
-    },
-    disabledButton: {
-        opacity: 0.6,
-    },
-    optionText: {
-        color: 'white',
-        fontSize: 20,
-        fontWeight: 'bold',
-    },
-    buttonsContainer: {
-        flexDirection: 'row',
-        gap: 15,
-        marginBottom: 20,
-    },
-    smallButton: {
-        paddingVertical: 12,
-        paddingHorizontal: 20,
-        borderRadius: 8,
-        minWidth: 100,
-    },
-    resetButton: {
-        backgroundColor: '#e74c3c',
-    },
-    menuButton: {
-        backgroundColor: '#95a5a6',
-    },
-    resetButtonText: {
-        color: 'white',
-        fontSize: 16,
-        fontWeight: 'bold',
-        textAlign: 'center',
-    },
-    menuButtonText: {
-        color: 'white',
-        fontSize: 16,
-        fontWeight: 'bold',
-        textAlign: 'center',
-    },
-    timeWarning: {
-        backgroundColor: '#FFF3CD',
-        padding: 10,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: '#FFEAA7',
-    },
-    timeWarningText: {
-        color: '#856404',
-        fontSize: 14,
-        fontWeight: 'bold',
-        textAlign: 'center',
-    },
+    container: { flex: 1, backgroundColor: '#F8FAFC' },
+    centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff', padding: 20 },
+    mainTitle: { fontSize: 28, fontWeight: 'bold', color: '#1E293B', marginBottom: 8 },
+    subTitle: { fontSize: 16, color: '#64748B', marginBottom: 30 },
+    menuGrid: { width: '100%', gap: 15 },
+    diffCard: { flexDirection: 'row', alignItems: 'center', padding: 20, borderRadius: 15, gap: 15, borderWidth: 2 },
+    diffBtn: { flexDirection: 'row', alignItems: 'center', padding: 20, borderRadius: 15, gap: 15 },
+    diffBtnText: { fontSize: 20, fontWeight: 'bold' },
+    diffDesc: { fontSize: 14, color: '#64748B', marginTop: 4 },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, backgroundColor: '#fff', elevation: 2 },
+    stats: { flexDirection: 'row', gap: 12 },
+    stat: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F1F5F9', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+    statText: { fontWeight: '700', color: '#334155' },
+    gameArea: { flex: 1, padding: 20, alignItems: 'center', justifyContent: 'center' },
+    progressText: { fontSize: 16, color: '#64748B', fontWeight: '600', marginBottom: 10 },
+    questionCard: { width: '100%', backgroundColor: '#fff', paddingVertical: 50, borderRadius: 30, alignItems: 'center', marginBottom: 40, elevation: 5 },
+    questionText: { fontSize: 42, fontWeight: '800', color: '#1E293B' },
+    optionsGrid: { width: '100%', gap: 15 },
+    optionBtn: { backgroundColor: '#fff', padding: 22, borderRadius: 20, alignItems: 'center', borderWidth: 2, borderColor: '#E2E8F0' },
+    optionText: { fontSize: 22, fontWeight: '700', color: '#334155' },
+    loadingText: { marginTop: 15, fontSize: 14, color: '#666' },
+    scoreCard: { width: '100%', backgroundColor: '#F8FAFC', padding: 25, borderRadius: 20, marginBottom: 30, borderWidth: 2, borderColor: '#E2E8F0' },
+    scoreRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+    scoreLabel: { fontSize: 16, fontWeight: '600', color: '#64748B' },
+    scoreValue: { fontSize: 18, fontWeight: '800', color: '#1E293B' },
+
 });

@@ -16,21 +16,18 @@ import numpy as np
 import json
 import re
 import random
-import threading
 
 whisper_model = None
-math_queue = []
 
 def get_whisper_model():
     global whisper_model
     if whisper_model is None:
         logger.info("Loading Whisper model...")
-        whisper_model = whisper.load_model("base")   
+        whisper_model = whisper.load_model("base")
         logger.info("Whisper model loaded")
     return whisper_model
 
-# -----------------------------------
-# ----------------------------------
+# ---------------------------------------------------------------------
 # Settings
 # ---------------------------------------------------------------------
 class Settings(BaseSettings):
@@ -60,7 +57,6 @@ async def lifespan(app: FastAPI):
     logger.info("Ensuring model %s is available …", settings.model)
     try:
         ollama.pull(settings.model)
-        threading.Thread(target=refill_queue, daemon=True).start()
     except Exception as e:
         logger.error("Could not pull model: %s", e)
         raise RuntimeError(f"Model {settings.model} unavailable") from e
@@ -98,6 +94,7 @@ class ChatResponse(BaseModel):
     response: str
 
 class MathProblem(BaseModel):
+    """數學應用題回傳格式"""
     question: str
     options: list[str]
     answer: str
@@ -163,73 +160,96 @@ def chat_stream(req: ChatRequest) -> StreamingResponse:
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )
 
+@app.get("/api/math/batch_generate")
+def batch_generate_math(difficulty: str = "easy", count: int = 10):
+    rules = {
+        "easy": "addition and subtraction within 100.",
+        "medium": "multiplication and division within 200.",
+        "hard": "complex two-step operations (e.g. 14 * 5 + 22) with results within 1000."
+    }
+
+    prompt = (
+        f"Generate {count} math problems for {difficulty} level. Rule: {rules.get(difficulty)}\n"
+        "Return ONLY a JSON array of objects: [{\"question\": \"...\", \"answer\": \"...\"}]\n"
+        "The 'answer' field must be a string containing only the integer result."
+    )
+
+    try:
+        resp = ollama.chat(model=settings.model, messages=[{"role": "user", "content": prompt}])
+        content = resp["message"]["content"].strip()
+
+        # 使用正則表達式抓取 JSON 部分，避免 AI 廢話
+        match = re.search(r'(\[.*\])', content, re.DOTALL)
+        if match:
+            return json.loads(match.group(1))
+
+        # 如果格式不對，拋出錯誤觸發前端 Fallback
+        raise ValueError("AI output format invalid")
+    except Exception as e:
+        logger.error(f"AI Generation Error: {e}")
+        # 保底題目
+        return [{"question": "5 + 5", "answer": "10"}] * count
+
 @app.get("/api/math/generate")
 def generate_math_ai(difficulty: str = "easy"):
     topics = ["shopping", "traveling", "farming", "coding", "cooking"]
     selected_topic = random.choice(topics)
 
+
     if difficulty == "hard":
-        diff_rule = "Create a problem with 3 numbers and two operations. Answer must be a whole number."
+        diff_rule = "Create a problem with 3 numbers and two operations (e.g., multiply then add). Answer must be a whole number."
     elif difficulty == "medium":
-        diff_rule = "Create a multiplication or division problem."
+        diff_rule = "Create a multiplication or division problem. Answer must be a whole number."
     else:
         diff_rule = "Create a simple addition or subtraction problem."
 
-
     prompt = (
-        f"JSON ONLY. {difficulty} math problem about {selected_topic}. "
-        f"Rule: {diff_rule}. "
-        "Format: {\"question\":\"...\",\"answer\":\"...\",\"explanation\":\"...\"}"
+        f"Generate a {difficulty} math problem about {selected_topic}.\n"
+        f"Rule: {diff_rule}\n"
+        "Return ONLY a JSON object with keys 'question', 'answer', and 'explanation'.\n"
+        "Example: {\"question\": \"...\", \"answer\": \"10\", \"explanation\": \"...\"}"
     )
 
     try:
         resp = ollama.chat(
             model=settings.model,
             messages=[{"role": "user", "content": prompt}],
-            options={
-                "temperature": 0.1,
-                "num_predict": 150,
-                "num_thread": 4
-            }
+            options={"temperature": 0.1}
         )
         content = resp["message"]["content"].strip()
+        logger.info(f"AI Raw Output ({difficulty}): {content}")
 
-        # Get JSON
-        match = re.search(r'(\{.*\})', content, re.DOTALL)
-        if match:
-            json_str = match.group(1).replace('\n', ' ')
-            data = json.loads(json_str)
-            data["answer"] = str(data.get("answer", "0"))
-            return data
+        start = content.find('{')
+        end = content.rfind('}')
+
+        if start != -1 and end != -1:
+            json_str = content[start:end+1]
+
+            json_str = re.sub(r'[\n\r]', ' ', json_str)
+            json_str = re.sub(r',\s*}', '}', json_str)  # Remove trailing commas
+            json_str = re.sub(r',\s*]', ']', json_str)  # Remove trailing commas in arrays
+            json_str = re.sub(r'\s+', ' ', json_str)    # Normalize whitespace
+            json_str = json_str.strip()
+
+            logger.info(f"Cleaned JSON string: {json_str}")
+
+            try:
+                data = json.loads(json_str)
+
+                data["answer"] = str(data.get("answer", "0"))
+                return data
+            except json.JSONDecodeError as e:
+                logger.error(f"JSON Parse Error: {e}")
+
     except Exception as e:
-        logger.error(f"Logic generation error: {e}")
+        logger.error(f"AI Fetch Error: {e}")
 
-    # A backup question in case the AI is error.
+
     return {
-        "question": f"A {selected_topic} worker works 8 hours a day for 5 days. Total hours?",
+        "question": f"A {selected_topic} worker works 8 hours a day for 5 days. How many hours in total?",
         "answer": "40",
         "explanation": "8 * 5 = 40"
     }
-
-def get_math_prefetched():
-    global math_queue
-    if math_queue:
-        problem = math_queue.pop(0)
-
-        threading.Thread(target=refill_queue, daemon=True).start()
-        return problem
-
-    # 如果 Queue 咁啱係空嘅 (例如啟動太快)
-    return generate_math_ai("easy")
-
-def refill_queue():
-    global math_queue
-    while len(math_queue) < 5:
-        logger.info("Refilling math queue...")
-        new_prob = generate_math_ai("easy")
-        if new_prob:
-            math_queue.append(new_prob)
-    logger.info(f"Queue refill complete. Size: {len(math_queue)}")
 @app.post("/api/math/check")
 def check_math_answer(req: CheckRequest):
     logger.info("AI checking student's work...")
@@ -250,15 +270,17 @@ def check_math_answer(req: CheckRequest):
         resp = ollama.chat(model=settings.model, messages=[{"role": "user", "content": prompt}])
         content = resp["message"]["content"].strip()
 
+        # 2. 這是核心：更強大的過濾網
+        # 尋找第一個 '{' 和最後一個 '}' 之間的所有內容
         match = re.search(r'(\{.*\})', content, re.DOTALL)
 
         if match:
             json_str = match.group(1)
-            # Remove illegal line breaks that AI sometimes spews out.
+            # 處理掉 AI 有時候會噴出的非法換行符
             json_str = json_str.replace('\n', ' ').replace('\r', ' ')
 
             try:
-
+                # 嘗試解析
                 result = json.loads(json_str)
                 # 即使解析成功，我們也要檢查 feedback 裡面有沒有 AI 偷塞的 "Correct!" 字眼
                 # 如果有，把它們清理掉，只留重點
@@ -307,25 +329,25 @@ def speech_to_text(file: UploadFile = File(...)):
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
             tmp.write(file.file.read())
             tmp_path = tmp.name
-        
+
         try:
             # Load audio using librosa (no ffmpeg required)
             audio, sr = librosa.load(tmp_path, sr=16000)
-            
+
             # Whisper expects audio in float32 format between -1 and 1
             audio = audio.astype(np.float32)
             if audio.max() > 1.0:
                 audio = audio / (audio.max() + 1e-9)
-            
+
             # Use Whisper's transcribe with audio array directly
             model = get_whisper_model()
             result = model.transcribe(audio, language="en")
-            
+
             os.remove(tmp_path)
-            
+
             logger.info("STT result: %s", result["text"][:50])
             return {"text": result["text"].strip()}
-            
+
         except Exception as e:
             logger.exception("STT processing failed")
             raise HTTPException(

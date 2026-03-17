@@ -1,5 +1,6 @@
 package com.eduquest.springbackend.controller;
 
+import com.eduquest.springbackend.service.UserGameScoreService;
 import com.eduquest.springbackend.service.UserService;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -16,19 +17,26 @@ import org.springframework.web.bind.annotation.RestController;
 public class UserController {
 
     private final UserService userService;
+    private final UserGameScoreService userGameScoreService;
 
-    public UserController(UserService userService) {
+    public UserController(UserService userService, UserGameScoreService userGameScoreService) {
         this.userService = userService;
+        this.userGameScoreService = userGameScoreService;
     }
 
     @GetMapping("/profile")
-    public ResponseEntity<?> getProfile(
+    public ResponseEntity<?> getMyProfile(
             @AuthenticationPrincipal UserDetails userDetails,
             @PageableDefault(
                     sort = "createdAt",
                     direction = Sort.Direction.DESC
             ) Pageable pageable
     ) {
-        return ResponseEntity.ok(userService.showProfile(userDetails, pageable));
+        return ResponseEntity.ok(userGameScoreService.showGameRecord(userDetails.getUsername(), pageable));
+    }
+
+    @GetMapping("/point")
+    public ResponseEntity<?> getMyPoints(@AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(userService.findPointsByUsername(userDetails.getUsername()));
     }
 }

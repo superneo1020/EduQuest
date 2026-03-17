@@ -8,6 +8,8 @@ import org.springframework.data.repository.query.Param;
 import java.util.Optional;
 
 public interface GameRepository extends JpaRepository<Game, Long> {
+    Optional<Game> getReferenceByName(String name);
+
     @Query("SELECT u.id FROM Game u WHERE u.name = :name")
     Optional<Long> findIdByName(@Param("name") String name);
 }

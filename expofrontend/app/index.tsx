@@ -94,6 +94,13 @@ export default function LandscapeOptimizedHome() {
                         <LogOut size={22} color="#FF4757" />
                         <Text style={styles.logoutText}>Exit</Text>
                     </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.headerIconBtn}
+                        onPress={() => router.push('/rank/leaderboard' as any)}
+                    >
+                        <Trophy size={26} color="#2D3436" />
+                    </TouchableOpacity>
                 </View>
             </View>
 

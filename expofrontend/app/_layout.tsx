@@ -89,6 +89,20 @@ export default function RootLayout() {
                   }
               }}
           />
+
+          <Stack.Screen
+              name="rank/leaderboard"
+              options={{
+                  title: 'Leaderboard',
+                  headerStyle: {
+                      backgroundColor: '#FF6B6B',
+                  },
+                  headerTintColor: '#fff',
+                  headerTitleStyle: {
+                      fontWeight: 'bold',
+                  }
+              }}
+          />
       </Stack>
     </AuthProvider>
   );
