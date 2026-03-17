@@ -5,8 +5,6 @@ import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.beans.TypeMismatchException;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.dao.InvalidDataAccessApiUsageException;
-import org.springframework.data.mapping.PropertyReferenceException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -17,7 +15,9 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.net.URI;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -140,42 +140,18 @@ public class GlobalExceptionHandler {
                 .body(toException(HttpStatus.NOT_FOUND, e.getMessage()));
     }
 
-    @ExceptionHandler(PropertyReferenceException.class)
-    public ProblemDetail handlePropertyError(PropertyReferenceException e) {
-        // return 400 instead when database cannot get the field from sort in Pageable
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ProblemDetail> handleResponseStatus(ResponseStatusException e) {
+        HttpStatus status = (HttpStatus) e.getStatusCode();
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
-                HttpStatus.BAD_REQUEST,
-                "The specified sort field [" + e.getPropertyName() + "] does not exist"
+                status, e.getReason() != null ? e.getReason() : "Unexpected error"
         );
-
-        problem.setTitle("Invalid pagination sorting parameters");
+        problem.setTitle(status.getReasonPhrase());
+        String instanceId = "urn:uuid:" + java.util.UUID.randomUUID();
+        problem.setInstance(URI.create(instanceId));
+        problem.setProperty("instanceId", instanceId);
         problem.setProperty("timestamp", Instant.now());
         problem.setProperty("log", e.getMessage());
-
-        return problem;
-    }
-
-    @ExceptionHandler(InvalidDataAccessApiUsageException.class)
-    public ProblemDetail handleDatabaseUsageError(InvalidDataAccessApiUsageException e) {
-        // for native query (PostgreSQL)
-        // return 400 instead when database cannot get the field from sort in Pageable
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
-                HttpStatus.BAD_REQUEST,
-                "The database operation command {" + e.getRootCause() + "} is invalid."
-        );
-
-        problem.setTitle("Data access syntax error");
-        problem.setProperty("type", "DataAccessException");
-        problem.setProperty("timestamp", Instant.now());
-        problem.setProperty("log", e.getMessage());
-
-        return problem;
-    }
-
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ExceptionDto> handleException(Exception e) {
-        return ResponseEntity
-                .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(toException(HttpStatus.INTERNAL_SERVER_ERROR, e.getMessage()));
+        return ResponseEntity.status(status).body(problem);
     }
 }
