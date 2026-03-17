@@ -31,7 +31,7 @@ class AIService {
     constructor() {
         // 使用與 chatbot.tsx 相同的後端地址
         this.baseURL = 'http://127.0.0.1:8000';  // 或 Config.AI_BASE_URL
-        this.modelName = Config.AI_MODEL_NAME || 'llama';
+        this.modelName = Config.AI_MODEL_NAME || 'gemma';
         this.enabled = Config.AI_ENABLED !== false;
     }
 

@@ -36,7 +36,7 @@ class WritingAIService {
     constructor() {
         // 使用與 chatbot.tsx 相同的後端地址
         this.baseURL = 'http://127.0.0.1:8000';
-        this.modelName = 'llama'; // 簡化模型名稱
+        this.modelName = 'gemma'; // 簡化模型名稱
         this.enabled = true;
 
         console.log('📝 WritingAIService initialized:', {

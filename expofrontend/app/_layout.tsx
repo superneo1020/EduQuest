@@ -51,7 +51,7 @@ export default function RootLayout() {
           }}
         />
         <Stack.Screen
-          name="games/memory/memory"
+          name="games/chinese/chinese"
           options={{
             title: 'Memory Training',
             headerStyle: {
