@@ -1,22 +1,21 @@
-// app/games/SentenceReorderGame.tsx
-import React, { useState, useEffect, useRef } from 'react';
+// english/sentencereorder.tsx
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
     StyleSheet,
     TouchableOpacity,
-    SafeAreaView,
     ScrollView,
-    Dimensions,
     Modal,
-    Animated
+    Dimensions
 } from 'react-native';
-import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { Stack } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const { width } = Dimensions.get('window');
 
-// 題庫數據
+// 题库数据
 const sentenceBank = [
     { id: 1, sentence: "I like apples", words: ["I", "like", "apples"], translation: "I like apples." },
     { id: 2, sentence: "She reads a book", words: ["She", "reads", "a", "book"], translation: "She reads a book." },
@@ -44,13 +43,13 @@ interface GameState {
     questionStatus: ('correct' | 'wrong' | 'unanswered')[];
 }
 
-const SentenceReorderGame = () => {
-    // 遊戲狀態
+export default function SentenceReorderScreen() {
+    // 游戏状态
     const [gameState, setGameState] = useState<GameState>({
         currentQuestion: 0,
         score: 0,
         words: [],
-        feedback: 'Drag words to reorder the sentence',
+        feedback: 'Tap words to reorder the sentence',
         isChecking: false,
         showCompletionModal: false,
         correctAnswers: 0,
@@ -60,7 +59,7 @@ const SentenceReorderGame = () => {
 
     const currentQuestion = sentenceBank[gameState.currentQuestion];
 
-    // 初始化題目
+    // 初始化题目
     useEffect(() => {
         initializeQuestion();
     }, [gameState.currentQuestion]);
@@ -75,12 +74,12 @@ const SentenceReorderGame = () => {
         setGameState(prev => ({
             ...prev,
             words: shuffledWords,
-            feedback: 'Drag words to reorder the sentence',
+            feedback: 'Tap words to reorder the sentence',
             isChecking: false
         }));
     };
 
-    // 交換單字位置
+    // 交换单词位置
     const swapWords = (wordId1: number, wordId2: number) => {
         if (gameState.isChecking) return;
 
@@ -105,7 +104,7 @@ const SentenceReorderGame = () => {
         }
     };
 
-    // 檢查答案
+    // 检查答案
     const checkAnswer = () => {
         if (gameState.isChecking) return;
 
@@ -133,7 +132,8 @@ const SentenceReorderGame = () => {
                     score: newScore,
                     correctAnswers: newCorrectAnswers,
                     questionStatus: newQuestionStatus,
-                    feedback: `✅ Correct! Earned 10 points\n"${currentSentence}"`
+                    feedback: `✅ Correct! +10 points\n"${currentSentence}"`,
+                    isChecking: false
                 }));
             }, 500);
         } else {
@@ -152,7 +152,7 @@ const SentenceReorderGame = () => {
         }
     };
 
-    // 下一題
+    // 下一题
     const nextQuestion = () => {
         if (gameState.currentQuestion < sentenceBank.length - 1) {
             setGameState(prev => ({
@@ -166,18 +166,18 @@ const SentenceReorderGame = () => {
         }
     };
 
-    // 重來當前題目
+    // 重来当前题目
     const retryQuestion = () => {
         initializeQuestion();
     };
 
-    // 重新開始遊戲
+    // 重新开始游戏
     const restartGame = () => {
         setGameState({
             currentQuestion: 0,
             score: 0,
             words: [],
-            feedback: 'Drag words to reorder the sentence',
+            feedback: 'Tap words to reorder the sentence',
             isChecking: false,
             showCompletionModal: false,
             correctAnswers: 0,
@@ -186,14 +186,14 @@ const SentenceReorderGame = () => {
         });
     };
 
-    // 計算正確率
+    // 计算正确率
     const getAccuracy = () => {
         return gameState.correctAnswers > 0
             ? Math.round((gameState.correctAnswers / sentenceBank.length) * 100)
             : 0;
     };
 
-    // 渲染單字卡片
+    // 渲染单词卡片
     const renderWordCard = (word: WordItem) => {
         const isCorrectPosition = gameState.isChecking && word.currentIndex === word.originalIndex;
 
@@ -226,79 +226,26 @@ const SentenceReorderGame = () => {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
-            {/* Completed image */}
-            <Modal
-                transparent={true}
-                visible={gameState.showCompletionModal}
-                animationType="fade"
-            >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Game Completed</Text>
+        <View style={styles.container}>
+            <Stack.Screen
+                options={{
+                    title: 'Sentence Reorder',
+                    headerStyle: { backgroundColor: '#667eea' },
+                    headerTintColor: '#fff',
+                }}
+            />
 
-                        <View style={styles.modalStats}>
-                            <View style={styles.modalStat}>
-                                <Text style={styles.modalStatValue}>{gameState.score}</Text>
-                                <Text style={styles.modalStatLabel}>Final Score</Text>
-                            </View>
-                        </View>
+            <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+                {/* 游戏标题 */}
+                <LinearGradient
+                    colors={['#667eea', '#764ba2']}
+                    style={styles.header}
+                >
+                    <Text style={styles.headerTitle}>🔤 Sentence Reorder</Text>
+                    <Text style={styles.headerSubtitle}>Arrange the words to form correct sentences</Text>
+                </LinearGradient>
 
-                        <View style={styles.detailedStats}>
-                            <View style={styles.statItem}>
-                                <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
-                                <Text style={styles.statText}>Correct: {gameState.correctAnswers} questions</Text>
-                            </View>
-                            <View style={styles.statItem}>
-                                <Ionicons name="close-circle" size={20} color="#F44336" />
-                                <Text style={styles.statText}>Incorrect: {gameState.wrongAnswers} questions</Text>
-                            </View>
-                            <View style={styles.statItem}>
-                                <Ionicons name="help-circle" size={20} color="#757575" />
-                                <Text style={styles.statText}>Unanswered: {sentenceBank.length - gameState.correctAnswers - gameState.wrongAnswers} questions</Text>
-                            </View>
-                            <View style={styles.statItem}>
-                                <Ionicons name="stats-chart" size={20} color="#2196F3" />
-                                <Text style={styles.statText}>Correct Rate: {getAccuracy()}%</Text>
-                            </View>
-                        </View>
-
-                        <View style={styles.modalButtons}>
-                            <TouchableOpacity
-                                style={[styles.modalButton, styles.primaryButton]}
-                                onPress={() => {
-                                    setGameState(prev => ({ ...prev, showCompletionModal: false }));
-                                    setTimeout(restartGame, 300);
-                                }}
-                            >
-                                <Text style={styles.buttonText}>Play again</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={[styles.modalButton, styles.secondaryButton]}
-                                onPress={() => {
-                                    setGameState(prev => ({ ...prev, showCompletionModal: false }));
-                                    setTimeout(() => router.back(), 300);
-                                }}
-                            >
-                                <Text style={styles.buttonText}>Return to menu</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </View>
-            </Modal>
-
-            {/* 遊戲界面 */}
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color="#333" />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>Sentence Reordering Game</Text>
-                <View style={styles.headerRight} />
-            </View>
-
-            <ScrollView style={styles.content}>
-                {/* 統計 */}
+                {/* 统计 */}
                 <View style={styles.statsBar}>
                     <View style={styles.statBox}>
                         <Text style={styles.statValue}>{gameState.score}</Text>
@@ -318,7 +265,7 @@ const SentenceReorderGame = () => {
                     </View>
                 </View>
 
-                {/* 題目區域 */}
+                {/* 题目区域 */}
                 <View style={styles.questionCard}>
                     <Text style={styles.questionTitle}>Question {gameState.currentQuestion + 1}</Text>
                     <Text style={styles.translation}>{currentQuestion.translation}</Text>
@@ -334,26 +281,32 @@ const SentenceReorderGame = () => {
                     </View>
 
                     <Text style={styles.currentSentence}>
-                        Current sentence: {gameState.words
-                            .sort((a, b) => a.currentIndex - b.currentIndex)
-                            .map(word => word.text)
-                            .join(' ')}
+                        Current: {gameState.words
+                        .sort((a, b) => a.currentIndex - b.currentIndex)
+                        .map(word => word.text)
+                        .join(' ')}
                     </Text>
                 </View>
 
-                {/* 反饋 */}
-                <View style={styles.feedbackBox}>
+                {/* 反馈 */}
+                <View style={[
+                    styles.feedbackBox,
+                    gameState.feedback.includes('✅') ? styles.feedbackCorrect :
+                        gameState.feedback.includes('❌') ? styles.feedbackIncorrect : {}
+                ]}>
                     <Text style={styles.feedbackText}>{gameState.feedback}</Text>
                 </View>
 
-                {/* 控制按鈕 */}
+                {/* 控制按钮 */}
                 <View style={styles.controls}>
                     <TouchableOpacity
                         style={[styles.button, styles.checkButton]}
                         onPress={checkAnswer}
                         disabled={gameState.isChecking}
                     >
-                        <Text style={styles.buttonText}>{gameState.isChecking ? 'Checking...' : 'Check Answer'}</Text>
+                        <Text style={styles.buttonText}>
+                            {gameState.isChecking ? 'Checking...' : 'Check'}
+                        </Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -368,60 +321,115 @@ const SentenceReorderGame = () => {
                         onPress={nextQuestion}
                     >
                         <Text style={styles.buttonText}>
-                            {gameState.currentQuestion === sentenceBank.length - 1 ? 'Finish' : 'Next Question'}
+                            {gameState.currentQuestion === sentenceBank.length - 1 ? 'Finish' : 'Next'}
                         </Text>
                     </TouchableOpacity>
                 </View>
 
-                {/* 簡短說明 */}
+                {/* 游戏说明 */}
                 <View style={styles.instructions}>
-                    <Text style={styles.instructionsTitle}>Game Instructions</Text>
+                    <Text style={styles.instructionsTitle}>How to Play</Text>
                     <Text style={styles.instructionsText}>
-                        1. Click a word to swap it with the word to its left{"\n"}
-                        2. If you get it wrong, you can try again or click the next question{"\n"}
+                        1. Tap a word to swap it with the word on its left{"\n"}
+                        2. Try to form the correct sentence{"\n"}
                         3. Get 10 points for each correct answer
                     </Text>
                 </View>
             </ScrollView>
-        </SafeAreaView>
+
+            {/* 完成模态框 */}
+            <Modal
+                transparent={true}
+                visible={gameState.showCompletionModal}
+                animationType="fade"
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Game Completed! 🎉</Text>
+
+                        <View style={styles.modalStats}>
+                            <View style={styles.modalStat}>
+                                <Text style={styles.modalStatValue}>{gameState.score}</Text>
+                                <Text style={styles.modalStatLabel}>Final Score</Text>
+                            </View>
+                        </View>
+
+                        <View style={styles.detailedStats}>
+                            <View style={styles.statItem}>
+                                <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                                <Text style={styles.statText}>Correct: {gameState.correctAnswers}</Text>
+                            </View>
+                            <View style={styles.statItem}>
+                                <Ionicons name="close-circle" size={20} color="#F44336" />
+                                <Text style={styles.statText}>Incorrect: {gameState.wrongAnswers}</Text>
+                            </View>
+                            <View style={styles.statItem}>
+                                <Ionicons name="help-circle" size={20} color="#757575" />
+                                <Text style={styles.statText}>
+                                    Unanswered: {sentenceBank.length - gameState.correctAnswers - gameState.wrongAnswers}
+                                </Text>
+                            </View>
+                            <View style={styles.statItem}>
+                                <Ionicons name="stats-chart" size={20} color="#667eea" />
+                                <Text style={styles.statText}>Accuracy: {getAccuracy()}%</Text>
+                            </View>
+                        </View>
+
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity
+                                style={[styles.modalButton, styles.primaryButton]}
+                                onPress={() => {
+                                    setGameState(prev => ({ ...prev, showCompletionModal: false }));
+                                    setTimeout(restartGame, 300);
+                                }}
+                            >
+                                <Text style={styles.buttonText}>Play Again</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+        </View>
     );
-};
+}
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#f5f5f5',
     },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 16,
-        backgroundColor: 'white',
-        borderBottomWidth: 1,
-        borderBottomColor: '#e0e0e0',
+    scrollView: {
+        flex: 1,
     },
-    backButton: {
-        padding: 4,
+    scrollContent: {
+        flexGrow: 1,
+        paddingBottom: 30,
+    },
+    header: {
+        paddingTop: 40,
+        paddingBottom: 30,
+        paddingHorizontal: 20,
+        borderBottomLeftRadius: 30,
+        borderBottomRightRadius: 30,
+        marginBottom: 20,
     },
     headerTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: '#333',
-        marginLeft: 8,
-        flex: 1,
+        fontSize: 32,
+        fontWeight: 'bold',
+        color: '#fff',
+        marginBottom: 8,
     },
-    headerRight: {
-        width: 32,
-    },
-    content: {
-        flex: 1,
-        padding: 16,
+    headerSubtitle: {
+        fontSize: 16,
+        color: '#fff',
+        opacity: 0.9,
     },
     statsBar: {
         flexDirection: 'row',
         backgroundColor: 'white',
         borderRadius: 12,
         padding: 16,
+        marginHorizontal: 20,
         marginBottom: 16,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
@@ -436,7 +444,7 @@ const styles = StyleSheet.create({
     statValue: {
         fontSize: 20,
         fontWeight: 'bold',
-        color: '#333',
+        color: '#667eea',
     },
     statLabel: {
         fontSize: 12,
@@ -445,8 +453,9 @@ const styles = StyleSheet.create({
     },
     questionCard: {
         backgroundColor: 'white',
-        borderRadius: 12,
+        borderRadius: 16,
         padding: 20,
+        marginHorizontal: 20,
         marginBottom: 16,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
@@ -469,16 +478,16 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         flexWrap: 'wrap',
         justifyContent: 'center',
-        gap: 10,
+        gap: 8,
         minHeight: 80,
         marginBottom: 16,
     },
     wordCard: {
-        backgroundColor: '#2196F3',
+        backgroundColor: '#667eea',
         paddingHorizontal: 16,
         paddingVertical: 12,
         borderRadius: 8,
-        minWidth: 70,
+        minWidth: 60,
         alignItems: 'center',
         position: 'relative',
     },
@@ -517,9 +526,18 @@ const styles = StyleSheet.create({
         backgroundColor: 'white',
         borderRadius: 12,
         padding: 16,
+        marginHorizontal: 20,
         marginBottom: 16,
         borderLeftWidth: 4,
-        borderLeftColor: '#2196F3',
+        borderLeftColor: '#667eea',
+    },
+    feedbackCorrect: {
+        borderLeftColor: '#4CAF50',
+        backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    },
+    feedbackIncorrect: {
+        borderLeftColor: '#F44336',
+        backgroundColor: 'rgba(244, 67, 54, 0.1)',
     },
     feedbackText: {
         fontSize: 14,
@@ -528,18 +546,19 @@ const styles = StyleSheet.create({
     },
     controls: {
         flexDirection: 'row',
-        gap: 12,
+        gap: 10,
+        marginHorizontal: 20,
         marginBottom: 16,
     },
     button: {
         flex: 1,
-        paddingVertical: 14,
+        paddingVertical: 12,
         borderRadius: 8,
         alignItems: 'center',
         justifyContent: 'center',
     },
     checkButton: {
-        backgroundColor: '#2196F3',
+        backgroundColor: '#667eea',
     },
     retryButton: {
         backgroundColor: '#F44336',
@@ -556,7 +575,13 @@ const styles = StyleSheet.create({
         backgroundColor: 'white',
         borderRadius: 12,
         padding: 20,
-        marginBottom: 24,
+        marginHorizontal: 20,
+        marginBottom: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
     },
     instructionsTitle: {
         fontSize: 16,
@@ -569,7 +594,7 @@ const styles = StyleSheet.create({
         color: '#666',
         lineHeight: 22,
     },
-    // 完成畫面樣式
+    // 完成模态框样式
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -579,21 +604,21 @@ const styles = StyleSheet.create({
     },
     modalContent: {
         backgroundColor: 'white',
-        borderRadius: 16,
+        borderRadius: 20,
         padding: 24,
-        width: '100%',
+        width: '90%',
         maxWidth: 400,
     },
     modalTitle: {
         fontSize: 24,
         fontWeight: 'bold',
-        color: '#333',
+        color: '#667eea',
         textAlign: 'center',
         marginBottom: 20,
     },
     modalStats: {
         alignItems: 'center',
-        marginBottom: 24,
+        marginBottom: 20,
     },
     modalStat: {
         alignItems: 'center',
@@ -601,11 +626,11 @@ const styles = StyleSheet.create({
     modalStatValue: {
         fontSize: 48,
         fontWeight: 'bold',
-        color: '#2196F3',
+        color: '#667eea',
         marginBottom: 8,
     },
     modalStatLabel: {
-        fontSize: 18,
+        fontSize: 16,
         color: '#666',
     },
     detailedStats: {
@@ -614,7 +639,7 @@ const styles = StyleSheet.create({
     statItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 12,
+        paddingVertical: 10,
         borderBottomWidth: 1,
         borderBottomColor: '#f0f0f0',
     },
@@ -626,20 +651,16 @@ const styles = StyleSheet.create({
     },
     modalButtons: {
         flexDirection: 'row',
-        gap: 12,
+        justifyContent: 'center',
     },
     modalButton: {
-        flex: 1,
         paddingVertical: 14,
+        paddingHorizontal: 30,
         borderRadius: 8,
         alignItems: 'center',
+        minWidth: 150,
     },
     primaryButton: {
-        backgroundColor: '#2196F3',
-    },
-    secondaryButton: {
-        backgroundColor: '#757575',
+        backgroundColor: '#667eea',
     },
 });
-
-export default SentenceReorderGame;
