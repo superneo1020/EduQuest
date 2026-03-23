@@ -20,7 +20,6 @@ CREATE TABLE IF NOT EXISTS classes (
     school_id BIGINT NOT NULL,
     grade VARCHAR(10) NOT NULL,
     suffix VARCHAR(10) NOT NULL,
-    full_name VARCHAR(25) GENERATED ALWAYS AS (grade || suffix) STORED,
     academic_year VARCHAR(10) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (school_id, grade, suffix, academic_year),
@@ -29,8 +28,6 @@ CREATE TABLE IF NOT EXISTS classes (
 ;;;
 
 CREATE INDEX IF NOT EXISTS idx_classes_school_id ON classes(school_id);
-;;;
-CREATE INDEX idx_classes_full_name ON classes (full_name);
 ;;;
 
 CREATE TABLE IF NOT EXISTS users (

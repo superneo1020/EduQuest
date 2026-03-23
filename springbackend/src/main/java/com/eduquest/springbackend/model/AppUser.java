@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Min;
 import org.hibernate.annotations.Generated;
 import org.hibernate.generator.EventType;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -19,7 +20,7 @@ public class AppUser {
     @Column(nullable = false, length = 20, unique = true)
     private String username;
 
-    @Column(nullable = false, length = 50, unique = true)
+    @Column(nullable = false, unique = true)
     private String email;
 
     @Column(nullable = false)
@@ -29,6 +30,24 @@ public class AppUser {
     @Generated(event = {EventType.INSERT, EventType.UPDATE})
     @Min(value = 0, message = "User points must be at least 0")
     private Integer points = 0;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "school_id")
+    private School school;
+
+    @Column(nullable = false,
+            insertable = false,
+            updatable = false,
+            columnDefinition = "TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP")
+    @Generated(event = {EventType.INSERT})
+    private Instant createdAt;
+
+    @Column(nullable = false,
+            insertable = false,
+            updatable = false,
+            columnDefinition = "TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP")
+    @Generated(event = {EventType.INSERT})
+    private Instant updatedAt;
 
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
@@ -47,12 +66,26 @@ public class AppUser {
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<UserItem> userItems = new ArrayList<>();
 
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ClassMember> classMemberships = new ArrayList<>();
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<UserActivity> userActivities = new ArrayList<>();
+
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private UserProfile userProfile;
+
     public AppUser() {}
 
     public AppUser(String username, String email, String password) {
         this.username = username;
         this.email = email;
         this.password = password;
+    }
+
+    public AppUser(String username, String email, String password, School school) {
+        this(username, email, password);
+        this.school = school;
     }
 
     public Long getId() {
@@ -95,6 +128,22 @@ public class AppUser {
         this.points = points;
     }
 
+    public School getSchool() {
+        return school;
+    }
+
+    public void setSchool(School school) {
+        this.school = school;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
+
     public Collection<Role> getRoles() {
         return roles;
     }
@@ -125,5 +174,29 @@ public class AppUser {
 
     public void setUserItems(List<UserItem> userItems) {
         this.userItems = userItems;
+    }
+
+    public List<ClassMember> getClassMemberships() {
+        return classMemberships;
+    }
+
+    public void setClassMemberships(List<ClassMember> classMemberships) {
+        this.classMemberships = classMemberships;
+    }
+
+    public List<UserActivity> getUserActivities() {
+        return userActivities;
+    }
+
+    public void setUserActivities(List<UserActivity> userActivities) {
+        this.userActivities = userActivities;
+    }
+
+    public UserProfile getUserProfile() {
+        return userProfile;
+    }
+
+    public void setUserProfile(UserProfile userProfile) {
+        this.userProfile = userProfile;
     }
 }
