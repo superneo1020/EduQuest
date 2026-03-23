@@ -18,13 +18,12 @@ public interface UserGameScoreRepository extends JpaRepository<UserGameScore,Lon
             "ugs.scores, ugs.created_at AS createdAt " +
             "FROM user_game_scores ugs " +
             "JOIN games g ON ugs.game_id = g.id " +
-            "JOIN users u ON ugs.user_id = u.id " +
-            "WHERE u.username = :user " +
-            "AND g.name = :game ",
+            "WHERE ugs.user_id = :userId " +
+            "AND ugs.game_id = :gameId ",
             nativeQuery = true)
-    Page<UserGameScoreDto> findUserGameScoresByUserUsernameAndGameName(
-            @Param("user") String user,
-            @Param("game") String game,
+    Page<UserGameScoreDto> findUserGameScoresByUserIdAndGameId(
+            @Param("userId") Long userId,
+            @Param("gameId") Long gameId,
             Pageable pageable
     );
 
@@ -32,49 +31,45 @@ public interface UserGameScoreRepository extends JpaRepository<UserGameScore,Lon
             "ugs.scores, ugs.created_at AS createdAt " +
             "FROM user_game_scores ugs " +
             "JOIN games g ON ugs.game_id = g.id " +
-            "JOIN users u ON ugs.user_id = u.id " +
-            "WHERE u.username = :username ",
+            "WHERE ugs.user_id = :userId ",
             nativeQuery = true)
-    Page<UserGameScoreDto> findUserGameScoresByUserUsername(@Param("username") String username, Pageable pageable);
+    Page<UserGameScoreDto> findUserGameScoresByUserId(@Param("userId") Long userId, Pageable pageable);
 
     @Query(value = "SELECT DISTINCT ON (g.id) g.name, g.type, g.difficulty, g.icon, g.description, " +
             "ugs.scores, ugs.created_at AS createdAt " +
             "FROM user_game_scores ugs " +
             "JOIN games g ON ugs.game_id = g.id " +
-            "JOIN users u ON ugs.user_id = u.id " +
-            "WHERE u.username = :username " +
+            "WHERE ugs.user_id = :userId " +
             "ORDER BY g.id, ugs.scores DESC, ugs.created_at",
             nativeQuery = true)
-    List<UserGameScoreDto> findAllHighestScoresByUserUsername(@Param("username") String username);
+    List<UserGameScoreDto> findAllHighestScoresByUserId(@Param("userId") Long userId);
 
     @Query(value = "SELECT DISTINCT ON (g.id) g.name, g.type, g.difficulty, g.icon, g.description, " +
             "ugs.scores, ugs.created_at AS createdAt " +
             "FROM user_game_scores ugs " +
             "JOIN games g ON ugs.game_id = g.id " +
-            "JOIN users u ON ugs.user_id = u.id " +
-            "WHERE u.username = :user " +
-            "AND g.name = :game " +
+            "WHERE ugs.user_id = :userId " +
+            "AND ugs.game_id = :gameId " +
             "ORDER BY g.id, ugs.scores DESC, ugs.created_at",
             nativeQuery = true)
-    UserGameScoreDto findHighestScoresByUserUsernameAndGameName(
-            @Param("user") String user,
-            @Param("game") String game
+    UserGameScoreDto findHighestScoresByUserIdAndGameId(
+            @Param("userId") Long userId,
+            @Param("gameId") Long gameId
     );
 
     @Query(value = "SELECT u.username, ugs.scores, ugs.created_at AS createdAt " +
             "FROM user_game_scores ugs " +
-            "JOIN games g ON ugs.game_id = g.id " +
             "JOIN users u ON ugs.user_id = u.id " +
-            "WHERE g.name = :name " +
+            "WHERE ugs.game_id = :gameId " +
             "AND ugs.id IN ( " +
             "   SELECT DISTINCT ON (user_id) id FROM user_game_scores " +
-            "   WHERE game_id = g.id " +
+            "   WHERE game_id = ugs.game_id " +
             "   ORDER BY user_id, scores DESC, created_at " +
             ") " +
             "ORDER BY ugs.scores DESC, ugs.created_at",
             nativeQuery = true)
-    Slice<LeaderboardScoreDto> findAllHighestScoresByGameName(
-            @Param("name") String name,
+    Slice<LeaderboardScoreDto> findAllHighestScoresByGameId(
+            @Param("gameId") Long gameId,
             Pageable pageable
     );
 }
