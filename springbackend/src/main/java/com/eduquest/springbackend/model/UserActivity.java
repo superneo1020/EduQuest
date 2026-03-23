@@ -2,44 +2,28 @@ package com.eduquest.springbackend.model;
 
 import jakarta.persistence.*;
 import org.hibernate.annotations.Generated;
-import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.generator.EventType;
-import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
-import java.time.LocalDate;
-import java.util.HashMap;
-import java.util.Map;
 
 @Entity
-@Table(name = "user_missions", uniqueConstraints = {
-        @UniqueConstraint(name = "user_missions_user_id_mission_id_date_key", columnNames = {"user_id", "mission_id", "date"})
-})
-public class UserMission {
+@Table(name = "user_activities")
+public class UserActivity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(nullable = false)
     private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "activity_id", nullable = false)
+    private Activity activity;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     private AppUser user;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "mission_id", nullable = false)
-    private Mission mission;
-
-    @Column(nullable = false,
-            insertable = false,
-            updatable = false,
-            columnDefinition = "DATE NOT NULL DEFAULT CURRENT_DATE")
-    @Generated(event = {EventType.INSERT})
-    private LocalDate date;
-
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(columnDefinition = "jsonb NOT NULL DEFAULT '{}'",
-            nullable = false)
-    @Generated(event = {EventType.INSERT})
-    private Map<String, Object> progress = new HashMap<>();
+    @Column(length = 50, nullable = false)
+    private String roleInGroup;
 
     @Column(nullable = false)
     private Boolean completed = false;
@@ -58,11 +42,13 @@ public class UserMission {
     @Generated(event = {EventType.INSERT})
     private Instant updatedAt;
 
-    public UserMission() {}
+    public UserActivity() {}
 
-    public UserMission(AppUser user, Mission mission) {
+    public UserActivity(Activity activity, AppUser user, String roleInGroup, Boolean completed) {
+        this.activity = activity;
         this.user = user;
-        this.mission = mission;
+        this.roleInGroup = roleInGroup;
+        this.completed = completed;
     }
 
     public Long getId() {
@@ -73,6 +59,14 @@ public class UserMission {
         this.id = id;
     }
 
+    public Activity getActivity() {
+        return activity;
+    }
+
+    public void setActivity(Activity activity) {
+        this.activity = activity;
+    }
+
     public AppUser getUser() {
         return user;
     }
@@ -81,12 +75,12 @@ public class UserMission {
         this.user = user;
     }
 
-    public Mission getMission() {
-        return mission;
+    public String getRoleInGroup() {
+        return roleInGroup;
     }
 
-    public void setMission(Mission mission) {
-        this.mission = mission;
+    public void setRoleInGroup(String roleInGroup) {
+        this.roleInGroup = roleInGroup;
     }
 
     public Boolean getCompleted() {
@@ -95,22 +89,6 @@ public class UserMission {
 
     public void setCompleted(Boolean completed) {
         this.completed = completed;
-    }
-
-    public LocalDate getDate() {
-        return date;
-    }
-
-    public void setDate(LocalDate date) {
-        this.date = date;
-    }
-
-    public Map<String, Object> getProgress() {
-        return progress;
-    }
-
-    public void setProgress(Map<String, Object> progress) {
-        this.progress = progress;
     }
 
     public Instant getCreatedAt() {

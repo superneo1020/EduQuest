@@ -3,11 +3,15 @@ package com.eduquest.springbackend.model;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Min;
 import org.hibernate.annotations.Generated;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.generator.EventType;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Entity
 @Table(name = "missions")
@@ -34,6 +38,12 @@ public class Mission {
     @Column(nullable = false)
     @Min(value = 0, message = "Game scores must be at least 0")
     private Integer scores = 0;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "jsonb NOT NULL DEFAULT '{}'",
+            nullable = false)
+    @Generated(event = {EventType.INSERT})
+    private Map<String, Object> requirements = new HashMap<>();
 
     @Column(nullable = false,
             insertable = false,
@@ -111,6 +121,14 @@ public class Mission {
 
     public void setScores(Integer scores) {
         this.scores = scores;
+    }
+
+    public Map<String, Object> getRequirements() {
+        return requirements;
+    }
+
+    public void setRequirements(Map<String, Object> requirements) {
+        this.requirements = requirements;
     }
 
     public Instant getCreatedAt() {
