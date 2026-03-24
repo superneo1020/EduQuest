@@ -1,5 +1,8 @@
 package com.eduquest.springbackend.model;
 
+import com.eduquest.springbackend.dto.ProfileEquippedItemsDto;
+import com.eduquest.springbackend.dto.ProfilePreferencesDto;
+import com.eduquest.springbackend.dto.ProfilePrivacySettingsDto;
 import jakarta.persistence.*;
 import org.hibernate.annotations.Generated;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -7,8 +10,6 @@ import org.hibernate.generator.EventType;
 import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
-import java.util.HashMap;
-import java.util.Map;
 
 @Entity
 @Table(name = "user_profiles")
@@ -27,15 +28,15 @@ public class UserProfile {
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
-    private Map<String, Object> equippedItems = new HashMap<>();
+    private ProfileEquippedItemsDto equippedItems;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
-    private Map<String, Object> preferences = new HashMap<>();
+    private ProfilePreferencesDto preferences;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
-    private Map<String, Object> privacySettings = new HashMap<>();
+    private ProfilePrivacySettingsDto privacySettings;
 
     @Column(nullable = false,
             insertable = false,
@@ -53,10 +54,14 @@ public class UserProfile {
 
     public UserProfile() {}
 
-    public UserProfile(AppUser user, String nickname, Map<String, Object> equippedItems, 
-                       Map<String, Object> preferences, Map<String, Object> privacySettings) {
+    public UserProfile(AppUser user, String nickname) {
         this.user = user;
         this.nickname = nickname;
+    }
+
+    public UserProfile(AppUser user, String nickname, ProfileEquippedItemsDto equippedItems, 
+                       ProfilePreferencesDto preferences, ProfilePrivacySettingsDto privacySettings) {
+        this(user, nickname);
         this.equippedItems = equippedItems;
         this.preferences = preferences;
         this.privacySettings = privacySettings;
@@ -86,27 +91,27 @@ public class UserProfile {
         this.nickname = nickname;
     }
 
-    public Map<String, Object> getEquippedItems() {
+    public ProfileEquippedItemsDto getEquippedItems() {
         return equippedItems;
     }
 
-    public void setEquippedItems(Map<String, Object> equippedItems) {
+    public void setEquippedItems(ProfileEquippedItemsDto equippedItems) {
         this.equippedItems = equippedItems;
     }
 
-    public Map<String, Object> getPreferences() {
+    public ProfilePreferencesDto getPreferences() {
         return preferences;
     }
 
-    public void setPreferences(Map<String, Object> preferences) {
+    public void setPreferences(ProfilePreferencesDto preferences) {
         this.preferences = preferences;
     }
 
-    public Map<String, Object> getPrivacySettings() {
+    public ProfilePrivacySettingsDto getPrivacySettings() {
         return privacySettings;
     }
 
-    public void setPrivacySettings(Map<String, Object> privacySettings) {
+    public void setPrivacySettings(ProfilePrivacySettingsDto privacySettings) {
         this.privacySettings = privacySettings;
     }
 
