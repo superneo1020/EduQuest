@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS user_profiles (
      user_id BIGINT UNIQUE NOT NULL,
      nickname VARCHAR(50),
      equipped_items JSONB DEFAULT '{"AVATAR": null, "BADGE": null, "BACKGROUND": null}',
-     preferences JSONB DEFAULT '{"theme": "DARK", "sound": true, "notifications": false}',
+     preferences JSONB DEFAULT '{"theme": "DEFAULT", "sound": true, "notifications": false}',
      privacy_settings JSONB DEFAULT '{"show_email": true, "show_school": true, "show_class": true}',
      created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
      updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
