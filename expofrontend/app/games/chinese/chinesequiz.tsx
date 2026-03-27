@@ -7,7 +7,6 @@ import {
     TouchableOpacity,
     StyleSheet,
     ScrollView,
-    Modal,
     ActivityIndicator,
     Alert,
     BackHandler
@@ -15,31 +14,27 @@ import {
 import { router, Stack } from 'expo-router';
 import ChineseAIService, { ChineseQuestion } from '../../services/ChineseAIService';
 
-type GameState = 'playing' | 'result';
-
-// 滿分常量
-const TOTAL_SCORE = 100;
+type GameState = 'difficulty_select' | 'playing' | 'result';
 
 const ChineseGame = () => {
     const [questions, setQuestions] = useState<ChineseQuestion[]>([]);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [selectedAnswers, setSelectedAnswers] = useState<number[]>([]);
-    const [gameState, setGameState] = useState<GameState>('playing');
-    const [score, setScore] = useState(0); // 答對題數
-    const [totalScore, setTotalScore] = useState(0); // 100分制的總分
-    const [loading, setLoading] = useState(true);
-    const [difficulty, setDifficulty] = useState<'beginner' | 'advanced'>('beginner');
-    const [aiFeedback, setAiFeedback] = useState('');
-
-    useEffect(() => {
-        loadQuestions();
-    }, [difficulty]);
+    const [gameState, setGameState] = useState<GameState>('difficulty_select');
+    const [score, setScore] = useState(0);
+    const [loading, setLoading] = useState(false);
+    const [difficulty, setDifficulty] = useState<'beginner' | 'advanced' | null>(null);
+    const [aiFeedback, setAiFeedback] = useState<string>('');
 
     // 處理 Android 返回鍵
     useEffect(() => {
         const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
             if (gameState === 'result') {
-                setGameState('playing');
+                handleRestart();
+                return true;
+            }
+            if (gameState === 'playing') {
+                setGameState('difficulty_select');
                 return true;
             }
             return false;
@@ -48,18 +43,20 @@ const ChineseGame = () => {
         return () => backHandler.remove();
     }, [gameState]);
 
-    const loadQuestions = async () => {
+    const loadQuestions = async (selectedDifficulty: 'beginner' | 'advanced') => {
         setLoading(true);
         try {
             const newQuestions = await ChineseAIService.generateQuestions({
-                difficulty: difficulty,
+                difficulty: selectedDifficulty,
                 count: 11
             });
             setQuestions(newQuestions);
             resetGame();
+            setGameState('playing');
         } catch (error) {
             console.error('Failed to load questions:', error);
             Alert.alert('Error', 'Failed to load questions. Please try again.');
+            setGameState('difficulty_select');
         } finally {
             setLoading(false);
         }
@@ -68,15 +65,8 @@ const ChineseGame = () => {
     const resetGame = () => {
         setCurrentIndex(0);
         setSelectedAnswers([]);
-        setGameState('playing');
         setScore(0);
-        setTotalScore(0);
         setAiFeedback('');
-    };
-
-    // 計算100分制分數
-    const calculateTotalScore = (correctCount: number) => {
-        return Math.round((correctCount / questions.length) * TOTAL_SCORE);
     };
 
     const handleAnswer = (optionIndex: number) => {
@@ -86,56 +76,80 @@ const ChineseGame = () => {
         newSelectedAnswers[currentIndex] = optionIndex;
         setSelectedAnswers(newSelectedAnswers);
 
-        if (optionIndex === questions[currentIndex].correctAnswer) {
-            const newScore = score + 1;
-            setScore(newScore);
+        // 檢查答案是否正確並更新分數
+        const isCorrect = optionIndex === questions[currentIndex].correctAnswer;
+        if (isCorrect) {
+            setScore(prev => prev + 1);
         }
 
-        if (currentIndex < questions.length - 1) {
+        // 判斷是否為最後一題
+        const isLastQuestion = currentIndex === questions.length - 1;
+
+        if (!isLastQuestion) {
+            // 不是最後一題，延遲後進入下一題
             setTimeout(() => {
                 setCurrentIndex(prev => prev + 1);
             }, 500);
         } else {
-            // 遊戲結束時計算總分
-            const finalCorrectCount = optionIndex === questions[currentIndex].correctAnswer ? score + 1 : score;
-            const finalTotalScore = calculateTotalScore(finalCorrectCount);
-            setTotalScore(finalTotalScore);
-
+            // 是最後一題，延遲後顯示結果頁面
             setTimeout(() => {
+                // 計算最終分數（包括當前這一題）
+                const finalScore = isCorrect ? score + 1 : score;
+                generateAIFeedback(finalScore);
                 setGameState('result');
-                generateAIFeedback(finalCorrectCount, finalTotalScore);
             }, 500);
         }
     };
 
-    const generateAIFeedback = (correctCount: number, finalTotalScore: number) => {
+    const generateAIFeedback = (finalScore: number) => {
+        const totalQuestions = questions.length;
+        const percentage = (finalScore / totalQuestions) * 100;
+
         let feedback = '';
-        if (correctCount === questions.length) {
-            feedback = `Perfect! You got all ${correctCount} out of ${questions.length} correct! Your score: ${finalTotalScore}/${TOTAL_SCORE}! Excellent work! 🌟`;
-        } else if (correctCount >= questions.length - 1) {
-            feedback = `You got ${correctCount} out of ${questions.length} correct. Score: ${finalTotalScore}/${TOTAL_SCORE}. Great job! 👍`;
-        } else if (correctCount >= questions.length / 2) {
-            feedback = `You got ${correctCount} out of ${questions.length} correct. Score: ${finalTotalScore}/${TOTAL_SCORE}. Good effort, keep practicing! 💪`;
+        if (finalScore === totalQuestions) {
+            feedback = `Perfect score! You got all ${finalScore} out of ${totalQuestions} correct! 🌟🌟🌟`;
+        } else if (percentage >= 90) {
+            feedback = `Excellent! You got ${finalScore} out of ${totalQuestions} correct. Great job! 👍`;
+        } else if (percentage >= 70) {
+            feedback = `Good work! You got ${finalScore} out of ${totalQuestions} correct. Keep practicing! 💪`;
+        } else if (percentage >= 50) {
+            feedback = `You got ${finalScore} out of ${totalQuestions} correct. You're making progress! 📚`;
         } else {
-            feedback = `You got ${correctCount} out of ${questions.length} correct. Score: ${finalTotalScore}/${TOTAL_SCORE}. Don't give up, you can do better! 📚`;
+            feedback = `You got ${finalScore} out of ${totalQuestions} correct. Don't give up, you'll do better next time! 💪✨`;
         }
 
         setAiFeedback(feedback);
     };
 
-    // 返回上一頁（遊戲列表）
-    const handleBack = () => {
+    // 返回遊戲列表
+    const handleBackToGames = () => {
         router.back();
     };
 
-    // 關閉彈窗（X 按鈕）
-    const handleCloseModal = () => {
-        setGameState('playing');
+    // 返回主頁
+    const handleBackToHome = () => {
+        router.push('/'); // 根據你的主頁路由調整
     };
 
-    // 重新開始（Try Again 按鈕）
+    // 選擇難度並開始遊戲
+    const handleSelectDifficulty = (level: 'beginner' | 'advanced') => {
+        setDifficulty(level);
+        loadQuestions(level);
+    };
+
+    // 重新開始（回到難度選擇）
+    const handleRestart = () => {
+        setDifficulty(null);
+        setGameState('difficulty_select');
+        resetGame();
+        setQuestions([]);
+    };
+
+    // 重試（同一難度）
     const handleTryAgain = () => {
-        loadQuestions();
+        if (difficulty) {
+            loadQuestions(difficulty);
+        }
     };
 
     const renderQuestion = () => {
@@ -211,95 +225,147 @@ const ChineseGame = () => {
         );
     };
 
-    const renderResult = () => {
-        const correctCount = score;
+    const renderDifficultySelect = () => {
+        const totalQuestions = 11;
 
         return (
-            <Modal
-                visible={gameState === 'result'}
-                transparent={true}
-                animationType="slide"
-                onRequestClose={handleCloseModal}
-            >
-                <View style={styles.modalContainer}>
-                    <View style={styles.modalContent}>
-                        {/* 右上角 X 按鈕 */}
-                        <TouchableOpacity
-                            style={styles.closeButtonTop}
-                            onPress={handleCloseModal}
-                        >
-                            <Text style={styles.closeButtonTopText}>✕</Text>
-                        </TouchableOpacity>
+            <ScrollView contentContainerStyle={styles.difficultySelectContainer}>
+                <Text style={styles.difficultySelectTitle}>Select Difficulty 🀄️</Text>
+                <Text style={styles.difficultySelectSubtitle}>
+                    Choose your Chinese learning level
+                </Text>
 
-                        <Text style={styles.resultTitle}>Game Complete!</Text>
+                <TouchableOpacity
+                    style={[styles.difficultySelectButton, styles.beginnerButton]}
+                    onPress={() => handleSelectDifficulty('beginner')}
+                >
+                    <Text style={styles.difficultySelectButtonTitle}>Beginner</Text>
+                    <Text style={styles.difficultySelectButtonDesc}>
+                        Basic vocabulary, simple sentences, pinyin support
+                    </Text>
+                    <Text style={styles.questionCountText}>
+                        {totalQuestions} questions per session
+                    </Text>
+                </TouchableOpacity>
 
-                        <View style={styles.scoreContainer}>
-                            <Text style={styles.scoreLabel}>Your Score</Text>
-                            {/* 顯示100分制分數 */}
-                            <Text style={styles.scoreValue}>{totalScore}</Text>
-                            <Text style={styles.scoreDetail}>
-                                {totalScore}/{TOTAL_SCORE} ({correctCount} out of {questions.length} correct)
-                            </Text>
-                        </View>
+                <TouchableOpacity
+                    style={[styles.difficultySelectButton, styles.advancedButton]}
+                    onPress={() => handleSelectDifficulty('advanced')}
+                >
+                    <Text style={styles.difficultySelectButtonTitle}>Advanced</Text>
+                    <Text style={styles.difficultySelectButtonDesc}>
+                        Complex characters, idioms, and cultural context
+                    </Text>
+                    <Text style={styles.questionCountText}>
+                        {totalQuestions} questions per session
+                    </Text>
+                </TouchableOpacity>
 
-                        <View style={styles.feedbackContainer}>
-                            <Text style={styles.feedbackTitle}>AI Feedback</Text>
-                            <Text style={styles.feedbackText}>{aiFeedback}</Text>
-                        </View>
-
-                        <View style={styles.buttonContainer}>
-                            <TouchableOpacity
-                                style={[styles.button, styles.tryAgainButton]}
-                                onPress={handleTryAgain}
-                            >
-                                <Text style={styles.buttonText}>Try Again</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={[styles.button, styles.backButton]}
-                                onPress={handleBack}
-                            >
-                                <Text style={styles.buttonText}>Back</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </View>
-            </Modal>
+                <TouchableOpacity
+                    style={styles.backToGamesButton}
+                    onPress={handleBackToGames}
+                >
+                    <Text style={styles.backToGamesButtonText}>← Back to Games</Text>
+                </TouchableOpacity>
+            </ScrollView>
         );
     };
 
-    const renderHeader = () => (
-        <View style={styles.header}>
-            <View style={styles.headerTop}>
-                <TouchableOpacity
-                    style={styles.headerBackButton}
-                    onPress={handleBack}
-                >
-                    <Text style={styles.headerBackButtonText}>← Back</Text>
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>Chinese Learning</Text>
-                <View style={styles.placeholder} />
-            </View>
-            <View style={styles.difficultyContainer}>
-                {['beginner', 'advanced'].map((level) => (
-                    <TouchableOpacity
-                        key={level}
-                        style={[
-                            styles.difficultyButton,
-                            difficulty === level && styles.activeDifficulty
-                        ]}
-                        onPress={() => setDifficulty(level as 'beginner' | 'advanced')}
-                    >
-                        <Text style={[
-                            styles.difficultyText,
-                            difficulty === level && styles.activeDifficultyText
-                        ]}>
-                            {level.charAt(0).toUpperCase() + level.slice(1)}
+    const renderResult = () => {
+        const totalQuestions = questions.length;
+        const percentage = (score / totalQuestions) * 100;
+        const correctCount = score;
+
+        return (
+            <ScrollView contentContainerStyle={styles.resultContainer}>
+                <View style={styles.resultCard}>
+                    <Text style={styles.resultTitle}>🎉 Game Complete! 🎉</Text>
+
+                    <View style={styles.scoreCircle}>
+                        <Text style={styles.scorePercentage}>{Math.round(percentage)}</Text>
+                        <Text style={styles.scorePercentSign}>%</Text>
+                        <Text style={styles.scoreLabel}>Score</Text>
+                    </View>
+
+                    <View style={styles.scoreDetails}>
+                        <Text style={styles.scoreDetailText}>
+                            You got {correctCount} out of {totalQuestions} questions correct
                         </Text>
+                        <Text style={styles.scoreDetailSubtext}>
+                            {correctCount === totalQuestions
+                                ? "Perfect! You're a Chinese master! 🌟"
+                                : percentage >= 70
+                                    ? "Great effort! Keep up the good work! 💪"
+                                    : "Keep practicing and you'll improve! 📚"}
+                        </Text>
+                    </View>
+
+                    <View style={styles.feedbackBox}>
+                        <Text style={styles.feedbackTitle}>💡 AI Feedback</Text>
+                        <Text style={styles.feedbackText}>{aiFeedback}</Text>
+                    </View>
+
+                    <View style={styles.resultButtonContainer}>
+                        <TouchableOpacity
+                            style={[styles.resultButton, styles.tryAgainResultButton]}
+                            onPress={handleTryAgain}
+                        >
+                            <Text style={styles.resultButtonText}>🔄 Try Again</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.resultButton, styles.newDifficultyButton]}
+                            onPress={handleRestart}
+                        >
+                            <Text style={styles.resultButtonText}>🎯 New Difficulty</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.resultButton, styles.backToGamesResultButton]}
+                            onPress={handleBackToGames}
+                        >
+                            <Text style={styles.resultButtonText}>🎮 Back to Games</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.resultButton, styles.homeButton]}
+                            onPress={handleBackToHome}
+                        >
+                            <Text style={styles.resultButtonText}>🏠 Back to Home</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </ScrollView>
+        );
+    };
+
+    const renderPlaying = () => (
+        <>
+            <View style={styles.header}>
+                <View style={styles.headerTop}>
+                    <TouchableOpacity
+                        style={styles.headerBackButton}
+                        onPress={handleRestart}
+                    >
+                        <Text style={styles.headerBackButtonText}>← Exit</Text>
                     </TouchableOpacity>
-                ))}
+                    <Text style={styles.headerTitle}>Chinese Learning</Text>
+                    <View style={styles.difficultyBadge}>
+                        <Text style={styles.difficultyBadgeText}>
+                            {difficulty === 'beginner' ? '初级' : '高级'}
+                        </Text>
+                    </View>
+                </View>
+                <View style={styles.scoreHeader}>
+                    <Text style={styles.scoreHeaderText}>
+                        Score: {score}/{questions.length}
+                    </Text>
+                </View>
             </View>
-        </View>
+            <ScrollView contentContainerStyle={styles.scrollContent}>
+                {renderQuestion()}
+            </ScrollView>
+        </>
     );
 
     if (loading) {
@@ -313,34 +379,96 @@ const ChineseGame = () => {
 
     return (
         <View style={styles.container}>
-            {/* 設置 Stack 標題 */}
             <Stack.Screen
                 options={{
                     title: 'Chinese Quiz',
                     headerStyle: { backgroundColor: '#4c669f' },
                     headerTintColor: '#fff',
                     headerLeft: () => (
-                        <TouchableOpacity onPress={handleBack}>
+                        <TouchableOpacity onPress={handleBackToGames}>
                             <Text style={{ color: '#fff', marginLeft: 15 }}>← Back</Text>
                         </TouchableOpacity>
                     ),
                 }}
             />
-            {renderHeader()}
-            <ScrollView contentContainerStyle={styles.scrollContent}>
-                {renderQuestion()}
-            </ScrollView>
-            {renderResult()}
+            {gameState === 'difficulty_select' && renderDifficultySelect()}
+            {gameState === 'playing' && renderPlaying()}
+            {gameState === 'result' && renderResult()}
         </View>
     );
 };
 
-// 樣式保持不變
 const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#F5F7FA',
     },
+    // 難度選擇頁面樣式
+    difficultySelectContainer: {
+        flexGrow: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+        backgroundColor: '#F5F7FA',
+        minHeight: '100%',
+    },
+    difficultySelectTitle: {
+        fontSize: 32,
+        fontWeight: 'bold',
+        color: '#4A90E2',
+        marginBottom: 10,
+    },
+    difficultySelectSubtitle: {
+        fontSize: 16,
+        color: '#666',
+        marginBottom: 40,
+        textAlign: 'center',
+    },
+    difficultySelectButton: {
+        width: '90%',
+        padding: 20,
+        borderRadius: 15,
+        marginBottom: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    beginnerButton: {
+        backgroundColor: '#4A90E2',
+    },
+    advancedButton: {
+        backgroundColor: '#E67E22',
+    },
+    difficultySelectButtonTitle: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: '#FFFFFF',
+        marginBottom: 8,
+    },
+    difficultySelectButtonDesc: {
+        fontSize: 14,
+        color: 'rgba(255,255,255,0.9)',
+        lineHeight: 20,
+        marginBottom: 8,
+    },
+    questionCountText: {
+        fontSize: 12,
+        color: 'rgba(255,255,255,0.8)',
+        marginTop: 5,
+    },
+    backToGamesButton: {
+        marginTop: 20,
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+    },
+    backToGamesButtonText: {
+        fontSize: 16,
+        color: '#4A90E2',
+        fontWeight: '600',
+    },
+    // 遊戲頁面標題
     header: {
         backgroundColor: '#4A90E2',
         padding: 20,
@@ -350,7 +478,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: 15,
+        marginBottom: 10,
     },
     headerBackButton: {
         padding: 10,
@@ -362,33 +490,33 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     headerTitle: {
-        fontSize: 20,
+        fontSize: 18,
         fontWeight: 'bold',
         color: '#FFFFFF',
     },
-    placeholder: {
-        width: 50,
-    },
-    difficultyContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-    },
-    difficultyButton: {
-        paddingVertical: 8,
-        paddingHorizontal: 16,
+    difficultyBadge: {
+        backgroundColor: 'rgba(255,255,255,0.3)',
+        paddingHorizontal: 12,
+        paddingVertical: 4,
         borderRadius: 20,
-        backgroundColor: 'rgba(255,255,255,0.2)',
     },
-    activeDifficulty: {
-        backgroundColor: '#FFFFFF',
+    difficultyBadgeText: {
+        color: '#FFFFFF',
+        fontSize: 12,
+        fontWeight: '600',
     },
-    difficultyText: {
+    scoreHeader: {
+        alignItems: 'center',
+        marginTop: 5,
+    },
+    scoreHeaderText: {
         color: '#FFFFFF',
         fontSize: 14,
-    },
-    activeDifficultyText: {
-        color: '#4A90E2',
-        fontWeight: 'bold',
+        fontWeight: '600',
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 15,
     },
     scrollContent: {
         padding: 20,
@@ -491,104 +619,119 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#666',
     },
-    modalContainer: {
-        flex: 1,
+    // 結果頁面樣式
+    resultContainer: {
+        flexGrow: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        padding: 20,
+        backgroundColor: '#F5F7FA',
+        minHeight: '100%',
     },
-    modalContent: {
+    resultCard: {
         backgroundColor: '#FFFFFF',
-        borderRadius: 20,
+        borderRadius: 25,
         padding: 30,
-        width: '90%',
-        maxWidth: 400,
+        width: '100%',
         alignItems: 'center',
-        position: 'relative',
-    },
-    closeButtonTop: {
-        position: 'absolute',
-        top: 15,
-        right: 15,
-        width: 30,
-        height: 30,
-        borderRadius: 15,
-        backgroundColor: '#F0F0F0',
-        justifyContent: 'center',
-        alignItems: 'center',
-        zIndex: 1,
-    },
-    closeButtonTopText: {
-        fontSize: 18,
-        color: '#666',
-        fontWeight: 'bold',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 5,
     },
     resultTitle: {
         fontSize: 28,
         fontWeight: 'bold',
         color: '#4A90E2',
-        marginBottom: 20,
-        marginTop: 10,
-    },
-    scoreContainer: {
-        alignItems: 'center',
         marginBottom: 30,
+        textAlign: 'center',
+    },
+    scoreCircle: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 30,
+        position: 'relative',
+    },
+    scorePercentage: {
+        fontSize: 72,
+        fontWeight: 'bold',
+        color: '#4A90E2',
+    },
+    scorePercentSign: {
+        fontSize: 32,
+        fontWeight: 'bold',
+        color: '#4A90E2',
+        position: 'absolute',
+        top: 10,
+        right: -25,
     },
     scoreLabel: {
         fontSize: 16,
         color: '#666',
-        marginBottom: 5,
-    },
-    scoreValue: {
-        fontSize: 48,
-        fontWeight: 'bold',
-        color: '#4A90E2',
-    },
-    scoreDetail: {
-        fontSize: 14,
-        color: '#999',
         marginTop: 5,
     },
-    feedbackContainer: {
-        width: '100%',
-        backgroundColor: '#F5F7FA',
-        borderRadius: 10,
-        padding: 15,
+    scoreDetails: {
+        alignItems: 'center',
         marginBottom: 30,
+        width: '100%',
     },
-    feedbackTitle: {
-        fontSize: 16,
+    scoreDetailText: {
+        fontSize: 18,
         fontWeight: '600',
         color: '#333',
         marginBottom: 10,
         textAlign: 'center',
     },
+    scoreDetailSubtext: {
+        fontSize: 14,
+        color: '#666',
+        textAlign: 'center',
+        fontStyle: 'italic',
+    },
+    feedbackBox: {
+        width: '100%',
+        backgroundColor: '#F5F7FA',
+        borderRadius: 15,
+        padding: 20,
+        marginBottom: 30,
+        borderLeftWidth: 4,
+        borderLeftColor: '#4A90E2',
+    },
+    feedbackTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#333',
+        marginBottom: 10,
+    },
     feedbackText: {
         fontSize: 14,
         color: '#666',
         lineHeight: 20,
-        textAlign: 'center',
     },
-    buttonContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
+    resultButtonContainer: {
         width: '100%',
-        gap: 10,
+        gap: 12,
     },
-    button: {
-        paddingVertical: 12,
-        paddingHorizontal: 25,
-        borderRadius: 25,
-        flex: 1,
+    resultButton: {
+        paddingVertical: 14,
+        borderRadius: 12,
         alignItems: 'center',
+        justifyContent: 'center',
     },
-    tryAgainButton: {
+    tryAgainResultButton: {
         backgroundColor: '#4A90E2',
     },
-    backButton: {
+    newDifficultyButton: {
+        backgroundColor: '#E67E22',
+    },
+    backToGamesResultButton: {
         backgroundColor: '#4CAF50',
     },
-    buttonText: {
+    homeButton: {
+        backgroundColor: '#9C27B0',
+    },
+    resultButtonText: {
         fontSize: 16,
         fontWeight: '600',
         color: '#FFFFFF',

@@ -7,7 +7,6 @@ import {
     TouchableOpacity,
     Alert,
     Animated,
-    Modal,
     ScrollView,
     Dimensions,
     Vibration,
@@ -31,19 +30,9 @@ type Option = {
     correct: boolean;
 };
 
-// AI 分析响应类型
-type AIAnalysisResponse = {
-    feedback: string;
-    suggestions: string[];
-    strengths: string[];
-    areas_to_improve: string[];
-    estimated_level: string;
-    recommended_next_steps: string[];
-};
-
 // 游戏状态类型
 type GameState = {
-    currentLevel: Difficulty;
+    currentLevel: Difficulty | null;
     currentQuestionIndex: number;
     score: number;
     streak: number;
@@ -55,9 +44,6 @@ type GameState = {
     gameCompleted: boolean;
     showHint: boolean;
     selectedOptionId: string | null;
-    isAnalyzing: boolean;
-    aiAnalysis: AIAnalysisResponse | null;
-    showAIFeedback: boolean;
     isLoading: boolean;
     questions: Question[];
 };
@@ -65,7 +51,7 @@ type GameState = {
 export default function ListeningScreen() {
     // 游戏状态
     const [gameState, setGameState] = useState<GameState>({
-        currentLevel: 'easy',
+        currentLevel: null,
         currentQuestionIndex: 0,
         score: 0,
         streak: 0,
@@ -77,15 +63,11 @@ export default function ListeningScreen() {
         gameCompleted: false,
         showHint: false,
         selectedOptionId: null,
-        isAnalyzing: false,
-        aiAnalysis: null,
-        showAIFeedback: false,
-        isLoading: true,
+        isLoading: false,
         questions: [],
     });
 
     const [highScore, setHighScore] = useState(0);
-    const [showResult, setShowResult] = useState(false);
 
     // 动画引用
     const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -93,13 +75,10 @@ export default function ListeningScreen() {
 
     // 加载最高分
     useEffect(() => {
-        loadHighScore();
+        if (gameState.currentLevel) {
+            loadHighScore();
+        }
     }, [gameState.currentLevel]);
-
-    // 首次加载时生成题目
-    useEffect(() => {
-        loadQuestions('easy');
-    }, []);
 
     const loadHighScore = async () => {
         try {
@@ -121,7 +100,7 @@ export default function ListeningScreen() {
         }
     };
 
-    // 加载题目 - 每次都生成全新的题目
+    // 加载题目
     const loadQuestions = async (level: Difficulty) => {
         setGameState(prev => ({ ...prev, isLoading: true, questions: [] }));
 
@@ -129,15 +108,12 @@ export default function ListeningScreen() {
             const questions: Question[] = [];
             const totalNeeded = 6;
 
-            // 逐题生成，每生成一题就更新状态
             for (let i = 0; i < totalNeeded; i++) {
-                // 生成单道题目 - 每次都生成全新的
                 const question = await AIService.generateSingleQuestion(level, i);
 
                 if (question) {
                     questions.push(question);
 
-                    // 每生成一题就更新一次状态，让用户看到进度
                     setGameState(prev => ({
                         ...prev,
                         questions: [...questions],
@@ -147,20 +123,26 @@ export default function ListeningScreen() {
                     console.log(`Generated question ${i + 1}/${totalNeeded}:`, question.audioText);
                 }
 
-                // 添加一个小延迟，避免请求过快
                 if (i < totalNeeded - 1) {
                     await new Promise(resolve => setTimeout(resolve, 500));
                 }
             }
 
-            // 所有题目生成完成
             setGameState(prev => ({
                 ...prev,
                 isLoading: false,
                 questions: questions,
                 totalQuestions: questions.length,
                 currentQuestionIndex: 0,
+                gameCompleted: false,
+                score: 0,
+                streak: 0,
+                maxStreak: 0,
+                correctAnswers: 0,
+                isAnswered: false,
             }));
+
+            progressAnim.setValue(0);
 
             console.log(`All ${questions.length} questions generated successfully`);
 
@@ -170,12 +152,35 @@ export default function ListeningScreen() {
         }
     };
 
-    // 重新开始游戏（保留当前难度，重新生成题目）
+    // 选择难度并开始游戏
+    const selectDifficulty = async (level: Difficulty) => {
+        setGameState(prev => ({
+            ...prev,
+            currentLevel: level,
+            isLoading: true,
+            questions: [],
+            currentQuestionIndex: 0,
+            score: 0,
+            streak: 0,
+            maxStreak: 0,
+            correctAnswers: 0,
+            isAnswered: false,
+            isPlaying: false,
+            gameCompleted: false,
+            showHint: false,
+            selectedOptionId: null,
+        }));
+
+        progressAnim.setValue(0);
+        await loadQuestions(level);
+    };
+
+    // 重新开始游戏
     const restartGame = async () => {
-        // 停止音频播放
+        if (!gameState.currentLevel) return;
+
         stopAudio();
 
-        // 重置游戏状态
         setGameState(prev => ({
             ...prev,
             isLoading: true,
@@ -190,22 +195,43 @@ export default function ListeningScreen() {
             gameCompleted: false,
             showHint: false,
             selectedOptionId: null,
-            isAnalyzing: false,
-            aiAnalysis: null,
-            showAIFeedback: false
         }));
 
         progressAnim.setValue(0);
-        setShowResult(false);
-
-        // 重新生成题目（使用当前难度）
         await loadQuestions(gameState.currentLevel);
     };
 
-    // 重试加载（当加载失败时使用）
+    // 重试加载
     const retryLoadQuestions = async () => {
+        if (!gameState.currentLevel) return;
         setGameState(prev => ({ ...prev, isLoading: true }));
         await loadQuestions(gameState.currentLevel);
+    };
+
+    // 返回难度选择页面
+    const backToDifficultySelect = () => {
+        stopAudio();
+        setGameState({
+            currentLevel: null,
+            currentQuestionIndex: 0,
+            score: 0,
+            streak: 0,
+            maxStreak: 0,
+            correctAnswers: 0,
+            totalQuestions: 6,
+            isAnswered: false,
+            isPlaying: false,
+            gameCompleted: false,
+            showHint: false,
+            selectedOptionId: null,
+            isLoading: false,
+            questions: [],
+        });
+    };
+
+    // 返回主页面
+    const goBackToGames = () => {
+        router.back();
     };
 
     // 获取当前问题
@@ -226,7 +252,6 @@ export default function ListeningScreen() {
 
         setGameState(prev => ({ ...prev, isPlaying: true }));
 
-        // 播放按钮动画
         Animated.sequence([
             Animated.timing(scaleAnim, {
                 toValue: 0.95,
@@ -299,7 +324,6 @@ export default function ListeningScreen() {
             setGameState(prev => ({ ...prev, streak: 0 }));
         }
 
-        // 更新进度条
         Animated.timing(progressAnim, {
             toValue: ((gameState.currentQuestionIndex + 1) / gameState.totalQuestions) * 100,
             duration: 500,
@@ -307,7 +331,7 @@ export default function ListeningScreen() {
         }).start();
     };
 
-    // 下一题
+    // 下一题或结束游戏
     const nextQuestion = () => {
         if (gameState.currentQuestionIndex >= gameState.totalQuestions - 1) {
             endGame();
@@ -325,55 +349,10 @@ export default function ListeningScreen() {
         stopAudio();
     };
 
-    // 切换难度
-    const changeLevel = async (level: Difficulty) => {
-        if (gameState.isPlaying) {
-            Alert.alert('提示', '请先停止音频播放');
-            return;
-        }
-
-        setGameState(prev => ({
-            ...prev,
-            isLoading: true,
-            currentLevel: level,
-            questions: [],
-        }));
-
-        // 加载新难度的题目
-        await loadQuestions(level);
-
-        setGameState(prev => ({
-            ...prev,
-            currentQuestionIndex: 0,
-            score: 0,
-            streak: 0,
-            maxStreak: 0,
-            correctAnswers: 0,
-            isAnswered: false,
-            isPlaying: false,
-            gameCompleted: false,
-            showHint: false,
-            selectedOptionId: null,
-            isAnalyzing: false,
-            aiAnalysis: null,
-            showAIFeedback: false
-        }));
-
-        progressAnim.setValue(0);
-        loadHighScore();
-        setShowResult(false);
-    };
-
     // 结束游戏
     const endGame = () => {
         setGameState(prev => ({ ...prev, gameCompleted: true }));
         saveHighScore(gameState.score);
-        setShowResult(true);
-    };
-
-    // 返回游戏列表
-    const goBackToGames = () => {
-        router.back();
     };
 
     // 显示提示
@@ -396,67 +375,94 @@ export default function ListeningScreen() {
         return Math.round((gameState.correctAnswers / gameState.totalQuestions) * 100);
     };
 
-    // 获取星级评价
-    const getStarRating = (accuracy: number): number => {
-        return Math.min(5, Math.ceil(accuracy / 20));
+    // 计算分数（满分100分制）
+    const calculatePercentageScore = (): number => {
+        // 最高分 = 总题数 * 10 * (最大连击系数，最高6) = 6 * 10 * 6 = 360
+        const maxPossibleScore = gameState.totalQuestions * 10 * 6;
+        return Math.round((gameState.score / maxPossibleScore) * 100);
     };
 
     // 获取结果消息
     const getResultMessage = (accuracy: number): string => {
-        if (accuracy === 100) return "Excellent! Full marks! Your listening skills are outstanding!";
+        if (accuracy === 100) return "Excellent! Perfect score! Your listening skills are outstanding!";
         if (accuracy >= 80) return "Great! Your listening skills are excellent, keep it up!";
         if (accuracy >= 60) return "Good! With more practice, you'll get even better!";
         return "Keep practicing! Language learning takes time, and persistence pays off!";
     };
 
-    // AI 分析功能
-    const analyzeWithAI = async () => {
-        if (gameState.isAnalyzing) return;
-
-        setGameState(prev => ({ ...prev, isAnalyzing: true }));
-
-        try {
-            const accuracy = calculateAccuracy();
-
-            const aiRequestData = {
-                score: gameState.score,
-                accuracy: accuracy,
-                totalQuestions: gameState.totalQuestions,
-                correctAnswers: gameState.correctAnswers,
-                maxStreak: gameState.maxStreak,
-                difficulty: getLevelLabel(gameState.currentLevel),
-                gameType: 'Listening Game',
-                timestamp: new Date().toISOString()
-            };
-
-            const aiAnalysis = await AIService.analyzeGameResults(aiRequestData);
-
-            setGameState(prev => ({
-                ...prev,
-                aiAnalysis: aiAnalysis,
-                showAIFeedback: true
-            }));
-
-        } catch (error: any) {
-            console.error('AI analysis error:', error);
-            const defaultAnalysis = AIService.getDefaultAnalysisResponse();
-            setGameState(prev => ({
-                ...prev,
-                aiAnalysis: defaultAnalysis,
-                showAIFeedback: true
-            }));
-        } finally {
-            setGameState(prev => ({ ...prev, isAnalyzing: false }));
-        }
+    // 获取星级评价
+    const getStarRating = (percentage: number): number => {
+        return Math.min(5, Math.ceil(percentage / 20));
     };
 
     const currentQuestion = getCurrentQuestion();
     const accuracy = calculateAccuracy();
-    const stars = getStarRating(accuracy);
-    const progressWidth = progressAnim.interpolate({
-        inputRange: [0, 100],
-        outputRange: ['0%', '100%']
-    });
+    const percentageScore = calculatePercentageScore();
+    const stars = getStarRating(percentageScore);
+
+    // 难度选择页面
+    if (gameState.currentLevel === null) {
+        return (
+            <View style={styles.container}>
+                <Stack.Screen
+                    options={{
+                        title: 'Listening Game',
+                        headerStyle: { backgroundColor: '#4b6cb7' },
+                        headerTintColor: '#fff',
+                        headerLeft: () => (
+                            <TouchableOpacity onPress={goBackToGames} style={{ marginLeft: 10 }}>
+                                <Ionicons name="arrow-back" size={24} color="white" />
+                            </TouchableOpacity>
+                        ),
+                    }}
+                />
+                <ScrollView contentContainerStyle={styles.difficultyContainer}>
+                    <LinearGradient
+                        colors={['#4b6cb7', '#182848']}
+                        style={styles.difficultyHeader}
+                    >
+                        <Ionicons name="headset" size={60} color="white" />
+                        <Text style={styles.difficultyTitle}>Listening Game</Text>
+                        <Text style={styles.difficultySubtitle}>Test your listening skills</Text>
+                    </LinearGradient>
+
+                    <Text style={styles.difficultyLabel}>Select Difficulty Level</Text>
+
+                    <View style={styles.difficultyOptions}>
+                        <TouchableOpacity
+                            style={[styles.difficultyCard, styles.easyCard]}
+                            onPress={() => selectDifficulty('easy')}
+                        >
+                            <Ionicons name="leaf" size={40} color="#4CAF50" />
+                            <Text style={styles.difficultyCardTitle}>Beginner</Text>
+                            <Text style={styles.difficultyCardDesc}>Simple words and phrases</Text>
+                            <Text style={styles.difficultyCardHint}>Slow speed • Basic vocabulary</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.difficultyCard, styles.mediumCard]}
+                            onPress={() => selectDifficulty('medium')}
+                        >
+                            <Ionicons name="flame" size={40} color="#FF9800" />
+                            <Text style={styles.difficultyCardTitle}>Intermediate</Text>
+                            <Text style={styles.difficultyCardDesc}>Short sentences</Text>
+                            <Text style={styles.difficultyCardHint}>Normal speed • Common phrases</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.difficultyCard, styles.hardCard]}
+                            onPress={() => selectDifficulty('hard')}
+                        >
+                            <Ionicons name="flash" size={40} color="#F44336" />
+                            <Text style={styles.difficultyCardTitle}>Advanced</Text>
+                            <Text style={styles.difficultyCardDesc}>Complex sentences</Text>
+                            <Text style={styles.difficultyCardHint}>Fast speed • Idiomatic expressions</Text>
+                        </TouchableOpacity>
+                    </View>
+                </ScrollView>
+            </View>
+        );
+    }
 
     // 加载进度
     if (gameState.isLoading) {
@@ -470,7 +476,7 @@ export default function ListeningScreen() {
                         headerStyle: { backgroundColor: '#4b6cb7' },
                         headerTintColor: '#fff',
                         headerLeft: () => (
-                            <TouchableOpacity onPress={goBackToGames} style={{ marginLeft: 10 }}>
+                            <TouchableOpacity onPress={backToDifficultySelect} style={{ marginLeft: 10 }}>
                                 <Ionicons name="arrow-back" size={24} color="white" />
                             </TouchableOpacity>
                         ),
@@ -484,18 +490,13 @@ export default function ListeningScreen() {
                     <View style={styles.loadingProgressBar}>
                         <View style={[styles.loadingProgressFill, { width: `${progress}%` }]} />
                     </View>
-                    {gameState.questions.length > 0 && (
-                        <Text style={styles.loadingSubtext}>
-                            Last generated: {gameState.questions[gameState.questions.length - 1]?.audioText}
-                        </Text>
-                    )}
                 </View>
             </View>
         );
     }
 
     // 加载失败界面
-    if (!currentQuestion && !gameState.isLoading) {
+    if (!currentQuestion && !gameState.isLoading && !gameState.gameCompleted) {
         return (
             <View style={styles.container}>
                 <Stack.Screen
@@ -504,7 +505,7 @@ export default function ListeningScreen() {
                         headerStyle: { backgroundColor: '#4b6cb7' },
                         headerTintColor: '#fff',
                         headerLeft: () => (
-                            <TouchableOpacity onPress={goBackToGames} style={{ marginLeft: 10 }}>
+                            <TouchableOpacity onPress={backToDifficultySelect} style={{ marginLeft: 10 }}>
                                 <Ionicons name="arrow-back" size={24} color="white" />
                             </TouchableOpacity>
                         ),
@@ -518,103 +519,170 @@ export default function ListeningScreen() {
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={[styles.retryButton, { backgroundColor: '#FF5722', marginTop: 10 }]}
-                        onPress={goBackToGames}
+                        onPress={backToDifficultySelect}
                     >
-                        <Text style={styles.retryButtonText}>Back to Games</Text>
+                        <Text style={styles.retryButtonText}>Back to Difficulty</Text>
                     </TouchableOpacity>
                 </View>
             </View>
         );
     }
 
-    // AI 反馈模态框
-    const AIFeedbackModal = () => {
-        if (!gameState.aiAnalysis) return null;
-
+    // 游戏结束页面 - 显示结果
+    if (gameState.gameCompleted) {
         return (
-            <Modal
-                visible={gameState.showAIFeedback}
-                transparent
-                animationType="slide"
-                onRequestClose={() => setGameState(prev => ({ ...prev, showAIFeedback: false }))}
-            >
-                <View style={styles.aiModal}>
-                    <View style={styles.aiModalContent}>
-                        <TouchableOpacity
-                            style={styles.aiCloseButton}
-                            onPress={() => setGameState(prev => ({ ...prev, showAIFeedback: false }))}
-                        >
-                            <Ionicons name="close" size={24} color="#666" />
-                        </TouchableOpacity>
+            <View style={styles.container}>
+                <Stack.Screen
+                    options={{
+                        title: 'Game Results',
+                        headerStyle: { backgroundColor: '#4b6cb7' },
+                        headerTintColor: '#fff',
+                        headerLeft: () => (
+                            <TouchableOpacity onPress={backToDifficultySelect} style={{ marginLeft: 10 }}>
+                                <Ionicons name="arrow-back" size={24} color="white" />
+                            </TouchableOpacity>
+                        ),
+                    }}
+                />
+                <ScrollView contentContainerStyle={styles.resultPageContainer}>
+                    <LinearGradient
+                        colors={['#4b6cb7', '#182848']}
+                        style={styles.resultHeader}
+                    >
+                        <Ionicons name="trophy" size={60} color="#FFD700" />
+                        <Text style={styles.resultHeaderTitle}>Quiz Completed!</Text>
+                    </LinearGradient>
 
-                        <View style={styles.aiHeader}>
-                            <LinearGradient
-                                colors={['#4b6cb7', '#182848']}
-                                style={styles.aiAvatar}
+                    <View style={styles.resultCard}>
+                        {/* 分数显示 */}
+                        <View style={styles.scoreCircle}>
+                            <Text style={styles.scoreCircleNumber}>{percentageScore}</Text>
+                            <Text style={styles.scoreCircleLabel}>out of 100</Text>
+                        </View>
+
+                        {/* 星级评价 */}
+                        <View style={styles.resultStars}>
+                            {[...Array(5)].map((_, i) => (
+                                <Ionicons
+                                    key={i}
+                                    name={i < stars ? "star" : "star-outline"}
+                                    size={32}
+                                    color="#FFD700"
+                                />
+                            ))}
+                        </View>
+
+                        <Text style={styles.resultMessage}>{getResultMessage(accuracy)}</Text>
+
+                        {/* 详细数据 */}
+                        <View style={styles.resultStats}>
+                            <View style={styles.resultStatItem}>
+                                <View style={styles.resultStatIcon}>
+                                    <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+                                </View>
+                                <View style={styles.resultStatInfo}>
+                                    <Text style={styles.resultStatLabel}>Correct Answers</Text>
+                                    <Text style={styles.resultStatValue}>
+                                        {gameState.correctAnswers} / {gameState.totalQuestions}
+                                    </Text>
+                                </View>
+                            </View>
+
+                            <View style={styles.resultStatItem}>
+                                <View style={styles.resultStatIcon}>
+                                    <Ionicons name="analytics" size={24} color="#FF9800" />
+                                </View>
+                                <View style={styles.resultStatInfo}>
+                                    <Text style={styles.resultStatLabel}>Accuracy</Text>
+                                    <Text style={styles.resultStatValue}>{accuracy}%</Text>
+                                </View>
+                            </View>
+
+                            <View style={styles.resultStatItem}>
+                                <View style={styles.resultStatIcon}>
+                                    <Ionicons name="flag" size={24} color="#4b6cb7" />
+                                </View>
+                                <View style={styles.resultStatInfo}>
+                                    <Text style={styles.resultStatLabel}>Total Points</Text>
+                                    <Text style={styles.resultStatValue}>{gameState.score}</Text>
+                                </View>
+                            </View>
+
+                            <View style={styles.resultStatItem}>
+                                <View style={styles.resultStatIcon}>
+                                    <Ionicons name="flame" size={24} color="#F44336" />
+                                </View>
+                                <View style={styles.resultStatInfo}>
+                                    <Text style={styles.resultStatLabel}>Max Streak</Text>
+                                    <Text style={styles.resultStatValue}>{gameState.maxStreak}</Text>
+                                </View>
+                            </View>
+
+                            <View style={styles.resultStatItem}>
+                                <View style={styles.resultStatIcon}>
+                                    <Ionicons name="medal" size={24} color="#FFD700" />
+                                </View>
+                                <View style={styles.resultStatInfo}>
+                                    <Text style={styles.resultStatLabel}>Difficulty</Text>
+                                    <Text style={styles.resultStatValue}>
+                                        {getLevelLabel(gameState.currentLevel!)}
+                                    </Text>
+                                </View>
+                            </View>
+
+                            <View style={styles.resultStatItem}>
+                                <View style={styles.resultStatIcon}>
+                                    <Ionicons name="trophy" size={24} color="#FF9800" />
+                                </View>
+                                <View style={styles.resultStatInfo}>
+                                    <Text style={styles.resultStatLabel}>High Score</Text>
+                                    <Text style={styles.resultStatValue}>{highScore}</Text>
+                                </View>
+                            </View>
+                        </View>
+
+                        {/* 操作按钮 */}
+                        <View style={styles.resultButtons}>
+                            <TouchableOpacity
+                                style={[styles.resultButton, styles.playAgainButton]}
+                                onPress={restartGame}
                             >
-                                <Ionicons name="sparkles" size={32} color="white" />
-                            </LinearGradient>
-                            <Text style={styles.aiTitle}>AI Learning Coach</Text>
-                            <Text style={styles.aiSubtitle}>Personalized Learning Suggestions</Text>
+                                <Ionicons name="refresh" size={20} color="white" />
+                                <Text style={styles.resultButtonText}>Play Again</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[styles.resultButton, styles.changeDifficultyButton]}
+                                onPress={backToDifficultySelect}
+                            >
+                                <Ionicons name="options" size={20} color="white" />
+                                <Text style={styles.resultButtonText}>Change Difficulty</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[styles.resultButton, styles.homeButton]}
+                                onPress={goBackToGames}
+                            >
+                                <Ionicons name="home" size={20} color="white" />
+                                <Text style={styles.resultButtonText}>Back to Home</Text>
+                            </TouchableOpacity>
                         </View>
-
-                        <View style={styles.scoreSummary}>
-                            <View style={styles.scoreItem}>
-                                <Text style={styles.scoreLabel}>Score</Text>
-                                <Text style={styles.scoreValue}>{gameState.score}</Text>
-                            </View>
-                            <View style={styles.scoreItem}>
-                                <Text style={styles.scoreLabel}>Accuracy</Text>
-                                <Text style={styles.scoreValue}>{calculateAccuracy()}%</Text>
-                            </View>
-                        </View>
-
-                        <View style={styles.aiSection}>
-                            <View style={styles.aiSectionHeader}>
-                                <Ionicons name="chatbubble-ellipses" size={20} color="#4b6cb7" />
-                                <Text style={styles.aiSectionTitle}>Feedback</Text>
-                            </View>
-                            <Text style={styles.aiFeedbackText}>{gameState.aiAnalysis.feedback}</Text>
-                        </View>
-
-                        {gameState.aiAnalysis.suggestions && gameState.aiAnalysis.suggestions.length > 0 && (
-                            <View style={styles.aiSection}>
-                                <View style={styles.aiSectionHeader}>
-                                    <Ionicons name="bulb" size={20} color="#FF9800" />
-                                    <Text style={styles.aiSectionTitle}>Suggestions</Text>
-                                </View>
-                                <View style={styles.aiList}>
-                                    {gameState.aiAnalysis.suggestions.map((suggestion, index) => (
-                                        <View key={index} style={styles.aiListItem}>
-                                            <Ionicons name="arrow-forward" size={16} color="#4b6cb7" />
-                                            <Text style={styles.aiListItemText}>{suggestion}</Text>
-                                        </View>
-                                    ))}
-                                </View>
-                            </View>
-                        )}
-
-                        <TouchableOpacity
-                            style={styles.aiCloseButtonMain}
-                            onPress={() => setGameState(prev => ({ ...prev, showAIFeedback: false }))}
-                        >
-                            <Text style={styles.aiCloseButtonText}>Close</Text>
-                        </TouchableOpacity>
                     </View>
-                </View>
-            </Modal>
+                </ScrollView>
+            </View>
         );
-    };
+    }
 
+    // 游戏主界面
     return (
         <View style={styles.container}>
             <Stack.Screen
                 options={{
-                    title: 'Listening Game',
+                    title: `Listening Game - ${getLevelLabel(gameState.currentLevel)}`,
                     headerStyle: { backgroundColor: '#4b6cb7' },
                     headerTintColor: '#fff',
                     headerLeft: () => (
-                        <TouchableOpacity onPress={goBackToGames} style={{ marginLeft: 10 }}>
+                        <TouchableOpacity onPress={backToDifficultySelect} style={{ marginLeft: 10 }}>
                             <Ionicons name="arrow-back" size={24} color="white" />
                         </TouchableOpacity>
                     ),
@@ -626,21 +694,12 @@ export default function ListeningScreen() {
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
             >
-                {/* 游戏标题 */}
-                <LinearGradient
-                    colors={['#4b6cb7', '#182848']}
-                    style={styles.header}
-                >
-                    <Text style={styles.headerTitle}>🎧 Listening Game</Text>
-                    <Text style={styles.headerSubtitle}>Listen and choose the correct answer</Text>
-                </LinearGradient>
-
                 {/* 游戏信息 */}
                 <View style={styles.gameInfo}>
                     <View style={styles.stats}>
                         <View style={styles.statBox}>
                             <Text style={styles.statValue}>{gameState.score}</Text>
-                            <Text style={styles.statLabel}>Score</Text>
+                            <Text style={styles.statLabel}>Points</Text>
                         </View>
                         <View style={styles.statBox}>
                             <Text style={styles.statValue}>
@@ -654,27 +713,10 @@ export default function ListeningScreen() {
                         </View>
                     </View>
 
-                    {/* 难度选择器 */}
-                    <View style={styles.levelSelector}>
-                        <Text style={styles.levelLabel}>Level:</Text>
-                        {(['easy', 'medium', 'hard'] as Difficulty[]).map((level) => (
-                            <TouchableOpacity
-                                key={level}
-                                style={[
-                                    styles.levelButton,
-                                    gameState.currentLevel === level && styles.levelButtonActive
-                                ]}
-                                onPress={() => changeLevel(level)}
-                                disabled={gameState.isPlaying}
-                            >
-                                <Text style={[
-                                    styles.levelButtonText,
-                                    gameState.currentLevel === level && styles.levelButtonTextActive
-                                ]}>
-                                    {level === 'easy' ? 'Beginner' : level === 'medium' ? 'Intermediate' : 'Advanced'}
-                                </Text>
-                            </TouchableOpacity>
-                        ))}
+                    <View style={styles.currentDifficultyBadge}>
+                        <Text style={styles.currentDifficultyText}>
+                            {getLevelLabel(gameState.currentLevel)}
+                        </Text>
                     </View>
                 </View>
 
@@ -686,7 +728,6 @@ export default function ListeningScreen() {
                                 'Listen and choose the correct meaning'}
                     </Text>
 
-                    {/* 音频控制 */}
                     <View style={styles.audioControls}>
                         <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
                             <TouchableOpacity
@@ -717,15 +758,14 @@ export default function ListeningScreen() {
                         </View>
                     </View>
 
-                    {/* 进度条 */}
                     <View style={styles.progressBar}>
-                        <Animated.View style={[styles.progressFill, { width: progressWidth }]} />
+                        <Animated.View style={[styles.progressFill, { width: progressAnim.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }) }]} />
                     </View>
                 </View>
 
                 {/* 选项容器 */}
                 <View style={styles.optionsGrid}>
-                    {currentQuestion.options.map((option) => {
+                    {currentQuestion?.options.map((option) => {
                         const isSelected = gameState.isAnswered && option.correct;
                         const isIncorrect = gameState.isAnswered &&
                             !option.correct &&
@@ -774,7 +814,7 @@ export default function ListeningScreen() {
                 )}
 
                 {/* 提示区域 */}
-                {gameState.showHint && (
+                {gameState.showHint && currentQuestion && (
                     <View style={styles.hintArea}>
                         <View style={styles.hintTitle}>
                             <Ionicons name="bulb" size={20} color="#ff8f00" />
@@ -809,108 +849,17 @@ export default function ListeningScreen() {
                         />
                         <Text style={styles.nextButtonText}>
                             {gameState.currentQuestionIndex >= gameState.totalQuestions - 1
-                                ? "View Results"
+                                ? "Finish"
                                 : "Next"}
                         </Text>
                     </TouchableOpacity>
                 </View>
 
-                {/* 最高分显示 */}
                 <View style={styles.highScoreContainer}>
                     <Ionicons name="trophy" size={16} color="#FFD700" />
                     <Text style={styles.highScoreText}>High Score: {highScore}</Text>
-                    <Text style={styles.currentLevelText}>{getLevelLabel(gameState.currentLevel)}</Text>
                 </View>
             </ScrollView>
-
-            {/* 结果模态框 */}
-            <Modal
-                visible={showResult}
-                transparent
-                animationType="slide"
-                onRequestClose={() => setShowResult(false)}
-            >
-                <View style={styles.resultModal}>
-                    <View style={styles.resultContent}>
-                        <View style={styles.completionBadge}>
-                            <Ionicons name="trophy" size={20} color="white" />
-                            <Text style={styles.completionBadgeText}>Quiz Completed</Text>
-                        </View>
-
-                        <Text style={styles.resultTitle}>Quiz Results</Text>
-                        <Text style={styles.finalScore}>{gameState.score}</Text>
-
-                        {/* 星级评价 */}
-                        <View style={styles.stars}>
-                            {[...Array(5)].map((_, i) => (
-                                <Text key={i} style={styles.star}>
-                                    {i < stars ? '★' : '☆'}
-                                </Text>
-                            ))}
-                        </View>
-
-                        <Text style={styles.resultMessage}>{getResultMessage(accuracy)}</Text>
-
-                        {/* 详细数据 */}
-                        <View style={styles.resultDetails}>
-                            <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>Correct Answers:</Text>
-                                <Text style={styles.detailValue}>{gameState.correctAnswers}/{gameState.totalQuestions}</Text>
-                            </View>
-                            <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>Accuracy:</Text>
-                                <Text style={styles.detailValue}>{accuracy}%</Text>
-                            </View>
-                            <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>Max Streak:</Text>
-                                <Text style={styles.detailValue}>{gameState.maxStreak}</Text>
-                            </View>
-                            <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>Level:</Text>
-                                <Text style={styles.detailValue}>{getLevelLabel(gameState.currentLevel)}</Text>
-                            </View>
-                        </View>
-
-                        {/* 结果操作按钮 */}
-                        <View style={styles.resultActions}>
-                            <TouchableOpacity
-                                style={[styles.resultButton, styles.playAgainButton]}
-                                onPress={restartGame}
-                            >
-                                <Ionicons name="refresh" size={20} color="white" />
-                                <Text style={styles.playAgainButtonText}>Play Again</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={[styles.resultButton, styles.aiAnalysisButton]}
-                                onPress={analyzeWithAI}
-                                disabled={gameState.isAnalyzing}
-                            >
-                                {gameState.isAnalyzing ? (
-                                    <ActivityIndicator size="small" color="white" />
-                                ) : (
-                                    <>
-                                        <Ionicons name="sparkles" size={20} color="white" />
-                                        <Text style={styles.aiAnalysisButtonText}>AI Analysis</Text>
-                                    </>
-                                )}
-                            </TouchableOpacity>
-
-                            {/* 返回按钮 */}
-                            <TouchableOpacity
-                                style={[styles.resultButton, styles.backButton]}
-                                onPress={goBackToGames}
-                            >
-                                <Ionicons name="arrow-back" size={20} color="white" />
-                                <Text style={styles.backButtonText}>Back to Games</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </View>
-            </Modal>
-
-            {/* AI 反馈模态框 */}
-            <AIFeedbackModal />
         </View>
     );
 }
@@ -919,6 +868,85 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#f5f5f5',
+    },
+    // 难度选择页面样式
+    difficultyContainer: {
+        flexGrow: 1,
+        backgroundColor: '#f5f5f5',
+    },
+    difficultyHeader: {
+        alignItems: 'center',
+        paddingTop: 60,
+        paddingBottom: 40,
+        paddingHorizontal: 20,
+        borderBottomLeftRadius: 30,
+        borderBottomRightRadius: 30,
+        marginBottom: 30,
+    },
+    difficultyTitle: {
+        fontSize: 32,
+        fontWeight: 'bold',
+        color: '#fff',
+        marginTop: 16,
+        marginBottom: 8,
+    },
+    difficultySubtitle: {
+        fontSize: 16,
+        color: '#fff',
+        opacity: 0.9,
+    },
+    difficultyLabel: {
+        fontSize: 20,
+        fontWeight: '600',
+        color: '#333',
+        textAlign: 'center',
+        marginBottom: 24,
+    },
+    difficultyOptions: {
+        paddingHorizontal: 20,
+        gap: 16,
+    },
+    difficultyCard: {
+        backgroundColor: 'white',
+        borderRadius: 20,
+        padding: 24,
+        alignItems: 'center',
+        elevation: 3,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        borderWidth: 1,
+        borderColor: '#e0e0e0',
+    },
+    easyCard: {
+        borderTopColor: '#4CAF50',
+        borderTopWidth: 4,
+    },
+    mediumCard: {
+        borderTopColor: '#FF9800',
+        borderTopWidth: 4,
+    },
+    hardCard: {
+        borderTopColor: '#F44336',
+        borderTopWidth: 4,
+    },
+    difficultyCardTitle: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: '#333',
+        marginTop: 12,
+        marginBottom: 4,
+    },
+    difficultyCardDesc: {
+        fontSize: 14,
+        color: '#666',
+        marginBottom: 8,
+    },
+    difficultyCardHint: {
+        fontSize: 12,
+        color: '#999',
+        fontStyle: 'italic',
     },
     loadingContainer: {
         flex: 1,
@@ -945,13 +973,6 @@ const styles = StyleSheet.create({
         height: '100%',
         backgroundColor: '#4CAF50',
         borderRadius: 4,
-    },
-    loadingSubtext: {
-        marginTop: 20,
-        fontSize: 14,
-        color: '#666',
-        textAlign: 'center',
-        paddingHorizontal: 20,
     },
     errorText: {
         fontSize: 18,
@@ -980,30 +1001,12 @@ const styles = StyleSheet.create({
         flexGrow: 1,
         paddingBottom: 30,
     },
-    header: {
-        paddingTop: 40,
-        paddingBottom: 30,
-        paddingHorizontal: 20,
-        borderBottomLeftRadius: 30,
-        borderBottomRightRadius: 30,
-        marginBottom: 20,
-    },
-    headerTitle: {
-        fontSize: 32,
-        fontWeight: 'bold',
-        color: '#fff',
-        marginBottom: 8,
-    },
-    headerSubtitle: {
-        fontSize: 16,
-        color: '#fff',
-        opacity: 0.9,
-    },
     gameInfo: {
         backgroundColor: 'white',
         borderRadius: 16,
         padding: 20,
         marginHorizontal: 20,
+        marginTop: 20,
         marginBottom: 20,
         elevation: 2,
         shadowColor: '#000',
@@ -1014,7 +1017,7 @@ const styles = StyleSheet.create({
     stats: {
         flexDirection: 'row',
         justifyContent: 'space-around',
-        marginBottom: 20,
+        marginBottom: 15,
     },
     statBox: {
         alignItems: 'center',
@@ -1025,41 +1028,24 @@ const styles = StyleSheet.create({
         color: '#4b6cb7',
     },
     statLabel: {
-        fontSize: 14,
+        fontSize: 12,
         color: '#666',
         marginTop: 5,
     },
-    levelSelector: {
-        flexDirection: 'row',
+    currentDifficultyBadge: {
         alignItems: 'center',
-        justifyContent: 'center',
-        flexWrap: 'wrap',
+        paddingTop: 10,
+        borderTopWidth: 1,
+        borderTopColor: '#f0f0f0',
     },
-    levelLabel: {
-        fontSize: 16,
-        color: '#333',
-        marginRight: 10,
-    },
-    levelButton: {
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 20,
-        borderWidth: 2,
-        borderColor: '#4b6cb7',
-        backgroundColor: 'white',
-        marginHorizontal: 5,
-        marginVertical: 3,
-    },
-    levelButtonActive: {
-        backgroundColor: '#4b6cb7',
-    },
-    levelButtonText: {
-        fontSize: 12,
+    currentDifficultyText: {
+        fontSize: 14,
         fontWeight: '600',
         color: '#4b6cb7',
-    },
-    levelButtonTextActive: {
-        color: 'white',
+        backgroundColor: 'rgba(75, 108, 183, 0.1)',
+        paddingHorizontal: 16,
+        paddingVertical: 6,
+        borderRadius: 20,
     },
     questionArea: {
         backgroundColor: 'white',
@@ -1269,246 +1255,120 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#666',
     },
-    currentLevelText: {
-        fontSize: 12,
-        color: '#4b6cb7',
-        backgroundColor: 'rgba(75, 108, 183, 0.1)',
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: 10,
+    // 结果页面样式
+    resultPageContainer: {
+        flexGrow: 1,
+        backgroundColor: '#f5f5f5',
     },
-    resultModal: {
-        flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        justifyContent: 'center',
+    resultHeader: {
         alignItems: 'center',
-        padding: 20,
-    },
-    resultContent: {
-        backgroundColor: 'white',
-        borderRadius: 20,
-        padding: 30,
-        width: '90%',
-        maxWidth: 400,
-        alignItems: 'center',
-    },
-    completionBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#FFD700',
+        paddingTop: 60,
+        paddingBottom: 40,
         paddingHorizontal: 20,
-        paddingVertical: 8,
-        borderRadius: 30,
+        borderBottomLeftRadius: 30,
+        borderBottomRightRadius: 30,
         marginBottom: 20,
-        gap: 8,
     },
-    completionBadgeText: {
-        fontSize: 14,
+    resultHeaderTitle: {
+        fontSize: 28,
         fontWeight: 'bold',
-        color: '#333',
+        color: '#fff',
+        marginTop: 16,
     },
-    resultTitle: {
-        fontSize: 24,
+    resultCard: {
+        backgroundColor: 'white',
+        borderRadius: 24,
+        marginHorizontal: 20,
+        marginBottom: 30,
+        padding: 24,
+        elevation: 3,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+    },
+    scoreCircle: {
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    scoreCircleNumber: {
+        fontSize: 72,
         fontWeight: 'bold',
         color: '#4b6cb7',
-        marginBottom: 10,
     },
-    finalScore: {
-        fontSize: 48,
-        fontWeight: 'bold',
-        color: '#182848',
-        marginBottom: 10,
+    scoreCircleLabel: {
+        fontSize: 14,
+        color: '#666',
+        marginTop: -8,
     },
-    stars: {
+    resultStars: {
         flexDirection: 'row',
-        marginBottom: 20,
-        gap: 5,
-    },
-    star: {
-        fontSize: 24,
-        color: '#FFD700',
+        justifyContent: 'center',
+        gap: 8,
+        marginBottom: 16,
     },
     resultMessage: {
         fontSize: 16,
         color: '#555',
         textAlign: 'center',
-        marginBottom: 20,
+        marginBottom: 24,
         lineHeight: 24,
+        paddingHorizontal: 16,
     },
-    resultDetails: {
+    resultStats: {
         backgroundColor: '#f8f9fa',
-        borderRadius: 12,
-        padding: 15,
-        width: '100%',
-        marginBottom: 20,
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 24,
     },
-    detailRow: {
+    resultStatItem: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        paddingVertical: 8,
+        alignItems: 'center',
+        paddingVertical: 12,
         borderBottomWidth: 1,
         borderBottomColor: '#e0e0e0',
     },
-    detailLabel: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#555',
+    resultStatIcon: {
+        width: 40,
+        alignItems: 'center',
     },
-    detailValue: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#182848',
+    resultStatInfo: {
+        flex: 1,
+        marginLeft: 12,
     },
-    resultActions: {
-        flexDirection: 'column',
-        gap: 10,
-        width: '100%',
+    resultStatLabel: {
+        fontSize: 14,
+        color: '#666',
+        marginBottom: 2,
+    },
+    resultStatValue: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#333',
+    },
+    resultButtons: {
+        gap: 12,
     },
     resultButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingHorizontal: 20,
-        paddingVertical: 12,
+        paddingVertical: 14,
         borderRadius: 12,
         gap: 8,
     },
     playAgainButton: {
         backgroundColor: '#4b6cb7',
     },
-    playAgainButtonText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: 'white',
+    changeDifficultyButton: {
+        backgroundColor: '#FF9800',
     },
-    aiAnalysisButton: {
-        backgroundColor: '#9C27B0',
-    },
-    aiAnalysisButtonText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: 'white',
-    },
-    backButton: {
+    homeButton: {
         backgroundColor: '#FF5722',
     },
-    backButtonText: {
+    resultButtonText: {
         fontSize: 16,
         fontWeight: '600',
         color: 'white',
-    },
-    // AI 模态框样式
-    aiModal: {
-        flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 20,
-    },
-    aiModalContent: {
-        backgroundColor: 'white',
-        borderRadius: 20,
-        padding: 25,
-        width: '95%',
-        maxWidth: 500,
-        maxHeight: '80%',
-    },
-    aiCloseButton: {
-        position: 'absolute',
-        top: 15,
-        right: 15,
-        zIndex: 1,
-        padding: 5,
-    },
-    aiHeader: {
-        alignItems: 'center',
-        marginBottom: 20,
-        marginTop: 10,
-    },
-    aiAvatar: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 10,
-    },
-    aiTitle: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 5,
-    },
-    aiSubtitle: {
-        fontSize: 14,
-        color: '#666',
-    },
-    scoreSummary: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        backgroundColor: '#f8f9fa',
-        borderRadius: 12,
-        padding: 15,
-        marginBottom: 20,
-    },
-    scoreItem: {
-        alignItems: 'center',
-    },
-    scoreLabel: {
-        fontSize: 12,
-        color: '#666',
-        marginBottom: 5,
-    },
-    scoreValue: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: '#4b6cb7',
-    },
-    aiSection: {
-        marginBottom: 20,
-    },
-    aiSectionHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 10,
-        gap: 8,
-    },
-    aiSectionTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#333',
-    },
-    aiFeedbackText: {
-        fontSize: 14,
-        color: '#555',
-        lineHeight: 22,
-    },
-    aiList: {
-        gap: 8,
-    },
-    aiListItem: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: 8,
-        paddingVertical: 6,
-    },
-    aiListItemText: {
-        fontSize: 14,
-        color: '#444',
-        flex: 1,
-        lineHeight: 20,
-    },
-    aiCloseButtonMain: {
-        backgroundColor: '#4b6cb7',
-        paddingHorizontal: 30,
-        paddingVertical: 12,
-        borderRadius: 12,
-        alignItems: 'center',
-        marginTop: 10,
-    },
-    aiCloseButtonText: {
-        color: 'white',
-        fontSize: 16,
-        fontWeight: '600',
     },
 });

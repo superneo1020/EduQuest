@@ -1,5 +1,5 @@
-// english/sentencereorder.tsx
-import React, { useState, useEffect } from 'react';
+// english/sentencereordergame.tsx
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
@@ -7,25 +7,27 @@ import {
     TouchableOpacity,
     ScrollView,
     Modal,
-    Dimensions
+    Dimensions,
+    ActivityIndicator,
+    Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import ReorderService, { ReorderQuestion } from '../../services/reorderService';
 
 const { width } = Dimensions.get('window');
 
-// 题库数据
-const sentenceBank = [
-    { id: 1, sentence: "I like apples", words: ["I", "like", "apples"], translation: "I like apples." },
-    { id: 2, sentence: "She reads a book", words: ["She", "reads", "a", "book"], translation: "She reads a book." },
-    { id: 3, sentence: "We are students", words: ["We", "are", "students"], translation: "We are students." },
-    { id: 4, sentence: "Do you like coffee?", words: ["Do", "you", "like", "coffee", "?"], translation: "Do you like coffee?" },
-    { id: 5, sentence: "The cat is sleeping", words: ["The", "cat", "is", "sleeping"], translation: "The cat is sleeping." }
-];
+// 难度级别配置 - 只保留 Easy 和 Medium
+const DIFFICULTY_LEVELS = {
+    easy: { label: 'Easy', color: '#4CAF50', questionsPerGame: 5, desc: 'Simple 3-4 word sentences' },
+    medium: { label: 'Medium', color: '#FF9800', questionsPerGame: 5, desc: 'Common 4-5 word phrases' }
+};
+
+type Difficulty = 'easy' | 'medium';
 
 interface WordItem {
-    id: number;
+    id: string;
     text: string;
     originalIndex: number;
     currentIndex: number;
@@ -37,10 +39,13 @@ interface GameState {
     words: WordItem[];
     feedback: string;
     isChecking: boolean;
-    showCompletionModal: boolean;
     correctAnswers: number;
     wrongAnswers: number;
-    questionStatus: ('correct' | 'wrong' | 'unanswered')[];
+    questions: ReorderQuestion[];
+    isLoading: boolean;
+    difficulty: Difficulty | null;
+    gameStarted: boolean;
+    gameFinished: boolean;
 }
 
 export default function SentenceReorderScreen() {
@@ -49,52 +54,125 @@ export default function SentenceReorderScreen() {
         currentQuestion: 0,
         score: 0,
         words: [],
-        feedback: 'Tap words to reorder the sentence',
+        feedback: '',
         isChecking: false,
-        showCompletionModal: false,
         correctAnswers: 0,
         wrongAnswers: 0,
-        questionStatus: new Array(sentenceBank.length).fill('unanswered')
+        questions: [],
+        isLoading: false,
+        difficulty: null,
+        gameStarted: false,
+        gameFinished: false
     });
 
-    const currentQuestion = sentenceBank[gameState.currentQuestion];
+    const currentQuestion = gameState.questions[gameState.currentQuestion];
 
-    // 初始化题目
-    useEffect(() => {
-        initializeQuestion();
-    }, [gameState.currentQuestion]);
+    // 初始化游戏 - 生成题目
+    const initializeGame = useCallback(async (difficulty: Difficulty) => {
+        setGameState(prev => ({
+            ...prev,
+            isLoading: true,
+            difficulty: difficulty,
+            gameStarted: true,
+            gameFinished: false
+        }));
 
-    const initializeQuestion = () => {
-        const question = sentenceBank[gameState.currentQuestion];
-        const shuffledWords = [...question.words]
-            .map((word, index) => ({ id: index, text: word, originalIndex: index, currentIndex: index }))
-            .sort(() => Math.random() - 0.5)
-            .map((word, newIndex) => ({ ...word, currentIndex: newIndex }));
+        try {
+            // 检查 AI 是否可用
+            const aiAvailable = await ReorderService.isAIAvailable();
+            console.log('AI available:', aiAvailable);
+
+            // 生成题目
+            const questionsCount = DIFFICULTY_LEVELS[difficulty].questionsPerGame;
+            let generatedQuestions: ReorderQuestion[];
+
+            if (aiAvailable) {
+                // 使用 AI 生成题目
+                console.log('Generating questions with AI...');
+                generatedQuestions = await ReorderService.generateQuestions(difficulty, questionsCount);
+                console.log(`Generated ${generatedQuestions.length} questions`);
+            } else {
+                // 使用备用题目
+                console.log('Using fallback questions...');
+                generatedQuestions = [];
+                for (let i = 0; i < questionsCount; i++) {
+                    generatedQuestions.push(ReorderService.getFallbackQuestion(difficulty, i));
+                }
+            }
+
+            setGameState(prev => ({
+                ...prev,
+                questions: generatedQuestions,
+                currentQuestion: 0,
+                score: 0,
+                correctAnswers: 0,
+                wrongAnswers: 0,
+                isLoading: false
+            }));
+
+            // 初始化第一题
+            if (generatedQuestions.length > 0) {
+                initializeQuestion(generatedQuestions[0]);
+            }
+
+        } catch (error) {
+            console.error('Failed to initialize game:', error);
+            Alert.alert('Error', 'Failed to generate questions. Using fallback questions.');
+
+            // 使用备用题目
+            const questionsCount = DIFFICULTY_LEVELS[difficulty].questionsPerGame;
+            const fallbackQuestions: ReorderQuestion[] = [];
+            for (let i = 0; i < questionsCount; i++) {
+                fallbackQuestions.push(ReorderService.getFallbackQuestion(difficulty, i));
+            }
+
+            setGameState(prev => ({
+                ...prev,
+                questions: fallbackQuestions,
+                isLoading: false
+            }));
+
+            if (fallbackQuestions.length > 0) {
+                initializeQuestion(fallbackQuestions[0]);
+            }
+        }
+    }, []);
+
+    // 初始化当前题目
+    const initializeQuestion = (question: ReorderQuestion) => {
+        // 打乱单词顺序
+        const shuffled = ReorderService.shuffleWords(question.words);
+
+        const words: WordItem[] = shuffled.map((item, newIndex) => ({
+            id: `${item.originalIndex}-${Date.now()}-${Math.random()}`,
+            text: item.word,
+            originalIndex: item.originalIndex,
+            currentIndex: newIndex
+        }));
 
         setGameState(prev => ({
             ...prev,
-            words: shuffledWords,
-            feedback: 'Tap words to reorder the sentence',
+            words: words,
+            feedback: '',
             isChecking: false
         }));
     };
 
-    // 交换单词位置
-    const swapWords = (wordId1: number, wordId2: number) => {
+    // 向左移动单词
+    const moveLeft = (wordId: string) => {
         if (gameState.isChecking) return;
 
         const currentWords = [...gameState.words];
-        const index1 = currentWords.findIndex(w => w.id === wordId1);
-        const index2 = currentWords.findIndex(w => w.id === wordId2);
+        const index = currentWords.findIndex(w => w.id === wordId);
 
-        if (index1 !== -1 && index2 !== -1) {
-            const temp = currentWords[index1];
-            currentWords[index1] = currentWords[index2];
-            currentWords[index2] = temp;
+        if (index > 0) {
+            const temp = currentWords[index];
+            currentWords[index] = currentWords[index - 1];
+            currentWords[index - 1] = temp;
 
-            const updatedWords = currentWords.map((word, index) => ({
+            const updatedWords = currentWords.map((word, idx) => ({
                 ...word,
-                currentIndex: index
+                currentIndex: idx
             }));
 
             setGameState(prev => ({
@@ -110,65 +188,66 @@ export default function SentenceReorderScreen() {
 
         setGameState(prev => ({ ...prev, isChecking: true }));
 
+        // 获取当前顺序
         const currentOrder = [...gameState.words]
             .sort((a, b) => a.currentIndex - b.currentIndex)
             .map(word => word.originalIndex);
 
-        const isCorrect = JSON.stringify(currentOrder) === JSON.stringify([...Array(currentQuestion.words.length).keys()]);
+        // 检查是否正确（顺序应为 0,1,2,3...）
+        const isCorrect = ReorderService.checkAnswer(currentOrder);
+
         const currentSentence = gameState.words
             .sort((a, b) => a.currentIndex - b.currentIndex)
             .map(word => word.text)
             .join(' ');
 
-        if (isCorrect) {
-            setTimeout(() => {
-                const newScore = gameState.score + 10;
+        const originalSentence = currentQuestion.sentence;
+
+        setTimeout(() => {
+            if (isCorrect) {
+                const pointsEarned = 20; // 每题20分，满分100分（5题）
+                const newScore = gameState.score + pointsEarned;
                 const newCorrectAnswers = gameState.correctAnswers + 1;
-                const newQuestionStatus = [...gameState.questionStatus];
-                newQuestionStatus[gameState.currentQuestion] = 'correct';
 
                 setGameState(prev => ({
                     ...prev,
                     score: newScore,
                     correctAnswers: newCorrectAnswers,
-                    questionStatus: newQuestionStatus,
-                    feedback: `✅ Correct! +10 points\n"${currentSentence}"`,
+                    feedback: `✅ Correct! +${pointsEarned} points`,
                     isChecking: false
                 }));
-            }, 500);
-        } else {
-            setTimeout(() => {
-                const newQuestionStatus = [...gameState.questionStatus];
-                newQuestionStatus[gameState.currentQuestion] = 'wrong';
-
+            } else {
                 setGameState(prev => ({
                     ...prev,
                     wrongAnswers: prev.wrongAnswers + 1,
                     isChecking: false,
-                    questionStatus: newQuestionStatus,
-                    feedback: `❌ Incorrect\n"${currentSentence}"`
+                    feedback: `❌ Incorrect\nCorrect: "${originalSentence}"`
                 }));
-            }, 500);
-        }
+            }
+        }, 500);
     };
 
     // 下一题
     const nextQuestion = () => {
-        if (gameState.currentQuestion < sentenceBank.length - 1) {
+        if (gameState.currentQuestion < gameState.questions.length - 1) {
             setGameState(prev => ({
                 ...prev,
                 currentQuestion: prev.currentQuestion + 1,
-                words: [],
-                feedback: 'Loading...'
+                feedback: ''
             }));
+            initializeQuestion(gameState.questions[gameState.currentQuestion + 1]);
         } else {
-            setGameState(prev => ({ ...prev, showCompletionModal: true }));
+            // 游戏完成
+            setGameState(prev => ({
+                ...prev,
+                gameFinished: true
+            }));
         }
     };
 
     // 重来当前题目
     const retryQuestion = () => {
-        initializeQuestion();
+        initializeQuestion(currentQuestion);
     };
 
     // 重新开始游戏
@@ -177,220 +256,370 @@ export default function SentenceReorderScreen() {
             currentQuestion: 0,
             score: 0,
             words: [],
-            feedback: 'Tap words to reorder the sentence',
+            feedback: '',
             isChecking: false,
-            showCompletionModal: false,
             correctAnswers: 0,
             wrongAnswers: 0,
-            questionStatus: new Array(sentenceBank.length).fill('unanswered')
+            questions: [],
+            isLoading: false,
+            difficulty: null,
+            gameStarted: false,
+            gameFinished: false
         });
+    };
+
+    // 返回上一页（难度选择）
+    const backToDifficulty = () => {
+        setGameState(prev => ({
+            ...prev,
+            gameStarted: false,
+            gameFinished: false,
+            difficulty: null,
+            questions: []
+        }));
+    };
+
+    // 返回主页
+    const goToHome = () => {
+        router.back();
     };
 
     // 计算正确率
     const getAccuracy = () => {
-        return gameState.correctAnswers > 0
-            ? Math.round((gameState.correctAnswers / sentenceBank.length) * 100)
-            : 0;
+        const totalAnswered = gameState.correctAnswers + gameState.wrongAnswers;
+        if (totalAnswered === 0) return 0;
+        return Math.round((gameState.correctAnswers / totalAnswered) * 100);
+    };
+
+    // 计算满分百分比（满分100分）
+    const getScorePercentage = () => {
+        const maxScore = DIFFICULTY_LEVELS[gameState.difficulty as Difficulty]?.questionsPerGame * 20 || 100;
+        return Math.round((gameState.score / maxScore) * 100);
+    };
+
+    // 获取得分颜色
+    const getScoreColor = () => {
+        const percentage = getScorePercentage();
+        if (percentage >= 80) return '#4CAF50';
+        if (percentage >= 60) return '#FF9800';
+        return '#F44336';
+    };
+
+    // 获取进度百分比
+    const getProgress = () => {
+        if (gameState.questions.length === 0) return 0;
+        return ((gameState.currentQuestion + 1) / gameState.questions.length) * 100;
     };
 
     // 渲染单词卡片
-    const renderWordCard = (word: WordItem) => {
-        const isCorrectPosition = gameState.isChecking && word.currentIndex === word.originalIndex;
-
+    const renderWordCard = (word: WordItem, index: number) => {
         return (
             <TouchableOpacity
-                key={`word-${word.id}`}
-                style={[
-                    styles.wordCard,
-                    isCorrectPosition && styles.wordCardCorrect
-                ]}
-                onPress={() => {
-                    if (gameState.isChecking) return;
-                    const currentIndex = word.currentIndex;
-                    if (currentIndex > 0) {
-                        const leftWord = gameState.words.find(w => w.currentIndex === currentIndex - 1);
-                        if (leftWord) swapWords(word.id, leftWord.id);
-                    }
-                }}
+                key={word.id}
+                style={styles.wordCard}
+                onPress={() => moveLeft(word.id)}
                 activeOpacity={0.7}
                 disabled={gameState.isChecking}
             >
                 <Text style={styles.wordText}>{word.text}</Text>
-                {isCorrectPosition && (
-                    <View style={styles.correctBadge}>
-                        <Ionicons name="checkmark" size={12} color="white" />
+                {index > 0 && (
+                    <View style={styles.moveHint}>
+                        <Ionicons name="arrow-back" size={12} color="rgba(255,255,255,0.7)" />
                     </View>
                 )}
             </TouchableOpacity>
         );
     };
 
-    return (
-        <View style={styles.container}>
-            <Stack.Screen
-                options={{
-                    title: 'Sentence Reorder',
-                    headerStyle: { backgroundColor: '#667eea' },
-                    headerTintColor: '#fff',
-                }}
-            />
+    // 难度选择页面
+    const renderDifficultySelector = () => (
+        <ScrollView style={styles.container} contentContainerStyle={styles.centerContainer}>
+            <LinearGradient
+                colors={['#667eea', '#764ba2']}
+                style={styles.difficultyHeader}
+            >
+                <Text style={styles.difficultyTitle}>🔤 Sentence Reorder</Text>
+                <Text style={styles.difficultySubtitle}>Arrange words to form correct sentences</Text>
+            </LinearGradient>
 
-            <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-                {/* 游戏标题 */}
+            <Text style={styles.selectTitle}>Select Difficulty 🎯</Text>
+
+            {(Object.keys(DIFFICULTY_LEVELS) as Difficulty[]).map((level) => (
+                <TouchableOpacity
+                    key={level}
+                    style={[
+                        styles.difficultyCard,
+                        { backgroundColor: DIFFICULTY_LEVELS[level].color }
+                    ]}
+                    onPress={() => initializeGame(level)}
+                >
+                    <Text style={styles.difficultyCardTitle}>
+                        {DIFFICULTY_LEVELS[level].label}
+                    </Text>
+                    <Text style={styles.difficultyCardDesc}>
+                        {DIFFICULTY_LEVELS[level].desc}
+                    </Text>
+                    <Text style={styles.difficultyCardPoints}>
+                        {DIFFICULTY_LEVELS[level].questionsPerGame} questions • 20 points each
+                    </Text>
+                </TouchableOpacity>
+            ))}
+
+            <TouchableOpacity style={styles.backButton} onPress={goToHome}>
+                <Ionicons name="arrow-back" size={20} color="#666" />
+                <Text style={styles.backButtonText}>Back to Home</Text>
+            </TouchableOpacity>
+        </ScrollView>
+    );
+
+    // 游戏完成页面
+    const renderCompletionScreen = () => {
+        const maxScore = DIFFICULTY_LEVELS[gameState.difficulty as Difficulty]?.questionsPerGame * 20 || 100;
+        const scorePercentage = getScorePercentage();
+
+        let performanceMessage = '';
+        if (scorePercentage >= 80) performanceMessage = 'Excellent! 🎉';
+        else if (scorePercentage >= 60) performanceMessage = 'Good job! 👍';
+        else if (scorePercentage >= 40) performanceMessage = 'Keep practicing! 💪';
+        else performanceMessage = 'Try again! You can do it! 🌟';
+
+        return (
+            <ScrollView style={styles.container} contentContainerStyle={styles.completionContainer}>
                 <LinearGradient
                     colors={['#667eea', '#764ba2']}
-                    style={styles.header}
+                    style={styles.completionHeader}
                 >
-                    <Text style={styles.headerTitle}>🔤 Sentence Reorder</Text>
-                    <Text style={styles.headerSubtitle}>Arrange the words to form correct sentences</Text>
+                    <Text style={styles.completionTitle}>Game Completed! 🎉</Text>
+                    <Text style={styles.completionSubtitle}>{performanceMessage}</Text>
                 </LinearGradient>
 
-                {/* 统计 */}
-                <View style={styles.statsBar}>
-                    <View style={styles.statBox}>
-                        <Text style={styles.statValue}>{gameState.score}</Text>
-                        <Text style={styles.statLabel}>Score</Text>
-                    </View>
-                    <View style={styles.statBox}>
-                        <Text style={styles.statValue}>{gameState.correctAnswers}</Text>
-                        <Text style={styles.statLabel}>Correct</Text>
-                    </View>
-                    <View style={styles.statBox}>
-                        <Text style={styles.statValue}>{gameState.wrongAnswers}</Text>
-                        <Text style={styles.statLabel}>Incorrect</Text>
-                    </View>
-                    <View style={styles.statBox}>
-                        <Text style={styles.statValue}>{gameState.currentQuestion + 1}/{sentenceBank.length}</Text>
-                        <Text style={styles.statLabel}>Question</Text>
-                    </View>
-                </View>
-
-                {/* 题目区域 */}
-                <View style={styles.questionCard}>
-                    <Text style={styles.questionTitle}>Question {gameState.currentQuestion + 1}</Text>
-                    <Text style={styles.translation}>{currentQuestion.translation}</Text>
-
-                    <View style={styles.wordsContainer}>
-                        {gameState.words.length > 0 ? (
-                            gameState.words
-                                .sort((a, b) => a.currentIndex - b.currentIndex)
-                                .map(renderWordCard)
-                        ) : (
-                            <Text style={styles.loadingText}>Loading...</Text>
-                        )}
-                    </View>
-
-                    <Text style={styles.currentSentence}>
-                        Current: {gameState.words
-                        .sort((a, b) => a.currentIndex - b.currentIndex)
-                        .map(word => word.text)
-                        .join(' ')}
+                {/* 分数圆环 */}
+                <View style={styles.scoreCircle}>
+                    <Text style={[styles.scoreNumber, { color: getScoreColor() }]}>
+                        {gameState.score}
                     </Text>
+                    <Text style={styles.scoreMax}>/ {maxScore}</Text>
+                    <Text style={styles.scoreLabel}>Final Score</Text>
                 </View>
 
-                {/* 反馈 */}
-                <View style={[
-                    styles.feedbackBox,
-                    gameState.feedback.includes('✅') ? styles.feedbackCorrect :
-                        gameState.feedback.includes('❌') ? styles.feedbackIncorrect : {}
-                ]}>
-                    <Text style={styles.feedbackText}>{gameState.feedback}</Text>
-                </View>
-
-                {/* 控制按钮 */}
-                <View style={styles.controls}>
-                    <TouchableOpacity
-                        style={[styles.button, styles.checkButton]}
-                        onPress={checkAnswer}
-                        disabled={gameState.isChecking}
-                    >
-                        <Text style={styles.buttonText}>
-                            {gameState.isChecking ? 'Checking...' : 'Check'}
-                        </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={[styles.button, styles.retryButton]}
-                        onPress={retryQuestion}
-                    >
-                        <Text style={styles.buttonText}>Retry</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={[styles.button, styles.nextButton]}
-                        onPress={nextQuestion}
-                    >
-                        <Text style={styles.buttonText}>
-                            {gameState.currentQuestion === sentenceBank.length - 1 ? 'Finish' : 'Next'}
-                        </Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* 游戏说明 */}
-                <View style={styles.instructions}>
-                    <Text style={styles.instructionsTitle}>How to Play</Text>
-                    <Text style={styles.instructionsText}>
-                        1. Tap a word to swap it with the word on its left{"\n"}
-                        2. Try to form the correct sentence{"\n"}
-                        3. Get 10 points for each correct answer
-                    </Text>
-                </View>
-            </ScrollView>
-
-            {/* 完成模态框 */}
-            <Modal
-                transparent={true}
-                visible={gameState.showCompletionModal}
-                animationType="fade"
-            >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Game Completed! 🎉</Text>
-
-                        <View style={styles.modalStats}>
-                            <View style={styles.modalStat}>
-                                <Text style={styles.modalStatValue}>{gameState.score}</Text>
-                                <Text style={styles.modalStatLabel}>Final Score</Text>
-                            </View>
+                {/* 详细统计 */}
+                <View style={styles.statsCard}>
+                    <View style={styles.statRow}>
+                        <View style={styles.statItem}>
+                            <Ionicons name="checkmark-circle" size={32} color="#4CAF50" />
+                            <Text style={styles.statNumber}>{gameState.correctAnswers}</Text>
+                            <Text style={styles.statLabel}>Correct</Text>
                         </View>
+                        <View style={styles.statItem}>
+                            <Ionicons name="close-circle" size={32} color="#F44336" />
+                            <Text style={styles.statNumber}>{gameState.wrongAnswers}</Text>
+                            <Text style={styles.statLabel}>Incorrect</Text>
+                        </View>
+                        <View style={styles.statItem}>
+                            <Ionicons name="stats-chart" size={32} color="#667eea" />
+                            <Text style={styles.statNumber}>{getAccuracy()}%</Text>
+                            <Text style={styles.statLabel}>Accuracy</Text>
+                        </View>
+                    </View>
+                </View>
 
-                        <View style={styles.detailedStats}>
-                            <View style={styles.statItem}>
-                                <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
-                                <Text style={styles.statText}>Correct: {gameState.correctAnswers}</Text>
-                            </View>
-                            <View style={styles.statItem}>
-                                <Ionicons name="close-circle" size={20} color="#F44336" />
-                                <Text style={styles.statText}>Incorrect: {gameState.wrongAnswers}</Text>
-                            </View>
-                            <View style={styles.statItem}>
-                                <Ionicons name="help-circle" size={20} color="#757575" />
-                                <Text style={styles.statText}>
-                                    Unanswered: {sentenceBank.length - gameState.correctAnswers - gameState.wrongAnswers}
+                {/* 每题详情 */}
+                <View style={styles.detailsCard}>
+                    <Text style={styles.detailsTitle}>📊 Question Summary</Text>
+                    {gameState.questions.map((q, idx) => {
+                        const isCorrect = idx < gameState.correctAnswers;
+                        const status = idx < gameState.correctAnswers ? 'correct' :
+                            idx < gameState.correctAnswers + gameState.wrongAnswers ? 'wrong' : 'unanswered';
+                        return (
+                            <View key={idx} style={styles.detailRow}>
+                                <View style={[styles.detailStatus, {
+                                    backgroundColor: status === 'correct' ? '#4CAF50' :
+                                        status === 'wrong' ? '#F44336' : '#E0E0E0'
+                                }]}>
+                                    {status === 'correct' && <Ionicons name="checkmark" size={16} color="white" />}
+                                    {status === 'wrong' && <Ionicons name="close" size={16} color="white" />}
+                                    {status === 'unanswered' && <Text style={styles.detailNumber}>{idx + 1}</Text>}
+                                </View>
+                                <Text style={styles.detailSentence} numberOfLines={1}>
+                                    Q{idx + 1}: {q.sentence}
                                 </Text>
                             </View>
-                            <View style={styles.statItem}>
-                                <Ionicons name="stats-chart" size={20} color="#667eea" />
-                                <Text style={styles.statText}>Accuracy: {getAccuracy()}%</Text>
+                        );
+                    })}
+                </View>
+
+                {/* 按钮区域 */}
+                <View style={styles.completionButtons}>
+                    <TouchableOpacity style={[styles.completionButton, styles.retryButton]} onPress={restartGame}>
+                        <Ionicons name="refresh" size={20} color="white" />
+                        <Text style={styles.completionButtonText}>Play Again</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={[styles.completionButton, styles.backDifficultyButton]} onPress={backToDifficulty}>
+                        <Ionicons name="arrow-back" size={20} color="white" />
+                        <Text style={styles.completionButtonText}>Select Difficulty</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={[styles.completionButton, styles.homeButton]} onPress={goToHome}>
+                        <Ionicons name="home" size={20} color="white" />
+                        <Text style={styles.completionButtonText}>Back to Home</Text>
+                    </TouchableOpacity>
+                </View>
+            </ScrollView>
+        );
+    };
+
+    // 游戏主界面
+    const renderGameScreen = () => {
+        if (!currentQuestion) return null;
+
+        return (
+            <View style={styles.container}>
+                <Stack.Screen
+                    options={{
+                        title: `Sentence Reorder - ${DIFFICULTY_LEVELS[gameState.difficulty as Difficulty]?.label || ''}`,
+                        headerStyle: { backgroundColor: '#667eea' },
+                        headerTintColor: '#fff',
+                        headerLeft: () => (
+                            <TouchableOpacity onPress={backToDifficulty} style={styles.headerBackButton}>
+                                <Ionicons name="arrow-back" size={24} color="white" />
+                            </TouchableOpacity>
+                        ),
+                    }}
+                />
+
+                <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+                    {/* 游戏标题 */}
+                    <LinearGradient
+                        colors={['#667eea', '#764ba2']}
+                        style={styles.header}
+                    >
+                        <Text style={styles.headerTitle}>🔤 Sentence Reorder</Text>
+                        <Text style={styles.headerSubtitle}>Arrange the words to form correct sentences</Text>
+                    </LinearGradient>
+
+                    {/* 进度条 */}
+                    <View style={styles.progressBar}>
+                        <View style={[styles.progressFill, { width: `${getProgress()}%` }]} />
+                    </View>
+
+                    {/* 统计 */}
+                    <View style={styles.statsBar}>
+                        <View style={styles.statBox}>
+                            <Text style={styles.statValue}>{gameState.score}</Text>
+                            <Text style={styles.statLabel}>Score</Text>
+                        </View>
+                        <View style={styles.statBox}>
+                            <Text style={styles.statValue}>{gameState.correctAnswers}</Text>
+                            <Text style={styles.statLabel}>Correct</Text>
+                        </View>
+                        <View style={styles.statBox}>
+                            <Text style={styles.statValue}>{gameState.wrongAnswers}</Text>
+                            <Text style={styles.statLabel}>Incorrect</Text>
+                        </View>
+                        <View style={styles.statBox}>
+                            <Text style={styles.statValue}>
+                                {gameState.currentQuestion + 1}/{gameState.questions.length}
+                            </Text>
+                            <Text style={styles.statLabel}>Question</Text>
+                        </View>
+                    </View>
+
+                    {/* 题目区域 */}
+                    <View style={styles.questionCard}>
+                        <View style={styles.questionHeader}>
+                            <Text style={styles.questionTitle}>Question {gameState.currentQuestion + 1}</Text>
+                            <View style={[styles.difficultyBadge, { backgroundColor: DIFFICULTY_LEVELS[gameState.difficulty as Difficulty]?.color }]}>
+                                <Text style={styles.difficultyBadgeText}>
+                                    {DIFFICULTY_LEVELS[gameState.difficulty as Difficulty]?.label}
+                                </Text>
                             </View>
                         </View>
 
-                        <View style={styles.modalButtons}>
-                            <TouchableOpacity
-                                style={[styles.modalButton, styles.primaryButton]}
-                                onPress={() => {
-                                    setGameState(prev => ({ ...prev, showCompletionModal: false }));
-                                    setTimeout(restartGame, 300);
-                                }}
-                            >
-                                <Text style={styles.buttonText}>Play Again</Text>
-                            </TouchableOpacity>
+                        <Text style={styles.translation}>{currentQuestion.translation}</Text>
+
+                        <View style={styles.wordsContainer}>
+                            {gameState.words.length > 0 ? (
+                                gameState.words
+                                    .sort((a, b) => a.currentIndex - b.currentIndex)
+                                    .map((word, idx) => renderWordCard(word, idx))
+                            ) : (
+                                <Text style={styles.loadingText}>Loading...</Text>
+                            )}
                         </View>
+
+                        <Text style={styles.instructionHint}>
+                            💡 Tap a word to move it left
+                        </Text>
                     </View>
-                </View>
-            </Modal>
-        </View>
-    );
+
+                    {/* 反馈 */}
+                    {gameState.feedback !== '' && (
+                        <View style={[
+                            styles.feedbackBox,
+                            gameState.feedback.includes('✅') ? styles.feedbackCorrect :
+                                gameState.feedback.includes('❌') ? styles.feedbackIncorrect : {}
+                        ]}>
+                            <Text style={styles.feedbackText}>{gameState.feedback}</Text>
+                        </View>
+                    )}
+
+                    {/* 控制按钮 */}
+                    <View style={styles.controls}>
+                        <TouchableOpacity
+                            style={[styles.button, styles.checkButton]}
+                            onPress={checkAnswer}
+                            disabled={gameState.isChecking}
+                        >
+                            <Text style={styles.buttonText}>
+                                {gameState.isChecking ? 'Checking...' : 'Check'}
+                            </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.button, styles.retryButton]}
+                            onPress={retryQuestion}
+                        >
+                            <Text style={styles.buttonText}>Retry</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.button, styles.nextButton]}
+                            onPress={nextQuestion}
+                        >
+                            <Text style={styles.buttonText}>
+                                {gameState.currentQuestion === gameState.questions.length - 1 ? 'Finish' : 'Next'}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                </ScrollView>
+            </View>
+        );
+    };
+
+    // 加载界面
+    if (gameState.isLoading) {
+        return (
+            <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#667eea" />
+                <Text style={styles.loadingText}>Generating questions with AI...</Text>
+                <Text style={styles.loadingSubText}>This may take a few seconds</Text>
+            </View>
+        );
+    }
+
+    // 游戏完成显示完成页面
+    if (gameState.gameFinished) {
+        return renderCompletionScreen();
+    }
+
+    // 未开始游戏显示难度选择
+    if (!gameState.gameStarted) {
+        return renderDifficultySelector();
+    }
+
+    // 显示游戏主界面
+    return renderGameScreen();
 }
 
 const styles = StyleSheet.create({
@@ -405,6 +634,101 @@ const styles = StyleSheet.create({
         flexGrow: 1,
         paddingBottom: 30,
     },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#f5f5f5',
+        padding: 20,
+    },
+    loadingText: {
+        marginTop: 20,
+        fontSize: 16,
+        color: '#667eea',
+        fontWeight: '500',
+    },
+    loadingSubText: {
+        marginTop: 8,
+        fontSize: 14,
+        color: '#999',
+    },
+    headerBackButton: {
+        marginLeft: 10,
+        padding: 5,
+    },
+    // 难度选择页面样式
+    centerContainer: {
+        flexGrow: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: 40,
+        paddingHorizontal: 20,
+    },
+    difficultyHeader: {
+        width: '100%',
+        padding: 30,
+        borderRadius: 20,
+        alignItems: 'center',
+        marginBottom: 30,
+    },
+    difficultyTitle: {
+        fontSize: 28,
+        fontWeight: 'bold',
+        color: '#fff',
+        marginBottom: 8,
+    },
+    difficultySubtitle: {
+        fontSize: 14,
+        color: '#fff',
+        opacity: 0.9,
+        textAlign: 'center',
+    },
+    selectTitle: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: '#333',
+        marginBottom: 24,
+    },
+    difficultyCard: {
+        width: '100%',
+        padding: 24,
+        borderRadius: 16,
+        marginBottom: 16,
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    difficultyCardTitle: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: 'white',
+        marginBottom: 8,
+    },
+    difficultyCardDesc: {
+        fontSize: 14,
+        color: 'rgba(255,255,255,0.9)',
+        marginBottom: 12,
+        textAlign: 'center',
+    },
+    difficultyCardPoints: {
+        fontSize: 12,
+        color: 'rgba(255,255,255,0.8)',
+    },
+    backButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 20,
+        padding: 12,
+    },
+    backButtonText: {
+        marginLeft: 8,
+        fontSize: 16,
+        color: '#666',
+    },
+    // 游戏主界面样式
     header: {
         paddingTop: 40,
         paddingBottom: 30,
@@ -423,6 +747,19 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#fff',
         opacity: 0.9,
+    },
+    progressBar: {
+        height: 4,
+        backgroundColor: '#e0e0e0',
+        marginHorizontal: 20,
+        marginBottom: 16,
+        borderRadius: 2,
+        overflow: 'hidden',
+    },
+    progressFill: {
+        height: '100%',
+        backgroundColor: '#667eea',
+        borderRadius: 2,
     },
     statsBar: {
         flexDirection: 'row',
@@ -463,11 +800,26 @@ const styles = StyleSheet.create({
         shadowRadius: 4,
         elevation: 2,
     },
+    questionHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
     questionTitle: {
         fontSize: 18,
         fontWeight: '600',
         color: '#333',
-        marginBottom: 8,
+    },
+    difficultyBadge: {
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    difficultyBadgeText: {
+        fontSize: 12,
+        color: 'white',
+        fontWeight: '600',
     },
     translation: {
         fontSize: 14,
@@ -491,36 +843,28 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         position: 'relative',
     },
-    wordCardCorrect: {
-        backgroundColor: '#4CAF50',
-    },
     wordText: {
         fontSize: 16,
         fontWeight: '600',
         color: 'white',
     },
-    correctBadge: {
+    moveHint: {
         position: 'absolute',
-        top: 4,
-        right: 4,
-        backgroundColor: 'rgba(255,255,255,0.3)',
-        borderRadius: 8,
-        width: 16,
-        height: 16,
-        justifyContent: 'center',
-        alignItems: 'center',
+        bottom: -8,
+        left: '50%',
+        transform: [{ translateX: -8 }],
+    },
+    instructionHint: {
+        fontSize: 12,
+        color: '#999',
+        textAlign: 'center',
+        fontStyle: 'italic',
     },
     loadingText: {
         fontSize: 16,
         color: '#999',
         textAlign: 'center',
         padding: 20,
-    },
-    currentSentence: {
-        fontSize: 14,
-        color: '#666',
-        fontStyle: 'italic',
-        textAlign: 'center',
     },
     feedbackBox: {
         backgroundColor: 'white',
@@ -571,9 +915,52 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
     },
-    instructions: {
+    // 完成页面样式
+    completionContainer: {
+        flexGrow: 1,
+        paddingBottom: 30,
+    },
+    completionHeader: {
+        paddingTop: 50,
+        paddingBottom: 30,
+        paddingHorizontal: 20,
+        borderBottomLeftRadius: 30,
+        borderBottomRightRadius: 30,
+        alignItems: 'center',
+        marginBottom: 30,
+    },
+    completionTitle: {
+        fontSize: 28,
+        fontWeight: 'bold',
+        color: '#fff',
+        marginBottom: 8,
+    },
+    completionSubtitle: {
+        fontSize: 16,
+        color: '#fff',
+        opacity: 0.9,
+    },
+    scoreCircle: {
+        alignItems: 'center',
+        marginBottom: 30,
+    },
+    scoreNumber: {
+        fontSize: 72,
+        fontWeight: 'bold',
+    },
+    scoreMax: {
+        fontSize: 24,
+        color: '#999',
+        marginTop: -10,
+    },
+    scoreLabel: {
+        fontSize: 14,
+        color: '#666',
+        marginTop: 8,
+    },
+    statsCard: {
         backgroundColor: 'white',
-        borderRadius: 12,
+        borderRadius: 16,
         padding: 20,
         marginHorizontal: 20,
         marginBottom: 20,
@@ -583,84 +970,84 @@ const styles = StyleSheet.create({
         shadowRadius: 4,
         elevation: 2,
     },
-    instructionsTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#333',
-        marginBottom: 12,
-    },
-    instructionsText: {
-        fontSize: 14,
-        color: '#666',
-        lineHeight: 22,
-    },
-    // 完成模态框样式
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 20,
-    },
-    modalContent: {
-        backgroundColor: 'white',
-        borderRadius: 20,
-        padding: 24,
-        width: '90%',
-        maxWidth: 400,
-    },
-    modalTitle: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#667eea',
-        textAlign: 'center',
-        marginBottom: 20,
-    },
-    modalStats: {
-        alignItems: 'center',
-        marginBottom: 20,
-    },
-    modalStat: {
-        alignItems: 'center',
-    },
-    modalStatValue: {
-        fontSize: 48,
-        fontWeight: 'bold',
-        color: '#667eea',
-        marginBottom: 8,
-    },
-    modalStatLabel: {
-        fontSize: 16,
-        color: '#666',
-    },
-    detailedStats: {
-        marginBottom: 24,
+    statRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
     },
     statItem: {
-        flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 10,
-        borderBottomWidth: 1,
-        borderBottomColor: '#f0f0f0',
     },
-    statText: {
-        fontSize: 16,
+    statNumber: {
+        fontSize: 24,
+        fontWeight: 'bold',
         color: '#333',
-        marginLeft: 12,
-        flex: 1,
+        marginTop: 8,
     },
-    modalButtons: {
+    detailsCard: {
+        backgroundColor: 'white',
+        borderRadius: 16,
+        padding: 20,
+        marginHorizontal: 20,
+        marginBottom: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    detailsTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#333',
+        marginBottom: 16,
+    },
+    detailRow: {
         flexDirection: 'row',
-        justifyContent: 'center',
-    },
-    modalButton: {
-        paddingVertical: 14,
-        paddingHorizontal: 30,
-        borderRadius: 8,
         alignItems: 'center',
-        minWidth: 150,
+        marginBottom: 12,
     },
-    primaryButton: {
+    detailStatus: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    detailNumber: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        color: 'white',
+    },
+    detailSentence: {
+        flex: 1,
+        fontSize: 14,
+        color: '#666',
+    },
+    completionButtons: {
+        paddingHorizontal: 20,
+        gap: 12,
+    },
+    completionButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 14,
+        borderRadius: 12,
+        gap: 8,
+    },
+    retryButton: {
+        backgroundColor: '#4CAF50',
+    },
+    backDifficultyButton: {
+        backgroundColor: '#FF9800',
+    },
+    homeButton: {
         backgroundColor: '#667eea',
+    },
+    completionButtonText: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: '600',
     },
 });

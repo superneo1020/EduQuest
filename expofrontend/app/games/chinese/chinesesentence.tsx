@@ -6,7 +6,6 @@ import {
     StyleSheet,
     TouchableOpacity,
     TextInput,
-    Modal,
     ScrollView,
     ActivityIndicator,
     Alert,
@@ -34,31 +33,47 @@ type Question = {
     score?: number; // 0-10分
 };
 
-const TOTAL_QUESTIONS = 10; // 改為10題
+type Difficulty = 'easy' | 'medium' | null;
+type GameState = 'difficulty_select' | 'playing' | 'result';
+
+const TOTAL_QUESTIONS = 10;
 
 export default function ChineseSentenceGame() {
     const router = useRouter();
+
+    // 難度選擇狀態
+    const [difficulty, setDifficulty] = useState<Difficulty>(null);
+    const [gameState, setGameState] = useState<GameState>('difficulty_select');
+
+    // 遊戲狀態
     const [currentIndex, setCurrentIndex] = useState(0);
     const [questions, setQuestions] = useState<Question[]>([]);
     const [inputText, setInputText] = useState('');
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
-    const [showResultModal, setShowResultModal] = useState(false);
     const [showHint, setShowHint] = useState(false);
-    const [gameCompleted, setGameCompleted] = useState(false);
     const [showFeedback, setShowFeedback] = useState(false);
+    const [aiFeedback, setAiFeedback] = useState('');
 
-    // 初始化遊戲
-    useEffect(() => {
-        loadFirstQuestion();
-    }, []);
+    // 初始化遊戲（當難度選擇後）
+    const startGame = (selectedDifficulty: Difficulty) => {
+        setDifficulty(selectedDifficulty);
+        setGameState('playing');
+        setLoading(true);
+        setQuestions([]);
+        setCurrentIndex(0);
+        setInputText('');
+        setShowHint(false);
+        setShowFeedback(false);
+        loadFirstQuestion(selectedDifficulty);
+    };
 
-    const loadFirstQuestion = async () => {
+    const loadFirstQuestion = async (selectedDifficulty: Difficulty) => {
         setLoading(true);
         try {
             const response = await chineseSentenceAIService.generateSentence({
                 currentQuestionIndex: 0,
-                difficulty: 'medium'
+                difficulty: selectedDifficulty || 'medium'
             });
 
             setQuestions([{
@@ -82,9 +97,9 @@ export default function ChineseSentenceGame() {
 
     const loadNextQuestion = async () => {
         if (currentIndex + 1 >= TOTAL_QUESTIONS) {
-            // 遊戲完成，顯示結果
-            setGameCompleted(true);
-            setShowResultModal(true);
+            // 遊戲完成，顯示結果頁面
+            generateFinalFeedback();
+            setGameState('result');
             return;
         }
 
@@ -99,7 +114,7 @@ export default function ChineseSentenceGame() {
                     feedback: q.feedback
                 })),
                 currentQuestionIndex: currentIndex + 1,
-                difficulty: getDifficultyBasedOnPerformance()
+                difficulty: difficulty || 'medium'
             });
 
             setQuestions(prev => [...prev, {
@@ -124,14 +139,6 @@ export default function ChineseSentenceGame() {
         } finally {
             setLoading(false);
         }
-    };
-
-    // 根據表現調整難度
-    const getDifficultyBasedOnPerformance = (): string => {
-        const correctCount = questions.filter(q => q.isCorrect).length;
-        if (correctCount <= 3) return 'easy';
-        if (correctCount >= 7) return 'hard';
-        return 'medium';
     };
 
     const handleSubmit = async () => {
@@ -194,25 +201,84 @@ export default function ChineseSentenceGame() {
         };
     };
 
-    const handleTryAgain = () => {
-        setShowResultModal(false);
-        // 重置遊戲
+    const generateFinalFeedback = () => {
+        const score = calculateScore();
+        const percentage = score.percentage;
+
+        let feedback = '';
+        if (score.correct === TOTAL_QUESTIONS) {
+            feedback = `Perfect score! You got all ${score.correct} out of ${TOTAL_QUESTIONS} correct! 🌟🌟🌟`;
+        } else if (percentage >= 90) {
+            feedback = `Excellent! You got ${score.correct} out of ${TOTAL_QUESTIONS} correct. Great job! 👍`;
+        } else if (percentage >= 70) {
+            feedback = `Good work! You got ${score.correct} out of ${TOTAL_QUESTIONS} correct. Keep practicing! 💪`;
+        } else if (percentage >= 50) {
+            feedback = `You got ${score.correct} out of ${TOTAL_QUESTIONS} correct. You're making progress! 📚`;
+        } else {
+            feedback = `You got ${score.correct} out of ${TOTAL_QUESTIONS} correct. Don't give up, you'll do better next time! 💪✨`;
+        }
+
+        setAiFeedback(feedback);
+    };
+
+    // 返回難度選擇頁面
+    const handleNewDifficulty = () => {
+        setGameState('difficulty_select');
+        setDifficulty(null);
         setQuestions([]);
         setCurrentIndex(0);
         setInputText('');
         setShowHint(false);
-        setGameCompleted(false);
         setShowFeedback(false);
-        loadFirstQuestion();
+    };
+
+    // 重新開始同一難度
+    const handleTryAgain = () => {
+        if (difficulty) {
+            startGame(difficulty);
+        }
+    };
+
+    // 返回遊戲列表
+    const handleBackToGames = () => {
+        router.back(); // 使用 back() 方法
+    };
+
+    // 返回主頁
+    const handleBackToHome = () => {
+        router.push('/');
     };
 
     const handleBack = () => {
-        // 確保返回上一頁，即 chinese.tsx
-        if (router.canGoBack()) {
-            router.back();
-        } else {
-            // 如果不能返回，則導航到中文遊戲列表
-            router.push('/games/chinese');
+        if (gameState === 'difficulty_select') {
+            // 如果在難度選擇頁面，返回上一頁
+            if (router.canGoBack()) {
+                router.back();
+            } else {
+                router.push('/games/chinese');
+            }
+        } else if (gameState === 'playing') {
+            // 如果在遊戲中，詢問是否退出
+            Alert.alert(
+                '退出遊戲',
+                '確定要退出嗎？進度將不會保存。',
+                [
+                    { text: '取消', style: 'cancel' },
+                    {
+                        text: '退出',
+                        style: 'destructive',
+                        onPress: () => {
+                            setGameState('difficulty_select');
+                            setDifficulty(null);
+                            setQuestions([]);
+                            setCurrentIndex(0);
+                        }
+                    }
+                ]
+            );
+        } else if (gameState === 'result') {
+            // 如果在結果頁面，返回難度選擇
+            handleNewDifficulty();
         }
     };
 
@@ -342,78 +408,121 @@ export default function ChineseSentenceGame() {
         );
     };
 
-    const renderResultModal = () => {
-        const score = calculateScore();
-
+    // 難度選擇頁面
+    const renderDifficultySelector = () => {
         return (
-            <Modal
-                visible={showResultModal}
-                transparent={true}
-                animationType="fade"
-                onRequestClose={() => setShowResultModal(false)}
-            >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        <TouchableOpacity
-                            style={styles.closeButton}
-                            onPress={() => setShowResultModal(false)}
-                        >
-                            <Ionicons name="close" size={24} color="#666" />
-                        </TouchableOpacity>
+            <View style={styles.centerContainer}>
+                <Text style={styles.title}>選擇難度 🧠</Text>
+                <Text style={styles.subtitle}>中文填空遊戲</Text>
 
-                        <ScrollView showsVerticalScrollIndicator={false}>
-                            <Text style={styles.modalTitle}>遊戲結果</Text>
-
-                            <View style={styles.scoreContainer}>
-                                <Text style={styles.totalScoreText}>
-                                    {score.totalScore}/100
-                                </Text>
-                                <Text style={styles.correctCountText}>
-                                    答對 {score.correct}/{score.total} 題
-                                </Text>
-                            </View>
-
-                            <View style={styles.summaryContainer}>
-                                <Text style={styles.summaryTitle}>答題摘要：</Text>
-                                {questions.map((q, index) => (
-                                    <View key={index} style={styles.summaryItem}>
-                                        <Text style={styles.summaryNumber}>{index + 1}.</Text>
-                                        <Text style={styles.summaryAnswer}>
-                                            {q.userAnswer || '未答'}
-                                        </Text>
-                                        <Text style={[
-                                            styles.summaryScore,
-                                            q.isCorrect ? styles.correctScore : styles.incorrectScore
-                                        ]}>
-                                            {q.score || 0}/10
-                                        </Text>
-                                    </View>
-                                ))}
-                            </View>
-
-                            <View style={styles.modalButtons}>
-                                <TouchableOpacity
-                                    style={[styles.modalButton, styles.tryAgainButton]}
-                                    onPress={handleTryAgain}
-                                >
-                                    <Text style={styles.tryAgainButtonText}>Try Again</Text>
-                                </TouchableOpacity>
-
-                                <TouchableOpacity
-                                    style={[styles.modalButton, styles.backButton]}
-                                    onPress={handleBack}
-                                >
-                                    <Text style={styles.backButtonText}>Back</Text>
-                                </TouchableOpacity>
-                            </View>
-                        </ScrollView>
-                    </View>
+                <View style={styles.buttonSpacing}>
+                    <TouchableOpacity
+                        style={[styles.difficultyButton, styles.easyButton]}
+                        onPress={() => startGame('easy')}
+                    >
+                        <Text style={styles.difficultyButtonText}>簡單 (初級詞彙)</Text>
+                        <Text style={styles.difficultyDesc}>常用詞彙、基本句型</Text>
+                    </TouchableOpacity>
                 </View>
-            </Modal>
+
+                <View style={styles.buttonSpacing}>
+                    <TouchableOpacity
+                        style={[styles.difficultyButton, styles.mediumButton]}
+                        onPress={() => startGame('medium')}
+                    >
+                        <Text style={styles.difficultyButtonText}>中等 (日常用語)</Text>
+                        <Text style={styles.difficultyDesc}>日常對話、常用詞彙</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
         );
     };
 
-    if (loading && questions.length === 0) {
+    // 結果頁面
+    const renderResult = () => {
+        const score = calculateScore();
+
+        return (
+            <ScrollView contentContainerStyle={styles.resultContainer}>
+                <View style={styles.resultCard}>
+                    <Text style={styles.resultTitle}>📊 遊戲結果</Text>
+
+                    <View style={styles.scoreCircle}>
+                        <Text style={styles.scorePercentage}>{score.totalScore}</Text>
+                        <Text style={styles.scorePercentSign}>/100</Text>
+                        <Text style={styles.scoreLabel}>總分</Text>
+                    </View>
+
+                    <View style={styles.scoreDetails}>
+                        <Text style={styles.scoreDetailText}>
+                            答對 {score.correct} / {score.total} 題
+                        </Text>
+                        <View style={styles.percentageBadge}>
+                            <Text style={styles.percentageText}>
+                                正確率 {score.percentage}%
+                            </Text>
+                        </View>
+                    </View>
+
+                    <View style={styles.feedbackBox}>
+                        <Text style={styles.feedbackTitle}>💡 AI 學習建議</Text>
+                        <Text style={styles.feedbackText}>{aiFeedback}</Text>
+                    </View>
+
+                    <View style={styles.summaryContainer}>
+                        <Text style={styles.summaryTitle}>📝 答題摘要：</Text>
+                        {questions.map((q, index) => (
+                            <View key={index} style={styles.summaryItem}>
+                                <Text style={styles.summaryNumber}>{index + 1}.</Text>
+                                <Text style={styles.summaryAnswer} numberOfLines={1}>
+                                    {q.userAnswer || '未答'}
+                                </Text>
+                                <Text style={[
+                                    styles.summaryScore,
+                                    q.isCorrect ? styles.correctScore : styles.incorrectScore
+                                ]}>
+                                    {q.score || 0}/10
+                                </Text>
+                            </View>
+                        ))}
+                    </View>
+
+                    <View style={styles.resultButtonContainer}>
+                        <TouchableOpacity
+                            style={[styles.resultButton, styles.tryAgainButton]}
+                            onPress={handleTryAgain}
+                        >
+                            <Text style={styles.resultButtonText}>🔄 Try Again</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.resultButton, styles.newDifficultyButton]}
+                            onPress={handleNewDifficulty}
+                        >
+                            <Text style={styles.resultButtonText}>🎯 New Difficulty</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.resultButton, styles.backToGamesButton]}
+                            onPress={handleBackToGames}
+                        >
+                            <Text style={styles.resultButtonText}>🎮 Back to Games</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.resultButton, styles.homeButton]}
+                            onPress={handleBackToHome}
+                        >
+                            <Text style={styles.resultButtonText}>🏠 Back to Home</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </ScrollView>
+        );
+    };
+
+    // 加載中畫面
+    if (loading && questions.length === 0 && gameState === 'playing') {
         return (
             <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#4CAF50" />
@@ -422,20 +531,59 @@ export default function ChineseSentenceGame() {
         );
     }
 
+    // 遊戲主畫面
+    if (gameState === 'playing') {
+        return (
+            <SafeAreaView style={styles.container}>
+                <StatusBar barStyle="dark-content" />
+
+                <View style={styles.header}>
+                    <TouchableOpacity onPress={handleBack} style={styles.headerButton}>
+                        <Ionicons name="arrow-back" size={24} color="#333" />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>
+                        中文填空 - {difficulty === 'easy' ? '簡單' : '中等'}
+                    </Text>
+                    <View style={styles.scoreBadge}>
+                        <Text style={styles.scoreBadgeText}>
+                            {questions.filter(q => q.isCorrect).length}/{TOTAL_QUESTIONS}
+                        </Text>
+                    </View>
+                </View>
+
+                {renderQuestion()}
+            </SafeAreaView>
+        );
+    }
+
+    if (gameState === 'result') {
+        return (
+            <SafeAreaView style={styles.container}>
+                <StatusBar barStyle="dark-content" />
+                <View style={styles.header}>
+                    <TouchableOpacity onPress={handleBack} style={styles.headerButton}>
+                        <Ionicons name="arrow-back" size={24} color="#333" />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>遊戲結果</Text>
+                    <View style={styles.headerButton} />
+                </View>
+                {renderResult()}
+            </SafeAreaView>
+        );
+    }
+
+    // 難度選擇畫面
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" />
-
             <View style={styles.header}>
                 <TouchableOpacity onPress={handleBack} style={styles.headerButton}>
                     <Ionicons name="arrow-back" size={24} color="#333" />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>中文填字遊戲</Text>
+                <Text style={styles.headerTitle}>中文填空遊戲</Text>
                 <View style={styles.headerButton} />
             </View>
-
-            {renderQuestion()}
-            {renderResultModal()}
+            {renderDifficultySelector()}
         </SafeAreaView>
     );
 }
@@ -444,6 +592,57 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#f5f5f5',
+    },
+    centerContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+        backgroundColor: '#fff',
+    },
+    title: {
+        fontSize: 32,
+        fontWeight: 'bold',
+        textAlign: 'center',
+        marginBottom: 10,
+        color: '#333',
+    },
+    subtitle: {
+        fontSize: 16,
+        color: '#666',
+        textAlign: 'center',
+        marginBottom: 40,
+    },
+    buttonSpacing: {
+        width: '85%',
+        marginVertical: 12,
+    },
+    difficultyButton: {
+        paddingVertical: 18,
+        paddingHorizontal: 20,
+        borderRadius: 16,
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    easyButton: {
+        backgroundColor: '#4CAF50',
+    },
+    mediumButton: {
+        backgroundColor: '#FF9800',
+    },
+    difficultyButtonText: {
+        color: '#fff',
+        fontSize: 18,
+        fontWeight: 'bold',
+        marginBottom: 4,
+    },
+    difficultyDesc: {
+        color: 'rgba(255,255,255,0.9)',
+        fontSize: 12,
     },
     loadingContainer: {
         flex: 1,
@@ -477,6 +676,17 @@ const styles = StyleSheet.create({
         height: 40,
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    scoreBadge: {
+        backgroundColor: '#4CAF50',
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 20,
+    },
+    scoreBadgeText: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: '600',
     },
     questionContainer: {
         flex: 1,
@@ -584,7 +794,6 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: '600',
     },
-    // 簡化的評價卡片樣式
     feedbackCard: {
         marginTop: 20,
         padding: 20,
@@ -653,54 +862,103 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
     },
-    // 模態框樣式
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    // 結果頁面樣式
+    resultContainer: {
+        flexGrow: 1,
         justifyContent: 'center',
         alignItems: 'center',
-    },
-    modalContent: {
-        width: '85%',
-        maxHeight: '80%',
-        backgroundColor: '#fff',
-        borderRadius: 24,
         padding: 20,
+        backgroundColor: '#f5f5f5',
+        minHeight: '100%',
     },
-    closeButton: {
-        position: 'absolute',
-        right: 15,
-        top: 15,
-        zIndex: 1,
-        padding: 5,
-    },
-    modalTitle: {
-        fontSize: 26,
-        fontWeight: 'bold',
-        color: '#333',
-        textAlign: 'center',
-        marginBottom: 20,
-        marginTop: 10,
-    },
-    scoreContainer: {
+    resultCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 25,
+        padding: 30,
+        width: '100%',
         alignItems: 'center',
-        marginBottom: 20,
-        backgroundColor: '#f8f9fa',
-        borderRadius: 16,
-        padding: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 5,
     },
-    totalScoreText: {
-        fontSize: 48,
+    resultTitle: {
+        fontSize: 28,
+        fontWeight: 'bold',
+        color: '#4CAF50',
+        marginBottom: 30,
+        textAlign: 'center',
+    },
+    scoreCircle: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 30,
+        flexDirection: 'row',
+        alignItems: 'baseline',
+    },
+    scorePercentage: {
+        fontSize: 72,
         fontWeight: 'bold',
         color: '#4CAF50',
     },
-    correctCountText: {
-        fontSize: 18,
+    scorePercentSign: {
+        fontSize: 32,
+        fontWeight: 'bold',
+        color: '#4CAF50',
+        marginLeft: 5,
+    },
+    scoreLabel: {
+        fontSize: 16,
         color: '#666',
-        marginTop: 5,
+        marginLeft: 10,
+    },
+    scoreDetails: {
+        alignItems: 'center',
+        marginBottom: 30,
+        width: '100%',
+    },
+    scoreDetailText: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#333',
+        marginBottom: 10,
+        textAlign: 'center',
+    },
+    percentageBadge: {
+        backgroundColor: '#E8F5E9',
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 20,
+    },
+    percentageText: {
+        fontSize: 14,
+        color: '#4CAF50',
+        fontWeight: '600',
+    },
+    feedbackBox: {
+        width: '100%',
+        backgroundColor: '#F5F7FA',
+        borderRadius: 15,
+        padding: 20,
+        marginBottom: 30,
+        borderLeftWidth: 4,
+        borderLeftColor: '#4CAF50',
+    },
+    feedbackTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#333',
+        marginBottom: 10,
+    },
+    feedbackText: {
+        fontSize: 14,
+        color: '#666',
+        lineHeight: 20,
     },
     summaryContainer: {
-        marginBottom: 20,
+        width: '100%',
+        marginBottom: 30,
     },
     summaryTitle: {
         fontSize: 18,
@@ -737,33 +995,31 @@ const styles = StyleSheet.create({
     incorrectScore: {
         color: '#f44336',
     },
-    modalButtons: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginTop: 10,
+    resultButtonContainer: {
+        width: '100%',
+        gap: 12,
     },
-    modalButton: {
-        flex: 1,
-        height: 48,
+    resultButton: {
+        paddingVertical: 14,
         borderRadius: 12,
-        justifyContent: 'center',
         alignItems: 'center',
-        marginHorizontal: 5,
+        justifyContent: 'center',
     },
     tryAgainButton: {
         backgroundColor: '#4CAF50',
     },
-    tryAgainButtonText: {
-        color: '#fff',
+    newDifficultyButton: {
+        backgroundColor: '#FF9800',
+    },
+    backToGamesButton: {
+        backgroundColor: '#2196F3',
+    },
+    homeButton: {
+        backgroundColor: '#9C27B0',
+    },
+    resultButtonText: {
         fontSize: 16,
         fontWeight: '600',
-    },
-    backButton: {
-        backgroundColor: '#f0f0f0',
-    },
-    backButtonText: {
-        color: '#333',
-        fontSize: 16,
-        fontWeight: '600',
+        color: '#FFFFFF',
     },
 });

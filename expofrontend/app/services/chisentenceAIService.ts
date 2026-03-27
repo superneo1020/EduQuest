@@ -1,4 +1,4 @@
-// app/services/chisentenceAIService.tsx
+// app/services/chisentenceAIService.ts
 import { Config } from '../config';
 
 export type ChineseSentenceRequest = {
@@ -10,7 +10,7 @@ export type ChineseSentenceRequest = {
         feedback?: string;
     }[];
     currentQuestionIndex: number;
-    difficulty?: string;
+    difficulty?: string; // 'easy', 'medium'
 };
 
 export type ChineseSentenceResponse = {
@@ -56,7 +56,7 @@ class ChineseSentenceAIService {
 
     async generateSentence(request: ChineseSentenceRequest): Promise<ChineseSentenceResponse> {
         if (!this.enabled) {
-            return this.getDefaultSentence(request.currentQuestionIndex);
+            return this.getDefaultSentence(request.currentQuestionIndex, request.difficulty);
         }
 
         try {
@@ -83,11 +83,11 @@ class ChineseSentenceAIService {
                 throw new Error('AI response format incorrect');
             }
 
-            return this.parseSentenceResponse(aiResponseText, request.currentQuestionIndex);
+            return this.parseSentenceResponse(aiResponseText, request.currentQuestionIndex, request.difficulty);
 
         } catch (error) {
             console.error('Failed to generate sentence:', error);
-            return this.getDefaultSentence(request.currentQuestionIndex);
+            return this.getDefaultSentence(request.currentQuestionIndex, request.difficulty);
         }
     }
 
@@ -166,6 +166,10 @@ class ChineseSentenceAIService {
 
     private createSentencePrompt(request: ChineseSentenceRequest): string {
         const difficulty = request.difficulty || 'medium';
+
+        // 根據難度設定不同的提示
+        const difficultyPrompt = this.getDifficultyPrompt(difficulty);
+
         const previousContext = request.previousAnswers && request.previousAnswers.length > 0
             ? `之前的題目和表現：\n${request.previousAnswers.map(a =>
                 `- 句子：${a.sentence}，答案：${a.correctAnswer}，用戶${a.isCorrect ? '答對' : '答錯'}，反饋：${a.feedback || '無'}`
@@ -174,18 +178,21 @@ class ChineseSentenceAIService {
 
         return `你是一個專業的中文老師。請生成一個適合中文學習者的填空句子。
 
-要求：
-- 難度：${difficulty === 'easy' ? '初級（常用詞彙）' : difficulty === 'hard' ? '高級（成語或較難詞彙）' : '中級（日常用語）'}
-- 這是第 ${request.currentQuestionIndex + 1} 題，總共 8 題
-- 句子要自然、實用、有教育意義
-- 填空部分用 "__" 表示（兩個底線）
-- 答案應該是常用詞彙，但要有一定的挑戰性
+重要規則：
+- 填空部分只能有 "一個" 空位，用 "__" 表示（兩個底線）
+- 絕對不能生成兩個或多個空位的句子
+- 句子中只能出現一次 "__"
+
+${difficultyPrompt}
+這是第 ${request.currentQuestionIndex + 1} 題，總共 10 題
+句子要自然、實用、有教育意義
+答案應該是常用詞彙，但要有一定的挑戰性
 
 ${previousContext}
 
 請以JSON格式回覆：
 {
-    "sentence": "完整的句子，用__表示填空",
+    "sentence": "完整的句子，只能用一個__表示填空",
     "correctAnswer": "正確答案",
     "alternatives": ["替代答案1", "替代答案2"],
     "hint": "簡短提示（最多10個字）",
@@ -194,6 +201,29 @@ ${previousContext}
 }
 
 只返回JSON，不要有其他文字。`;
+    }
+
+    private getDifficultyPrompt(difficulty: string): string {
+        switch (difficulty) {
+            case 'easy':
+                return `難度：初級（簡單）
+要求：
+- 使用最基礎的詞彙（如：好、大、小、多、少、去、來、吃、喝、看、聽等）
+- 句子結構簡單，主謂賓或主謂結構
+- 答案通常是單字詞或雙字詞
+- 適合初學者練習
+- 例句格式："今天天氣很__。" 只有一個空位`;
+
+            case 'medium':
+            default:
+                return `難度：中級（中等）
+要求：
+- 使用日常常用詞彙
+- 句子結構中等複雜度
+- 答案可以是雙字詞、三字詞或常見短語
+- 適合有一定基礎的學習者
+- 例句格式："他因為努力，終於__了成功。" 只有一個空位`;
+        }
     }
 
     private createCheckPrompt(request: ChineseSentenceCheckRequest): string {
@@ -229,7 +259,7 @@ ${alternatives}
 注意：考慮常見的錯別字、同義詞和語境。只返回JSON，不要有其他文字。`;
     }
 
-    private parseSentenceResponse(response: string, index: number): ChineseSentenceResponse {
+    private parseSentenceResponse(response: string, index: number, difficulty?: string): ChineseSentenceResponse {
         try {
             let cleanedResponse = response.trim();
 
@@ -245,9 +275,19 @@ ${alternatives}
 
             const parsed = JSON.parse(cleanedResponse.trim());
 
+            // 確保句子只有一個空位
+            let sentence = parsed.sentence || this.getDefaultSentence(index, difficulty).sentence;
+            const underscoreCount = (sentence.match(/__/g) || []).length;
+
+            // 如果有多個空位，使用默認句子
+            if (underscoreCount !== 1) {
+                console.warn('Generated sentence has multiple blanks, using default');
+                sentence = this.getDefaultSentence(index, difficulty).sentence;
+            }
+
             return {
-                sentence: parsed.sentence || this.getDefaultSentence(index).sentence,
-                correctAnswer: parsed.correctAnswer || this.getDefaultSentence(index).correctAnswer,
+                sentence: sentence,
+                correctAnswer: parsed.correctAnswer || this.getDefaultSentence(index, difficulty).correctAnswer,
                 hint: parsed.hint || '',
                 translation: parsed.translation || '',
                 alternatives: parsed.alternatives || [],
@@ -255,7 +295,7 @@ ${alternatives}
             };
         } catch (error) {
             console.error('Failed to parse sentence response:', error);
-            return this.getDefaultSentence(index);
+            return this.getDefaultSentence(index, difficulty);
         }
     }
 
@@ -305,13 +345,14 @@ ${alternatives}
         }
     }
 
-    private getDefaultSentence(index: number): ChineseSentenceResponse {
-        const defaultSentences = [
+    private getDefaultSentence(index: number, difficulty?: string): ChineseSentenceResponse {
+        // 根據難度分類的默認句子（全部只有一個空位）
+        const easySentences = [
             {
                 sentence: "今天天氣很__。",
                 correctAnswer: "好",
                 alternatives: ["不錯", "晴朗"],
-                hint: "weather",
+                hint: "weather (good)",
                 translation: "The weather is good today.",
                 explanation: "形容天氣狀況的形容詞"
             },
@@ -370,10 +411,117 @@ ${alternatives}
                 hint: "go",
                 translation: "I will go to school tomorrow.",
                 explanation: "表示移動的動詞"
+            },
+            {
+                sentence: "他__一個蘋果。",
+                correctAnswer: "吃",
+                alternatives: ["咬", "品嚐"],
+                hint: "eat",
+                translation: "He eats an apple.",
+                explanation: "表示進食的動詞"
+            },
+            {
+                sentence: "這隻狗很__。",
+                correctAnswer: "可愛",
+                alternatives: ["乖", "聽話"],
+                hint: "cute",
+                translation: "This dog is very cute.",
+                explanation: "形容詞，表示討人喜歡"
             }
         ];
 
-        return defaultSentences[index] || defaultSentences[0];
+        const mediumSentences = [
+            {
+                sentence: "他因為努力，終於__了成功。",
+                correctAnswer: "獲得",
+                alternatives: ["得到", "取得"],
+                hint: "obtain",
+                translation: "Because of his hard work, he finally achieved success.",
+                explanation: "表示得到某種結果"
+            },
+            {
+                sentence: "我們應該__環境保護的重要性。",
+                correctAnswer: "重視",
+                alternatives: ["關注", "注意"],
+                hint: "value",
+                translation: "We should value the importance of environmental protection.",
+                explanation: "表示認為重要"
+            },
+            {
+                sentence: "這個問題很__，需要仔細思考。",
+                correctAnswer: "複雜",
+                alternatives: ["困難", "麻煩"],
+                hint: "complex",
+                translation: "This problem is very complex and requires careful thought.",
+                explanation: "形容事情不簡單"
+            },
+            {
+                sentence: "他的演講__了全場觀眾。",
+                correctAnswer: "感動",
+                alternatives: ["打動", "感染"],
+                hint: "touch",
+                translation: "His speech touched all the audience.",
+                explanation: "使人心有共鳴"
+            },
+            {
+                sentence: "我們應該__傳統文化。",
+                correctAnswer: "傳承",
+                alternatives: ["繼承", "發揚"],
+                hint: "inherit",
+                translation: "We should inherit traditional culture.",
+                explanation: "傳遞和繼承"
+            },
+            {
+                sentence: "這個城市__很多歷史遺跡。",
+                correctAnswer: "擁有",
+                alternatives: ["具有", "保存"],
+                hint: "have",
+                translation: "This city has many historical sites.",
+                explanation: "表示具備或持有"
+            },
+            {
+                sentence: "他的意見__了大家的認同。",
+                correctAnswer: "獲得",
+                alternatives: ["得到", "取得"],
+                hint: "obtain",
+                translation: "His opinion gained everyone's approval.",
+                explanation: "表示得到某種結果"
+            },
+            {
+                sentence: "我們要__時間，不要浪費。",
+                correctAnswer: "珍惜",
+                alternatives: ["愛惜", "寶貴"],
+                hint: "cherish",
+                translation: "We should cherish time and not waste it.",
+                explanation: "重視並愛護"
+            },
+            {
+                sentence: "這個計畫__很大的風險。",
+                correctAnswer: "存在",
+                alternatives: ["有", "面臨"],
+                hint: "exist",
+                translation: "This plan has great risks.",
+                explanation: "實際上有"
+            },
+            {
+                sentence: "他__了自己的夢想。",
+                correctAnswer: "實現",
+                alternatives: ["達成", "完成"],
+                hint: "realize",
+                translation: "He realized his dream.",
+                explanation: "使成為現實"
+            }
+        ];
+
+        // 根據難度選擇默認句子集
+        let sentences;
+        if (difficulty === 'easy') {
+            sentences = easySentences;
+        } else {
+            sentences = mediumSentences;
+        }
+
+        return sentences[index] || sentences[0];
     }
 }
 
