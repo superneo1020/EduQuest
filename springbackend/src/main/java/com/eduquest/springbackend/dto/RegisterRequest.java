@@ -1,6 +1,5 @@
 package com.eduquest.springbackend.dto;
 
-import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -24,18 +23,6 @@ public record RegisterRequest(
         Boolean isEducator,
 
         @Size(max = 100)
-        String schoolName,
-
-        @Size(max = 50)
-        String nickname,
-
-        @Valid
-        ProfileEquippedItemsDto equippedItems,
-
-        @Valid
-        ProfilePreferencesDto preferences,
-
-        @Valid
-        ProfilePrivacySettingsDto privacySettings
+        String schoolName
 ) {
 }

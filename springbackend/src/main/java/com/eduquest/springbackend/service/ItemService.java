@@ -18,6 +18,6 @@ public class ItemService {
     @Transactional(readOnly = true)
     public Long checkIdByName(String name) {
         return itemRepository.findIdByName(name).orElseThrow(
-                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Game not found"));
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Item not found"));
     }
 }

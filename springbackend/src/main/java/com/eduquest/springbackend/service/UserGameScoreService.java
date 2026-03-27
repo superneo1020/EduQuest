@@ -1,6 +1,6 @@
 package com.eduquest.springbackend.service;
 
-import com.eduquest.springbackend.Util.PageableUtils;
+import com.eduquest.springbackend.util.PageableUtils;
 import com.eduquest.springbackend.dao.GameRepository;
 import com.eduquest.springbackend.dao.UserGameScoreRepository;
 import com.eduquest.springbackend.dao.UserRepository;
@@ -40,7 +40,8 @@ public class UserGameScoreService {
                                 UserRepository userRepo,
                                 GameRepository gameRepo,
                                 UserDtoMapper userDtoMapper,
-                                GameService gameService, UserService userService) {
+                                GameService gameService,
+                                UserService userService) {
         this.userGameScoreRepo = userGameScoreRepo;
         this.userRepo = userRepo;
         this.gameRepo = gameRepo;
