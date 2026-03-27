@@ -19,6 +19,12 @@ const ScienceGamesIndex: React.FC = () => {
             component: 'OrganPuzzleGame',
             description: 'Learn the positions of human organs'
         },
+        {
+            id: 3,
+            title: 'Claw Machine Game',
+            component: 'ClawMachineGame',
+            description: 'Catch science-themed prizes with the claw!'
+        },
         // More science games can be added.
     ];
 
@@ -43,6 +49,10 @@ const ScienceGamesIndex: React.FC = () => {
                             if (game.id === 2) {
                                 // 導航到 science/HumanBodyGame
                                 navigation.navigate('science/HumanBodyGame' as never);
+                            }
+                            if (game.id === 3) {
+                                // 導航到 science/ClawMachineGame
+                                navigation.navigate('science/ClawMachineGame' as never);
                             }
                         }}
                     >
