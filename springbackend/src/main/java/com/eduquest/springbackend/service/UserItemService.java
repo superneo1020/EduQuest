@@ -26,7 +26,8 @@ public class UserItemService {
     public UserItemService(UserItemRepository userItemRepo,
                            UserRepository userRepo,
                            ItemRepository itemRepo,
-                           UserService userService, ItemService itemService) {
+                           UserService userService,
+                           ItemService itemService) {
         this.userItemRepo = userItemRepo;
         this.userRepo = userRepo;
         this.itemRepo = itemRepo;
@@ -55,5 +56,23 @@ public class UserItemService {
     @Transactional(readOnly = true)
     public List<UserItemDto> showItem(String username) {
         return userItemRepo.findAllByUsername(username);
+    }
+
+    @Transactional(readOnly = true)
+    public Boolean checkUserItemAndItemExists(String username, Long itemId, String itemType) {
+        return checkUserItemExists(username, itemId) && checkItemExists(itemId, itemType);
+    }
+
+    @Transactional(readOnly = true)
+    public Boolean checkUserItemExists(String username, Long itemId) {
+        return userItemRepo.existsByUserIdAndItemId(
+                userService.checkIdByUsername(username),
+                itemId
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public Boolean checkItemExists(Long itemId, String itemType) {
+        return itemRepo.existsByIdAndType(itemId, itemType);
     }
 }

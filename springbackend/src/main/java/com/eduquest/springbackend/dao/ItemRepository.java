@@ -10,4 +10,6 @@ import java.util.Optional;
 public interface ItemRepository extends JpaRepository<Item, Long> {
     @Query("SELECT u.id FROM Item u WHERE u.name = :name")
     Optional<Long> findIdByName(@Param("name") String name);
+
+    Boolean existsByIdAndType(Long Id, String type);
 }
