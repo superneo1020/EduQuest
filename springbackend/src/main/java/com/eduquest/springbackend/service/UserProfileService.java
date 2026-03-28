@@ -8,6 +8,8 @@ import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Map;
+
 @Service
 public class UserProfileService {
 
@@ -56,7 +58,7 @@ public class UserProfileService {
                     req.equippedItems(),
                     userProfile.getEquippedItems()
             );
-            isEquippedItemsExists(username, equippedItems);
+            validateItemsOwnership(username, equippedItems);
             userProfile.setEquippedItems(equippedItems);
         }
 
@@ -87,7 +89,7 @@ public class UserProfileService {
     }
 
     @Transactional(readOnly = true)
-    public void isEquippedItemsExists(String username, ProfileEquippedItemsDto equippedItems) {
+    public void validateItemsOwnership(String username, ProfileEquippedItemsDto equippedItems) {
         if (equippedItems.AVATAR() != null && !userItemService.checkUserItemAndItemExists(username, equippedItems.AVATAR(), "AVATAR"))
             throw new ResourceNotFoundException("Avatar not found");
         if (equippedItems.BADGE() != null && !userItemService.checkUserItemAndItemExists(username, equippedItems.BADGE(), "BADGE"))
@@ -97,13 +99,13 @@ public class UserProfileService {
     }
 
     private static ProfileEquippedItemsDto mergeWithDefaultEquippedItems(
-            ProfileEquippedItemsDto incoming,
+            Map<String, Long> incoming,
             ProfileEquippedItemsDto current
     ) {
         return new ProfileEquippedItemsDto(
-                incoming.AVATAR() != null ? incoming.AVATAR() : current.AVATAR(),
-                incoming.BADGE() != null ? incoming.BADGE() : current.BADGE(),
-                incoming.BACKGROUND() != null ? incoming.BACKGROUND() : current.BACKGROUND()
+                incoming.containsKey("AVATAR") ? incoming.get("AVATAR") : current.AVATAR(),
+                incoming.containsKey("BADGE") ? incoming.get("BADGE") : current.BADGE(),
+                incoming.containsKey("BACKGROUND") ? incoming.get("BACKGROUND") : current.BACKGROUND()
         );
     }
 

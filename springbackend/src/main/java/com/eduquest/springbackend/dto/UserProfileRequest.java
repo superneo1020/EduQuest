@@ -1,19 +1,15 @@
 package com.eduquest.springbackend.dto;
 
-import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
+
+import java.util.Map;
 
 public record UserProfileRequest(
         @Size(max = 50)
         String nickname,
 
-        @Valid
-        ProfileEquippedItemsDto equippedItems,
-
-        @Valid
+        Map<String, Long> equippedItems,
         ProfilePreferencesDto preferences,
-
-        @Valid
         ProfilePrivacySettingsDto privacySettings
 ) {
 }
