@@ -54,7 +54,7 @@ public class UserProfileService {
 
         // Handle equippedItems - set if not null and merge if partial
         if (req.equippedItems() != null) {
-            ProfileEquippedItemsDto equippedItems = mergeWithDefaultEquippedItems(
+            ProfileEquippedItemsDto equippedItems = mergeWithCurrentEquippedItems(
                     req.equippedItems(),
                     userProfile.getEquippedItems()
             );
@@ -64,7 +64,7 @@ public class UserProfileService {
 
         // Handle preferences - set if not null and merge if partial
         if (req.preferences() != null) {
-            userProfile.setPreferences(mergeWithDefaultPreferences(
+            userProfile.setPreferences(mergeWithCurrentPreferences(
                     req.preferences(),
                     userProfile.getPreferences()
             ));
@@ -72,7 +72,7 @@ public class UserProfileService {
 
         // Handle privacySettings - set if not null and merge if partial
         if (req.privacySettings() != null) {
-            userProfile.setPrivacySettings(mergeWithDefaultPrivacySettings(
+            userProfile.setPrivacySettings(mergeWithCurrentPrivacySettings(
                     req.privacySettings(),
                     userProfile.getPrivacySettings()
             ));
@@ -98,7 +98,7 @@ public class UserProfileService {
             throw new ResourceNotFoundException("Background not found");
     }
 
-    private static ProfileEquippedItemsDto mergeWithDefaultEquippedItems(
+    private static ProfileEquippedItemsDto mergeWithCurrentEquippedItems(
             Map<String, Long> incoming,
             ProfileEquippedItemsDto current
     ) {
@@ -109,7 +109,7 @@ public class UserProfileService {
         );
     }
 
-    private static ProfilePreferencesDto mergeWithDefaultPreferences(
+    private static ProfilePreferencesDto mergeWithCurrentPreferences(
             ProfilePreferencesDto incoming,
             ProfilePreferencesDto current
     ) {
@@ -120,7 +120,7 @@ public class UserProfileService {
         );
     }
 
-    private static ProfilePrivacySettingsDto mergeWithDefaultPrivacySettings(
+    private static ProfilePrivacySettingsDto mergeWithCurrentPrivacySettings(
             ProfilePrivacySettingsDto incoming,
             ProfilePrivacySettingsDto current
     ) {
