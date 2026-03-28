@@ -20,8 +20,8 @@ const { width } = Dimensions.get('window');
 
 // 难度级别配置 - 只保留 Easy 和 Medium
 const DIFFICULTY_LEVELS = {
-    easy: { label: 'Easy', color: '#4CAF50', questionsPerGame: 5, desc: 'Simple 3-4 word sentences' },
-    medium: { label: 'Medium', color: '#FF9800', questionsPerGame: 5, desc: 'Common 4-5 word phrases' }
+    easy: { label: 'Easy', color: '#4CAF50', questionsPerGame: 5, desc: 'Simple 3-4 word sentences', hint: 'Short sentences • Basic word order' },
+    medium: { label: 'Medium', color: '#FF9800', questionsPerGame: 5, desc: 'Common 4-5 word phrases', hint: 'Moderate length • Common phrases' }
 };
 
 type Difficulty = 'easy' | 'medium';
@@ -252,20 +252,24 @@ export default function SentenceReorderScreen() {
 
     // 重新开始游戏
     const restartGame = () => {
-        setGameState({
-            currentQuestion: 0,
-            score: 0,
-            words: [],
-            feedback: '',
-            isChecking: false,
-            correctAnswers: 0,
-            wrongAnswers: 0,
-            questions: [],
-            isLoading: false,
-            difficulty: null,
-            gameStarted: false,
-            gameFinished: false
-        });
+        if (gameState.difficulty) {
+            initializeGame(gameState.difficulty);
+        } else {
+            setGameState({
+                currentQuestion: 0,
+                score: 0,
+                words: [],
+                feedback: '',
+                isChecking: false,
+                correctAnswers: 0,
+                wrongAnswers: 0,
+                questions: [],
+                isLoading: false,
+                difficulty: null,
+                gameStarted: false,
+                gameFinished: false
+            });
+        }
     };
 
     // 返回上一页（难度选择）
@@ -331,44 +335,51 @@ export default function SentenceReorderScreen() {
         );
     };
 
-    // 难度选择页面
+    // 难度选择页面 - 采用 writing.tsx 风格
     const renderDifficultySelector = () => (
-        <ScrollView style={styles.container} contentContainerStyle={styles.centerContainer}>
-            <LinearGradient
-                colors={['#667eea', '#764ba2']}
-                style={styles.difficultyHeader}
-            >
-                <Text style={styles.difficultyTitle}>🔤 Sentence Reorder</Text>
+        <ScrollView
+            style={styles.difficultyScroll}
+            contentContainerStyle={styles.difficultyScrollContent}
+            showsVerticalScrollIndicator={false}
+        >
+            <View style={styles.difficultyContainer}>
+                <Text style={styles.difficultyTitle}>Sentence Reorder</Text>
                 <Text style={styles.difficultySubtitle}>Arrange words to form correct sentences</Text>
-            </LinearGradient>
 
-            <Text style={styles.selectTitle}>Select Difficulty 🎯</Text>
+                <View style={styles.difficultyOptions}>
+                    {(Object.keys(DIFFICULTY_LEVELS) as Difficulty[]).map((level) => {
+                        const config = DIFFICULTY_LEVELS[level];
+                        return (
+                            <TouchableOpacity
+                                key={level}
+                                style={[
+                                    styles.difficultyCard,
+                                    { borderColor: config.color }
+                                ]}
+                                onPress={() => initializeGame(level)}
+                            >
+                                <View style={[styles.difficultyBadge, { backgroundColor: config.color }]}>
+                                    <Text style={styles.difficultyBadgeText}>{config.label}</Text>
+                                </View>
+                                <Text style={styles.difficultyDescription}>
+                                    {config.desc}
+                                </Text>
+                                <Text style={styles.difficultyHint}>
+                                    {config.hint}
+                                </Text>
+                                <Text style={styles.difficultyPoints}>
+                                    {config.questionsPerGame} questions • 20 points each
+                                </Text>
+                            </TouchableOpacity>
+                        );
+                    })}
+                </View>
 
-            {(Object.keys(DIFFICULTY_LEVELS) as Difficulty[]).map((level) => (
-                <TouchableOpacity
-                    key={level}
-                    style={[
-                        styles.difficultyCard,
-                        { backgroundColor: DIFFICULTY_LEVELS[level].color }
-                    ]}
-                    onPress={() => initializeGame(level)}
-                >
-                    <Text style={styles.difficultyCardTitle}>
-                        {DIFFICULTY_LEVELS[level].label}
-                    </Text>
-                    <Text style={styles.difficultyCardDesc}>
-                        {DIFFICULTY_LEVELS[level].desc}
-                    </Text>
-                    <Text style={styles.difficultyCardPoints}>
-                        {DIFFICULTY_LEVELS[level].questionsPerGame} questions • 20 points each
-                    </Text>
+                <TouchableOpacity style={styles.backToHomeButton} onPress={goToHome}>
+                    <Ionicons name="home" size={20} color="#666" />
+                    <Text style={styles.backToHomeText}>Back to Home</Text>
                 </TouchableOpacity>
-            ))}
-
-            <TouchableOpacity style={styles.backButton} onPress={goToHome}>
-                <Ionicons name="arrow-back" size={20} color="#666" />
-                <Text style={styles.backButtonText}>Back to Home</Text>
-            </TouchableOpacity>
+            </View>
         </ScrollView>
     );
 
@@ -386,7 +397,7 @@ export default function SentenceReorderScreen() {
         return (
             <ScrollView style={styles.container} contentContainerStyle={styles.completionContainer}>
                 <LinearGradient
-                    colors={['#667eea', '#764ba2']}
+                    colors={['#4b6cb7', '#182848']}
                     style={styles.completionHeader}
                 >
                     <Text style={styles.completionTitle}>Game Completed! 🎉</Text>
@@ -416,7 +427,7 @@ export default function SentenceReorderScreen() {
                             <Text style={styles.statLabel}>Incorrect</Text>
                         </View>
                         <View style={styles.statItem}>
-                            <Ionicons name="stats-chart" size={32} color="#667eea" />
+                            <Ionicons name="stats-chart" size={32} color="#4b6cb7" />
                             <Text style={styles.statNumber}>{getAccuracy()}%</Text>
                             <Text style={styles.statLabel}>Accuracy</Text>
                         </View>
@@ -427,7 +438,6 @@ export default function SentenceReorderScreen() {
                 <View style={styles.detailsCard}>
                     <Text style={styles.detailsTitle}>📊 Question Summary</Text>
                     {gameState.questions.map((q, idx) => {
-                        const isCorrect = idx < gameState.correctAnswers;
                         const status = idx < gameState.correctAnswers ? 'correct' :
                             idx < gameState.correctAnswers + gameState.wrongAnswers ? 'wrong' : 'unanswered';
                         return (
@@ -450,14 +460,14 @@ export default function SentenceReorderScreen() {
 
                 {/* 按钮区域 */}
                 <View style={styles.completionButtons}>
-                    <TouchableOpacity style={[styles.completionButton, styles.retryButton]} onPress={restartGame}>
+                    <TouchableOpacity style={[styles.completionButton, styles.playAgainButton]} onPress={restartGame}>
                         <Ionicons name="refresh" size={20} color="white" />
                         <Text style={styles.completionButtonText}>Play Again</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity style={[styles.completionButton, styles.backDifficultyButton]} onPress={backToDifficulty}>
-                        <Ionicons name="arrow-back" size={20} color="white" />
-                        <Text style={styles.completionButtonText}>Select Difficulty</Text>
+                        <Ionicons name="options" size={20} color="white" />
+                        <Text style={styles.completionButtonText}>Change Difficulty</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity style={[styles.completionButton, styles.homeButton]} onPress={goToHome}>
@@ -478,7 +488,7 @@ export default function SentenceReorderScreen() {
                 <Stack.Screen
                     options={{
                         title: `Sentence Reorder - ${DIFFICULTY_LEVELS[gameState.difficulty as Difficulty]?.label || ''}`,
-                        headerStyle: { backgroundColor: '#667eea' },
+                        headerStyle: { backgroundColor: '#4b6cb7' },
                         headerTintColor: '#fff',
                         headerLeft: () => (
                             <TouchableOpacity onPress={backToDifficulty} style={styles.headerBackButton}>
@@ -491,7 +501,7 @@ export default function SentenceReorderScreen() {
                 <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
                     {/* 游戏标题 */}
                     <LinearGradient
-                        colors={['#667eea', '#764ba2']}
+                        colors={['#4b6cb7', '#182848']}
                         style={styles.header}
                     >
                         <Text style={styles.headerTitle}>🔤 Sentence Reorder</Text>
@@ -601,7 +611,7 @@ export default function SentenceReorderScreen() {
     if (gameState.isLoading) {
         return (
             <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#667eea" />
+                <ActivityIndicator size="large" color="#4b6cb7" />
                 <Text style={styles.loadingText}>Generating questions with AI...</Text>
                 <Text style={styles.loadingSubText}>This may take a few seconds</Text>
             </View>
@@ -644,7 +654,7 @@ const styles = StyleSheet.create({
     loadingText: {
         marginTop: 20,
         fontSize: 16,
-        color: '#667eea',
+        color: '#4b6cb7',
         fontWeight: '500',
     },
     loadingSubText: {
@@ -656,74 +666,84 @@ const styles = StyleSheet.create({
         marginLeft: 10,
         padding: 5,
     },
-    // 难度选择页面样式
-    centerContainer: {
+    // 难度选择页面样式 (采用 writing.tsx 风格)
+    difficultyScroll: {
+        flex: 1,
+        backgroundColor: '#f5f5f5',
+    },
+    difficultyScrollContent: {
         flexGrow: 1,
         justifyContent: 'center',
-        alignItems: 'center',
         paddingVertical: 40,
+    },
+    difficultyContainer: {
         paddingHorizontal: 20,
     },
-    difficultyHeader: {
-        width: '100%',
-        padding: 30,
-        borderRadius: 20,
-        alignItems: 'center',
-        marginBottom: 30,
-    },
     difficultyTitle: {
-        fontSize: 28,
+        fontSize: 32,
         fontWeight: 'bold',
-        color: '#fff',
+        color: '#333',
+        textAlign: 'center',
         marginBottom: 8,
     },
     difficultySubtitle: {
-        fontSize: 14,
-        color: '#fff',
-        opacity: 0.9,
+        fontSize: 16,
+        color: '#666',
         textAlign: 'center',
+        marginBottom: 32,
     },
-    selectTitle: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 24,
+    difficultyOptions: {
+        gap: 16,
     },
     difficultyCard: {
-        width: '100%',
-        padding: 24,
-        borderRadius: 16,
-        marginBottom: 16,
-        alignItems: 'center',
+        backgroundColor: 'white',
+        borderRadius: 20,
+        padding: 20,
+        borderWidth: 2,
+        borderColor: 'transparent',
+        elevation: 3,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 4,
-        elevation: 3,
     },
-    difficultyCardTitle: {
-        fontSize: 24,
+    difficultyBadge: {
+        alignSelf: 'flex-start',
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 20,
+        marginBottom: 12,
+    },
+    difficultyBadgeText: {
+        fontSize: 14,
         fontWeight: 'bold',
         color: 'white',
+    },
+    difficultyDescription: {
+        fontSize: 16,
+        fontWeight: '500',
+        color: '#333',
         marginBottom: 8,
     },
-    difficultyCardDesc: {
-        fontSize: 14,
-        color: 'rgba(255,255,255,0.9)',
-        marginBottom: 12,
-        textAlign: 'center',
-    },
-    difficultyCardPoints: {
+    difficultyHint: {
         fontSize: 12,
-        color: 'rgba(255,255,255,0.8)',
+        color: '#999',
+        fontStyle: 'italic',
+        marginBottom: 12,
     },
-    backButton: {
+    difficultyPoints: {
+        fontSize: 12,
+        color: '#4b6cb7',
+        fontWeight: '500',
+    },
+    backToHomeButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 20,
+        justifyContent: 'center',
+        marginTop: 24,
         padding: 12,
     },
-    backButtonText: {
+    backToHomeText: {
         marginLeft: 8,
         fontSize: 16,
         color: '#666',
@@ -758,7 +778,7 @@ const styles = StyleSheet.create({
     },
     progressFill: {
         height: '100%',
-        backgroundColor: '#667eea',
+        backgroundColor: '#4b6cb7',
         borderRadius: 2,
     },
     statsBar: {
@@ -781,7 +801,7 @@ const styles = StyleSheet.create({
     statValue: {
         fontSize: 20,
         fontWeight: 'bold',
-        color: '#667eea',
+        color: '#4b6cb7',
     },
     statLabel: {
         fontSize: 12,
@@ -835,7 +855,7 @@ const styles = StyleSheet.create({
         marginBottom: 16,
     },
     wordCard: {
-        backgroundColor: '#667eea',
+        backgroundColor: '#4b6cb7',
         paddingHorizontal: 16,
         paddingVertical: 12,
         borderRadius: 8,
@@ -873,7 +893,7 @@ const styles = StyleSheet.create({
         marginHorizontal: 20,
         marginBottom: 16,
         borderLeftWidth: 4,
-        borderLeftColor: '#667eea',
+        borderLeftColor: '#4b6cb7',
     },
     feedbackCorrect: {
         borderLeftColor: '#4CAF50',
@@ -902,7 +922,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     checkButton: {
-        backgroundColor: '#667eea',
+        backgroundColor: '#4b6cb7',
     },
     retryButton: {
         backgroundColor: '#F44336',
@@ -1036,14 +1056,14 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         gap: 8,
     },
-    retryButton: {
-        backgroundColor: '#4CAF50',
+    playAgainButton: {
+        backgroundColor: '#4b6cb7',
     },
     backDifficultyButton: {
         backgroundColor: '#FF9800',
     },
     homeButton: {
-        backgroundColor: '#667eea',
+        backgroundColor: '#FF5722',
     },
     completionButtonText: {
         color: 'white',
