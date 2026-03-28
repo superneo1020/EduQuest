@@ -1,4 +1,4 @@
-// app/games/science/index.tsx
+// app/games/science/chinese.tsx
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -9,23 +9,17 @@ const ScienceGamesIndex: React.FC = () => {
     const games = [
         {
             id: 1,
-            title: 'Animal sorting game',
-            component: 'AnimalClassificationGame',
-            description: 'Classify animals into the correct categories.'
+            title: 'Animal Games',
+            component: 'AnimalGamesIndex', // 改为导航到难度选择页面
+            description: 'Learn about animals through fun games'
         },
         {
             id: 2,
-            title: 'Human Body Puzzle',
-            component: 'OrganPuzzleGame',
+            title: 'HumanBody',
+            component: 'HumanBody',
             description: 'Learn the positions of human organs'
         },
-        {
-            id: 3,
-            title: 'Claw Machine Game',
-            component: 'ClawMachineGame',
-            description: 'Catch science-themed prizes with the claw!'
-        },
-        // More science games can be added.
+
     ];
 
     return (
@@ -44,16 +38,13 @@ const ScienceGamesIndex: React.FC = () => {
                             // 使用相對路徑導航
                             if (game.id === 1) {
                                 // 導航到 science/AnimalClassificationGame
-                                navigation.navigate('science/AnimalClassificationGame' as never);
+                                navigation.navigate('science/AnimalGamesIndex' as never);
                             }
                             if (game.id === 2) {
                                 // 導航到 science/HumanBodyGame
-                                navigation.navigate('science/HumanBodyGame' as never);
+                                navigation.navigate('science/HumanBodyGamesIndex' as never);
                             }
-                            if (game.id === 3) {
-                                // 導航到 science/ClawMachineGame
-                                navigation.navigate('science/ClawMachineGame' as never);
-                            }
+
                         }}
                     >
                         <View style={styles.gameCardContent}>

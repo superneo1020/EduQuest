@@ -13,13 +13,36 @@ import {
     KeyboardAvoidingView,
     Platform,
     Modal,
-    SafeAreaView,
     StatusBar
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { writingAIService, calculateOverallScore, WritingAnalysis } from '../../services/WritingAIService';
+
+// 难度级别配置
+type Difficulty = 'easy' | 'hard';
+type DifficultyConfig = {
+    label: string;
+    wordLimit: number;
+    description: string;
+    color: string;
+};
+
+const DIFFICULTY_CONFIG: Record<Difficulty, DifficultyConfig> = {
+    easy: {
+        label: 'Easy',
+        wordLimit: 40,
+        description: 'Detailed description with some advanced vocabulary',
+        color: '#4CAF50'
+    },
+    hard: {
+        label: 'Hard',
+        wordLimit: 60,
+        description: 'Complex description with rich vocabulary and sentence structures',
+        color: '#F44336'
+    }
+};
 
 // 图片数据库
 const imageScenes = [
@@ -94,7 +117,9 @@ const imageScenes = [
 type Scene = typeof imageScenes[0];
 
 export default function WritingScreen() {
-    const [currentScene, setCurrentScene] = useState<Scene>(imageScenes[0]);
+    // 难度选择状态
+    const [difficulty, setDifficulty] = useState<Difficulty | null>(null);
+    const [currentScene, setCurrentScene] = useState<Scene | null>(null);
     const [writing, setWriting] = useState('');
     const [wordCount, setWordCount] = useState(0);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -107,8 +132,43 @@ export default function WritingScreen() {
         date: string;
     }>>([]);
     const [showSceneSelector, setShowSceneSelector] = useState(false);
+    const [isFinished, setIsFinished] = useState(false);
+    const [finalScore, setFinalScore] = useState(0);
+    const [sessionHistory, setSessionHistory] = useState<Array<{
+        sceneTitle: string;
+        writing: string;
+        score: number;
+        date: string;
+    }>>([]);
 
     const textInputRef = useRef<TextInput>(null);
+
+    // 根据难度筛选场景
+    const getScenesByDifficulty = (diff: Difficulty) => {
+        return imageScenes.filter(scene => {
+            if (diff === 'easy') {
+                return scene.difficulty.toLowerCase() === 'easy';
+            } else if (diff === 'hard') {
+                return scene.difficulty.toLowerCase() === 'medium' ||
+                    scene.difficulty.toLowerCase() === 'hard';
+            }
+            return false;
+        });
+    };
+
+    // 选择难度
+    const selectDifficulty = (diff: Difficulty) => {
+        setDifficulty(diff);
+        const scenes = getScenesByDifficulty(diff);
+        if (scenes.length > 0) {
+            setCurrentScene(scenes[0]);
+        }
+        setWriting('');
+        setWordCount(0);
+        setAnalysis(null);
+        setShowAnalysis(false);
+        setTimeout(() => textInputRef.current?.focus(), 100);
+    };
 
     // 处理文字输入
     const handleTextChange = (text: string) => {
@@ -130,20 +190,24 @@ export default function WritingScreen() {
 
     // AI 分析作文
     const handleAnalyze = async () => {
+        if (!currentScene) return;
+
         if (writing.trim().length === 0) {
             Alert.alert('Empty Writing', 'Please write something before analyzing.');
             return;
         }
+
+        const wordLimit = difficulty ? DIFFICULTY_CONFIG[difficulty].wordLimit : currentScene.wordLimit;
 
         if (wordCount < 5) {
             Alert.alert('Too Short', 'Please write at least 5 words for meaningful analysis.');
             return;
         }
 
-        if (wordCount > currentScene.wordLimit) {
+        if (wordCount > wordLimit) {
             Alert.alert(
                 'Exceeded Limit',
-                `You wrote ${wordCount} words, but the limit is ${currentScene.wordLimit}. Try to make it shorter.`
+                `You wrote ${wordCount} words, but the limit for ${difficulty} level is ${wordLimit}. Try to make it shorter.`
             );
             return;
         }
@@ -156,7 +220,8 @@ export default function WritingScreen() {
                 {
                     imageDescription: currentScene.description,
                     category: currentScene.category,
-                    wordLimit: currentScene.wordLimit
+                    wordLimit: wordLimit,
+                    difficulty: difficulty || 'hard'
                 }
             );
 
@@ -164,14 +229,18 @@ export default function WritingScreen() {
             const overallScore = calculateOverallScore(result);
             setShowAnalysis(true);
 
-            // 保存到历史记录
-            const newHistory = {
+            const newHistoryItem = {
                 sceneTitle: currentScene.title,
                 writing: writing,
                 score: overallScore,
                 date: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             };
-            setHistory(prev => [newHistory, ...prev.slice(0, 4)]);
+
+            setSessionHistory(prev => [...prev, newHistoryItem]);
+            setHistory(prev => [newHistoryItem, ...prev.slice(0, 4)]);
+
+            setFinalScore(overallScore);
+            setIsFinished(true);
 
         } catch (error) {
             Alert.alert('Analysis Failed', 'Unable to analyze your writing. Please try again.');
@@ -187,6 +256,37 @@ export default function WritingScreen() {
         setWordCount(0);
         setShowAnalysis(false);
         textInputRef.current?.focus();
+    };
+
+    // Play Again - 重新开始当前难度
+    const handlePlayAgain = () => {
+        setIsFinished(false);
+        setWriting('');
+        setWordCount(0);
+        setAnalysis(null);
+        setShowAnalysis(false);
+        setFinalScore(0);
+        setSessionHistory([]);
+        setTimeout(() => textInputRef.current?.focus(), 100);
+    };
+
+    // Change Difficulty - 返回难度选择
+    const handleChangeDifficulty = () => {
+        setIsFinished(false);
+        setDifficulty(null);
+        setCurrentScene(null);
+        setWriting('');
+        setWordCount(0);
+        setAnalysis(null);
+        setShowAnalysis(false);
+        setFinalScore(0);
+        setSessionHistory([]);
+        setHistory([]);
+    };
+
+    // Back to Games - 返回游戏列表
+    const handleBackToGames = () => {
+        router.back();
     };
 
     // 取得分数颜色
@@ -207,8 +307,11 @@ export default function WritingScreen() {
 
     // 渲染单词计数
     const renderWordCount = () => {
-        const isWithinLimit = wordCount <= currentScene.wordLimit;
-        const percentage = Math.min((wordCount / currentScene.wordLimit) * 100, 100);
+        if (!currentScene || !difficulty) return null;
+
+        const wordLimit = DIFFICULTY_CONFIG[difficulty].wordLimit;
+        const isWithinLimit = wordCount <= wordLimit;
+        const percentage = Math.min((wordCount / wordLimit) * 100, 100);
 
         return (
             <View style={styles.wordCountContainer}>
@@ -218,7 +321,7 @@ export default function WritingScreen() {
                         styles.wordCountText,
                         { color: isWithinLimit ? '#4CAF50' : '#F44336' }
                     ]}>
-                        {wordCount}/{currentScene.wordLimit}
+                        {wordCount}/{wordLimit}
                     </Text>
                 </View>
 
@@ -321,6 +424,152 @@ export default function WritingScreen() {
         );
     };
 
+    // 渲染难度选择界面
+    const renderDifficultySelector = () => (
+        <View style={styles.difficultyContainer}>
+            <Text style={styles.difficultyTitle}>Choose Difficulty Level</Text>
+            <Text style={styles.difficultySubtitle}>Select a difficulty to start writing</Text>
+
+            <View style={styles.difficultyOptions}>
+                {(Object.keys(DIFFICULTY_CONFIG) as Difficulty[]).map((level) => {
+                    const config = DIFFICULTY_CONFIG[level];
+                    return (
+                        <TouchableOpacity
+                            key={level}
+                            style={[
+                                styles.difficultyCard,
+                                { borderColor: config.color }
+                            ]}
+                            onPress={() => selectDifficulty(level)}
+                        >
+                            <View style={[styles.difficultyBadge, { backgroundColor: config.color }]}>
+                                <Text style={styles.difficultyBadgeText}>{config.label}</Text>
+                            </View>
+                            <Text style={styles.difficultyWordLimit}>
+                                Word Limit: {config.wordLimit} words
+                            </Text>
+                            <Text style={styles.difficultyDescription}>
+                                {config.description}
+                            </Text>
+                        </TouchableOpacity>
+                    );
+                })}
+            </View>
+        </View>
+    );
+
+    // 渲染总结页面
+    const renderSummaryPage = () => (
+        <View style={styles.summaryContainer}>
+            <LinearGradient
+                colors={['#4b6cb7', '#182848']}
+                style={styles.summaryHeader}
+            >
+                <Text style={styles.summaryTitle}>📊 Writing Summary</Text>
+                <Text style={styles.summarySubtitle}>Your performance analysis</Text>
+            </LinearGradient>
+
+            <ScrollView
+                style={styles.summaryScroll}
+                contentContainerStyle={styles.summaryContent}
+                showsVerticalScrollIndicator={false}
+            >
+                {/* 总分显示 */}
+                <View style={styles.totalScoreCard}>
+                    <Text style={styles.totalScoreLabel}>Final Score</Text>
+                    <View style={[styles.totalScoreCircle, { borderColor: getScoreColor(finalScore) }]}>
+                        <Text style={[styles.totalScoreNumber, { color: getScoreColor(finalScore) }]}>
+                            {finalScore}
+                        </Text>
+                        <Text style={styles.totalScoreMax}>/100</Text>
+                    </View>
+                    <Text style={[styles.totalScoreFeedback, { color: getScoreColor(finalScore) }]}>
+                        {getScoreFeedback(finalScore)}
+                    </Text>
+                </View>
+
+                {/* 写作详情 */}
+                {sessionHistory.length > 0 && (
+                    <View style={styles.summaryDetailCard}>
+                        <Text style={styles.summarySectionTitle}>✍️ Your Writing</Text>
+                        <View style={styles.summaryWritingBox}>
+                            <Text style={styles.summaryWritingText}>{sessionHistory[0].writing}</Text>
+                        </View>
+
+                        {currentScene && (
+                            <>
+                                <Text style={[styles.summarySectionTitle, { marginTop: 16 }]}>🎨 Scene</Text>
+                                <View style={styles.summarySceneInfo}>
+                                    <Text style={styles.summarySceneTitle}>{currentScene.title}</Text>
+                                    <Text style={styles.summarySceneCategory}>{currentScene.category}</Text>
+                                </View>
+                                <Text style={styles.summarySceneDesc}>{currentScene.description}</Text>
+                            </>
+                        )}
+
+                        {difficulty && (
+                            <>
+                                <Text style={[styles.summarySectionTitle, { marginTop: 16 }]}>⚙️ Difficulty</Text>
+                                <View style={styles.summaryDifficultyBadge}>
+                                    <Text style={[styles.summaryDifficultyText, { color: DIFFICULTY_CONFIG[difficulty].color }]}>
+                                        {DIFFICULTY_CONFIG[difficulty].label}
+                                    </Text>
+                                </View>
+                            </>
+                        )}
+                    </View>
+                )}
+
+                {/* AI 反馈摘要 */}
+                {analysis && (
+                    <View style={styles.summaryDetailCard}>
+                        <Text style={styles.summarySectionTitle}>🤖 AI Feedback Summary</Text>
+                        <Text style={styles.summaryFeedbackText}>{analysis.feedback}</Text>
+
+                        {analysis.suggestions && analysis.suggestions.length > 0 && (
+                            <>
+                                <Text style={styles.summarySubSectionTitle}>Improvement Tips:</Text>
+                                {analysis.suggestions.slice(0, 3).map((suggestion, index) => (
+                                    <View key={index} style={styles.summaryTipItem}>
+                                        <Ionicons name="bulb-outline" size={16} color="#FFC107" />
+                                        <Text style={styles.summaryTipText}>{suggestion}</Text>
+                                    </View>
+                                ))}
+                            </>
+                        )}
+                    </View>
+                )}
+
+                {/* 按钮组 */}
+                <View style={styles.summaryButtons}>
+                    <TouchableOpacity
+                        style={[styles.summaryButton, styles.playAgainButton]}
+                        onPress={handlePlayAgain}
+                    >
+                        <Ionicons name="refresh" size={20} color="white" />
+                        <Text style={styles.summaryButtonText}>Play Again</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.summaryButton, styles.changeDifficultyButton]}
+                        onPress={handleChangeDifficulty}
+                    >
+                        <Ionicons name="options" size={20} color="white" />
+                        <Text style={styles.summaryButtonText}>Change Difficulty</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.summaryButton, styles.backToGamesButton]}
+                        onPress={handleBackToGames}
+                    >
+                        <Ionicons name="home" size={20} color="white" />
+                        <Text style={styles.summaryButtonText}>Back to Games</Text>
+                    </TouchableOpacity>
+                </View>
+            </ScrollView>
+        </View>
+    );
+
     // 场景选择器 Modal
     const renderSceneSelector = () => (
         <Modal
@@ -339,43 +588,92 @@ export default function WritingScreen() {
                     </View>
 
                     <ScrollView style={styles.sceneGrid}>
-                        {imageScenes.map((scene) => (
-                            <TouchableOpacity
-                                key={scene.id}
-                                style={[
-                                    styles.sceneCard,
-                                    currentScene.id === scene.id && styles.sceneCardActive
-                                ]}
-                                onPress={() => selectScene(scene)}
-                            >
-                                <Image
-                                    source={{ uri: scene.image }}
-                                    style={styles.sceneImage}
-                                    resizeMode="cover"
-                                />
-                                <View style={styles.sceneInfo}>
-                                    <Text style={styles.sceneTitle}>{scene.title}</Text>
-                                    <Text style={styles.sceneCategory}>{scene.category}</Text>
-                                    <View style={styles.sceneMeta}>
-                                        <Text style={styles.sceneDifficulty}>{scene.difficulty}</Text>
-                                        <Text style={styles.sceneWords}>{scene.wordLimit} words</Text>
+                        {imageScenes
+                            .filter(scene => {
+                                if (!difficulty) return true;
+                                if (difficulty === 'easy') {
+                                    return scene.difficulty.toLowerCase() === 'easy';
+                                } else {
+                                    return scene.difficulty.toLowerCase() === 'medium' ||
+                                        scene.difficulty.toLowerCase() === 'hard';
+                                }
+                            })
+                            .map((scene) => (
+                                <TouchableOpacity
+                                    key={scene.id}
+                                    style={[
+                                        styles.sceneCard,
+                                        currentScene?.id === scene.id && styles.sceneCardActive
+                                    ]}
+                                    onPress={() => selectScene(scene)}
+                                >
+                                    <Image
+                                        source={{ uri: scene.image }}
+                                        style={styles.sceneImage}
+                                        resizeMode="cover"
+                                    />
+                                    <View style={styles.sceneInfo}>
+                                        <Text style={styles.sceneTitle}>{scene.title}</Text>
+                                        <Text style={styles.sceneCategory}>{scene.category}</Text>
+                                        <View style={styles.sceneMeta}>
+                                            <Text style={styles.sceneDifficulty}>{scene.difficulty}</Text>
+                                            <Text style={styles.sceneWords}>{scene.wordLimit} words</Text>
+                                        </View>
                                     </View>
-                                </View>
-                            </TouchableOpacity>
-                        ))}
+                                </TouchableOpacity>
+                            ))}
                     </ScrollView>
                 </View>
             </View>
         </Modal>
     );
 
+    // 如果已完成，显示总结页面
+    if (isFinished) {
+        return renderSummaryPage();
+    }
+
+    // 如果还没有选择难度，显示难度选择界面
+    if (!difficulty || !currentScene) {
+        return (
+            <View style={styles.container}>
+                <Stack.Screen
+                    options={{
+                        title: 'Writing Game',
+                        headerStyle: { backgroundColor: '#4b6cb7' },
+                        headerTintColor: '#fff',
+                        headerLeft: () => (
+                            <TouchableOpacity onPress={handleBackToGames} style={{ marginLeft: 10 }}>
+                                <Ionicons name="arrow-back" size={24} color="white" />
+                            </TouchableOpacity>
+                        ),
+                    }}
+                />
+                <StatusBar barStyle="light-content" backgroundColor="#4b6cb7" />
+                <ScrollView
+                    style={styles.difficultyScroll}
+                    contentContainerStyle={styles.difficultyScrollContent}
+                    showsVerticalScrollIndicator={false}
+                >
+                    {renderDifficultySelector()}
+                </ScrollView>
+            </View>
+        );
+    }
+
+    // 主写作界面
     return (
         <View style={styles.container}>
             <Stack.Screen
                 options={{
-                    title: 'Writing Game',
+                    title: `Writing Game - ${DIFFICULTY_CONFIG[difficulty].label}`,
                     headerStyle: { backgroundColor: '#4b6cb7' },
                     headerTintColor: '#fff',
+                    headerLeft: () => (
+                        <TouchableOpacity onPress={handleChangeDifficulty} style={{ marginLeft: 10 }}>
+                            <Ionicons name="arrow-back" size={24} color="white" />
+                        </TouchableOpacity>
+                    ),
                 }}
             />
 
@@ -391,6 +689,18 @@ export default function WritingScreen() {
                     contentContainerStyle={styles.scrollContent}
                     showsVerticalScrollIndicator={false}
                 >
+                    {/* 难度显示 */}
+                    <View style={styles.difficultyHeader}>
+                        <View style={[styles.difficultyTag, { backgroundColor: DIFFICULTY_CONFIG[difficulty].color }]}>
+                            <Text style={styles.difficultyTagText}>
+                                {DIFFICULTY_CONFIG[difficulty].label} Level
+                            </Text>
+                        </View>
+                        <Text style={styles.wordLimitHint}>
+                            Word Limit: {DIFFICULTY_CONFIG[difficulty].wordLimit} words
+                        </Text>
+                    </View>
+
                     {/* 标题区 */}
                     <LinearGradient
                         colors={['#4b6cb7', '#182848']}
@@ -550,22 +860,110 @@ const styles = StyleSheet.create({
     scrollContent: {
         paddingBottom: 30,
     },
+    // 难度选择样式
+    difficultyScroll: {
+        flex: 1,
+        backgroundColor: '#f5f5f5',
+    },
+    difficultyScrollContent: {
+        flexGrow: 1,
+        justifyContent: 'center',
+        paddingVertical: 40,
+    },
+    difficultyContainer: {
+        paddingHorizontal: 20,
+    },
+    difficultyTitle: {
+        fontSize: 32,
+        fontWeight: 'bold',
+        color: '#333',
+        textAlign: 'center',
+        marginBottom: 8,
+    },
+    difficultySubtitle: {
+        fontSize: 16,
+        color: '#666',
+        textAlign: 'center',
+        marginBottom: 32,
+    },
+    difficultyOptions: {
+        gap: 16,
+    },
+    difficultyCard: {
+        backgroundColor: 'white',
+        borderRadius: 20,
+        padding: 20,
+        borderWidth: 2,
+        borderColor: 'transparent',
+        elevation: 3,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+    },
+    difficultyBadge: {
+        alignSelf: 'flex-start',
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 20,
+        marginBottom: 12,
+    },
+    difficultyBadgeText: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: 'white',
+    },
+    difficultyWordLimit: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#333',
+        marginBottom: 8,
+    },
+    difficultyDescription: {
+        fontSize: 14,
+        color: '#666',
+        lineHeight: 20,
+    },
+    // 难度头部显示
+    difficultyHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingTop: 12,
+        paddingBottom: 8,
+        backgroundColor: '#f5f5f5',
+    },
+    difficultyTag: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+    },
+    difficultyTagText: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        color: 'white',
+    },
+    wordLimitHint: {
+        fontSize: 12,
+        color: '#999',
+    },
     header: {
-        paddingTop: 40,
-        paddingBottom: 30,
+        paddingTop: 20,
+        paddingBottom: 20,
         paddingHorizontal: 20,
         borderBottomLeftRadius: 30,
         borderBottomRightRadius: 30,
         marginBottom: 20,
     },
     headerTitle: {
-        fontSize: 32,
+        fontSize: 28,
         fontWeight: 'bold',
         color: '#fff',
         marginBottom: 8,
     },
     headerSubtitle: {
-        fontSize: 16,
+        fontSize: 14,
         color: '#fff',
         opacity: 0.9,
     },
@@ -1071,5 +1469,192 @@ const styles = StyleSheet.create({
     sceneWords: {
         fontSize: 12,
         color: '#999',
+    },
+    // 总结页面样式
+    summaryContainer: {
+        flex: 1,
+        backgroundColor: '#f5f5f5',
+    },
+    summaryHeader: {
+        paddingTop: 60,
+        paddingBottom: 30,
+        paddingHorizontal: 20,
+        borderBottomLeftRadius: 30,
+        borderBottomRightRadius: 30,
+    },
+    summaryTitle: {
+        fontSize: 28,
+        fontWeight: 'bold',
+        color: '#fff',
+        marginBottom: 8,
+    },
+    summarySubtitle: {
+        fontSize: 14,
+        color: '#fff',
+        opacity: 0.9,
+    },
+    summaryScroll: {
+        flex: 1,
+    },
+    summaryContent: {
+        paddingHorizontal: 20,
+        paddingBottom: 40,
+    },
+    totalScoreCard: {
+        backgroundColor: 'white',
+        borderRadius: 24,
+        padding: 24,
+        alignItems: 'center',
+        marginTop: -30,
+        marginBottom: 20,
+        elevation: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+    },
+    totalScoreLabel: {
+        fontSize: 18,
+        color: '#666',
+        marginBottom: 16,
+    },
+    totalScoreCircle: {
+        width: 120,
+        height: 120,
+        borderRadius: 60,
+        borderWidth: 6,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    totalScoreNumber: {
+        fontSize: 48,
+        fontWeight: 'bold',
+    },
+    totalScoreMax: {
+        fontSize: 18,
+        color: '#999',
+        position: 'absolute',
+        bottom: 20,
+        right: 25,
+    },
+    totalScoreFeedback: {
+        fontSize: 20,
+        fontWeight: '600',
+    },
+    summaryDetailCard: {
+        backgroundColor: 'white',
+        borderRadius: 20,
+        padding: 20,
+        marginBottom: 20,
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+    },
+    summarySectionTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#333',
+        marginBottom: 12,
+    },
+    summarySubSectionTitle: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#555',
+        marginTop: 12,
+        marginBottom: 8,
+    },
+    summaryWritingBox: {
+        backgroundColor: '#f8fafc',
+        padding: 16,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+    },
+    summaryWritingText: {
+        fontSize: 15,
+        color: '#334155',
+        lineHeight: 22,
+    },
+    summarySceneInfo: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    summarySceneTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#333',
+    },
+    summarySceneCategory: {
+        fontSize: 14,
+        color: '#4b6cb7',
+        fontWeight: '500',
+    },
+    summarySceneDesc: {
+        fontSize: 14,
+        color: '#666',
+        lineHeight: 20,
+    },
+    summaryDifficultyBadge: {
+        alignSelf: 'flex-start',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        backgroundColor: '#f1f5f9',
+        borderRadius: 20,
+    },
+    summaryDifficultyText: {
+        fontSize: 14,
+        fontWeight: 'bold',
+    },
+    summaryFeedbackText: {
+        fontSize: 15,
+        color: '#555',
+        lineHeight: 22,
+        backgroundColor: '#f0f9ff',
+        padding: 16,
+        borderRadius: 12,
+    },
+    summaryTipItem: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        marginBottom: 8,
+        paddingHorizontal: 8,
+        gap: 8,
+    },
+    summaryTipText: {
+        flex: 1,
+        fontSize: 14,
+        color: '#666',
+        lineHeight: 20,
+    },
+    summaryButtons: {
+        gap: 12,
+        marginTop: 10,
+    },
+    summaryButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 14,
+        borderRadius: 12,
+        gap: 8,
+    },
+    playAgainButton: {
+        backgroundColor: '#4b6cb7',
+    },
+    changeDifficultyButton: {
+        backgroundColor: '#FF9800',
+    },
+    backToGamesButton: {
+        backgroundColor: '#FF5722',
+    },
+    summaryButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: 'white',
     },
 });

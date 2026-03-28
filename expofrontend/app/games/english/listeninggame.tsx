@@ -48,6 +48,31 @@ type GameState = {
     questions: Question[];
 };
 
+// 难度配置
+const DIFFICULTY_CONFIG: Record<Difficulty, { label: string; color: string; description: string; hint: string; icon: string }> = {
+    easy: {
+        label: 'Beginner',
+        color: '#4CAF50',
+        description: 'Simple words and phrases',
+        hint: 'Slow speed • Basic vocabulary',
+        icon: 'leaf'
+    },
+    medium: {
+        label: 'Intermediate',
+        color: '#FF9800',
+        description: 'Short sentences',
+        hint: 'Normal speed • Common phrases',
+        icon: 'flame'
+    },
+    hard: {
+        label: 'Advanced',
+        color: '#F44336',
+        description: 'Complex sentences',
+        hint: 'Fast speed • Idiomatic expressions',
+        icon: 'flash'
+    }
+};
+
 export default function ListeningScreen() {
     // 游戏状态
     const [gameState, setGameState] = useState<GameState>({
@@ -362,12 +387,7 @@ export default function ListeningScreen() {
 
     // 获取难度标签
     const getLevelLabel = (level: Difficulty): string => {
-        switch (level) {
-            case 'easy': return 'Beginner';
-            case 'medium': return 'Intermediate';
-            case 'hard': return 'Advanced';
-            default: return 'Beginner';
-        }
+        return DIFFICULTY_CONFIG[level].label;
     };
 
     // 计算准确率
@@ -400,7 +420,7 @@ export default function ListeningScreen() {
     const percentageScore = calculatePercentageScore();
     const stars = getStarRating(percentageScore);
 
-    // 难度选择页面
+    // 难度选择页面 (采用 writing.tsx 风格)
     if (gameState.currentLevel === null) {
         return (
             <View style={styles.container}>
@@ -416,48 +436,40 @@ export default function ListeningScreen() {
                         ),
                     }}
                 />
-                <ScrollView contentContainerStyle={styles.difficultyContainer}>
-                    <LinearGradient
-                        colors={['#4b6cb7', '#182848']}
-                        style={styles.difficultyHeader}
-                    >
-                        <Ionicons name="headset" size={60} color="white" />
+                <ScrollView
+                    style={styles.difficultyScroll}
+                    contentContainerStyle={styles.difficultyScrollContent}
+                    showsVerticalScrollIndicator={false}
+                >
+                    <View style={styles.difficultyContainer}>
                         <Text style={styles.difficultyTitle}>Listening Game</Text>
                         <Text style={styles.difficultySubtitle}>Test your listening skills</Text>
-                    </LinearGradient>
 
-                    <Text style={styles.difficultyLabel}>Select Difficulty Level</Text>
-
-                    <View style={styles.difficultyOptions}>
-                        <TouchableOpacity
-                            style={[styles.difficultyCard, styles.easyCard]}
-                            onPress={() => selectDifficulty('easy')}
-                        >
-                            <Ionicons name="leaf" size={40} color="#4CAF50" />
-                            <Text style={styles.difficultyCardTitle}>Beginner</Text>
-                            <Text style={styles.difficultyCardDesc}>Simple words and phrases</Text>
-                            <Text style={styles.difficultyCardHint}>Slow speed • Basic vocabulary</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.difficultyCard, styles.mediumCard]}
-                            onPress={() => selectDifficulty('medium')}
-                        >
-                            <Ionicons name="flame" size={40} color="#FF9800" />
-                            <Text style={styles.difficultyCardTitle}>Intermediate</Text>
-                            <Text style={styles.difficultyCardDesc}>Short sentences</Text>
-                            <Text style={styles.difficultyCardHint}>Normal speed • Common phrases</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.difficultyCard, styles.hardCard]}
-                            onPress={() => selectDifficulty('hard')}
-                        >
-                            <Ionicons name="flash" size={40} color="#F44336" />
-                            <Text style={styles.difficultyCardTitle}>Advanced</Text>
-                            <Text style={styles.difficultyCardDesc}>Complex sentences</Text>
-                            <Text style={styles.difficultyCardHint}>Fast speed • Idiomatic expressions</Text>
-                        </TouchableOpacity>
+                        <View style={styles.difficultyOptions}>
+                            {(Object.keys(DIFFICULTY_CONFIG) as Difficulty[]).map((level) => {
+                                const config = DIFFICULTY_CONFIG[level];
+                                return (
+                                    <TouchableOpacity
+                                        key={level}
+                                        style={[
+                                            styles.difficultyCard,
+                                            { borderColor: config.color }
+                                        ]}
+                                        onPress={() => selectDifficulty(level)}
+                                    >
+                                        <View style={[styles.difficultyBadge, { backgroundColor: config.color }]}>
+                                            <Text style={styles.difficultyBadgeText}>{config.label}</Text>
+                                        </View>
+                                        <Text style={styles.difficultyDescription}>
+                                            {config.description}
+                                        </Text>
+                                        <Text style={styles.difficultyHint}>
+                                            {config.hint}
+                                        </Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
                     </View>
                 </ScrollView>
             </View>
@@ -869,81 +881,66 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#f5f5f5',
     },
-    // 难度选择页面样式
-    difficultyContainer: {
-        flexGrow: 1,
+    // 难度选择页面样式 (采用 writing.tsx 风格)
+    difficultyScroll: {
+        flex: 1,
         backgroundColor: '#f5f5f5',
     },
-    difficultyHeader: {
-        alignItems: 'center',
-        paddingTop: 60,
-        paddingBottom: 40,
+    difficultyScrollContent: {
+        flexGrow: 1,
+        justifyContent: 'center',
+        paddingVertical: 40,
+    },
+    difficultyContainer: {
         paddingHorizontal: 20,
-        borderBottomLeftRadius: 30,
-        borderBottomRightRadius: 30,
-        marginBottom: 30,
     },
     difficultyTitle: {
         fontSize: 32,
         fontWeight: 'bold',
-        color: '#fff',
-        marginTop: 16,
+        color: '#333',
+        textAlign: 'center',
         marginBottom: 8,
     },
     difficultySubtitle: {
         fontSize: 16,
-        color: '#fff',
-        opacity: 0.9,
-    },
-    difficultyLabel: {
-        fontSize: 20,
-        fontWeight: '600',
-        color: '#333',
+        color: '#666',
         textAlign: 'center',
-        marginBottom: 24,
+        marginBottom: 32,
     },
     difficultyOptions: {
-        paddingHorizontal: 20,
         gap: 16,
     },
     difficultyCard: {
         backgroundColor: 'white',
         borderRadius: 20,
-        padding: 24,
-        alignItems: 'center',
+        padding: 20,
+        borderWidth: 2,
+        borderColor: 'transparent',
         elevation: 3,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
-        shadowRadius: 8,
-        borderWidth: 1,
-        borderColor: '#e0e0e0',
+        shadowRadius: 4,
     },
-    easyCard: {
-        borderTopColor: '#4CAF50',
-        borderTopWidth: 4,
+    difficultyBadge: {
+        alignSelf: 'flex-start',
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 20,
+        marginBottom: 12,
     },
-    mediumCard: {
-        borderTopColor: '#FF9800',
-        borderTopWidth: 4,
-    },
-    hardCard: {
-        borderTopColor: '#F44336',
-        borderTopWidth: 4,
-    },
-    difficultyCardTitle: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#333',
-        marginTop: 12,
-        marginBottom: 4,
-    },
-    difficultyCardDesc: {
+    difficultyBadgeText: {
         fontSize: 14,
-        color: '#666',
+        fontWeight: 'bold',
+        color: 'white',
+    },
+    difficultyDescription: {
+        fontSize: 16,
+        fontWeight: '500',
+        color: '#333',
         marginBottom: 8,
     },
-    difficultyCardHint: {
+    difficultyHint: {
         fontSize: 12,
         color: '#999',
         fontStyle: 'italic',

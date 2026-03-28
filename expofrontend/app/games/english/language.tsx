@@ -1,6 +1,6 @@
 // english/language.tsx
-import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
-import { Link, Stack } from 'expo-router';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { Stack } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 
 export default function EnglishGamesIndex() {
@@ -30,31 +30,38 @@ export default function EnglishGamesIndex() {
             <Stack.Screen
                 options={{
                     title: 'English Games',
+                    headerBackVisible: false, // 隐藏返回按钮
+                    headerLeft: () => null,   // 确保左侧没有返回按钮
                     headerStyle: { backgroundColor: '#4b6cb7' },
                     headerTintColor: '#fff',
-                    headerBackVisible: true,
+                    headerTitleStyle: {
+                        fontSize: 20,
+                        fontWeight: '600',
+                    },
                 }}
             />
 
             <LinearGradient
                 colors={['#4b6cb7', '#182848']}
-                style={styles.header}
-            >
-                <Text style={styles.headerTitle}>🇬🇧 English Games</Text>
-                <Text style={styles.headerSubtitle}>Improve your English skills through fun games</Text>
-            </LinearGradient>
+                style={styles.gradientHeader}
+            />
 
             <View style={styles.gamesList}>
                 {games.map((game) => (
-                    <Link key={game.id} href={game.route} asChild>
-                        <Pressable style={styles.gameCard}>
-                            <View style={styles.gameInfo}>
-                                <Text style={styles.gameTitle}>{game.title}</Text>
-                                <Text style={styles.gameDescription}>{game.description}</Text>
-                            </View>
-                            <Text style={styles.arrow}>→</Text>
-                        </Pressable>
-                    </Link>
+                    <Pressable
+                        key={game.id}
+                        style={styles.gameCard}
+                        onPress={() => {
+                            const router = require('expo-router').router;
+                            router.push(game.route);
+                        }}
+                    >
+                        <View style={styles.gameInfo}>
+                            <Text style={styles.gameTitle}>{game.title}</Text>
+                            <Text style={styles.gameDescription}>{game.description}</Text>
+                        </View>
+                        <Text style={styles.arrow}>→</Text>
+                    </Pressable>
                 ))}
             </View>
         </View>
@@ -66,27 +73,12 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#f5f5f5',
     },
-    header: {
-        paddingTop: 60,
-        paddingBottom: 40,
-        paddingHorizontal: 20,
-        borderBottomLeftRadius: 30,
-        borderBottomRightRadius: 30,
-    },
-    headerTitle: {
-        fontSize: 32,
-        fontWeight: 'bold',
-        color: '#fff',
-        marginBottom: 8,
-    },
-    headerSubtitle: {
-        fontSize: 16,
-        color: '#fff',
-        opacity: 0.9,
+    gradientHeader: {
+        height: 0, // 完全隐藏渐变装饰
     },
     gamesList: {
         flex: 1,
-        paddingTop: 30,
+        paddingTop: 20,
         paddingHorizontal: 20,
     },
     gameCard: {
