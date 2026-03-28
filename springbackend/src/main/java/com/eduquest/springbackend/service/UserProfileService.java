@@ -2,7 +2,6 @@ package com.eduquest.springbackend.service;
 
 import com.eduquest.springbackend.dao.UserProfileRepository;
 import com.eduquest.springbackend.dto.*;
-import com.eduquest.springbackend.enums.Theme;
 import com.eduquest.springbackend.exception.ResourceNotFoundException;
 import com.eduquest.springbackend.model.UserProfile;
 import org.springframework.lang.NonNull;
@@ -53,19 +52,28 @@ public class UserProfileService {
 
         // Handle equippedItems - set if not null and merge if partial
         if (req.equippedItems() != null) {
-            ProfileEquippedItemsDto equippedItems = mergeWithDefaultEquippedItems(req.equippedItems());
+            ProfileEquippedItemsDto equippedItems = mergeWithDefaultEquippedItems(
+                    req.equippedItems(),
+                    userProfile.getEquippedItems()
+            );
             isEquippedItemsExists(username, equippedItems);
             userProfile.setEquippedItems(equippedItems);
         }
 
         // Handle preferences - set if not null and merge if partial
         if (req.preferences() != null) {
-            userProfile.setPreferences(mergeWithDefaultPreferences(req.preferences()));
+            userProfile.setPreferences(mergeWithDefaultPreferences(
+                    req.preferences(),
+                    userProfile.getPreferences()
+            ));
         }
 
         // Handle privacySettings - set if not null and merge if partial
         if (req.privacySettings() != null) {
-            userProfile.setPrivacySettings(mergeWithDefaultPrivacySettings(req.privacySettings()));
+            userProfile.setPrivacySettings(mergeWithDefaultPrivacySettings(
+                    req.privacySettings(),
+                    userProfile.getPrivacySettings()
+            ));
         }
 
         UserProfile savedProfile = userProfileRepo.save(userProfile);
@@ -88,30 +96,36 @@ public class UserProfileService {
             throw new ResourceNotFoundException("Background not found");
     }
 
-    @NonNull
-    private static ProfileEquippedItemsDto mergeWithDefaultEquippedItems(@NonNull ProfileEquippedItemsDto equippedItems) {
+    private static ProfileEquippedItemsDto mergeWithDefaultEquippedItems(
+            ProfileEquippedItemsDto incoming,
+            ProfileEquippedItemsDto current
+    ) {
         return new ProfileEquippedItemsDto(
-                equippedItems.AVATAR() != null ? equippedItems.AVATAR() : null,
-                equippedItems.BADGE() != null ? equippedItems.BADGE() : null,
-                equippedItems.BACKGROUND() != null ? equippedItems.BACKGROUND() : null
+                incoming.AVATAR() != null ? incoming.AVATAR() : current.AVATAR(),
+                incoming.BADGE() != null ? incoming.BADGE() : current.BADGE(),
+                incoming.BACKGROUND() != null ? incoming.BACKGROUND() : current.BACKGROUND()
         );
     }
 
-    @NonNull
-    private static ProfilePreferencesDto mergeWithDefaultPreferences(@NonNull ProfilePreferencesDto preferences) {
+    private static ProfilePreferencesDto mergeWithDefaultPreferences(
+            ProfilePreferencesDto incoming,
+            ProfilePreferencesDto current
+    ) {
         return new ProfilePreferencesDto(
-                preferences.theme() != null ? preferences.theme() : Theme.DEFAULT,
-                preferences.sound() != null ? preferences.sound() : true,
-                preferences.notifications() != null ? preferences.notifications() : false
+                incoming.theme() != null ? incoming.theme() : current.theme(),
+                incoming.sound() != null ? incoming.sound() : current.sound(),
+                incoming.notifications() != null ? incoming.notifications() : current.notifications()
         );
     }
 
-    @NonNull
-    private static ProfilePrivacySettingsDto mergeWithDefaultPrivacySettings(@NonNull ProfilePrivacySettingsDto privacySettings) {
+    private static ProfilePrivacySettingsDto mergeWithDefaultPrivacySettings(
+            ProfilePrivacySettingsDto incoming,
+            ProfilePrivacySettingsDto current
+    ) {
         return new ProfilePrivacySettingsDto(
-                privacySettings.show_email() != null ? privacySettings.show_email() : false,
-                privacySettings.show_school() != null ? privacySettings.show_school() : false,
-                privacySettings.show_class() != null ? privacySettings.show_class() : false
+                incoming.show_email() != null ? incoming.show_email() : current.show_email(),
+                incoming.show_school() != null ? incoming.show_school() : current.show_school(),
+                incoming.show_class() != null ? incoming.show_class() : current.show_class()
         );
     }
 }
