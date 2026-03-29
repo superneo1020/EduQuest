@@ -17,6 +17,8 @@ import { Layers, Star, Brain, LayoutList } from 'lucide-react-native';
 import { Stack, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import ReorderService, { ReorderQuestion } from '../../services/reorderService';
+import axios from "axios";
+import {useAuth} from "@/src/auth/AuthContext";
 
 const { width } = Dimensions.get('window');
 
@@ -69,6 +71,8 @@ interface GameState {
 }
 
 export default function SentenceReorderScreen() {
+    const [isSaving, setIsSaving] = useState(false);
+    const { token } = useAuth();
     // 游戏状态
     const [gameState, setGameState] = useState<GameState>({
         currentQuestion: 0,
@@ -262,6 +266,7 @@ export default function SentenceReorderScreen() {
                 ...prev,
                 gameFinished: true
             }));
+            saveScore();
         }
     };
 
@@ -333,6 +338,32 @@ export default function SentenceReorderScreen() {
     const getProgress = () => {
         if (gameState.questions.length === 0) return 0;
         return ((gameState.currentQuestion + 1) / gameState.questions.length) * 100;
+    };
+
+    // Get difficulty label
+    const getLevelLabel = (difficulty: Difficulty): string => {
+        return DIFFICULTY_LEVELS[difficulty].label;
+    };
+
+    // 在 SentenceReorderScreen 組件內
+    const saveScore = async () => {
+        if (!token || !gameState.difficulty) return;
+
+        setIsSaving(true);
+        try {
+            await axios.post('http://localhost:8080/api/user/game/score', {
+                gameName: "Sentence Reorder", // 確保這與資料庫 games 表一致
+                scores: gameState.score,
+                difficulty: getLevelLabel(gameState.difficulty).toUpperCase()
+            }, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            console.log("Score synced to server!");
+        } catch (e) {
+            console.error("Failed to sync score:", e);
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     // 渲染单词卡片

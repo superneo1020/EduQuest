@@ -106,13 +106,22 @@ VALUES
     ('MATH', 'AI Math Adventure', 'HARD', 'Robot', '結合人工智慧的高難度數學邏輯冒險。'),
 
     -- English Games
-    ('ENGLISH', 'Listening multiple choice questions', 'MEDIUM', 'Headphones', '聽力多選題測試，增強英文聽解能力。'),
-    ('ENGLISH', 'Word matching game', 'EASY', 'ABC', '經典單字配對，幫助記住基礎字彙。'),
-    ('ENGLISH', 'Sentence Reordering Game', 'HARD', 'Book', '句子重組挑戰，強化英文語法結構。'),
+    ('ENGLISH', 'Listening Game', 'MEDIUM', 'Headphones', '聽力多選題測試，增強英文聽解能力。'),
+    ('ENGLISH', 'Writing Game', 'EASY', 'ABC', '經典單字配對，幫助記住基礎字彙。'),
+    ('ENGLISH', 'Sentence Reorder', 'HARD', 'Book', '句子重組挑戰，強化英文語法結構。'),
 
     -- Science Games
-    ('SCIENCE', 'Animal sorting game', 'EASY', 'Leaf', '根據特徵對不同動物進行分類。'),
-    ('SCIENCE', 'Human Body Puzzle', 'MEDIUM', 'Brain', '人體器官拼圖，學習解剖學基礎知識。')
+    ('SCIENCE', 'Animal Catcher', 'EASY', 'Leaf', '根據特徵對不同動物進行分類。'),
+    ('SCIENCE', 'Animal Classification', 'MEDIUM', 'Brain', '人體器官拼圖，學習解剖學基礎知識。'),
+    ('SCIENCE', 'Body Parts Matching', 'MEDIUM', 'Body', '人體系統遊戲索引，探索人體各個系統。'),
+    ('SCIENCE', 'Human organs', 'EASY', 'Paw', '動物遊戲索引，學習各種動物知識。'),
+
+    -- Chinese Games
+    ('CHINESE', 'ChineseGame', 'MEDIUM', 'Character', '中文學習遊戲，提升中文能力。'),
+    ('CHINESE', 'ChineseSentenceGame', 'HARD', 'Scroll', '中文句子遊戲，學習中文句型結構。')
+
+    -- General/Misc Games
+
 ON CONFLICT (name) DO UPDATE SET
                                  type = EXCLUDED.type,
                                  difficulty = EXCLUDED.difficulty,
@@ -126,25 +135,25 @@ VALUES
     ('ENGLISH', 'Daily Reader', 'EASY', 'Book', 'Read for 15 minutes and complete a comprehension quiz', 10),
     ('MATH', 'Daily Math Practice', 'EASY', 'Calculator', 'Complete 5 math problems of any difficulty', 10),
     ('SCIENCE', 'Science Fact Finder', 'EASY', 'Atom', 'Learn one new science fact and answer a question', 10),
-    ('MEMORY', 'Memory Warm-up', 'EASY', 'Brain', 'Complete one memory game to start your day', 10),
+    ('CHINESE', 'Daily Chinese Practice', 'EASY', 'Character', 'Practice Chinese characters for 15 minutes', 10),
 
     -- Weekly Missions
     ('ENGLISH', 'Word Collector', 'MEDIUM', 'Languages', 'Learn 20 new vocabulary words this week', 30),
     ('MATH', 'Math Marathon', 'MEDIUM', 'Calculator', 'Complete 15 math problems across all difficulties', 30),
     ('SCIENCE', 'Science Explorer', 'MEDIUM', 'Atom', 'Complete 5 different science games', 30),
-    ('MEMORY', 'Memory Champion', 'MEDIUM', 'Brain', 'Achieve a score of 80% or higher in 3 memory games', 30),
+    ('CHINESE', 'Chinese Character Master', 'MEDIUM', 'Character', 'Learn 15 new Chinese characters this week', 30),
 
     -- Achievement Missions
     ('ENGLISH', 'Grammar Guru', 'HARD', 'Languages', 'Complete all English games with 90% accuracy', 50),
     ('MATH', 'Math Wizard', 'HARD', 'Calculator', 'Master all math difficulty levels', 50),
     ('SCIENCE', 'Science Master', 'HARD', 'Atom', 'Complete every science game at least once', 50),
-    ('MEMORY', 'Memory Master', 'HARD', 'Brain', 'Achieve perfect scores in all memory games', 50),
+    ('CHINESE', 'Chinese Language Expert', 'HARD', 'Scroll', 'Complete all Chinese games with 90% accuracy', 50),
 
     -- Special Missions
     ('MATH', 'Speed Demon', 'HARD', 'Calculator', 'Complete 10 math problems in under 2 minutes', 40),
     ('ENGLISH', 'Storyteller', 'MEDIUM', 'Languages', 'Write a short story using 10 vocabulary words', 35),
     ('SCIENCE', 'Experiment Log', 'MEDIUM', 'Atom', 'Document and explain 3 scientific concepts', 35),
-    ('MEMORY', 'Lightning Fast', 'HARD', 'Brain', 'Complete a memory game in record time', 40)
+    ('CHINESE', 'Chinese Speed Writing', 'HARD', 'Scroll', 'Write 20 Chinese characters in under 3 minutes', 40)
 ON CONFLICT (name) DO NOTHING;
 ;;;
 
@@ -190,26 +199,52 @@ WHERE user_id IN (SELECT id FROM users WHERE username IN ('student1', 'student2'
 -- Insert sample game scores for leaderboard display
 INSERT INTO user_game_scores (user_id, game_id, scores)
 VALUES
-    -- Speed Calculation (EASY)
+    -- Speed Calculation (EASY) - 名稱正確
     ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM games WHERE name = 'Speed Calculation'), 95),
     ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM games WHERE name = 'Speed Calculation'), 88),
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM games WHERE name = 'Speed Calculation'), 100),
 
-    -- AI Math Adventure (HARD)
+    -- AI Math Adventure (HARD) - 名稱正確
     ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM games WHERE name = 'AI Math Adventure'), 75),
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM games WHERE name = 'AI Math Adventure'), 92),
 
-    -- Word matching game (EASY)
-    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM games WHERE name = 'Word matching game'), 98),
-    ((SELECT id FROM users WHERE username = 'student3'), (SELECT id FROM games WHERE name = 'Word matching game'), 70),
+    -- 修正：'Word matching game' 改為 'Writing Game'
+    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM games WHERE name = 'Writing Game'), 98),
+    ((SELECT id FROM users WHERE username = 'student3'), (SELECT id FROM games WHERE name = 'Writing Game'), 70),
 
-    -- Sentence Reordering Game (HARD)
-    ((SELECT id FROM users WHERE username = 'teacher1'), (SELECT id FROM games WHERE name = 'Sentence Reordering Game'), 95),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM games WHERE name = 'Sentence Reordering Game'), 88),
+    -- 修正：'Sentence Reordering Game' 改為 'Sentence Reorder'
+    ((SELECT id FROM users WHERE username = 'teacher1'), (SELECT id FROM games WHERE name = 'Sentence Reorder'), 95),
+    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM games WHERE name = 'Sentence Reorder'), 88),
 
-    -- Animal sorting game (EASY)
-    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM games WHERE name = 'Animal sorting game'), 85),
-    ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM games WHERE name = 'Animal sorting game'), 92)
+    -- 修正：'Animal sorting game' 改為 'Animal Catcher'
+    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM games WHERE name = 'Animal Catcher'), 85),
+    ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM games WHERE name = 'Animal Catcher'), 92),
+
+    -- Listening Game (MEDIUM)
+    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM games WHERE name = 'Listening Game'), 78),
+    ((SELECT id FROM users WHERE username = 'student3'), (SELECT id FROM games WHERE name = 'Listening Game'), 82),
+    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM games WHERE name = 'Listening Game'), 90),
+
+    -- Human organs (EASY)
+    ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM games WHERE name = 'Human organs'), 88),
+    ((SELECT id FROM users WHERE username = 'student3'), (SELECT id FROM games WHERE name = 'Human organs'), 75),
+
+    -- Animal Classification (MEDIUM)
+    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM games WHERE name = 'Animal Classification'), 92),
+    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM games WHERE name = 'Animal Classification'), 85),
+
+    -- Body Parts Matching (MEDIUM)
+    ((SELECT id FROM users WHERE username = 'student3'), (SELECT id FROM games WHERE name = 'Body Parts Matching'), 80),
+    ((SELECT id FROM users WHERE username = 'teacher1'), (SELECT id FROM games WHERE name = 'Body Parts Matching'), 77),
+
+    -- ChineseGame (MEDIUM)
+    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM games WHERE name = 'ChineseGame'), 85),
+    ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM games WHERE name = 'ChineseGame'), 90),
+    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM games WHERE name = 'ChineseGame'), 88),
+
+    -- ChineseSentenceGame (HARD)
+    ((SELECT id FROM users WHERE username = 'student3'), (SELECT id FROM games WHERE name = 'ChineseSentenceGame'), 70),
+    ((SELECT id FROM users WHERE username = 'teacher1'), (SELECT id FROM games WHERE name = 'ChineseSentenceGame'), 82)
 ON CONFLICT DO NOTHING;
 ;;;
 
@@ -223,7 +258,7 @@ VALUES
     -- Student1 completed missions
     ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM missions WHERE name = 'Daily Reader'), TRUE),
     ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM missions WHERE name = 'Daily Math Practice'), TRUE),
-    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM missions WHERE name = 'Memory Warm-up'), TRUE),
+    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM missions WHERE name = 'Daily Chinese Practice'), TRUE),
     ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM missions WHERE name = 'Word Collector'), FALSE),
 
     -- Student2 completed missions (more advanced)
@@ -232,11 +267,11 @@ VALUES
     ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM missions WHERE name = 'Science Fact Finder'), TRUE),
     ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM missions WHERE name = 'Word Collector'), TRUE),
     ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM missions WHERE name = 'Math Marathon'), TRUE),
-    ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM missions WHERE name = 'Memory Champion'), FALSE),
+    ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM missions WHERE name = 'Chinese Character Master'), FALSE),
 
     -- Student3 completed missions (beginner)
     ((SELECT id FROM users WHERE username = 'student3'), (SELECT id FROM missions WHERE name = 'Daily Math Practice'), TRUE),
-    ((SELECT id FROM users WHERE username = 'student3'), (SELECT id FROM missions WHERE name = 'Memory Warm-up'), TRUE),
+    ((SELECT id FROM users WHERE username = 'student3'), (SELECT id FROM missions WHERE name = 'Daily Chinese Practice'), TRUE),
     ((SELECT id FROM users WHERE username = 'student3'), (SELECT id FROM missions WHERE name = 'Daily Reader'), FALSE),
 
     -- Teacher1 completed missions (demonstration purposes)
@@ -252,19 +287,19 @@ VALUES
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Daily Reader'), TRUE),
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Daily Math Practice'), TRUE),
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Science Fact Finder'), TRUE),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Memory Warm-up'), TRUE),
+    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Daily Chinese Practice'), TRUE),
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Word Collector'), TRUE),
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Math Marathon'), TRUE),
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Science Explorer'), TRUE),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Memory Champion'), TRUE),
+    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Chinese Character Master'), TRUE),
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Grammar Guru'), TRUE),
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Math Wizard'), TRUE),
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Science Master'), TRUE),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Memory Master'), TRUE),
+    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Chinese Language Expert'), TRUE),
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Speed Demon'), TRUE),
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Storyteller'), TRUE),
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Experiment Log'), TRUE),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Lightning Fast'), TRUE)
+    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Chinese Speed Writing'), TRUE)
 ON CONFLICT DO NOTHING;
 ;;;
 
