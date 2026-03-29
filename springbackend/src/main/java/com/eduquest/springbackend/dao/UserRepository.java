@@ -20,10 +20,19 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
     @Query("SELECT u.points FROM AppUser u WHERE u.username = :username")
     Optional<Integer> findPointsByUsername(@Param("username") String username);
 
+    @Query("SELECT s.name FROM AppUser u JOIN u.school s WHERE u.username = :username")
+    Optional<String> findSchoolNameByUsername(@Param("username") String username);
+
+    @Query("SELECT u.email FROM AppUser u WHERE u.username = :username")
+    Optional<String> findEmailByUsername(@Param("username") String username);
+
     @Query("SELECT new com.eduquest.springbackend.dto.UserAuthDto(u.username, u.password) " +
             "FROM AppUser u WHERE u.username = :username")
     Optional<UserAuthDto> findAuthInfoByUsername(@Param("username") String username);
 
     @Query("SELECT r.name FROM AppUser u JOIN u.roles r WHERE u.username = :username")
     Collection<String> findRoleNamesByUsername(@Param("username") String username);
+
+    @Query("SELECT r.name FROM AppUser u JOIN u.roles r WHERE u.username = :username")
+    Optional<Collection<String>> findRoleNamesByUsernameOptional(@Param("username") String username);
 }
