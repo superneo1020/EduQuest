@@ -2,8 +2,8 @@ package com.eduquest.springbackend.dto;
 
 import java.util.List;
 
-public record UserGameRecordDto(
-        List<UserGameScoreDto> userGameScores,
+public record PageResponse<T>(
+        List<T> content,
         int currentPage,
         int totalPages,
         long totalItems,

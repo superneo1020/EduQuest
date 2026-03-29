@@ -5,7 +5,6 @@ import com.eduquest.springbackend.dao.SchoolRepository;
 import com.eduquest.springbackend.dao.UserRepository;
 import com.eduquest.springbackend.dto.*;
 import com.eduquest.springbackend.enums.Theme;
-import com.eduquest.springbackend.exception.DuplicateResourceException;
 import com.eduquest.springbackend.exception.ResourceNotFoundException;
 import com.eduquest.springbackend.model.AppUser;
 import com.eduquest.springbackend.model.Role;
@@ -31,7 +30,8 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
-    private final UserDtoMapper userDtoMapper;
+    private final UserService userService;
+    private final DtoMapper dtoMapper;
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
     public AuthService(UserRepository userRepo,
@@ -39,25 +39,22 @@ public class AuthService {
                        AuthenticationManager authenticationManager,
                        PasswordEncoder passwordEncoder,
                        JwtService jwtService,
-                       UserDtoMapper userDtoMapper,
-                       SchoolRepository schoolRepo) {
+                       DtoMapper dtoMapper,
+                       SchoolRepository schoolRepo, UserService userService) {
         this.userRepo = userRepo;
         this.roleRepo = roleRepo;
         this.authenticationManager = authenticationManager;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
-        this.userDtoMapper = userDtoMapper;
+        this.userService = userService;
+        this.dtoMapper = dtoMapper;
         this.schoolRepo = schoolRepo;
     }
 
     @Transactional
     public RegisterResponse register(RegisterRequest req) {
-        if (userRepo.existsByUsername(req.username())) {
-            throw new DuplicateResourceException("Username already exists");
-        }
-        if (userRepo.existsByEmail(req.email())) {
-            throw new DuplicateResourceException("Email already exists");
-        }
+        userService.validateUsernameExists(req.username(), "Username already exists");
+        userService.validateEmailExists(req.email(), "Email already exists");
 
         School school = (req.schoolName() == null) ? null :
                 schoolRepo.findByName(req.schoolName())
@@ -118,7 +115,31 @@ public class AuthService {
         String token = login(username, password);
         AppUser user = userRepo.findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
-        UserDto userDto = userDtoMapper.toUser(user);
+        UserDto userDto = dtoMapper.toUser(user);
         return new LoginResponse(token, userDto);
     }
+
+    @Transactional
+    public boolean savePassword(String username, ResetPasswordRequest req) {
+        // 1. find user
+        AppUser user = userRepo.findByUsername(username)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+
+        // 2. check old password
+        if (!passwordEncoder.matches(req.oldPassword(), user.getPassword())) {
+            throw new BadCredentialsException("Old password is incorrect");
+        }
+
+        // 3. confirm that the new password is not same as old password
+        if (passwordEncoder.matches(req.newPassword(), user.getPassword())) {
+            throw new IllegalArgumentException("New password cannot be the same as old password");
+        }
+
+        // 4. encode new password and set it to user
+        user.setPassword(passwordEncoder.encode(req.newPassword()));
+        userRepo.save(user);
+        logger.info("Successful for changing password for user {}", username);
+        return true;
+    }
+
 }
