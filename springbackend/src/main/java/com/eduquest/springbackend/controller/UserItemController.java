@@ -2,11 +2,13 @@ package com.eduquest.springbackend.controller;
 
 import com.eduquest.springbackend.dto.UserItemRequest;
 import com.eduquest.springbackend.service.UserItemService;
-import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/user/item")
@@ -26,7 +28,7 @@ public class UserItemController {
     @PostMapping("/")
     public ResponseEntity<?> createMyItem(
             @AuthenticationPrincipal UserDetails userDetails,
-            @Valid @RequestBody UserItemRequest request
+            UserItemRequest request
     ) {
         return ResponseEntity.ok(userItemService.createUserItem(userDetails.getUsername(), request));
     }
