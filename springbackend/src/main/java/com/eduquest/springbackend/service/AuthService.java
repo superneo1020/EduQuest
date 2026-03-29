@@ -31,7 +31,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final UserService userService;
-    private final UserDtoMapper userDtoMapper;
+    private final DtoMapper dtoMapper;
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
     public AuthService(UserRepository userRepo,
@@ -39,7 +39,7 @@ public class AuthService {
                        AuthenticationManager authenticationManager,
                        PasswordEncoder passwordEncoder,
                        JwtService jwtService,
-                       UserDtoMapper userDtoMapper,
+                       DtoMapper dtoMapper,
                        SchoolRepository schoolRepo, UserService userService) {
         this.userRepo = userRepo;
         this.roleRepo = roleRepo;
@@ -47,7 +47,7 @@ public class AuthService {
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.userService = userService;
-        this.userDtoMapper = userDtoMapper;
+        this.dtoMapper = dtoMapper;
         this.schoolRepo = schoolRepo;
     }
 
@@ -115,7 +115,7 @@ public class AuthService {
         String token = login(username, password);
         AppUser user = userRepo.findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
-        UserDto userDto = userDtoMapper.toUser(user);
+        UserDto userDto = dtoMapper.toUser(user);
         return new LoginResponse(token, userDto);
     }
 
