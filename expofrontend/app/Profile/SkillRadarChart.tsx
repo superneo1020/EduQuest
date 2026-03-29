@@ -14,25 +14,45 @@ interface RadarData {
 
 export default function SkillRadarChart({ gameHistory }: { gameHistory: any[] }) {
 
-
-    // 1. 邏輯：計算各科目熟練度 (0 ~ 100)
+    // 1. 邏輯：動態計算各科目熟練度 (0 ~ 100)
     const skills = useMemo(() => {
-        const categories = [
-            { key: 'MATH', label: 'Math' },
-            { key: 'ENGLISH', label: 'English' },
-            { key: 'SCIENCE', label: 'Science' },
-            { key: 'MEMORY', label: 'Memory' }
-        ];
+        // 從遊戲歷史中動態提取所有遊戲類型
+        const gameTypes = [...new Set(gameHistory.map(g => g.type?.toUpperCase()).filter(Boolean))];
+
+        // 如果沒有遊戲記錄，使用預設類型
+        const categories = gameTypes.length > 0
+            ? gameTypes.map(type => ({ key: type, label: type.charAt(0) + type.slice(1).toLowerCase() }))
+            : [
+                { key: 'MATH', label: 'Math' },
+                { key: 'ENGLISH', label: 'English' },
+                { key: 'SCIENCE', label: 'Science' },
+                { key: 'CHINESE', label: 'Chinese' }
+            ];
 
         return categories.map(cat => {
             const scores = gameHistory
-                .filter(g => g.gameType?.toUpperCase() === cat.key)
-                .map(g => g.scores);
+                .filter(g => g.type?.toUpperCase() === cat.key)
+                .map(g => g.scores || 0);
 
-            // 假設 100 分是滿分，計算平均值
-            const avg = scores.length > 0
-                ? Math.min(scores.reduce((a, b) => a + b, 0) / scores.length, 100)
-                : 20; // 沒玩過給點基礎分
+            // 計算平均分，考慮難度加權
+            let avg = 0;
+            if (scores.length > 0) {
+                // 基礎平均分
+                avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+
+                // 難度加權：HARD +10%, MEDIUM +5%, EASY 不變
+                const difficultyBonus = gameHistory
+                    .filter(g => g.type?.toUpperCase() === cat.key)
+                    .reduce((bonus, g) => {
+                        switch(g.difficulty?.toUpperCase()) {
+                            case 'HARD': return bonus + 10;
+                            case 'MEDIUM': return bonus + 5;
+                            default: return bonus;
+                        }
+                    }, 0) / scores.length;
+
+                avg = Math.min(avg + difficultyBonus, 100);
+            }
 
             return { label: cat.label, value: avg / 100 };
         });

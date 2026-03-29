@@ -171,7 +171,7 @@ export default function CalculationGame() {
     const saveScore = async () => {
         setIsSaving(true);
         try {
-            await axios.post('http://localhost:8080/api/user/game/score', { gameName: "Math Boss", scores: score, difficulty }, { headers: { 'Authorization': `Bearer ${token}` } });
+            await axios.post('http://localhost:8080/api/user/game/score', { gameName: "Speed Calculation", scores: score, difficulty }, { headers: { 'Authorization': `Bearer ${token}` } });
             router.push('/rank/leaderboard');
         } catch (e) { router.push('/'); }
     };
