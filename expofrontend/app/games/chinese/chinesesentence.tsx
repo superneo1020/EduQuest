@@ -279,7 +279,7 @@ export default function ChineseSentenceGame() {
             if (router.canGoBack()) {
                 router.back();
             } else {
-                router.push('/games/chinese');
+                router.push('/games/chinese/chinese');
             }
         } else if (gameState === 'playing') {
             // 如果在遊戲中，詢問是否退出

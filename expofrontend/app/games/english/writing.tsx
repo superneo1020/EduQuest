@@ -227,9 +227,8 @@ export default function WritingScreen() {
                 {
                     imageDescription: currentScene.description,
                     category: currentScene.category,
-                    wordLimit: wordLimit,
-                    difficulty: difficulty || 'hard'
-                }
+                    wordLimit: wordLimit
+                                    }
             );
 
             setAnalysis(result);
