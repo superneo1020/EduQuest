@@ -12,6 +12,8 @@ import {
     Vibration,
     ActivityIndicator,
 } from 'react-native';
+import { Volume2, Star, Headphones } from 'lucide-react-native'; // 仿照 chinesequiz 的圖標庫
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -97,6 +99,40 @@ export default function ListeningScreen() {
     // 动画引用
     const scaleAnim = useRef(new Animated.Value(1)).current;
     const progressAnim = useRef(new Animated.Value(0)).current;
+
+    // 定義與 chinesequiz.tsx 結構一致的難度選項
+    const difficultyOptions = [
+        {
+            id: 'easy' as const,
+            title: 'Easy',
+            badgeText: 'Beginner',
+            description: 'Simple words and phrases. Perfect for warming up your ears.',
+            icon: '👂',
+            color: '#4CAF50',
+            bgColor: '#E8F5E9',
+            features: ['Slow speed', 'Basic vocabulary', '6 Questions']
+        },
+        {
+            id: 'medium' as const,
+            title: 'Medium',
+            badgeText: 'Intermediate',
+            description: 'Short everyday sentences with natural speaking speed.',
+            icon: '💬',
+            color: '#FF9800',
+            bgColor: '#FFF3E0',
+            features: ['Normal speed', 'Common phrases', '6 Questions']
+        },
+        {
+            id: 'hard' as const,
+            title: 'Hard',
+            badgeText: 'Advanced',
+            description: 'Complex sentences and idiomatic expressions for experts.',
+            icon: '⚡',
+            color: '#F44336',
+            bgColor: '#FFEBEE',
+            features: ['Fast speed', 'Idiomatic usage', '6 Questions']
+        }
+    ];
 
     // 加载最高分
     useEffect(() => {
@@ -423,56 +459,81 @@ export default function ListeningScreen() {
     // 难度选择页面 (采用 writing.tsx 风格)
     if (gameState.currentLevel === null) {
         return (
-            <View style={styles.container}>
+            <SafeAreaView style={styles.container}>
                 <Stack.Screen
                     options={{
-                        title: 'Listening Game',
-                        headerStyle: { backgroundColor: '#4b6cb7' },
-                        headerTintColor: '#fff',
-                        headerLeft: () => (
-                            <TouchableOpacity onPress={goBackToGames} style={{ marginLeft: 10 }}>
-                                <Ionicons name="arrow-back" size={24} color="white" />
-                            </TouchableOpacity>
-                        ),
+                        headerShown: false, // 隱藏原生 Header 以匹配標題區域風格
                     }}
                 />
-                <ScrollView
-                    style={styles.difficultyScroll}
-                    contentContainerStyle={styles.difficultyScrollContent}
-                    showsVerticalScrollIndicator={false}
-                >
-                    <View style={styles.difficultyContainer}>
-                        <Text style={styles.difficultyTitle}>Listening Game</Text>
-                        <Text style={styles.difficultySubtitle}>Test your listening skills</Text>
-
-                        <View style={styles.difficultyOptions}>
-                            {(Object.keys(DIFFICULTY_CONFIG) as Difficulty[]).map((level) => {
-                                const config = DIFFICULTY_CONFIG[level];
-                                return (
-                                    <TouchableOpacity
-                                        key={level}
-                                        style={[
-                                            styles.difficultyCard,
-                                            { borderColor: config.color }
-                                        ]}
-                                        onPress={() => selectDifficulty(level)}
-                                    >
-                                        <View style={[styles.difficultyBadge, { backgroundColor: config.color }]}>
-                                            <Text style={styles.difficultyBadgeText}>{config.label}</Text>
-                                        </View>
-                                        <Text style={styles.difficultyDescription}>
-                                            {config.description}
-                                        </Text>
-                                        <Text style={styles.difficultyHint}>
-                                            {config.hint}
-                                        </Text>
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </View>
+                <ScrollView contentContainerStyle={styles.scrollContent}>
+                    {/* 頂部標題區域 - 仿 chinesequiz.tsx */}
+                    <View style={styles.headerSection}>
+                        <Volume2 size={60} color="#4b6cb7" style={{ marginBottom: 20 }} />
+                        <Text style={styles.mainTitle}>Listening Mastery</Text>
+                        <Text style={styles.subTitle}>
+                            Train your ears and improve your comprehension with AI.
+                        </Text>
                     </View>
+
+                    {/* 難度選擇卡片列表 - 仿 chinesequiz.tsx */}
+                    <View style={styles.menuGrid}>
+                        {difficultyOptions.map((option) => (
+                            <TouchableOpacity
+                                key={option.id}
+                                style={[
+                                    styles.diffCard,
+                                    { backgroundColor: option.bgColor, borderColor: option.color }
+                                ]}
+                                onPress={() => selectDifficulty(option.id)}
+                                activeOpacity={0.8}
+                            >
+                                {/* 左側圓形圖標 */}
+                                <View style={styles.cardIconContainer}>
+                                    <Text style={styles.cardIcon}>{option.icon}</Text>
+                                </View>
+
+                                {/* 右側內容區 */}
+                                <View style={styles.cardContent}>
+                                    <View style={styles.cardHeader}>
+                                        <Text style={[styles.diffBtnText, { color: option.color }]}>
+                                            {option.title}
+                                        </Text>
+                                        <View style={[styles.levelBadge, { backgroundColor: option.color }]}>
+                                            <Text style={styles.levelBadgeText}>{option.badgeText}</Text>
+                                        </View>
+                                    </View>
+
+                                    <Text style={styles.diffDesc}>{option.description}</Text>
+
+                                    {/* 特色清單 */}
+                                    <View style={styles.featuresList}>
+                                        {option.features.map((feature, index) => (
+                                            <View key={index} style={styles.featureItem}>
+                                                <Star size={12} color={option.color} style={styles.featureIcon} />
+                                                <Text style={styles.featureText}>{feature}</Text>
+                                            </View>
+                                        ))}
+                                    </View>
+
+                                    {/* 下方開始按鈕樣式 */}
+                                    <View style={styles.startButtonContainer}>
+                                        <View style={[styles.startButton, { backgroundColor: option.color }]}>
+                                            <Text style={styles.startButtonText}>Start Training →</Text>
+                                        </View>
+                                    </View>
+                                </View>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+
+                    <TouchableOpacity
+                        style={styles.backLink}
+                        onPress={goBackToGames}
+                    >
+                        <Text style={styles.backLinkText}>← Back to Game Library</Text>
+                    </TouchableOpacity>
                 </ScrollView>
-            </View>
+            </SafeAreaView>
         );
     }
 
@@ -881,6 +942,128 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#f5f5f5',
     },
+    // --- 新增: 仿 chinesequiz 風格的 Header 樣式 ---
+    headerSection: {
+        alignItems: 'center',
+        paddingTop: 40,
+        paddingHorizontal: 20,
+        paddingBottom: 30,
+        backgroundColor: '#fff',
+    },
+    mainTitle: {
+        fontSize: 32,
+        fontWeight: '800',
+        color: '#1E293B',
+        textAlign: 'center',
+        marginBottom: 8,
+    },
+    subTitle: {
+        fontSize: 16,
+        color: '#64748B',
+        textAlign: 'center',
+        marginBottom: 10,
+    },
+    // --- 新增: 卡片佈局樣式 ---
+    menuGrid: {
+        width: '100%',
+        paddingHorizontal: 20,
+        gap: 20,
+    },
+    diffCard: {
+        flexDirection: 'row',
+        padding: 20,
+        borderRadius: 16,
+        borderWidth: 2,
+        gap: 15,
+        marginBottom: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 3,
+    },
+    cardIconContainer: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        elevation: 2,
+    },
+    cardIcon: {
+        fontSize: 32,
+    },
+    cardContent: {
+        flex: 1,
+    },
+    cardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 8,
+    },
+    diffBtnText: {
+        fontSize: 20,
+        fontWeight: '700',
+    },
+    levelBadge: {
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    levelBadgeText: {
+        fontSize: 10,
+        color: '#fff',
+        fontWeight: '600',
+    },
+    diffDesc: {
+        fontSize: 14,
+        color: '#64748B',
+        marginBottom: 12,
+        lineHeight: 20,
+    },
+    featuresList: {
+        marginBottom: 15,
+        gap: 6,
+    },
+    featureItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    featureIcon: {
+        marginRight: 4,
+    },
+    featureText: {
+        fontSize: 12,
+        color: '#475569',
+    },
+    startButtonContainer: {
+        alignItems: 'flex-end',
+    },
+    startButton: {
+        paddingHorizontal: 20,
+        paddingVertical: 8,
+        borderRadius: 20,
+        minWidth: 120,
+        alignItems: 'center',
+    },
+    startButtonText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#fff',
+    },
+    backLink: {
+        marginTop: 20,
+        alignItems: 'center',
+    },
+    backLinkText: {
+        fontSize: 16,
+        color: '#4b6cb7',
+        fontWeight: '600',
+    },
+    ///////////
     // 难度选择页面样式 (采用 writing.tsx 风格)
     difficultyScroll: {
         flex: 1,

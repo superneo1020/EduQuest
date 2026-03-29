@@ -7,11 +7,13 @@ import {
     TouchableOpacity,
     ScrollView,
     Modal,
+    SafeAreaView,
     Dimensions,
     ActivityIndicator,
     Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Layers, Star, Brain, LayoutList } from 'lucide-react-native';
 import { Stack, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import ReorderService, { ReorderQuestion } from '../../services/reorderService';
@@ -20,8 +22,26 @@ const { width } = Dimensions.get('window');
 
 // 难度级别配置 - 只保留 Easy 和 Medium
 const DIFFICULTY_LEVELS = {
-    easy: { label: 'Easy', color: '#4CAF50', questionsPerGame: 5, desc: 'Simple 3-4 word sentences', hint: 'Short sentences • Basic word order' },
-    medium: { label: 'Medium', color: '#FF9800', questionsPerGame: 5, desc: 'Common 4-5 word phrases', hint: 'Moderate length • Common phrases' }
+    easy: {
+        label: 'Easy',
+        badgeText: 'Beginner',
+        color: '#4CAF50',
+        bgColor: '#E8F5E9',
+        icon: '🌱',
+        questionsPerGame: 5,
+        desc: 'Simple 3-4 word sentences. Focus on basic structure.',
+        features: ['Short sentences', 'Basic word order', '5 Questions']
+    },
+    medium: {
+        label: 'Medium',
+        badgeText: 'Intermediate',
+        color: '#FF9800',
+        bgColor: '#FFF3E0',
+        icon: '🌳',
+        questionsPerGame: 5,
+        desc: 'Common 4-5 word phrases. Natural daily expressions.',
+        features: ['Moderate length', 'Common phrases', '5 Questions']
+    }
 };
 
 type Difficulty = 'easy' | 'medium';
@@ -336,52 +356,56 @@ export default function SentenceReorderScreen() {
     };
 
     // 难度选择页面 - 采用 writing.tsx 风格
-    const renderDifficultySelector = () => (
-        <ScrollView
-            style={styles.difficultyScroll}
-            contentContainerStyle={styles.difficultyScrollContent}
-            showsVerticalScrollIndicator={false}
-        >
-            <View style={styles.difficultyContainer}>
-                <Text style={styles.difficultyTitle}>Sentence Reorder</Text>
-                <Text style={styles.difficultySubtitle}>Arrange words to form correct sentences</Text>
+    const renderDifficultySelector = () => {
+        return (
+            <SafeAreaView style={styles.container}>
+                <ScrollView contentContainerStyle={styles.scrollContent}>
+                    <View style={styles.headerSection}>
+                        <LayoutList size={60} color="#4A90E2" style={{ marginBottom: 20 }} />
+                        <Text style={styles.mainTitle}>Sentence Reorder</Text>
+                        <Text style={styles.subTitle}>
+                            Drag and drop words to build perfect English sentences!
+                        </Text>
+                    </View>
 
-                <View style={styles.difficultyOptions}>
-                    {(Object.keys(DIFFICULTY_LEVELS) as Difficulty[]).map((level) => {
-                        const config = DIFFICULTY_LEVELS[level];
-                        return (
-                            <TouchableOpacity
-                                key={level}
-                                style={[
-                                    styles.difficultyCard,
-                                    { borderColor: config.color }
-                                ]}
-                                onPress={() => initializeGame(level)}
-                            >
-                                <View style={[styles.difficultyBadge, { backgroundColor: config.color }]}>
-                                    <Text style={styles.difficultyBadgeText}>{config.label}</Text>
-                                </View>
-                                <Text style={styles.difficultyDescription}>
-                                    {config.desc}
-                                </Text>
-                                <Text style={styles.difficultyHint}>
-                                    {config.hint}
-                                </Text>
-                                <Text style={styles.difficultyPoints}>
-                                    {config.questionsPerGame} questions • 20 points each
-                                </Text>
-                            </TouchableOpacity>
-                        );
-                    })}
-                </View>
+                    <View style={styles.menuGrid}>
+                        {(Object.keys(DIFFICULTY_LEVELS) as Difficulty[]).map((level) => {
+                            const config = DIFFICULTY_LEVELS[level];
+                            return (
+                                <TouchableOpacity
+                                    key={level}
+                                    style={[
+                                        styles.diffCard,
+                                        { backgroundColor: config.bgColor, borderColor: config.color }
+                                    ]}
+                                    // 修正這裡：確保名稱與你的 initializeGame 函式一致
+                                    onPress={() => initializeGame(level)}
+                                    activeOpacity={0.8}
+                                >
+                                    <View style={styles.cardIconContainer}>
+                                        <Text style={styles.cardIcon}>{config.icon}</Text>
+                                    </View>
 
-                <TouchableOpacity style={styles.backToHomeButton} onPress={goToHome}>
-                    <Ionicons name="home" size={20} color="#666" />
-                    <Text style={styles.backToHomeText}>Back to Home</Text>
-                </TouchableOpacity>
-            </View>
-        </ScrollView>
-    );
+                                    <View style={styles.cardContent}>
+                                        <View style={styles.cardHeader}>
+                                            <Text style={[styles.diffBtnText, { color: config.color }]}>
+                                                {config.label}
+                                            </Text>
+                                            <View style={[styles.levelBadge, { backgroundColor: config.color }]}>
+                                                <Text style={styles.levelBadgeText}>{config.badgeText}</Text>
+                                            </View>
+                                        </View>
+                                        <Text style={styles.diffDesc}>{config.desc}</Text>
+                                        {/* ...其餘代碼保持不變 ... */}
+                                    </View>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
+                </ScrollView>
+            </SafeAreaView>
+        );
+    };
 
     // 游戏完成页面
     const renderCompletionScreen = () => {
@@ -667,74 +691,124 @@ const styles = StyleSheet.create({
         padding: 5,
     },
     // 难度选择页面样式 (采用 writing.tsx 风格)
-    difficultyScroll: {
-        flex: 1,
-        backgroundColor: '#f5f5f5',
-    },
-    difficultyScrollContent: {
-        flexGrow: 1,
-        justifyContent: 'center',
-        paddingVertical: 40,
-    },
-    difficultyContainer: {
+    headerSection: {
+        alignItems: 'center',
+        paddingTop: 50,
         paddingHorizontal: 20,
+        paddingBottom: 30,
+        backgroundColor: '#fff',
     },
-    difficultyTitle: {
+    mainTitle: {
         fontSize: 32,
-        fontWeight: 'bold',
-        color: '#333',
+        fontWeight: '800',
+        color: '#1E293B',
         textAlign: 'center',
         marginBottom: 8,
     },
-    difficultySubtitle: {
+    subTitle: {
         fontSize: 16,
-        color: '#666',
+        color: '#64748B',
         textAlign: 'center',
-        marginBottom: 32,
+        marginBottom: 10,
     },
-    difficultyOptions: {
-        gap: 16,
+    menuGrid: {
+        width: '100%',
+        paddingHorizontal: 20,
+        gap: 20,
     },
-    difficultyCard: {
-        backgroundColor: 'white',
-        borderRadius: 20,
+    diffCard: {
+        flexDirection: 'row',
         padding: 20,
+        borderRadius: 16,
         borderWidth: 2,
-        borderColor: 'transparent',
-        elevation: 3,
+        gap: 15,
+        marginBottom: 20,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
-        shadowRadius: 4,
+        shadowRadius: 8,
+        elevation: 3,
     },
-    difficultyBadge: {
-        alignSelf: 'flex-start',
-        paddingHorizontal: 12,
-        paddingVertical: 4,
-        borderRadius: 20,
-        marginBottom: 12,
+    cardIconContainer: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        elevation: 2,
     },
-    difficultyBadgeText: {
-        fontSize: 14,
-        fontWeight: 'bold',
-        color: 'white',
+    cardIcon: {
+        fontSize: 32,
     },
-    difficultyDescription: {
-        fontSize: 16,
-        fontWeight: '500',
-        color: '#333',
+    cardContent: {
+        flex: 1,
+    },
+    cardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
         marginBottom: 8,
     },
-    difficultyHint: {
-        fontSize: 12,
-        color: '#999',
-        fontStyle: 'italic',
-        marginBottom: 12,
+    diffBtnText: {
+        fontSize: 20,
+        fontWeight: '700',
     },
-    difficultyPoints: {
+    levelBadge: {
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    levelBadgeText: {
+        fontSize: 10,
+        color: '#fff',
+        fontWeight: '600',
+    },
+    diffDesc: {
+        fontSize: 14,
+        color: '#64748B',
+        marginBottom: 12,
+        lineHeight: 20,
+    },
+    featuresList: {
+        marginBottom: 15,
+        gap: 6,
+    },
+    featureItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    featureIcon: {
+        marginRight: 4,
+    },
+    featureText: {
         fontSize: 12,
-        color: '#4b6cb7',
-        fontWeight: '500',
+        color: '#475569',
+    },
+    startButtonContainer: {
+        alignItems: 'flex-end',
+    },
+    startButton: {
+        paddingHorizontal: 20,
+        paddingVertical: 8,
+        borderRadius: 20,
+        minWidth: 120,
+        alignItems: 'center',
+    },
+    startButtonText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#fff',
+    },
+    backLink: {
+        marginTop: 20,
+        alignItems: 'center',
+    },
+    backLinkText: {
+        fontSize: 16,
+        color: '#4A90E2',
+        fontWeight: '600',
     },
     backToHomeButton: {
         flexDirection: 'row',
@@ -880,12 +954,7 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         fontStyle: 'italic',
     },
-    loadingText: {
-        fontSize: 16,
-        color: '#999',
-        textAlign: 'center',
-        padding: 20,
-    },
+
     feedbackBox: {
         backgroundColor: 'white',
         borderRadius: 12,

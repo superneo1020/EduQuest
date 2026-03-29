@@ -13,6 +13,7 @@ import {
     StatusBar
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Brain, Star, Languages, BookOpen } from 'lucide-react-native';
 import { Ionicons } from '@expo/vector-icons';
 import chineseSentenceAIService, {
     ChineseSentenceResponse,
@@ -37,6 +38,29 @@ type Difficulty = 'easy' | 'medium' | null;
 type GameState = 'difficulty_select' | 'playing' | 'result';
 
 const TOTAL_QUESTIONS = 10;
+
+const difficultyOptions = [
+    {
+        id: 'easy',
+        title: 'Easy',
+        level: 'beginner',
+        description: 'Common vocabulary and basic sentence patterns for beginners.',
+        icon: '🌱',
+        color: '#4CAF50',
+        bgColor: '#E8F5E9',
+        features: []
+    },
+    {
+        id: 'medium',
+        title: 'Medium',
+        level: 'advanced',
+        description: 'Standard daily language and more complex sentence structures.',
+        icon: '🌳',
+        color: '#FF9800',
+        bgColor: '#FFF3E0',
+        features: []
+    }
+];
 
 export default function ChineseSentenceGame() {
     const router = useRouter();
@@ -411,30 +435,67 @@ export default function ChineseSentenceGame() {
     // 難度選擇頁面
     const renderDifficultySelector = () => {
         return (
-            <View style={styles.centerContainer}>
-                <Text style={styles.title}>選擇難度 🧠</Text>
-                <Text style={styles.subtitle}>中文填空遊戲</Text>
-
-                <View style={styles.buttonSpacing}>
-                    <TouchableOpacity
-                        style={[styles.difficultyButton, styles.easyButton]}
-                        onPress={() => startGame('easy')}
-                    >
-                        <Text style={styles.difficultyButtonText}>簡單 (初級詞彙)</Text>
-                        <Text style={styles.difficultyDesc}>常用詞彙、基本句型</Text>
-                    </TouchableOpacity>
+            <ScrollView contentContainerStyle={styles.scrollContent}>
+                {/* 仿照 AnimalGamesIndex 的頭部區域[cite: 3] */}
+                <View style={styles.headerSection}>
+                    <Languages size={60} color="#4CAF50" style={{ marginBottom: 20 }} />
+                    <Text style={styles.mainTitle}>Chinese Sentence Quiz</Text>
+                    <Text style={styles.subTitle}>
+                        Master Mandarin sentence structures through interactive filling!
+                    </Text>
                 </View>
 
-                <View style={styles.buttonSpacing}>
-                    <TouchableOpacity
-                        style={[styles.difficultyButton, styles.mediumButton]}
-                        onPress={() => startGame('medium')}
-                    >
-                        <Text style={styles.difficultyButtonText}>中等 (日常用語)</Text>
-                        <Text style={styles.difficultyDesc}>日常對話、常用詞彙</Text>
-                    </TouchableOpacity>
+                {/* 難度選擇網格[cite: 3] */}
+                <View style={styles.menuGrid}>
+                    {difficultyOptions.map((option) => (
+                        <TouchableOpacity
+                            key={option.id}
+                            style={[
+                                styles.diffCard,
+                                { backgroundColor: option.bgColor, borderColor: option.color }
+                            ]}
+                            onPress={() => startGame(option.id as Difficulty)}
+                            activeOpacity={0.8}
+                        >
+                            <View style={styles.cardIconContainer}>
+                                <Text style={styles.cardIcon}>{option.icon}</Text>
+                            </View>
+                            <View style={styles.cardContent}>
+                                <View style={styles.cardHeader}>
+                                    <Text style={[styles.diffBtnText, { color: option.color }]}>
+                                        {option.title}
+                                    </Text>
+                                    <View style={[styles.levelBadge, { backgroundColor: option.color }]}>
+                                        <Text style={styles.levelBadgeText}>
+                                            {option.level === 'beginner' ? 'Easy Start' : 'Challenge'}
+                                        </Text>
+                                    </View>
+                                </View>
+                                <Text style={styles.diffDesc}>{option.description}</Text>
+
+                                {/* 特色功能列表[cite: 3] */}
+                                <View style={styles.featuresList}>
+                                    {option.features.map((feature, index) => (
+                                        <View key={index} style={styles.featureItem}>
+                                            <Star size={12} color={option.color} style={styles.featureIcon} />
+                                            <Text style={styles.featureText}>{feature}</Text>
+                                        </View>
+                                    ))}
+                                </View>
+
+                                {/* 開始按鈕[cite: 3] */}
+                                <View style={styles.startButtonContainer}>
+                                    <View style={[styles.startButton, { backgroundColor: option.color }]}>
+                                        <Text style={styles.startButtonText}>
+                                            Start Quiz →
+                                        </Text>
+                                    </View>
+                                </View>
+                            </View>
+                        </TouchableOpacity>
+                    ))}
                 </View>
-            </View>
+            </ScrollView>
         );
     };
 
@@ -617,32 +678,122 @@ const styles = StyleSheet.create({
         width: '85%',
         marginVertical: 12,
     },
-    difficultyButton: {
-        paddingVertical: 18,
-        paddingHorizontal: 20,
-        borderRadius: 16,
+    scrollContent: {
+        paddingBottom: 40,
+    },
+    headerSection: {
         alignItems: 'center',
+        paddingTop: 40,
+        paddingHorizontal: 20,
+        paddingBottom: 30,
+        backgroundColor: '#fff',
+    },
+    mainTitle: {
+        fontSize: 32,
+        fontWeight: '800',
+        color: '#1E293B',
+        textAlign: 'center',
+        marginBottom: 8,
+    },
+    subTitle: {
+        fontSize: 16,
+        color: '#64748B',
+        textAlign: 'center',
+        marginBottom: 30,
+    },
+    menuGrid: {
+        width: '100%',
+        paddingHorizontal: 20,
+        gap: 20,
+    },
+    diffCard: {
+        flexDirection: 'row',
+        padding: 20,
+        borderRadius: 16,
+        borderWidth: 2,
+        gap: 15,
+        backgroundColor: '#fff',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
-        shadowRadius: 4,
+        shadowRadius: 8,
         elevation: 3,
+        marginBottom: 20, // 額外增加間距
     },
-    easyButton: {
-        backgroundColor: '#4CAF50',
+    cardIconContainer: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        elevation: 2,
     },
-    mediumButton: {
-        backgroundColor: '#FF9800',
+    cardIcon: {
+        fontSize: 32,
     },
-    difficultyButtonText: {
-        color: '#fff',
+    cardContent: {
+        flex: 1,
+    },
+    cardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 8,
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    diffBtnText: {
         fontSize: 18,
-        fontWeight: 'bold',
-        marginBottom: 4,
+        fontWeight: '700',
     },
-    difficultyDesc: {
-        color: 'rgba(255,255,255,0.9)',
+    levelBadge: {
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    levelBadgeText: {
+        fontSize: 10,
+        color: '#fff',
+        fontWeight: '600',
+    },
+    diffDesc: {
+        fontSize: 14,
+        color: '#64748B',
+        marginBottom: 12,
+        lineHeight: 20,
+    },
+    featuresList: {
+        marginBottom: 15,
+        gap: 6,
+    },
+    featureItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    featureIcon: {
+        marginRight: 4,
+    },
+    featureText: {
         fontSize: 12,
+        color: '#475569',
+    },
+    startButtonContainer: {
+        alignItems: 'flex-end',
+        marginTop: 8,
+    },
+    startButton: {
+        paddingHorizontal: 20,
+        paddingVertical: 8,
+        borderRadius: 20,
+        minWidth: 120,
+        alignItems: 'center',
+    },
+    startButtonText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#fff',
     },
     loadingContainer: {
         flex: 1,
@@ -895,7 +1046,6 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         marginBottom: 30,
         flexDirection: 'row',
-        alignItems: 'baseline',
     },
     scorePercentage: {
         fontSize: 72,
