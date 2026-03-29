@@ -9,9 +9,12 @@ import {
     ScrollView,
     ActivityIndicator,
     Alert,
-    BackHandler
+    BackHandler,
+    SafeAreaView
 } from 'react-native';
 import { router, Stack } from 'expo-router';
+// 引入與 AnimalGamesIndex 相同的圖標庫
+import { Languages, BookOpen, Star, Brain } from 'lucide-react-native';
 import ChineseAIService, { ChineseQuestion } from '../../services/ChineseAIService';
 
 type GameState = 'difficulty_select' | 'playing' | 'result';
@@ -42,6 +45,31 @@ const ChineseGame = () => {
 
         return () => backHandler.remove();
     }, [gameState]);
+
+    const difficultyOptions = [
+        {
+            id: 'beginner',
+            level: 'beginner' as const,
+            title: 'Beginner',
+            badgeText: 'Easy Start',
+            description: 'Basic vocabulary, simple sentences, pinyin support',
+            icon: '🀄️',
+            color: '#4A90E2',
+            bgColor: '#E3F2FD',
+            features: []
+        },
+        {
+            id: 'advanced',
+            level: 'advanced' as const,
+            title: 'Advanced',
+            badgeText: 'Challenge',
+            description: 'Complex characters, idioms, and cultural context',
+            icon: '📜',
+            color: '#E67E22',
+            bgColor: '#FFF3E0',
+            features: []
+        }
+    ];
 
     const loadQuestions = async (selectedDifficulty: 'beginner' | 'advanced') => {
         setLoading(true);
@@ -226,48 +254,75 @@ const ChineseGame = () => {
     };
 
     const renderDifficultySelect = () => {
-        const totalQuestions = 11;
-
         return (
-            <ScrollView contentContainerStyle={styles.difficultySelectContainer}>
-                <Text style={styles.difficultySelectTitle}>Select Difficulty 🀄️</Text>
-                <Text style={styles.difficultySelectSubtitle}>
-                    Choose your Chinese learning level
-                </Text>
+            <SafeAreaView style={styles.container}>
+                <ScrollView contentContainerStyle={styles.scrollContent}>
+                    {/* 頂部標題區域 - 仿 AnimalGamesIndex */}
+                    <View style={styles.headerSection}>
+                        <Languages size={60} color="#4A90E2" style={{ marginBottom: 20 }} />
+                        <Text style={styles.mainTitle}>Chinese Learning</Text>
+                        <Text style={styles.subTitle}>
+                            Master Mandarin through AI-powered interactive quizzes!
+                        </Text>
+                    </View>
 
-                <TouchableOpacity
-                    style={[styles.difficultySelectButton, styles.beginnerButton]}
-                    onPress={() => handleSelectDifficulty('beginner')}
-                >
-                    <Text style={styles.difficultySelectButtonTitle}>Beginner</Text>
-                    <Text style={styles.difficultySelectButtonDesc}>
-                        Basic vocabulary, simple sentences, pinyin support
-                    </Text>
-                    <Text style={styles.questionCountText}>
-                        {totalQuestions} questions per session
-                    </Text>
-                </TouchableOpacity>
+                    {/* 難度選擇卡片列表 - 仿 AnimalGamesIndex diffCard */}
+                    <View style={styles.menuGrid}>
+                        {difficultyOptions.map((option) => (
+                            <TouchableOpacity
+                                key={option.id}
+                                style={[
+                                    styles.diffCard,
+                                    { backgroundColor: option.bgColor, borderColor: option.color }
+                                ]}
+                                onPress={() => handleSelectDifficulty(option.level)}
+                                activeOpacity={0.8}
+                            >
+                                <View style={styles.cardIconContainer}>
+                                    <Text style={styles.cardIcon}>{option.icon}</Text>
+                                </View>
 
-                <TouchableOpacity
-                    style={[styles.difficultySelectButton, styles.advancedButton]}
-                    onPress={() => handleSelectDifficulty('advanced')}
-                >
-                    <Text style={styles.difficultySelectButtonTitle}>Advanced</Text>
-                    <Text style={styles.difficultySelectButtonDesc}>
-                        Complex characters, idioms, and cultural context
-                    </Text>
-                    <Text style={styles.questionCountText}>
-                        {totalQuestions} questions per session
-                    </Text>
-                </TouchableOpacity>
+                                <View style={styles.cardContent}>
+                                    <View style={styles.cardHeader}>
+                                        <Text style={[styles.diffBtnText, { color: option.color }]}>
+                                            {option.title}
+                                        </Text>
+                                        <View style={[styles.levelBadge, { backgroundColor: option.color }]}>
+                                            <Text style={styles.levelBadgeText}>{option.badgeText}</Text>
+                                        </View>
+                                    </View>
 
-                <TouchableOpacity
-                    style={styles.backToGamesButton}
-                    onPress={handleBackToGames}
-                >
-                    <Text style={styles.backToGamesButtonText}>← Back to Games</Text>
-                </TouchableOpacity>
-            </ScrollView>
+                                    <Text style={styles.diffDesc}>{option.description}</Text>
+
+                                    {/* 特色列表 */}
+                                    <View style={styles.featuresList}>
+                                        {option.features.map((feature, index) => (
+                                            <View key={index} style={styles.featureItem}>
+                                                <Star size={12} color={option.color} style={styles.featureIcon} />
+                                                <Text style={styles.featureText}>{feature}</Text>
+                                            </View>
+                                        ))}
+                                    </View>
+
+                                    {/* 開始按鈕 */}
+                                    <View style={styles.startButtonContainer}>
+                                        <View style={[styles.startButton, { backgroundColor: option.color }]}>
+                                            <Text style={styles.startButtonText}>Start Game →</Text>
+                                        </View>
+                                    </View>
+                                </View>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+
+                    <TouchableOpacity
+                        style={styles.backLink}
+                        onPress={handleBackToGames}
+                    >
+                        <Text style={styles.backLinkText}>← Back to Game Library</Text>
+                    </TouchableOpacity>
+                </ScrollView>
+            </SafeAreaView>
         );
     };
 
@@ -381,14 +436,10 @@ const ChineseGame = () => {
         <View style={styles.container}>
             <Stack.Screen
                 options={{
+                    headerShown: gameState === 'difficulty_select' ? false : true, // 難度頁面隱藏原生 Header
                     title: 'Chinese Quiz',
-                    headerStyle: { backgroundColor: '#4c669f' },
+                    headerStyle: { backgroundColor: '#4A90E2' },
                     headerTintColor: '#fff',
-                    headerLeft: () => (
-                        <TouchableOpacity onPress={handleBackToGames}>
-                            <Text style={{ color: '#fff', marginLeft: 15 }}>← Back</Text>
-                        </TouchableOpacity>
-                    ),
                 }}
             />
             {gameState === 'difficulty_select' && renderDifficultySelect()}
@@ -403,55 +454,131 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#F5F7FA',
     },
-    // 難度選擇頁面樣式
-    difficultySelectContainer: {
-        flexGrow: 1,
-        justifyContent: 'center',
+
+    headerSection: {
         alignItems: 'center',
-        padding: 20,
-        backgroundColor: '#F5F7FA',
-        minHeight: '100%',
+        paddingTop: 50,
+        paddingHorizontal: 20,
+        paddingBottom: 30,
+        backgroundColor: '#fff',
     },
-    difficultySelectTitle: {
+    mainTitle: {
         fontSize: 32,
-        fontWeight: 'bold',
-        color: '#4A90E2',
+        fontWeight: '800',
+        color: '#1E293B',
+        textAlign: 'center',
+        marginBottom: 8,
+    },
+    subTitle: {
+        fontSize: 16,
+        color: '#64748B',
+        textAlign: 'center',
         marginBottom: 10,
     },
-    difficultySelectSubtitle: {
-        fontSize: 16,
-        color: '#666',
-        marginBottom: 40,
-        textAlign: 'center',
+    menuGrid: {
+        width: '100%',
+        paddingHorizontal: 20,
+        gap: 20,
     },
-    difficultySelectButton: {
-        width: '90%',
+    diffCard: {
+        flexDirection: 'row',
         padding: 20,
-        borderRadius: 15,
+        borderRadius: 16,
+        borderWidth: 2,
+        gap: 15,
         marginBottom: 20,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
-        shadowRadius: 4,
+        shadowRadius: 8,
         elevation: 3,
     },
-    beginnerButton: {
-        backgroundColor: '#4A90E2',
+    cardIconContainer: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 2,
     },
-    advancedButton: {
-        backgroundColor: '#E67E22',
+    cardIcon: {
+        fontSize: 32,
     },
-    difficultySelectButtonTitle: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#FFFFFF',
+    cardContent: {
+        flex: 1,
+    },
+    cardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
         marginBottom: 8,
+        flexWrap: 'wrap',
     },
-    difficultySelectButtonDesc: {
+    diffBtnText: {
+        fontSize: 20,
+        fontWeight: '700',
+    },
+    levelBadge: {
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    levelBadgeText: {
+        fontSize: 10,
+        color: '#fff',
+        fontWeight: '600',
+    },
+    diffDesc: {
         fontSize: 14,
-        color: 'rgba(255,255,255,0.9)',
+        color: '#64748B',
+        marginBottom: 12,
         lineHeight: 20,
-        marginBottom: 8,
+    },
+    featuresList: {
+        marginBottom: 15,
+        gap: 6,
+    },
+    featureItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    featureIcon: {
+        marginRight: 4,
+    },
+    featureText: {
+        fontSize: 12,
+        color: '#475569',
+    },
+    startButtonContainer: {
+        alignItems: 'flex-end',
+        marginTop: 8,
+    },
+    startButton: {
+        paddingHorizontal: 20,
+        paddingVertical: 8,
+        borderRadius: 20,
+        minWidth: 120,
+        alignItems: 'center',
+    },
+    startButtonText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#fff',
+    },
+    backLink: {
+        marginTop: 30,
+        alignItems: 'center',
+    },
+    backLinkText: {
+        fontSize: 16,
+        color: '#4A90E2',
+        fontWeight: '600',
     },
     questionCountText: {
         fontSize: 12,
