@@ -1,15 +1,18 @@
 package com.eduquest.springbackend.service;
 
 import com.eduquest.springbackend.dao.RoleRepository;
+import com.eduquest.springbackend.dao.SchoolRepository;
 import com.eduquest.springbackend.dao.UserRepository;
-import com.eduquest.springbackend.dto.AuthResponse;
-import com.eduquest.springbackend.dto.UserDto;
+import com.eduquest.springbackend.dto.*;
+import com.eduquest.springbackend.enums.Theme;
 import com.eduquest.springbackend.exception.DuplicateResourceException;
+import com.eduquest.springbackend.exception.ResourceNotFoundException;
 import com.eduquest.springbackend.model.AppUser;
 import com.eduquest.springbackend.model.Role;
+import com.eduquest.springbackend.model.School;
+import com.eduquest.springbackend.model.UserProfile;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -22,76 +25,100 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AuthService {
 
-    private final UserRepository userRepository;
-    private final RoleRepository roleRepository;
+    private final UserRepository userRepo;
+    private final RoleRepository roleRepo;
+    private final SchoolRepository schoolRepo;
     private final AuthenticationManager authenticationManager;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final UserDtoMapper userDtoMapper;
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
-    public AuthService(UserRepository userRepository,
-                       RoleRepository roleRepository,
+    public AuthService(UserRepository userRepo,
+                       RoleRepository roleRepo,
                        AuthenticationManager authenticationManager,
                        PasswordEncoder passwordEncoder,
                        JwtService jwtService,
-                       UserDtoMapper userDtoMapper) {
-        this.userRepository = userRepository;
-        this.roleRepository = roleRepository;
+                       UserDtoMapper userDtoMapper,
+                       SchoolRepository schoolRepo) {
+        this.userRepo = userRepo;
+        this.roleRepo = roleRepo;
         this.authenticationManager = authenticationManager;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.userDtoMapper = userDtoMapper;
+        this.schoolRepo = schoolRepo;
     }
 
     @Transactional
-    public AppUser register(AppUser user) {
-        if (userRepository.existsByUsername(user.getUsername())) {
+    public RegisterResponse register(RegisterRequest req) {
+        if (userRepo.existsByUsername(req.username())) {
             throw new DuplicateResourceException("Username already exists");
         }
-        if (userRepository.existsByEmail(user.getEmail())) {
+        if (userRepo.existsByEmail(req.email())) {
             throw new DuplicateResourceException("Email already exists");
         }
-        try {
-            user.setPassword(passwordEncoder.encode(user.getPassword()));
-            Role userRole = roleRepository.findByName("ROLE_USER").orElseThrow(() ->
-                    new IllegalStateException("ROLE_USER must be pre-configured"));
-            user.getRoles().add(userRole);
-            return userRepository.save(user);
-        } catch (DataIntegrityViolationException e) {
-            throw new IllegalArgumentException("Username or Email already exists");
-        } catch (Exception e) {
-            logger.error("Error while registering user {}: {}", user.getUsername(), e.getMessage());
-            throw new RuntimeException(e);
+
+        School school = (req.schoolName() == null) ? null :
+                schoolRepo.findByName(req.schoolName())
+                        .orElseThrow(() -> new ResourceNotFoundException("School not found"));
+
+        AppUser user = new AppUser(
+                req.username().trim(),
+                req.email().trim(),
+                passwordEncoder.encode(req.password()),
+                school
+        );
+
+        Role userRole = roleRepo.findByName("ROLE_USER")
+                .orElseThrow(() -> new IllegalStateException("ROLE_USER must be pre-configured"));
+        user.getRoles().add(userRole);
+
+        if (req.isEducator()) {
+            Role educatorRole = roleRepo.findByName("ROLE_EDUCATOR")
+                    .orElseThrow(() -> new IllegalStateException("ROLE_EDUCATOR must be pre-configured"));
+            user.getRoles().add(educatorRole);
         }
+
+        UserProfile userProfile = new UserProfile(
+                user,
+                req.username().trim(),
+                new ProfileEquippedItemsDto(null, null, null),
+                new ProfilePreferencesDto(Theme.DEFAULT, true, false),
+                new ProfilePrivacySettingsDto(false, false, false)
+        );
+
+        user.setUserProfile(userProfile);
+
+        AppUser savedUser = userRepo.save(user);
+
+        return new RegisterResponse(
+                savedUser.getId(),
+                savedUser.getUsername(),
+                savedUser.getEmail()
+        );
     }
 
     @Transactional
     public String login(String username, String password) {
-        try {
-            logger.info("Authenticating user: {}", username);
-            Authentication authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(username, password)
-            );
-            if (authentication.isAuthenticated()) {
-                logger.info("Authentication successful for user {}", username);
-                return jwtService.generateToken(authentication);
-            }
-            logger.error("Authentication failed for user {}", username);
-            throw new BadCredentialsException("Invalid username or password");
-        } catch (BadCredentialsException e) {
-            throw new BadCredentialsException("Invalid username or password", e);
-        } catch (Exception e) {
-            throw new RuntimeException("Authentication failed", e);
+        logger.info("Authenticating user: {}", username);
+        Authentication authentication = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(username, password)
+        );
+        if (authentication.isAuthenticated()) {
+            logger.info("Authentication successful for user {}", username);
+            return jwtService.generateToken(authentication);
         }
+        logger.error("Authentication failed for user {}", username);
+        throw new BadCredentialsException("Invalid username or password");
     }
 
     @Transactional
-    public AuthResponse loginAndGetUser(String username, String password) {
+    public LoginResponse loginAndGetUser(String username, String password) {
         String token = login(username, password);
-        AppUser user = userRepository.findByUsername(username)
+        AppUser user = userRepo.findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
         UserDto userDto = userDtoMapper.toUser(user);
-        return new AuthResponse(token, userDto);
+        return new LoginResponse(token, userDto);
     }
 }

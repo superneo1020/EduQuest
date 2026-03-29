@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 
 public interface UserItemRepository extends JpaRepository<UserItem,Long> {
+    Boolean existsByUserIdAndItemId(Long userId, Long itemId);
 
     @Query(value = "SELECT new com.eduquest.springbackend.dto.UserItemDto( " +
             "i.name, i.type, i.icon, i.description, ui.createdAt" +
