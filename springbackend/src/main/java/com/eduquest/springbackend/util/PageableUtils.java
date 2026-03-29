@@ -1,4 +1,4 @@
-package com.eduquest.springbackend.Util;
+package com.eduquest.springbackend.util;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

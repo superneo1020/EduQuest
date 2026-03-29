@@ -9,10 +9,8 @@ import com.eduquest.springbackend.dto.UserItemResponse;
 import com.eduquest.springbackend.model.AppUser;
 import com.eduquest.springbackend.model.Item;
 import com.eduquest.springbackend.model.UserItem;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -22,23 +20,29 @@ public class UserItemService {
     private final UserItemRepository userItemRepo;
     private final UserRepository userRepo;
     private final ItemRepository itemRepo;
+    private final UserService userService;
+    private final ItemService itemService;
 
     public UserItemService(UserItemRepository userItemRepo,
                            UserRepository userRepo,
-                           ItemRepository itemRepo
-    ) {
+                           ItemRepository itemRepo,
+                           UserService userService,
+                           ItemService itemService) {
         this.userItemRepo = userItemRepo;
         this.userRepo = userRepo;
         this.itemRepo = itemRepo;
+        this.userService = userService;
+        this.itemService = itemService;
     }
 
     @Transactional
     public UserItemResponse createUserItem(String username, UserItemRequest req) {
 
-        AppUser user = userRepo.getReferenceByUsername(username).orElseThrow(() ->
-                new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found: " + username));
-        Item item = itemRepo.getReferenceByName(req.itemName()).orElseThrow(() ->
-                new ResponseStatusException(HttpStatus.NOT_FOUND, "Item not found: " + req.itemName()));
+        Long userId = userService.checkIdByUsername(username);
+        Long itemId = itemService.checkIdByName(req.itemName());
+
+        AppUser user = userRepo.getReferenceById(userId);
+        Item item = itemRepo.getReferenceById(itemId);
 
         UserItem userItem = new UserItem(user, item);
         UserItem savedUserItem = userItemRepo.save(userItem);
@@ -52,5 +56,23 @@ public class UserItemService {
     @Transactional(readOnly = true)
     public List<UserItemDto> showItem(String username) {
         return userItemRepo.findAllByUsername(username);
+    }
+
+    @Transactional(readOnly = true)
+    public Boolean checkUserItemAndItemExists(String username, Long itemId, String itemType) {
+        return checkUserItemExists(username, itemId) && checkItemExists(itemId, itemType);
+    }
+
+    @Transactional(readOnly = true)
+    public Boolean checkUserItemExists(String username, Long itemId) {
+        return userItemRepo.existsByUserIdAndItemId(
+                userService.checkIdByUsername(username),
+                itemId
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public Boolean checkItemExists(Long itemId, String itemType) {
+        return itemRepo.existsByIdAndType(itemId, itemType);
     }
 }

@@ -8,6 +8,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -52,17 +53,25 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
-    public ResponseEntity<ExceptionDto> handleDataIntegrityViolation(DataIntegrityViolationException e) {
-        return ResponseEntity
-                .status(HttpStatus.CONFLICT)
-                .body(toException(HttpStatus.CONFLICT, e.getMessage()));
+    public ProblemDetail handleDataIntegrity(DataIntegrityViolationException ex) {
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT,
+                ex.getMessage()
+        );
+        problemDetail.setTitle("Data Integrity Violation");
+        problemDetail.setProperty("timestamp", Instant.now());
+        return problemDetail;
     }
 
     @ExceptionHandler(BadCredentialsException.class)
-    public ResponseEntity<ExceptionDto> handleBadCredentials(BadCredentialsException e) {
-        return ResponseEntity
-                .status(HttpStatus.UNAUTHORIZED)
-                .body(toException(HttpStatus.UNAUTHORIZED, e.getMessage()));
+    public ProblemDetail handleBadCredentials(BadCredentialsException ex) {
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+                HttpStatus.UNAUTHORIZED,
+                ex.getMessage()
+        );
+        problemDetail.setTitle("Bad Credentials");
+        problemDetail.setProperty("timestamp", Instant.now());
+        return problemDetail;
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -79,10 +88,43 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(DuplicateResourceException.class)
-    public ResponseEntity<ExceptionDto> handleDuplicateResourceResource(DuplicateResourceException e) {
-        return ResponseEntity
-                .status(HttpStatus.CONFLICT)
-                .body(toException(HttpStatus.CONFLICT, e.getMessage()));
+    public ProblemDetail handleDuplicateResource(DuplicateResourceException ex) {
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT,
+                ex.getMessage()
+        );
+        problemDetail.setTitle("Resource Already Exists");
+        problemDetail.setProperty("timestamp", Instant.now());
+        return problemDetail;
+    }
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ProblemDetail handleResourceNotFound(ResourceNotFoundException ex) {
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+                HttpStatus.NOT_FOUND,
+                ex.getMessage()
+        );
+        problemDetail.setTitle("Resource Not Found");
+        problemDetail.setProperty("timestamp", Instant.now());
+        return problemDetail;
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ProblemDetail handleEnumError(HttpMessageNotReadableException ex) {
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST,
+                "JSON parse error"
+        );
+        problemDetail.setTitle("Enum error");
+        problemDetail.setProperty("timestamp", Instant.now());
+
+        // for Theme Enum
+        if (ex.getMessage().contains("Theme")) {
+            problemDetail.setDetail("JSON parse error: Cannot deserialize value of Theme type from request");
+            problemDetail.setProperty("acceptedValues", new String[]{"DEFAULT", "LIGHT", "DARK"});
+        }
+
+        return problemDetail;
     }
 
     @ExceptionHandler(JwtValidationException.class)
