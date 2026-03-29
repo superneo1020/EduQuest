@@ -1,32 +1,30 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
     StyleSheet,
     TouchableOpacity,
-    Animated,
-    Modal,
-    Dimensions,
     ScrollView,
     Image,
+    Dimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import GameScoreService, { GameResult } from '../../services/GameScoreService';
+import { useNavigation } from '@react-navigation/native';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 // 動物資料
 const ANIMALS = [
-    { id: 1, name: 'shark', type: 'fish', image: require('../../../assets/images/animals/shark.png') },
-    { id: 2, name: 'trout', type: 'fish', image: require('../../../assets/images/animals/trout.png') },
-    { id: 3, name: 'sparrow', type: 'bird', image: require('../../../assets/images/animals/sparrow.png') },
-    { id: 4, name: 'pigeon', type: 'bird', image: require('../../../assets/images/animals/pigeon.png') },
-    { id: 5, name: 'dog', type: 'mammal', image: require('../../../assets/images/animals/dog.png') },
-    { id: 6, name: 'tiger', type: 'mammal', image: require('../../../assets/images/animals/tiger.png') },
-    { id: 7, name: 'turtle', type: 'reptile', image: require('../../../assets/images/animals/turtle.png') },
-    { id: 8, name: 'snake', type: 'reptile', image: require('../../../assets/images/animals/snake.png') },
+    { id: 1, name: 'shark', type: 'fish', image: require('../../../../assets/images/animals/shark.png') },
+    { id: 2, name: 'trout', type: 'fish', image: require('../../../../assets/images/animals/trout.png') },
+    { id: 3, name: 'sparrow', type: 'bird', image: require('../../../../assets/images/animals/sparrow.png') },
+    { id: 4, name: 'pigeon', type: 'bird', image: require('../../../../assets/images/animals/pigeon.png') },
+    { id: 5, name: 'dog', type: 'mammal', image: require('../../../../assets/images/animals/dog.png') },
+    { id: 6, name: 'tiger', type: 'mammal', image: require('../../../../assets/images/animals/tiger.png') },
+    { id: 7, name: 'turtle', type: 'reptile', image: require('../../../../assets/images/animals/turtle.png') },
+    { id: 8, name: 'snake', type: 'reptile', image: require('../../../../assets/images/animals/snake.png') },
 ];
-//'../assets/images/animals/shark.png'
+
 // 分類區域
 const CATEGORIES = [
     { id: 'fish', name: 'fish', color: '#4FC3F7' },
@@ -48,18 +46,21 @@ interface Category {
     color: string;
 }
 
-interface PositionedAnimal extends Animal {
-    position?: { top: number; left: number };
+interface GameResult {
+    correct: number;
+    wrong: number;
+    total: number;
+    score: number;
 }
 
 const AnimalClassificationGame: React.FC = () => {
+    const navigation = useNavigation();
     const [allAnimals] = useState<Animal[]>(ANIMALS);
     const [categories] = useState<Category[]>(CATEGORIES);
     const [availableAnimals, setAvailableAnimals] = useState<Animal[]>(ANIMALS);
     const [categoryAssignments, setCategoryAssignments] = useState<Record<number, string>>({});
     const [score, setScore] = useState(0);
     const [gameCompleted, setGameCompleted] = useState(false);
-    const [showResults, setShowResults] = useState(false);
     const [gameResult, setGameResult] = useState<GameResult>({
         correct: 0,
         wrong: 0,
@@ -68,29 +69,8 @@ const AnimalClassificationGame: React.FC = () => {
     });
     const [selectedAnimal, setSelectedAnimal] = useState<Animal | null>(null);
     const [showDropZones, setShowDropZones] = useState(false);
-    const [positionedAnimals, setPositionedAnimals] = useState<PositionedAnimal[]>(ANIMALS);
-
-    const fadeAnim = useRef(new Animated.Value(0)).current;
-    const scaleAnim = useRef(new Animated.Value(0.8)).current;
-
-    // 儲存動物卡片的位置
-    const animalRefs = useRef<Record<number, { x: number; y: number; width: number; height: number }>>({});
-
-    // 初始化動畫
-    useEffect(() => {
-        Animated.parallel([
-            Animated.timing(fadeAnim, {
-                toValue: 1,
-                duration: 500,
-                useNativeDriver: true,
-            }),
-            Animated.timing(scaleAnim, {
-                toValue: 1,
-                duration: 500,
-                useNativeDriver: true,
-            }),
-        ]).start();
-    }, []);
+    const [isFinished, setIsFinished] = useState(false);
+    const [finalReport, setFinalReport] = useState({ summary: '', accuracy: 0 });
 
     // 選擇動物
     const handleAnimalPress = (animal: Animal) => {
@@ -103,40 +83,31 @@ const AnimalClassificationGame: React.FC = () => {
     // 拖放動物到分類
     const handleDropOnCategory = (categoryId: string) => {
         if (selectedAnimal) {
-            // 更新分類分配
             setCategoryAssignments(prev => ({
                 ...prev,
                 [selectedAnimal.id]: categoryId
             }));
 
-            // 從可用動物列表中移除
             setAvailableAnimals(prev => prev.filter(a => a.id !== selectedAnimal.id));
-
-            // 重置選擇
             setSelectedAnimal(null);
             setShowDropZones(false);
-
-            // 檢查遊戲是否完成
             checkGameCompletion();
         }
     };
 
     // 從分類中移除動物
     const handleRemoveFromCategory = (animalId: number) => {
-        // 移除分類分配
         setCategoryAssignments(prev => {
             const newAssignments = { ...prev };
             delete newAssignments[animalId];
             return newAssignments;
         });
 
-        // 將動物加回可用列表
         const animal = allAnimals.find(a => a.id === animalId);
         if (animal) {
             setAvailableAnimals(prev => [...prev, animal]);
         }
 
-        // 檢查遊戲完成狀態
         checkGameCompletion();
     };
 
@@ -148,14 +119,7 @@ const AnimalClassificationGame: React.FC = () => {
         allAnimals.forEach(animal => {
             const assignedCategory = categoryAssignments[animal.id];
             if (assignedCategory) {
-                const categoryMap: Record<string, string> = {
-                    'fish': 'fish',
-                    'bird': 'bird',
-                    'mammal': 'mammal',
-                    'reptile': 'reptile'
-                };
-
-                if (categoryMap[animal.type] === assignedCategory) {
+                if (animal.type === assignedCategory) {
                     correct++;
                 } else {
                     wrong++;
@@ -182,14 +146,51 @@ const AnimalClassificationGame: React.FC = () => {
     const checkGameCompletion = () => {
         const assignedCount = Object.keys(categoryAssignments).length;
         if (assignedCount === allAnimals.length) {
-            setTimeout(() => {
-                const result = calculateScore();
-                setGameResult(result);
-                setGameCompleted(true);
-                setShowResults(true);
-                saveGameResult(result);
-            }, 500);
+            const result = calculateScore();
+            saveGameResult(result);
+            setGameCompleted(true);
+            showFinalReport();
         }
+    };
+
+    // 顯示最終報告
+    const showFinalReport = () => {
+        const result = calculateScore();
+        setGameResult(result);
+        const summary = generateSummary(result);
+        setFinalReport({
+            summary,
+            accuracy: result.score
+        });
+        setIsFinished(true);
+    };
+
+    // 生成總結文字
+    const generateSummary = (result: GameResult): string => {
+        let summary = '';
+        if (result.score === 100) {
+            summary = 'Excellent! You classified all animals correctly! 🎉';
+        } else if (result.score >= 70) {
+            summary = `Good job! You got ${result.correct} out of ${result.total} correct. Keep practicing to improve your classification skills!`;
+        } else {
+            summary = `You got ${result.correct} out of ${result.total} correct. Let's review the animal classifications and try again!`;
+        }
+
+        // 添加錯誤分類的詳細信息
+        const wrongAnimals = allAnimals.filter(animal => {
+            const assigned = categoryAssignments[animal.id];
+            return assigned && assigned !== animal.type;
+        });
+
+        if (wrongAnimals.length > 0) {
+            summary += '\n\nAnimals to review:\n';
+            wrongAnimals.forEach(animal => {
+                const assigned = categoryAssignments[animal.id];
+                summary += `• ${animal.name} was placed in ${assigned}, but should be in ${animal.type}\n`;
+            });
+        }
+
+        return summary;
     };
 
     // 保存遊戲結果
@@ -213,26 +214,10 @@ const AnimalClassificationGame: React.FC = () => {
         setAvailableAnimals(allAnimals);
         setScore(0);
         setGameCompleted(false);
-        setShowResults(false);
         setSelectedAnimal(null);
         setShowDropZones(false);
-
-        // 重設動畫
-        fadeAnim.setValue(0);
-        scaleAnim.setValue(0.8);
-
-        Animated.parallel([
-            Animated.timing(fadeAnim, {
-                toValue: 1,
-                duration: 500,
-                useNativeDriver: true,
-            }),
-            Animated.timing(scaleAnim, {
-                toValue: 1,
-                duration: 500,
-                useNativeDriver: true,
-            }),
-        ]).start();
+        setIsFinished(false);
+        setFinalReport({ summary: '', accuracy: 0 });
     };
 
     // 取消選擇
@@ -241,14 +226,14 @@ const AnimalClassificationGame: React.FC = () => {
         setShowDropZones(false);
     };
 
-    // 保存動物卡片位置
-    const saveAnimalLayout = (animalId: number, layout: any) => {
-        animalRefs.current[animalId] = {
-            x: layout.x,
-            y: layout.y,
-            width: layout.width,
-            height: layout.height,
-        };
+    // 返回上一頁
+    const handleGoBack = () => {
+        navigation.goBack();
+    };
+
+    // 返回遊戲列表頁面
+    const handleGoToGameList = () => {
+        navigation.navigate('science/index' as never);
     };
 
     // 渲染動物卡片（只顯示未分類的）
@@ -256,50 +241,30 @@ const AnimalClassificationGame: React.FC = () => {
         const isSelected = selectedAnimal?.id === animal.id;
         const isClassified = categoryAssignments[animal.id];
 
-        if (isClassified) {
-            return null; // 已分類的動物不顯示在卡片區域
-        }
+        if (isClassified) return null;
 
         return (
-            <Animated.View
+            <TouchableOpacity
                 key={animal.id}
                 style={[
                     styles.animalCard,
-                    {
-                        opacity: fadeAnim,
-                        transform: [{ scale: scaleAnim }],
-                    },
                     isSelected && styles.selectedAnimalCard,
                 ]}
-                onLayout={(event) => {
-                    const layout = event.nativeEvent.layout;
-                    saveAnimalLayout(animal.id, layout);
-                }}
+                onPress={() => handleAnimalPress(animal)}
             >
-                <TouchableOpacity
-                    style={styles.animalCardInner}
-                    onPress={() => handleAnimalPress(animal)}
-                >
-                    <View style={styles.animalImageContainer}>
-                        <Image source={animal.image} style={styles.animalImage} />
-                        <Text style={styles.animalName}>{animal.name}</Text>
-                    </View>
-                    <Text style={styles.tapToSelectText}>Click to select</Text>
-                </TouchableOpacity>
-            </Animated.View>
+                <View style={styles.animalImageContainer}>
+                    <Image source={animal.image} style={styles.animalImage} />
+                    <Text style={styles.animalName}>{animal.name}</Text>
+                </View>
+                <Text style={styles.tapToSelectText}>Click to select</Text>
+            </TouchableOpacity>
         );
     };
 
     // 渲染分類區域中的動物
     const renderClassifiedAnimal = (animal: Animal) => {
         const assignedCategory = categoryAssignments[animal.id];
-        const isCorrect = assignedCategory &&
-            (assignedCategory === 'fish' && animal.type === 'fish' ||
-                assignedCategory === 'bird' && animal.type === 'bird' ||
-                assignedCategory === 'mammal' && animal.type === 'mammal' ||
-                assignedCategory === 'reptile' && animal.type === 'reptile');
-
-        const category = categories.find(c => c.id === assignedCategory);
+        const isCorrect = assignedCategory === animal.type;
 
         return (
             <TouchableOpacity
@@ -313,7 +278,7 @@ const AnimalClassificationGame: React.FC = () => {
                 <Image source={animal.image} style={styles.classifiedAnimalImage} />
                 <Text style={styles.classifiedAnimalName}>{animal.name}</Text>
                 <Text style={styles.classifiedAnimalType}>
-                    {category?.name}
+                    {assignedCategory}
                 </Text>
                 <View style={[
                     styles.correctnessIndicator,
@@ -364,23 +329,92 @@ const AnimalClassificationGame: React.FC = () => {
                         </View>
                     )}
                 </View>
-
-                {showDropZones && assignedAnimals.length === 0 && (
-                    <View style={styles.dropZone}>
-                        <Text style={styles.dropZoneText}>Click here to place</Text>
-                    </View>
-                )}
             </TouchableOpacity>
         );
     };
 
-    // 獲取當前分類的動物
-    const getAnimalsByCategory = (categoryId: string) => {
-        return allAnimals.filter(animal => categoryAssignments[animal.id] === categoryId);
-    };
+    // 完成頁面
+    if (isFinished) {
+        return (
+            <ScrollView style={styles.container}>
+                {/* 頂部導航欄 */}
+                <View style={styles.headerBar}>
+                    <TouchableOpacity onPress={handleGoBack} style={styles.backButtonHeader}>
+                        <Text style={styles.backButtonText}>← Back</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>Game Result</Text>
+                    <TouchableOpacity onPress={handleGoToGameList} style={styles.gameListButtonHeader}>
+                        <Text style={styles.gameListButtonText}>Game List</Text>
+                    </TouchableOpacity>
+                </View>
+
+                <View style={styles.reportContainer}>
+                    <Text style={styles.reportTitle}>Session Report 🎓</Text>
+
+                    <View style={styles.scoreCircle}>
+                        <Text style={styles.scoreCircleNumber}>{finalReport.accuracy}</Text>
+                        <Text style={styles.scoreCircleLabel}>/ 100</Text>
+                    </View>
+
+                    <View style={styles.resultsContainer}>
+                        <View style={styles.resultRow}>
+                            <Text style={styles.resultLabel}>Correct Answers:</Text>
+                            <Text style={[styles.resultValue, styles.correctText]}>
+                                {gameResult.correct} / {gameResult.total}
+                            </Text>
+                        </View>
+                        <View style={styles.resultRow}>
+                            <Text style={styles.resultLabel}>Wrong Answers:</Text>
+                            <Text style={[styles.resultValue, styles.wrongText]}>
+                                {gameResult.wrong} / {gameResult.total}
+                            </Text>
+                        </View>
+                    </View>
+
+                    <View style={styles.reportBox}>
+                        <Text style={styles.summaryText}>{finalReport.summary}</Text>
+                    </View>
+
+                    <View style={styles.modalButtons}>
+                        <TouchableOpacity
+                            style={[styles.modalButton, styles.playAgainButton]}
+                            onPress={resetGame}
+                        >
+                            <Text style={styles.modalButtonText}>Play Again</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.modalButton, styles.backButton]}
+                            onPress={handleGoBack}
+                        >
+                            <Text style={styles.modalButtonText}>Back</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.modalButton, styles.gameListButton]}
+                            onPress={handleGoToGameList}
+                        >
+                            <Text style={styles.modalButtonText}>Game List</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </ScrollView>
+        );
+    }
 
     return (
         <View style={styles.container}>
+            {/* 頂部導航欄 */}
+            <View style={styles.headerBar}>
+                <TouchableOpacity onPress={handleGoBack} style={styles.backButtonHeader}>
+                    <Text style={styles.backButtonText}>← Back</Text>
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>Animal Classification</Text>
+                <TouchableOpacity onPress={handleGoToGameList} style={styles.gameListButtonHeader}>
+                    <Text style={styles.gameListButtonText}>Game List</Text>
+                </TouchableOpacity>
+            </View>
+
             <ScrollView contentContainerStyle={styles.scrollContainer}>
                 {/* 遊戲標題和分數 */}
                 <View style={styles.header}>
@@ -425,7 +459,7 @@ const AnimalClassificationGame: React.FC = () => {
                             style={styles.cancelButton}
                             onPress={cancelSelection}
                         >
-                            <Text style={styles.cancelButtonText}>Cancel Selection</Text>
+                            <Text style={styles.cancelButtonText}>Cancel</Text>
                         </TouchableOpacity>
                     </View>
                 )}
@@ -469,106 +503,12 @@ const AnimalClassificationGame: React.FC = () => {
 
                     <TouchableOpacity
                         style={[styles.button, styles.checkButton]}
-                        onPress={() => {
-                            const result = calculateScore();
-                            setGameResult(result);
-                            setShowResults(true);
-                        }}
+                        onPress={showFinalReport}
                     >
                         <Text style={styles.buttonText}>Check Answer</Text>
                     </TouchableOpacity>
                 </View>
             </ScrollView>
-
-            {/* 結果彈出視窗 */}
-            <Modal
-                animationType="slide"
-                transparent={true}
-                visible={showResults}
-                onRequestClose={() => setShowResults(false)}
-            >
-                <View style={styles.modalOverlay}>
-                    <Animated.View style={[
-                        styles.modalContent,
-                        {
-                            opacity: fadeAnim,
-                            transform: [{ scale: scaleAnim }],
-                        },
-                    ]}>
-                        <Text style={styles.modalTitle}>Game Completed!</Text>
-
-                        <View style={styles.resultsContainer}>
-                            <View style={styles.resultRow}>
-                                <Text style={styles.resultLabel}>Correct answers:</Text>
-                                <Text style={[styles.resultValue, styles.correctText]}>
-                                    {gameResult.correct}
-                                </Text>
-                            </View>
-
-                            <View style={styles.resultRow}>
-                                <Text style={styles.resultLabel}>Number of questions answered incorrectly:</Text>
-                                <Text style={[styles.resultValue, styles.wrongText]}>
-                                    {gameResult.wrong}
-                                </Text>
-                            </View>
-
-                            <View style={styles.resultRow}>
-                                <Text style={styles.resultLabel}>Total number of questions:</Text>
-                                <Text style={styles.resultValue}>{gameResult.total}</Text>
-                            </View>
-
-                            <View style={styles.scoreResultRow}>
-                                <Text style={styles.finalScoreLabel}>Final Score:</Text>
-                                <Text style={styles.finalScoreValue}>{gameResult.score}</Text>
-                            </View>
-                        </View>
-
-                        {/* 顯示每個分類的結果 */}
-                        <View style={styles.categoryResults}>
-                            {categories.map(category => {
-                                const animalsInCategory = getAnimalsByCategory(category.id);
-                                const correctCount = animalsInCategory.filter(animal => {
-                                    const categoryMap: Record<string, string> = {
-                                        'fish': 'fish',
-                                        'bird': 'bird',
-                                        'mammal': 'mammal',
-                                        'reptile': 'reptile'
-                                    };
-                                    return categoryMap[animal.type] === category.id;
-                                }).length;
-
-                                return (
-                                    <View key={category.id} style={styles.categoryResultItem}>
-                                        <View style={[styles.categoryColorDot, { backgroundColor: category.color }]} />
-                                        <Text style={styles.categoryResultText}>
-                                            {category.name}: {correctCount} / {animalsInCategory.length} correct
-                                        </Text>
-                                    </View>
-                                );
-                            })}
-                        </View>
-
-                        <View style={styles.modalButtons}>
-                            <TouchableOpacity
-                                style={[styles.modalButton, styles.playAgainButton]}
-                                onPress={() => {
-                                    setShowResults(false);
-                                    resetGame();
-                                }}
-                            >
-                                <Text style={styles.modalButtonText}>Play Again</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={[styles.modalButton, styles.closeButton]}
-                                onPress={() => setShowResults(false)}
-                            >
-                                <Text style={styles.modalButtonText}>Close</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </Animated.View>
-                </View>
-            </Modal>
         </View>
     );
 };
@@ -577,6 +517,40 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#f5f5f5',
+    },
+    headerBar: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingTop: 48,
+        paddingBottom: 12,
+        backgroundColor: '#fff',
+        borderBottomWidth: 1,
+        borderBottomColor: '#e0e0e0',
+    },
+    backButtonHeader: {
+        paddingVertical: 8,
+        paddingRight: 12,
+    },
+    backButtonText: {
+        fontSize: 16,
+        color: '#2196F3',
+        fontWeight: '600',
+    },
+    headerTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#333',
+    },
+    gameListButtonHeader: {
+        paddingVertical: 8,
+        paddingLeft: 12,
+    },
+    gameListButtonText: {
+        fontSize: 16,
+        color: '#2196F3',
+        fontWeight: '600',
     },
     scrollContainer: {
         padding: 20,
@@ -589,9 +563,10 @@ const styles = StyleSheet.create({
         marginBottom: 20,
     },
     title: {
-        fontSize: 28,
+        fontSize: 24,
         fontWeight: 'bold',
         color: '#333',
+        flex: 1,
     },
     scoreContainer: {
         flexDirection: 'row',
@@ -607,18 +582,18 @@ const styles = StyleSheet.create({
         shadowRadius: 4,
     },
     scoreLabel: {
-        fontSize: 16,
+        fontSize: 14,
         color: '#666',
         marginRight: 5,
     },
     scoreValue: {
-        fontSize: 24,
+        fontSize: 20,
         fontWeight: 'bold',
         color: '#4CAF50',
-        marginRight: 8,
+        marginRight: 5,
     },
     progressText: {
-        fontSize: 14,
+        fontSize: 12,
         color: '#666',
     },
     instructions: {
@@ -629,27 +604,27 @@ const styles = StyleSheet.create({
         elevation: 2,
     },
     instructionsText: {
-        fontSize: 16,
+        fontSize: 14,
         color: '#333',
         marginBottom: 5,
         textAlign: 'center',
     },
     subInstructionsText: {
-        fontSize: 14,
+        fontSize: 12,
         color: '#666',
         fontStyle: 'italic',
         textAlign: 'center',
         marginBottom: 5,
     },
     hintText: {
-        fontSize: 12,
+        fontSize: 11,
         color: '#FF9800',
         textAlign: 'center',
         fontStyle: 'italic',
     },
     selectionInfo: {
         backgroundColor: '#E3F2FD',
-        padding: 15,
+        padding: 12,
         borderRadius: 10,
         marginBottom: 20,
         flexDirection: 'row',
@@ -662,34 +637,33 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     selectedAnimalImage: {
-        width: 50,
-        height: 50,
+        width: 40,
+        height: 40,
         resizeMode: 'contain',
         marginRight: 10,
     },
     selectionText: {
-        fontSize: 16,
+        fontSize: 14,
         color: '#333',
-        marginBottom: 2,
     },
     selectedAnimalName: {
         fontWeight: 'bold',
         color: '#2196F3',
     },
     instructionText: {
-        fontSize: 14,
+        fontSize: 12,
         color: '#666',
     },
     cancelButton: {
         backgroundColor: '#FF9800',
-        paddingHorizontal: 15,
-        paddingVertical: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
         borderRadius: 20,
         marginLeft: 10,
     },
     cancelButtonText: {
         color: '#fff',
-        fontSize: 14,
+        fontSize: 12,
         fontWeight: '600',
     },
     sectionHeader: {
@@ -699,17 +673,17 @@ const styles = StyleSheet.create({
         marginBottom: 10,
     },
     sectionTitle: {
-        fontSize: 20,
+        fontSize: 18,
         fontWeight: '600',
         color: '#333',
     },
     remainingCount: {
-        fontSize: 14,
+        fontSize: 12,
         color: '#666',
         fontStyle: 'italic',
     },
     animalsContainer: {
-        marginBottom: 30,
+        marginBottom: 25,
     },
     animalsGrid: {
         flexDirection: 'row',
@@ -720,12 +694,12 @@ const styles = StyleSheet.create({
         width: '48%',
         backgroundColor: '#fff',
         borderRadius: 10,
-        marginBottom: 15,
-        elevation: 3,
+        marginBottom: 12,
+        elevation: 2,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.1,
-        shadowRadius: 4,
+        shadowRadius: 2,
         overflow: 'hidden',
     },
     selectedAnimalCard: {
@@ -733,18 +707,9 @@ const styles = StyleSheet.create({
         borderWidth: 2,
         borderColor: '#2196F3',
     },
-    animalCardInner: {
+    animalImageContainer: {
         padding: 10,
         alignItems: 'center',
-    },
-    animalImageContainer: {
-        width: 80,
-        height: 80,
-        backgroundColor: '#f0f0f0',
-        borderRadius: 8,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 10,
     },
     animalImage: {
         width: 60,
@@ -752,36 +717,37 @@ const styles = StyleSheet.create({
         resizeMode: 'contain',
     },
     animalName: {
-        fontSize: 16,
+        fontSize: 14,
         fontWeight: '500',
         color: '#333',
         marginTop: 5,
     },
     tapToSelectText: {
-        fontSize: 12,
+        fontSize: 10,
         color: '#2196F3',
-        marginTop: 5,
+        marginBottom: 8,
+        textAlign: 'center',
         fontStyle: 'italic',
     },
     emptyAnimalArea: {
         backgroundColor: '#fff',
-        padding: 30,
+        padding: 20,
         borderRadius: 10,
         alignItems: 'center',
         elevation: 2,
     },
     emptyAnimalText: {
-        fontSize: 18,
+        fontSize: 16,
         fontWeight: '600',
         color: '#4CAF50',
-        marginBottom: 5,
     },
     emptyAnimalSubtext: {
-        fontSize: 14,
+        fontSize: 12,
         color: '#666',
+        marginTop: 5,
     },
     categoriesContainer: {
-        marginBottom: 30,
+        marginBottom: 25,
     },
     categoriesGrid: {
         flexDirection: 'row',
@@ -790,9 +756,9 @@ const styles = StyleSheet.create({
     },
     categoryArea: {
         width: '48%',
-        minHeight: 250,
+        minHeight: 220,
         borderRadius: 10,
-        marginBottom: 15,
+        marginBottom: 12,
         overflow: 'hidden',
         borderWidth: 1,
         borderColor: '#ddd',
@@ -803,107 +769,87 @@ const styles = StyleSheet.create({
         borderStyle: 'dashed',
     },
     categoryHeader: {
-        padding: 10,
+        padding: 8,
         alignItems: 'center',
     },
     categoryTitle: {
-        fontSize: 18,
+        fontSize: 16,
         fontWeight: 'bold',
         color: '#fff',
     },
     categoryCount: {
-        fontSize: 12,
+        fontSize: 10,
         color: '#fff',
         opacity: 0.9,
         marginTop: 2,
     },
     classifiedAnimalsContainer: {
-        padding: 10,
+        padding: 8,
         flex: 1,
     },
     classifiedAnimalCard: {
         backgroundColor: '#fff',
-        borderRadius: 8,
-        padding: 8,
-        marginBottom: 8,
+        borderRadius: 6,
+        padding: 6,
+        marginBottom: 6,
         alignItems: 'center',
-        borderWidth: 2,
+        borderWidth: 1,
+        position: 'relative',
         elevation: 1,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
     },
     classifiedAnimalImage: {
-        width: 40,
-        height: 40,
+        width: 35,
+        height: 35,
         resizeMode: 'contain',
-        marginBottom: 4,
     },
     classifiedAnimalName: {
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: '500',
         color: '#333',
-        marginBottom: 2,
     },
     classifiedAnimalType: {
-        fontSize: 10,
+        fontSize: 9,
         color: '#666',
         fontStyle: 'italic',
     },
     correctnessIndicator: {
         position: 'absolute',
-        top: 4,
-        right: 4,
-        width: 20,
-        height: 20,
-        borderRadius: 10,
+        top: 2,
+        right: 2,
+        width: 16,
+        height: 16,
+        borderRadius: 8,
         justifyContent: 'center',
         alignItems: 'center',
     },
     correctnessText: {
         color: '#fff',
-        fontSize: 10,
+        fontSize: 8,
         fontWeight: 'bold',
     },
     emptyCategoryMessage: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 20,
+        padding: 15,
     },
     emptyCategoryText: {
-        fontSize: 14,
+        fontSize: 12,
         color: '#999',
         textAlign: 'center',
         fontStyle: 'italic',
     },
-    dropZone: {
-        backgroundColor: 'rgba(33, 150, 243, 0.1)',
-        padding: 10,
-        alignItems: 'center',
-        borderTopWidth: 1,
-        borderTopColor: '#ddd',
-    },
-    dropZoneText: {
-        fontSize: 14,
-        color: '#2196F3',
-        fontWeight: '600',
-    },
     controls: {
         flexDirection: 'row',
         justifyContent: 'space-around',
-        marginTop: 20,
+        marginTop: 15,
+        marginBottom: 20,
     },
     button: {
-        paddingHorizontal: 30,
-        paddingVertical: 12,
+        paddingHorizontal: 25,
+        paddingVertical: 10,
         borderRadius: 25,
-        elevation: 3,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
+        elevation: 2,
     },
     resetButton: {
         backgroundColor: '#F44336',
@@ -913,37 +859,41 @@ const styles = StyleSheet.create({
     },
     buttonText: {
         color: '#fff',
-        fontSize: 16,
+        fontSize: 14,
         fontWeight: '600',
     },
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        justifyContent: 'center',
-        alignItems: 'center',
+    // 報告頁面樣式
+    reportContainer: {
         padding: 20,
     },
-    modalContent: {
-        backgroundColor: '#fff',
-        borderRadius: 20,
-        padding: 30,
-        width: '90%',
-        maxWidth: 400,
-        elevation: 5,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-    },
-    modalTitle: {
+    reportTitle: {
         fontSize: 28,
         fontWeight: 'bold',
-        color: '#333',
         textAlign: 'center',
-        marginBottom: 30,
+        marginVertical: 20,
+        color: '#333',
+    },
+    scoreCircle: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 25,
+    },
+    scoreCircleNumber: {
+        fontSize: 64,
+        fontWeight: 'bold',
+        color: '#4CAF50',
+    },
+    scoreCircleLabel: {
+        fontSize: 20,
+        color: '#666',
+        marginTop: -5,
     },
     resultsContainer: {
+        backgroundColor: '#fff',
+        borderRadius: 12,
+        padding: 15,
         marginBottom: 20,
+        elevation: 2,
     },
     resultRow: {
         flexDirection: 'row',
@@ -953,32 +903,13 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: '#eee',
     },
-    scoreResultRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: 15,
-        marginTop: 10,
-        borderTopWidth: 2,
-        borderTopColor: '#ddd',
-    },
     resultLabel: {
-        fontSize: 18,
+        fontSize: 16,
         color: '#666',
     },
     resultValue: {
-        fontSize: 20,
+        fontSize: 18,
         fontWeight: '600',
-    },
-    finalScoreLabel: {
-        fontSize: 22,
-        fontWeight: 'bold',
-        color: '#333',
-    },
-    finalScoreValue: {
-        fontSize: 32,
-        fontWeight: 'bold',
-        color: '#4CAF50',
     },
     correctText: {
         color: '#4CAF50',
@@ -986,35 +917,26 @@ const styles = StyleSheet.create({
     wrongText: {
         color: '#F44336',
     },
-    categoryResults: {
-        marginTop: 20,
+    reportBox: {
+        backgroundColor: '#fff9c4',
+        padding: 20,
+        borderRadius: 12,
         marginBottom: 30,
-        backgroundColor: '#f9f9f9',
-        padding: 15,
-        borderRadius: 10,
     },
-    categoryResultItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    categoryColorDot: {
-        width: 12,
-        height: 12,
-        borderRadius: 6,
-        marginRight: 10,
-    },
-    categoryResultText: {
+    summaryText: {
         fontSize: 14,
-        color: '#666',
+        lineHeight: 22,
+        color: '#333',
     },
     modalButtons: {
         flexDirection: 'row',
         justifyContent: 'space-between',
+        gap: 10,
+        marginBottom: 30,
     },
     modalButton: {
         flex: 1,
-        paddingVertical: 14,
+        paddingVertical: 12,
         borderRadius: 12,
         marginHorizontal: 5,
         alignItems: 'center',
@@ -1022,12 +944,15 @@ const styles = StyleSheet.create({
     playAgainButton: {
         backgroundColor: '#4CAF50',
     },
-    closeButton: {
-        backgroundColor: '#757575',
+    backButton: {
+        backgroundColor: '#FF9800',
+    },
+    gameListButton: {
+        backgroundColor: '#2196F3',
     },
     modalButtonText: {
         color: '#fff',
-        fontSize: 16,
+        fontSize: 14,
         fontWeight: '600',
     },
 });

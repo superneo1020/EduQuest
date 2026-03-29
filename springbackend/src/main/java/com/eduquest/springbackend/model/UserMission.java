@@ -2,10 +2,14 @@ package com.eduquest.springbackend.model;
 
 import jakarta.persistence.*;
 import org.hibernate.annotations.Generated;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.generator.EventType;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.HashMap;
+import java.util.Map;
 
 @Entity
 @Table(name = "user_missions", uniqueConstraints = {
@@ -16,11 +20,11 @@ public class UserMission {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     private AppUser user;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "mission_id", nullable = false)
     private Mission mission;
 
@@ -31,6 +35,12 @@ public class UserMission {
     @Generated(event = {EventType.INSERT})
     private LocalDate date;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "jsonb NOT NULL DEFAULT '{}'",
+            nullable = false)
+    @Generated(event = {EventType.INSERT})
+    private Map<String, Object> progress = new HashMap<>();
+
     @Column(nullable = false)
     private Boolean completed = false;
 
@@ -40,6 +50,13 @@ public class UserMission {
             columnDefinition = "TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP")
     @Generated(event = {EventType.INSERT})
     private Instant createdAt;
+
+    @Column(nullable = false,
+            insertable = false,
+            updatable = false,
+            columnDefinition = "TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP")
+    @Generated(event = {EventType.INSERT})
+    private Instant updatedAt;
 
     public UserMission() {}
 
@@ -88,7 +105,19 @@ public class UserMission {
         this.date = date;
     }
 
+    public Map<String, Object> getProgress() {
+        return progress;
+    }
+
+    public void setProgress(Map<String, Object> progress) {
+        this.progress = progress;
+    }
+
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
     }
 }

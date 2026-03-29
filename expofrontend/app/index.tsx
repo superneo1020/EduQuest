@@ -13,26 +13,23 @@ import {
     Platform,
     StatusBar
 } from 'react-native';
-import { Calculator, Languages, Atom, Brain, LogOut, User, Trophy, Clock, Target, Sparkles, Star, Zap } from 'lucide-react-native';
+import { Calculator, Languages, Atom, Brain, LogOut, User, Trophy, Clock, Target, Sparkles, Star, Zap, GraduationCap } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/src/auth/AuthContext';
 
-import {Bot} from "lucide-react-native/icons";
+import { Bot } from "lucide-react-native/icons";
 
 export default function LandscapeOptimizedHome() {
     const router = useRouter();
     const { width, height } = useWindowDimensions();
 
-
     const { token, loading, signOut, user } = useAuth();
 
     useEffect(() => {
-
         if (!loading && !token) {
             router.replace('/Profile/Login');
         }
     }, [token, loading, router]);
-
 
     if (loading) {
         return (
@@ -45,17 +42,13 @@ export default function LandscapeOptimizedHome() {
         );
     }
 
-
     const isLandscape = width > height;
 
     const gameButtons = [
         { id: 1, title: 'Math', icon: Calculator, color: '#4CAF50', route: '/games/math/math', pos: { x: '20%', y: '25%' } },
         { id: 2, title: 'Language', icon: Languages, color: '#2196F3', route: '/games/english/language', pos: { x: '70%', y: '20%' } },
         { id: 3, title: 'Science', icon: Atom, color: '#FF9800', route: '/games/science', pos: { x: '25%', y: '65%' } },
-        { id: 4, title: 'Chinese', icon: Brain, color: '#9C27B0', route: '/games/chinese/chinese',  pos: { x: '75%', y: '60%' } },
-
-
-
+        { id: 4, title: 'Chinese', icon: Brain, color: '#9C27B0', route: '/games/chinese/chinese', pos: { x: '75%', y: '60%' } },
     ];
 
     return (
@@ -78,6 +71,15 @@ export default function LandscapeOptimizedHome() {
                         onPress={() => router.push('/Profile/profile' as any)}
                     >
                         <User size={26} color="#2D3436" />
+                    </TouchableOpacity>
+
+                    {/* 新增的教师页面按钮 */}
+                    <TouchableOpacity
+                        style={styles.teacherBtn}
+                        onPress={() => router.push('/Profile/teacher' as any)}
+                    >
+                        <GraduationCap size={22} color="#6C5CE7" />
+                        <Text style={styles.teacherText}>Teacher</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -162,7 +164,7 @@ export default function LandscapeOptimizedHome() {
                     <Text style={styles.panelTitle}>Daily Quest</Text>
                     <TouchableOpacity style={styles.questCard} activeOpacity={0.8}>
                         <Target size={28} color="#FF4757" />
-                        <View style={{marginLeft: 15, flex: 1}}>
+                        <View style={{ marginLeft: 15, flex: 1 }}>
                             <Text style={styles.questTitle}>Math Mountain</Text>
                             <Text style={styles.questSub}>Earn 20 XP</Text>
                         </View>
@@ -180,7 +182,7 @@ const styles = StyleSheet.create({
     },
     // Header 執美與字體加大
     header: {
-        height: 70, // 增加高度
+        height: 70,
         backgroundColor: 'white',
         flexDirection: 'row',
         alignItems: 'center',
@@ -196,7 +198,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     headerTitle: {
-        fontSize: 26, // 字體加大
+        fontSize: 26,
         fontWeight: '900',
         color: '#2D3436',
     },
@@ -248,6 +250,21 @@ const styles = StyleSheet.create({
         fontSize: 16,
         marginLeft: 6,
     },
+    // 新增教师按钮样式
+    teacherBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 15,
+        paddingVertical: 8,
+        backgroundColor: '#F0E6FF',
+        borderRadius: 12,
+    },
+    teacherText: {
+        color: '#6C5CE7',
+        fontWeight: '800',
+        fontSize: 16,
+        marginLeft: 6,
+    },
     mainContent: {
         flex: 1,
     },
@@ -267,7 +284,7 @@ const styles = StyleSheet.create({
         borderLeftColor: '#eee',
     },
     panelTitle: {
-        fontSize: 20, // 字體加大
+        fontSize: 20,
         fontWeight: '800',
         marginBottom: 15,
         color: '#2D3436',
@@ -288,7 +305,7 @@ const styles = StyleSheet.create({
     statVal: {
         marginLeft: 10,
         fontWeight: '900',
-        fontSize: 18, // 數值放大
+        fontSize: 18,
     },
     divider: {
         height: 1,
@@ -305,7 +322,7 @@ const styles = StyleSheet.create({
         borderColor: '#FFE3E3',
     },
     questTitle: {
-        fontSize: 17, // 字體加大
+        fontSize: 17,
         fontWeight: '800',
         color: '#2D3436',
     },
@@ -316,7 +333,7 @@ const styles = StyleSheet.create({
     },
     gameButton: {
         position: 'absolute',
-        width: 78, // 按鈕變大
+        width: 78,
         height: 78,
         borderRadius: 39,
         justifyContent: 'center',
@@ -339,7 +356,7 @@ const styles = StyleSheet.create({
         width: 70,
         height: 70,
         borderRadius: 35,
-        backgroundColor: '#6C5CE7', // 使用顯眼的紫色
+        backgroundColor: '#6C5CE7',
         justifyContent: 'center',
         alignItems: 'center',
         elevation: 10,

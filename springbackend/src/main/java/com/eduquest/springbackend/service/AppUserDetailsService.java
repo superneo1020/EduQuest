@@ -1,7 +1,7 @@
 package com.eduquest.springbackend.service;
 
 import com.eduquest.springbackend.dao.UserRepository;
-import com.eduquest.springbackend.model.AppUser;
+import com.eduquest.springbackend.dto.UserAuthDto;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.core.GrantedAuthority;
@@ -27,13 +27,14 @@ public class AppUserDetailsService implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        AppUser user = userRepository.findByUsername(username).orElseThrow(() -> {
+        UserAuthDto userInfo = userRepository.findAuthInfoByUsername(username).orElseThrow(() -> {
             logger.warn("Invalid username");
             return new UsernameNotFoundException("User not found");
         });
         logger.info("Loading UserDetails for {}", username);
+        Collection<String> roles = userRepository.findRoleNamesByUsername(username);
         Collection<GrantedAuthority> authorities = new ArrayList<>();
-        user.getRoles().forEach(role -> authorities.add(new SimpleGrantedAuthority(role.getName())));
-        return new User(user.getUsername(), user.getPassword(), authorities);
+        roles.forEach(role -> authorities.add(new SimpleGrantedAuthority(role)));
+        return new User(userInfo.username(), userInfo.password(), authorities);
     }
 }
