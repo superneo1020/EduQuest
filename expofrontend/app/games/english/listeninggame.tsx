@@ -18,6 +18,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Speech from 'expo-speech';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AIService, { Question } from '../../services/AIService';
+import {useAuth} from "@/src/auth/AuthContext";
+import axios from "axios";
 
 const { width } = Dimensions.get('window');
 
@@ -91,7 +93,8 @@ export default function ListeningScreen() {
         isLoading: false,
         questions: [],
     });
-
+    const { token } = useAuth();
+    const [isSaving, setIsSaving] = useState(false);
     const [highScore, setHighScore] = useState(0);
 
     // 动画引用
@@ -375,9 +378,14 @@ export default function ListeningScreen() {
     };
 
     // 结束游戏
-    const endGame = () => {
+    // 结束游戏
+    const endGame = async () => {
         setGameState(prev => ({ ...prev, gameCompleted: true }));
         saveHighScore(gameState.score);
+
+        // Save score to database
+        const percentageScore = calculatePercentageScore();
+        await saveScore(percentageScore);
     };
 
     // 显示提示
@@ -413,6 +421,28 @@ export default function ListeningScreen() {
     // 获取星级评价
     const getStarRating = (percentage: number): number => {
         return Math.min(5, Math.ceil(percentage / 20));
+    };
+
+    const saveScore = async (finalScore: number) => {
+        setIsSaving(true);
+        try {
+            // 注意：這裡建議使用你電腦的 IP 地址代替 localhost，如果是手機實體機測試的話
+            await axios.post('http://localhost:8080/api/user/game/score', {
+                gameName: "Listening Game",
+                scores: finalScore,
+                difficulty: getLevelLabel(gameState.currentLevel!).toUpperCase()
+            }, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            // 儲存成功後可以選擇跳轉或留在結果頁
+            // router.push('/rank/leaderboard');
+        } catch (e) {
+            console.error("Save score failed:", e);
+            // 如果失敗了，我們至少讓玩家留在結果頁看到自己的分數
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const currentQuestion = getCurrentQuestion();

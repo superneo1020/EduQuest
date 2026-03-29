@@ -6,16 +6,21 @@ import {
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/src/auth/AuthContext'; // 假設你的路徑
+import { getApiBaseUrl } from '@/src/api/client';
 
 // 遊戲清單（建議未來可以從 API /api/game 獲取）
 const GAME_CATEGORIES = [
     "Speed Calculation",
     "AI Math Adventure",
-    "Listening multiple choice questions",
-    "Word matching game", 
-    "Sentence Reordering Game",
-    "Animal sorting game",
-    "Human Body Puzzle"
+    "Listening Game",
+    "Writing Game",
+    "Sentence Reorder",
+    "Animal Catcher",
+    "Human organs",
+    "Animal Classification",
+    "Body Parts Matching",
+    "ChineseGame",
+    "ChineseSentenceGame"
 ].sort(); // Sort alphabetically for consistent ordering
 
 const { width } = Dimensions.get('window');
@@ -36,19 +41,22 @@ const LeaderboardScreen = () => {
         try {
             const authToken = token || await AsyncStorage.getItem('auth_token');
             const response = await axios.get(
-                `http://localhost:8080/api/game/${targetGame}/leaderboard`,
+                `${getApiBaseUrl()}/api/game/${targetGame}/leaderboard`,
                 {
                     params: { page: pageNum, size: 10 },
                     headers: { 'Authorization': `Bearer ${authToken}` }
                 }
             );
 
-            const { userGameScores, hasNext: nextExists } = response.data;
+            const { slice: userGameScores, hasNext: nextExists } = response.data;
+            
+            // Ensure userGameScores is always an array
+            const scoresArray = Array.isArray(userGameScores) ? userGameScores : [];
 
             if (isRefreshing || pageNum === 0) {
-                setData(userGameScores);
+                setData(scoresArray);
             } else {
-                setData(prev => [...prev, ...userGameScores]);
+                setData(prev => [...(prev || []), ...scoresArray]);
             }
 
             setHasNext(nextExists);

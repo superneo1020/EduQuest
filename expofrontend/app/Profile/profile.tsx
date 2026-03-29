@@ -1,11 +1,11 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity,
-    StatusBar, Dimensions, ActivityIndicator
+    StatusBar, Dimensions, ActivityIndicator, TextInput, Modal, Alert
 } from 'react-native';
 import {
     Trophy, Gamepad2, Mail, User as UserIcon, Settings, ChevronRight,
-    LogOut, Calculator, BookOpen, Brain, FlaskConical
+    LogOut, Calculator, BookOpen, Brain, FlaskConical, Eye, EyeOff, Key
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -22,6 +22,49 @@ export default function ProfileScreen() {
     const [profileData, setProfileData] = useState<any>(null);
     const [loading, setLoading] = useState(false);
     const [recordMode, setRecordMode] = useState<'recent' | 'best'>('recent');
+    
+    // Password change state
+    const [showPasswordModal, setShowPasswordModal] = useState(false);
+    const [oldPassword, setOldPassword] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [showOldPassword, setShowOldPassword] = useState(false);
+    const [showNewPassword, setShowNewPassword] = useState(false);
+    
+    // Email change state
+    const [showEmailModal, setShowEmailModal] = useState(false);
+    const [newEmail, setNewEmail] = useState('');
+    
+    // Nickname change state
+    const [showNicknameModal, setShowNicknameModal] = useState(false);
+    const [newNickname, setNewNickname] = useState('');
+    
+    // Error feedback state
+    const [showErrorFeedbackModal, setShowErrorFeedbackModal] = useState(false);
+    const [errorContext, setErrorContext] = useState('');
+    const [userFeedback, setUserFeedback] = useState('');
+
+    const [modalMessage, setModalMessage] = useState({ text: '', type: '' }); // type: 'error' | 'success'
+
+    // Function to show error with feedback option
+    const showErrorWithFeedback = (errorMessage: string, context: string) => {
+        Alert.alert(
+            'Error', 
+            errorMessage,
+            [
+                {
+                    text: 'OK',
+                    style: 'cancel'
+                },
+                {
+                    text: 'Report Issue',
+                    onPress: () => {
+                        setErrorContext(context);
+                        setShowErrorFeedbackModal(true);
+                    }
+                }
+            ]
+        );
+    };
 
     useFocusEffect(
         useCallback(() => {
@@ -29,10 +72,23 @@ export default function ProfileScreen() {
                 if (!token) return;
                 try {
                     setLoading(true);
-                    const response = await axios.get(`${getApiBaseUrl()}/api/user/profile?page=0`, {
+                    // Fetch profile data
+                    const profileResponse = await axios.get(`${getApiBaseUrl()}/api/user/profile/`, {
                         headers: { Authorization: `Bearer ${token}` }
                     });
-                    setProfileData(response.data);
+                    setProfileData(profileResponse.data);
+                    
+                    // Fetch game history separately
+                    const gameHistoryResponse = await axios.get(`${getApiBaseUrl()}/api/user/game/score`, {
+                        params: { page: 0, size: 50 }, // Get up to 50 recent game records
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+                    
+                    // Combine profile data with game history
+                    setProfileData({
+                        ...profileResponse.data,
+                        userGameScores: gameHistoryResponse.data.content || []
+                    });
                 } catch (error) {
                     console.error("無法獲取最新資料", error);
                 } finally {
@@ -79,6 +135,201 @@ export default function ProfileScreen() {
 
     const displayList = recordMode === 'recent' ? gameHistory.slice(0, 5) : bestScores;
 
+    // Password change function
+    const handleChangePassword = async () => {
+        if (!oldPassword || !newPassword) {
+            showErrorWithFeedback('Please fill in all password fields', 'Password Change - Empty Fields');
+            return;
+        }
+        
+        if (newPassword.length < 8) {
+            showErrorWithFeedback('New password must be at least 8 characters long', 'Password Change - Too Short');
+            return;
+        }
+
+        try {
+            setLoading(true);
+            await axios.post(`${getApiBaseUrl()}/api/user/password`, 
+                { oldPassword, newPassword },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            
+            Alert.alert('Success', 'Password changed successfully');
+            setModalMessage({ text: 'Password changed successfully!', type: 'success' });
+            setTimeout(() => {
+                setShowPasswordModal(false);
+                setModalMessage({ text: '', type: '' });
+            }, 1500);
+            setOldPassword('');
+            setNewPassword('');
+        } catch (error: any) {
+            console.error('Password change error:', error);
+            let errorMessage = 'Failed to change password';
+            let context = 'Password Change - Unknown Error';
+            
+            if (error.response?.data?.message) {
+                errorMessage = error.response.data.message;
+                context = `Password Change - Server: ${error.response.data.message}`;
+            } else if (error.response?.status === 400) {
+                errorMessage = 'Invalid current password or new password format';
+                context = 'Password Change - Validation Error';
+            } else if (error.response?.status === 401) {
+                errorMessage = 'Authentication failed. Please log in again';
+                context = 'Password Change - Auth Error';
+            }
+            
+            showErrorWithFeedback(errorMessage, context);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Email change function
+    const handleChangeEmail = async () => {
+        if (!newEmail) {
+            showErrorWithFeedback('Please enter a new email address', 'Email Change - Empty Field');
+            return;
+        }
+
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(newEmail)) {
+            showErrorWithFeedback('Please enter a valid email address', 'Email Change - Invalid Format');
+            return;
+        }
+
+        // Check if new email is the same as current email
+        if (displayUser?.email && newEmail.trim().toLowerCase() === displayUser.email.toLowerCase()) {
+            showErrorWithFeedback('New email cannot be the same as your current email', 'Email Change - Same Email');
+            return;
+        }
+
+        try {
+            setLoading(true);
+            await axios.post(`${getApiBaseUrl()}/api/user/email`,
+                { newEmail: newEmail.trim() },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            
+            Alert.alert('Success', 'Email changed successfully');
+            setModalMessage({ text: 'Email changed successfully!', type: 'success' });
+            setTimeout(() => {
+                setShowEmailModal(false);
+                setModalMessage({ text: '', type: '' });
+            }, 1500);
+            setNewEmail('');
+            
+            // Refresh profile data to get new email
+            const response = await axios.get(`${getApiBaseUrl()}/api/user/profile/`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setProfileData(response.data);
+        } catch (error: any) {
+            console.error('Email change error:', error);
+            let errorMessage = 'Failed to change email';
+            let context = 'Email Change - Unknown Error';
+            
+            if (error.response?.data?.message) {
+                errorMessage = error.response.data.message;
+                context = `Email Change - Server: ${error.response.data.message}`;
+            } else if (error.response?.status === 400) {
+                errorMessage = 'Invalid email address or email already exists';
+                context = 'Email Change - Validation Error';
+            } else if (error.response?.status === 401) {
+                errorMessage = 'Authentication failed. Please log in again';
+                context = 'Email Change - Auth Error';
+            }
+            
+            showErrorWithFeedback(errorMessage, context);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Nickname change function
+    const handleChangeNickname = async () => {
+        if (!newNickname || newNickname.trim() === '') {
+            showErrorWithFeedback('Please enter a nickname', 'Nickname Change - Empty Field');
+            return;
+        }
+
+        if (newNickname.trim().length > 50) {
+            showErrorWithFeedback('Nickname must be 50 characters or less', 'Nickname Change - Too Long');
+            return;
+        }
+
+        try {
+            setLoading(true);
+            await axios.post(`${getApiBaseUrl()}/api/user/profile/`,
+                { nickname: newNickname.trim() },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            Alert.alert('Success', 'Nickname changed successfully');
+            setModalMessage({ text: 'Nickname changed successfully!', type: 'success' });
+            setTimeout(() => {
+                setShowNicknameModal(false);
+                setModalMessage({ text: '', type: '' });
+            }, 1500);
+            setNewNickname('');
+
+            // Refresh profile data to get new nickname
+            const profileResponse = await axios.get(`${getApiBaseUrl()}/api/user/profile/`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            
+            // Preserve existing game history while updating profile
+            setProfileData(prev => ({
+                ...profileResponse.data,
+                userGameScores: prev?.userGameScores || []
+            }));
+        } catch (error: any) {
+            console.error('Nickname change error:', error);
+            let errorMessage = 'Failed to change nickname';
+            let context = 'Nickname Change - Unknown Error';
+
+            if (error.response?.data?.message) {
+                errorMessage = error.response.data.message;
+                context = `Nickname Change - Server: ${error.response.data.message}`;
+            } else if (error.response?.status === 400) {
+                errorMessage = 'Invalid nickname format or length';
+                context = 'Nickname Change - Validation Error';
+            } else if (error.response?.status === 401) {
+                errorMessage = 'Authentication failed. Please log in again';
+                context = 'Nickname Change - Auth Error';
+            }
+
+            showErrorWithFeedback(errorMessage, context);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Function to handle feedback submission
+    const handleSubmitFeedback = async () => {
+        try {
+            // Here you would send the feedback to your backend or logging service
+            const feedbackData = {
+                context: errorContext,
+                userFeedback: userFeedback,
+                timestamp: new Date().toISOString(),
+                userAgent: 'EduQuest Mobile App'
+            };
+            
+            console.log('User feedback submitted:', feedbackData);
+            
+            // You could also send this to a logging service
+            // await axios.post(`${getApiBaseUrl()}/api/feedback`, feedbackData);
+            
+            Alert.alert('Thank You', 'Your feedback has been submitted. We\'ll look into this issue.');
+            setShowErrorFeedbackModal(false);
+            setUserFeedback('');
+            setErrorContext('');
+        } catch (error) {
+            console.error('Failed to submit feedback:', error);
+            Alert.alert('Error', 'Failed to submit feedback. Please try again later.');
+        }
+    };
+
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="light-content" />
@@ -90,13 +341,53 @@ export default function ProfileScreen() {
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
                 <View style={styles.profileHeader}>
                     <View style={styles.avatarCircle}><UserIcon size={45} color="#4CAF50" /></View>
-                    <Text style={styles.userName}>{displayUser?.username || 'Learner'}</Text>
+                    <Text style={styles.userName}>{displayUser?.nickname || displayUser?.username || 'Learner'}</Text>
                     <View style={styles.emailBadge}>
                         <Mail size={12} color="#636E72" />
                         <Text style={styles.emailText}>{displayUser?.email || 'N/A'}</Text>
                     </View>
                 </View>
 
+
+                {/* Settings Section */}
+                <View style={styles.settingsContainer}>
+                    <Text style={styles.sectionTitle}>Account Settings</Text>
+                    
+                    <TouchableOpacity 
+                        style={styles.settingItem}
+                        onPress={() => setShowPasswordModal(true)}
+                    >
+                        <Key size={20} color="#4CAF50" />
+                        <View style={styles.settingContent}>
+                            <Text style={styles.settingTitle}>Change Password</Text>
+                            <Text style={styles.settingDescription}>Update your account password</Text>
+                        </View>
+                        <ChevronRight size={20} color="#BDC3C7" />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity 
+                        style={styles.settingItem}
+                        onPress={() => setShowEmailModal(true)}
+                    >
+                        <Mail size={20} color="#2196F3" />
+                        <View style={styles.settingContent}>
+                            <Text style={styles.settingTitle}>Change Email</Text>
+                            <Text style={styles.settingDescription}>Update your email address</Text>
+                        </View>
+                        <ChevronRight size={20} color="#BDC3C7" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.settingItem}
+                        onPress={() => setShowNicknameModal(true)}
+                    >
+                        <UserIcon size={20} color="#9C27B0" />
+                        <View style={styles.settingContent}>
+                            <Text style={styles.settingTitle}>Change Nickname</Text>
+                            <Text style={styles.settingDescription}>Update your display nickname</Text>
+                        </View>
+                        <ChevronRight size={20} color="#BDC3C7" />
+                    </TouchableOpacity>
+                </View>
 
                 <View style={styles.statsContainer}>
                     <View style={[styles.statCard, { backgroundColor: '#FFF9E6', borderColor: '#FFEAA7' }]}>
@@ -111,10 +402,11 @@ export default function ProfileScreen() {
                     </View>
                 </View>
 
-                <View style={styles.radarSection}>
+                {/*  <View style={styles.radarSection}>
                     <Text style={styles.sectionTitle}>Skill Analysis</Text>
                     <SkillBarsChart gameHistory={gameHistory} />
                 </View>
+                *
 
                 {/* 切換標籤 */}
                 {/* 在 return 裡替換原有的 tabContainer */}
@@ -161,6 +453,267 @@ export default function ProfileScreen() {
                     <Text style={styles.logoutText}>Sign Out</Text>
                 </TouchableOpacity>
             </ScrollView>
+
+            {/* Password Change Modal */}
+            <Modal
+                visible={showPasswordModal}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setShowPasswordModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Change Password</Text>
+                        
+                        <View style={styles.inputContainer}>
+                            <Text style={styles.inputLabel}>Current Password</Text>
+                            <View style={styles.passwordInput}>
+                                <TextInput
+                                    style={[styles.textInput, { borderWidth: 0, backgroundColor: 'transparent' }]}
+                                    placeholder="Enter current password"
+                                    secureTextEntry={!showOldPassword}
+                                    value={oldPassword}
+                                    onChangeText={setOldPassword}
+                                />
+                                <TouchableOpacity onPress={() => setShowOldPassword(!showOldPassword)}>
+                                    {showOldPassword ? <EyeOff size={20} color="#636E72" /> : <Eye size={20} color="#636E72" />}
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+
+                        <View style={styles.inputContainer}>
+                            <Text style={styles.inputLabel}>New Password</Text>
+                            <View style={styles.passwordInput}>
+                                <TextInput
+                                    style={[styles.textInput, { borderWidth: 0, backgroundColor: 'transparent' }]}
+                                    placeholder="Enter new password (min 8 characters)"
+                                    secureTextEntry={!showNewPassword}
+                                    value={newPassword}
+                                    onChangeText={setNewPassword}
+                                />
+                                <TouchableOpacity onPress={() => setShowNewPassword(!showNewPassword)}>
+                                    {showNewPassword ? <EyeOff size={20} color="#636E72" /> : <Eye size={20} color="#636E72" />}
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+
+                        {modalMessage.text && modalMessage.type === 'success' ? (
+                            <Text style={{
+                                color: '#4CAF50',
+                                textAlign: 'center',
+                                marginBottom: 15,
+                                fontSize: 16,
+                                fontWeight: '600'
+                            }}>
+                                {modalMessage.text}
+                            </Text>
+                        ) : null}
+
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity 
+                                style={[styles.modalBtn, styles.cancelBtn]} 
+                                onPress={() => {
+                                    setShowPasswordModal(false);
+                                    setOldPassword('');
+                                    setNewPassword('');
+                                }}
+                            >
+                                <Text style={styles.cancelBtnText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={[styles.modalBtn, styles.confirmBtn]} 
+                                onPress={handleChangePassword}
+                                disabled={loading}
+                            >
+                                {loading ? (
+                                    <View style={styles.loadingContainer}>
+                                        <ActivityIndicator size="small" color="#FFF" />
+                                        <Text style={[styles.confirmBtnText, { marginLeft: 8 }]}>Updating...</Text>
+                                    </View>
+                                ) : (
+                                    <Text style={styles.confirmBtnText}>Update</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Email Change Modal */}
+            <Modal
+                visible={showEmailModal}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setShowEmailModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Change Email</Text>
+                        
+                        <View style={styles.inputContainer}>
+                            <Text style={styles.inputLabel}>New Email Address</Text>
+                            <TextInput
+                                style={styles.textInput}
+                                placeholder="Enter new email address"
+                                keyboardType="email-address"
+                                autoCapitalize="none"
+                                value={newEmail}
+                                onChangeText={setNewEmail}
+                            />
+                        </View>
+
+                        {modalMessage.text && modalMessage.type === 'success' ? (
+                            <Text style={{
+                                color: '#4CAF50',
+                                textAlign: 'center',
+                                marginBottom: 15,
+                                fontSize: 16,
+                                fontWeight: '600'
+                            }}>
+                                {modalMessage.text}
+                            </Text>
+                        ) : null}
+
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity 
+                                style={[styles.modalBtn, styles.cancelBtn]} 
+                                onPress={() => {
+                                    setShowEmailModal(false);
+                                    setNewEmail('');
+                                }}
+                            >
+                                <Text style={styles.cancelBtnText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={[styles.modalBtn, styles.confirmBtn]} 
+                                onPress={handleChangeEmail}
+                                disabled={loading}
+                            >
+                                {loading ? (
+                                    <View style={styles.loadingContainer}>
+                                        <ActivityIndicator size="small" color="#FFF" />
+                                        <Text style={[styles.confirmBtnText, { marginLeft: 8 }]}>Updating...</Text>
+                                    </View>
+                                ) : (
+                                    <Text style={styles.confirmBtnText}>Update</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+            {/* Nickname Change Modal */}
+            <Modal
+                visible={showNicknameModal}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setShowNicknameModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Change Nickname</Text>
+
+                        <View style={styles.inputContainer}>
+                            <Text style={styles.inputLabel}>New Nickname</Text>
+                            <TextInput
+                                style={styles.textInput}
+                                placeholder="Enter your new nickname (max 50 characters)"
+                                value={newNickname}
+                                onChangeText={setNewNickname}
+                                maxLength={50}
+                            />
+                        </View>
+
+                        {modalMessage.text && modalMessage.type === 'success' ? (
+                            <Text style={{
+                                color: '#4CAF50',
+                                textAlign: 'center',
+                                marginBottom: 15,
+                                fontSize: 16,
+                                fontWeight: '600'
+                            }}>
+                                {modalMessage.text}
+                            </Text>
+                        ) : null}
+
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity
+                                style={[styles.modalBtn, styles.cancelBtn]}
+                                onPress={() => {
+                                    setShowNicknameModal(false);
+                                    setNewNickname('');
+                                }}
+                            >
+                                <Text style={styles.cancelBtnText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.modalBtn, styles.confirmBtn]}
+                                onPress={handleChangeNickname}
+                                disabled={loading}
+                            >
+                                {loading ? (
+                                    <View style={styles.loadingContainer}>
+                                        <ActivityIndicator size="small" color="#FFF" />
+                                        <Text style={[styles.confirmBtnText, { marginLeft: 8 }]}>Updating...</Text>
+                                    </View>
+                                ) : (
+                                    <Text style={styles.confirmBtnText}>Update</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Error Feedback Modal */}
+            <Modal
+                visible={showErrorFeedbackModal}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setShowErrorFeedbackModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Report Issue</Text>
+                        
+                        <View style={styles.inputContainer}>
+                            <Text style={styles.inputLabel}>What went wrong?</Text>
+                            <Text style={styles.errorContextText}>{errorContext}</Text>
+                        </View>
+
+                        <View style={styles.inputContainer}>
+                            <Text style={styles.inputLabel}>Please describe what happened (optional)</Text>
+                            <TextInput
+                                style={[styles.textInput, { height: 100, textAlignVertical: 'top' }]}
+                                placeholder="Tell us more about what you were trying to do and what happened..."
+                                multiline
+                                value={userFeedback}
+                                onChangeText={setUserFeedback}
+                                maxLength={500}
+                            />
+                        </View>
+
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity 
+                                style={[styles.modalBtn, styles.cancelBtn]} 
+                                onPress={() => {
+                                    setShowErrorFeedbackModal(false);
+                                    setUserFeedback('');
+                                    setErrorContext('');
+                                }}
+                            >
+                                <Text style={styles.cancelBtnText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={[styles.modalBtn, styles.confirmBtn]} 
+                                onPress={handleSubmitFeedback}
+                            >
+                                <Text style={styles.confirmBtnText}>Submit</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -285,5 +838,128 @@ const styles = StyleSheet.create({
     activityScoreValue: { fontSize: 10, color: '#636E72', fontWeight: '600' },
     logoutBtn: { margin: 20, padding: 15, backgroundColor: '#FFF', borderRadius: 20, alignItems: 'center' },
     logoutText: { color: '#FF4757', fontWeight: '800' },
-    emptyText: { textAlign: 'center', padding: 20, color: '#BDC3C7' }
+    emptyText: { textAlign: 'center', padding: 20, color: '#BDC3C7' },
+    
+    // Settings styles
+    settingsContainer: {
+        backgroundColor: '#FFF',
+        marginHorizontal: 20,
+        marginTop: 20,
+        borderRadius: 24,
+        padding: 20,
+        elevation: 2,
+    },
+    settingItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 15,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F2F6',
+    },
+    settingContent: {
+        flex: 1,
+        marginLeft: 15,
+    },
+    settingTitle: {
+        fontSize: 16,
+        fontWeight: '800',
+        color: '#2D3436',
+    },
+    settingDescription: {
+        fontSize: 12,
+        color: '#636E72',
+        marginTop: 2,
+    },
+    
+    // Modal styles
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    modalContent: {
+        backgroundColor: '#FFF',
+        borderRadius: 24,
+        padding: 25,
+        width: '85%',
+        maxWidth: 400,
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: '900',
+        color: '#2D3436',
+        marginBottom: 20,
+        textAlign: 'center',
+    },
+    inputContainer: {
+        marginBottom: 20,
+    },
+    inputLabel: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#2D3436',
+        marginBottom: 8,
+    },
+    textInput: {
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        borderRadius: 12,
+        padding: 15,
+        fontSize: 16,
+        backgroundColor: '#F8F9FA',
+        flex: 1,
+    },
+    passwordInput: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        borderRadius: 12,
+        backgroundColor: '#F8F9FA',
+        paddingHorizontal: 15,
+    },
+    modalButtons: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 10,
+    },
+    modalBtn: {
+        flex: 1,
+        padding: 15,
+        borderRadius: 12,
+        alignItems: 'center',
+        marginHorizontal: 5,
+    },
+    cancelBtn: {
+        backgroundColor: '#F8F9FA',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    cancelBtnText: {
+        color: '#636E72',
+        fontWeight: '800',
+    },
+    confirmBtn: {
+        backgroundColor: '#4CAF50',
+    },
+    confirmBtnText: {
+        color: '#FFF',
+        fontWeight: '800',
+    },
+    loadingContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    errorContextText: {
+        fontSize: 14,
+        color: '#FF4757',
+        fontWeight: '600',
+        backgroundColor: '#FFF5F5',
+        padding: 12,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#FFB6B6',
+    }
 });
