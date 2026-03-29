@@ -1,134 +1,165 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert, ActivityIndicator, Dimensions, Image, ImageBackground } from 'react-native';
-import { ArrowLeft, Trophy, Clock, Brain, Star, zap, Target } from 'lucide-react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert, ActivityIndicator, Dimensions, ScrollView } from 'react-native';
+import { ArrowLeft, Trophy, Clock, Zap, Heart, CheckCircle2, XCircle } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
+import Animated, {
+    useSharedValue, useAnimatedStyle, withTiming, withRepeat, withSequence, withSpring, runOnJS
+} from 'react-native-reanimated';
 import axios from 'axios';
 import { useAuth } from "@/src/auth/AuthContext";
 
-const { width, height } = Dimensions.get('window');
-
-// --- 🎮 遊戲資材定義 (這裡假設你已經有這些圖片) ---
-// 如果沒有圖片，可以用網路圖片網址代替，或者先用我提供的佔位代碼
-const GAME_ASSETS = {
-    easy: {
-        bg: require('@/assets/games/bg_plains.png'), // 青青草原背景
-        monster: require('@/assets/games/monster_cloud.png'), // 雲朵怪
-        color: '#4CAF50'
-    },
-    medium: {
-        bg: require('@/assets/games/bg_desert.png'), // 荒漠遺蹟背景
-        monster: require('@/assets/games/monster_cactus.png'), // 仙人掌怪
-        color: '#FF9800'
-    },
-    hard: {
-        bg: require('@/assets/games/bg_volcano.png'), // 熔岩火山背景
-        monster: require('@/assets/games/monster_golem.png'), // 熔岩巨像
-        color: '#F44336'
-    }
+// --- 💥 浮動文字元件 (HIT / OUCH) ---
+const FloatingText = ({ text, color, onComplete }: { text: string, color: string, onComplete: () => void }) => {
+    const opacity = useSharedValue(1);
+    const translateY = useSharedValue(0);
+    useEffect(() => {
+        translateY.value = withTiming(-100, { duration: 800 });
+        opacity.value = withTiming(0, { duration: 800 }, () => runOnJS(onComplete)());
+    }, []);
+    return (
+        <Animated.View style={[styles.floatingLayer, useAnimatedStyle(() => ({ opacity: opacity.value, transform: [{ translateY: translateY.value }] }))]}>
+            <Text style={[styles.hitText, { color }]}>{text}</Text>
+        </Animated.View>
+    );
 };
 
 export default function CalculationGame() {
     const router = useRouter();
     const { token } = useAuth();
 
-    // --- 遊戲狀態管理 ---
+    // 遊戲狀態
     const [gameStarted, setGameStarted] = useState(false);
     const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard' | null>(null);
     const [loading, setLoading] = useState(false);
     const [questions, setQuestions] = useState<any[]>([]);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [score, setScore] = useState(0);
-    const [timeLeft, setTimeLeft] = useState(90);
-    const [gameActive, setGameActive] = useState(false);
+    const [gameActive, setGameActive] = useState(false); // 控制是否可以答題
     const [gameEnded, setGameEnded] = useState(false);
     const [options, setOptions] = useState<string[]>([]);
     const [isSaving, setIsSaving] = useState(false);
 
-    // 🎮 遊戲化狀態
+    // 倒數計時狀態
+    const [prepText, setPrepText] = useState<string | null>(null);
+    const prepScale = useSharedValue(0);
+
+    // 戰鬥數值
+    const [bossHP, setBossHP] = useState(100);
+    const [playerHP, setPlayerHP] = useState(100);
     const [combo, setCombo] = useState(0);
+    const [userAnswers, setUserAnswers] = useState<any[]>([]);
+    const [floatingText, setFloatingText] = useState<{ id: number, text: string, color: string } | null>(null);
 
-    const TOTAL_QUESTIONS = 10;
+    // 動畫 Shared Values
+    const bossY = useSharedValue(0);
+    const bossScale = useSharedValue(1);
+    const screenShake = useSharedValue(0);
 
-    // --- 獲取當前場景資材 ---
-    const currentScene = useMemo(() => {
-        if (!difficulty) return null;
-        return GAME_ASSETS[difficulty];
-    }, [difficulty]);
+    const currentScene = useMemo(() => difficulty ? GAME_SCENES[difficulty] : GAME_SCENES.easy, [difficulty]);
 
-    // --- 1. 從 AI 獲取題目 (闖關內容) ---
+    useEffect(() => {
+        bossY.value = withRepeat(withTiming(-10, { duration: 2000 }), -1, true);
+    }, []);
+
+    const animatedBossStyle = useAnimatedStyle(() => ({ transform: [{ translateY: bossY.value }, { scale: bossScale.value }] }));
+    const animatedScreenStyle = useAnimatedStyle(() => ({ transform: [{ translateX: screenShake.value }] }));
+    const animatedPrepStyle = useAnimatedStyle(() => ({ transform: [{ scale: prepScale.value }], opacity: withTiming(prepText ? 1 : 0) }));
+
     const fetchQuestions = async (selectedDiff: 'easy' | 'medium' | 'hard') => {
         setLoading(true);
         setDifficulty(selectedDiff);
         try {
-            const res = await axios.get(`http://localhost:8000/api/math/batch_generate?difficulty=${selectedDiff}&count=${TOTAL_QUESTIONS}`);
+            // 模擬或調用後端 API 獲取 10 題
+            const res = await axios.get(`http://localhost:8000/api/math/batch_generate?difficulty=${selectedDiff}&count=10`);
             setQuestions(res.data);
-            setCurrentIndex(0);
+            setBossHP(100);
+            setPlayerHP(100);
             setScore(0);
             setCombo(0);
-            setTimeLeft(selectedDiff === 'hard' ? 120 : 90);
+            setCurrentIndex(0);
+            setUserAnswers([]);
             setupOptions(res.data[0]);
-            setGameStarted(true);
-            setGameActive(true);
+
+            setLoading(false);
+            setGameStarted(true); // 切換到遊戲場景
+            startPrepSequence(); // 開始 Ready Go
         } catch (e) {
-            Alert.alert("Error", "AI Monster blocked your path. Try again.");
-        } finally {
+            Alert.alert("Error", "Backend offline!");
             setLoading(false);
         }
     };
 
-    // --- 2. 生成選項 (攻擊目標) ---
+    const startPrepSequence = () => {
+        // Ready...
+        setTimeout(() => {
+            setPrepText('READY');
+            prepScale.value = 0;
+            prepScale.value = withSpring(1.2);
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        }, 100);
+
+        // Go!
+        setTimeout(() => {
+            setPrepText('GO!');
+            prepScale.value = 0;
+            prepScale.value = withSpring(1.5);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }, 1000);
+
+        // Start Game
+        setTimeout(() => {
+            setPrepText(null);
+            setGameActive(true); // 正式解鎖按鈕和題目
+        }, 1600);
+    };
+
     const setupOptions = (qData: any) => {
         if (!qData) return;
-        const correctAnswer = qData.answer;
-        const correctNum = parseInt(correctAnswer);
-        const opts = new Set<string>();
-        opts.add(correctAnswer);
-
+        const correct = qData.answer;
+        const opts = new Set<string>([correct]);
         while (opts.size < 4) {
-            const offset = Math.floor(Math.random() * 20) - 10;
-            const fake = (correctNum + offset).toString();
-            if (parseInt(fake) >= 0 && fake !== correctAnswer) opts.add(fake);
+            const fake = (parseInt(correct) + (Math.floor(Math.random() * 20) - 10)).toString();
+            if (parseInt(fake) >= 0 && fake !== correct) opts.add(fake);
         }
         setOptions(Array.from(opts).sort(() => Math.random() - 0.5));
     };
 
-    // --- 3. 儲存分數 (戰利品同步) ---
-    const saveScoreToLeaderboard = async (finalPoints: number) => {
-        setIsSaving(true);
-        try {
-            const payload = {
-                gameName: "AI Math Boss Battle",
-                scores: finalPoints,
-                difficulty: difficulty
-            };
-            await axios.post('http://localhost:8080/api/user/game/score', payload, {
-                headers: { 'Authorization': `Bearer ${token}` }
+    const handleAnswer = (selected: string) => {
+        if (!gameActive || isSaving) return;
+        const currentQ = questions[currentIndex];
+        const isCorrect = selected === currentQ.answer;
+
+        setUserAnswers(prev => [...prev, { ...currentQ, userChoice: selected, isCorrect }]);
+
+        if (isCorrect) {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+            bossScale.value = withSequence(withTiming(1.3, { duration: 100 }), withSpring(1));
+            setFloatingText({ id: Date.now(), text: 'HIT!', color: '#FFD700' });
+            setBossHP(prev => Math.max(0, prev - 15));
+            setScore(prev => prev + 10 + combo);
+            setCombo(prev => prev + 1);
+            setTimeout(nextQuestion, 500);
+        } else {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            screenShake.value = withSequence(
+                withTiming(15, { duration: 50 }), withTiming(-15, { duration: 50 }),
+                withTiming(15, { duration: 50 }), withTiming(0, { duration: 50 })
+            );
+            setFloatingText({ id: Date.now(), text: 'OUCH!', color: '#FF4757' });
+            setPlayerHP(prev => {
+                const newHP = Math.max(0, prev - 20);
+                if (newHP <= 0) { setGameActive(false); setTimeout(() => setGameEnded(true), 600); }
+                return newHP;
             });
-            Alert.alert("Battle Won!", `Accuracy: ${finalPoints}%`, [
-                { text: "Leaderboard", onPress: () => router.push('/rank/leaderboard') },
-                { text: "Home", onPress: () => router.push('/') }
-            ]);
-        } catch (e) {
-            Alert.alert("Notice", "Victory recorded locally.");
-        } finally {
-            setIsSaving(false);
+            setCombo(0);
+            setTimeout(nextQuestion, 500);
         }
     };
 
-    // --- 4. 處理答題 (攻擊 Boss) ---
-    const handleAnswer = (selected: string) => {
-        if (!gameActive || isSaving) return;
-
-        const isCorrect = selected === questions[currentIndex].answer;
-
-        if (isCorrect) {
-            setCombo(prev => prev + 1);
-            setScore(prev => Math.min(prev + 10, 100));
-        } else {
-            setCombo(0);
-        }
-
-        if (currentIndex + 1 < TOTAL_QUESTIONS) {
+    const nextQuestion = () => {
+        if (currentIndex + 1 < 10 && playerHP > 0) {
             setupOptions(questions[currentIndex + 1]);
             setCurrentIndex(prev => prev + 1);
         } else {
@@ -137,136 +168,144 @@ export default function CalculationGame() {
         }
     };
 
-    // 計時器邏輯
-    useEffect(() => {
-        let timer: any;
-        if (gameActive && timeLeft > 0) {
-            timer = setInterval(() => setTimeLeft(t => t - 1), 1000);
-        } else if (timeLeft === 0 && gameActive) {
-            setGameActive(false);
-            setGameEnded(true);
-        }
-        return () => clearInterval(timer);
-    }, [gameActive, timeLeft]);
-
-    // 🏆 計算評價等級
-    const getBattleStats = () => {
-        const accuracy = score;
-        if (accuracy === 100) return { title: "S - MATH KING", color: "#FFD700", stars: 3 };
-        if (accuracy >= 80) return { title: "A - WIZARD", color: "#FF9800", stars: 2 };
-        if (accuracy >= 60) return { title: "B - LEARNER", color: "#4CAF50", stars: 1 };
-        return { title: "C - TRY AGAIN", color: "#94A3B8", stars: 0 };
+    const saveScore = async () => {
+        setIsSaving(true);
+        try {
+            await axios.post('http://localhost:8080/api/user/game/score', { gameName: "Math Boss", scores: score, difficulty }, { headers: { 'Authorization': `Bearer ${token}` } });
+            router.push('/rank/leaderboard');
+        } catch (e) { router.push('/'); }
     };
 
-    // --- 介面 A: 難度選擇 (闖關入口) - 這裡可以做成一個漂亮的選單 ---
-    if (!gameStarted) {
-        return (
-            <SafeAreaView style={styles.centerContainer}>
-                {/* 這裡是原本的難度選擇 UI，保持不變，或優化為卡片式 */}
-                {/* ... (為了縮短代碼，這裡省略，請使用原本的卡片式設計) ... */}
-            </SafeAreaView>
-        );
-    }
+    // --- 渲染邏輯 ---
 
-    // --- 介面 C: 遊戲結算畫面 (戰利品發放) ---
-    if (gameEnded) {
-        const stats = getBattleStats();
-        return (
-            <SafeAreaView style={styles.centerContainer}>
-                {/* ... (原本的結算 UI，保持不變) ... */}
-            </SafeAreaView>
-        );
-    }
+    if (loading) return (
+        <SafeAreaView style={styles.centerContainer}>
+            <ActivityIndicator size="large" color="#FF9800" />
+            <Text style={styles.loadingText}>PREPARING BATTLE...</Text>
+        </SafeAreaView>
+    );
 
-    // --- 介面 B: 遊戲進行中 (真正的戰鬥場景) ---
-    const bossHP = TOTAL_QUESTIONS - currentIndex;
+    if (!gameStarted) return (
+        <SafeAreaView style={styles.centerContainer}>
+            <Zap size={60} color="#FF9800" fill="#FF9800" />
+            <Text style={styles.menuTitle}>Math Boss Battle</Text>
+            <View style={styles.menuList}>
+                {(['easy', 'medium', 'hard'] as const).map(d => (
+                    <TouchableOpacity key={d} style={[styles.menuBtn, {borderColor: GAME_SCENES[d].color}]} onPress={() => fetchQuestions(d)}>
+                        <Text style={[styles.menuBtnText, {color: GAME_SCENES[d].color}]}>{d.toUpperCase()}</Text>
+                    </TouchableOpacity>
+                ))}
+            </View>
+        </SafeAreaView>
+    );
 
-    if (!currentScene) return null; // 保險機制
+    if (gameEnded) return (
+        <SafeAreaView style={styles.resultContainer}>
+            <Text style={styles.resultTitle}>{playerHP > 0 ? "🏆 VICTORY!" : "💀 DEFEATED"}</Text>
+            <Text style={styles.resultScore}>Final Score: {score}</Text>
+            <ScrollView style={{ marginVertical: 20 }}>
+                {userAnswers.map((item, i) => (
+                    <View key={i} style={[styles.reviewCard, item.isCorrect ? styles.cardCorrect : styles.cardWrong]}>
+                        <Text style={styles.reviewText}>{item.question} = {item.answer}</Text>
+                        <Text style={{fontSize: 12, color: '#64748B'}}>Your answer: {item.userChoice}</Text>
+                    </View>
+                ))}
+            </ScrollView>
+            <TouchableOpacity style={styles.saveBtn} onPress={saveScore}><Text style={styles.saveBtnText}>BACK TO LOBBY</Text></TouchableOpacity>
+        </SafeAreaView>
+    );
 
     return (
-        <ImageBackground source={currentScene.bg} style={styles.backgroundImage}>
-            <SafeAreaView style={styles.container}>
-                {/* 頂部 Header */}
-                <View style={styles.header}>
-                    <TouchableOpacity onPress={() => router.back()}><ArrowLeft size={24} color="#333" /></TouchableOpacity>
-                    <View style={styles.stats}>
-                        <View style={styles.stat}><Trophy size={18} color="#FFD700" /><Text style={styles.statText}>{score}</Text></View>
-                        <View style={styles.stat}><Clock size={18} color="#FF6B6B" /><Text style={styles.statText}>{timeLeft}s</Text></View>
-                    </View>
-                </View>
-
-                {/* 戰鬥區域 (Battle Arena) */}
-                <View style={styles.battleArena}>
-                    {/* 1. 怪獸形象與血條 */}
-                    <View style={styles.monsterHeader}>
-                        <Image source={currentScene.monster} style={styles.monsterImage} resizeMode="contain" />
-                        <View style={styles.hpContainer}>
-                            <View style={styles.hpBarBg}>
-                                <View style={[styles.hpBarFill, { width: `${(bossHP / TOTAL_QUESTIONS) * 100}%`, backgroundColor: currentScene.color }]} />
-                            </View>
-                            <Text style={styles.hpText}>BOSS HP: {bossHP} / {TOTAL_QUESTIONS}</Text>
+        <LinearGradient colors={currentScene.bg} style={{ flex: 1 }}>
+            <Animated.View style={[{ flex: 1 }, animatedScreenStyle]}>
+                <SafeAreaView style={styles.container}>
+                    <View style={styles.hpHeader}>
+                        <View style={{ flex: 1 }}>
+                            <View style={styles.hpBarBg}><View style={[styles.hpBarFill, { width: `${playerHP}%`, backgroundColor: '#FF4757' }]} /></View>
+                            <Text style={styles.hpLabel}>PLAYER: {playerHP}</Text>
+                        </View>
+                        <Heart color="#FF4757" fill="#FF4757" size={20} />
+                        <View style={{ flex: 1 }}>
+                            <View style={styles.hpBarBg}><View style={[styles.hpBarFill, { width: `${bossHP}%`, backgroundColor: currentScene.color }]} /></View>
+                            <Text style={[styles.hpLabel, { textAlign: 'right' }]}>BOSS: {bossHP}</Text>
                         </View>
                     </View>
 
-                    {/* 2. 連擊特效 (Combo) */}
-                    <View style={styles.comboArea}>
-                        {combo > 1 && (
-                            <Text style={styles.comboText}>🔥 {combo} HITS!</Text>
-                        )}
-                    </View>
+                    <View style={styles.battleArena}>
+                        <View style={styles.questionCard}>
+                            <Text style={[styles.questionMain, !gameActive && { color: '#CBD5E1' }]}>
+                                {gameActive ? questions[currentIndex]?.question : "---"}
+                            </Text>
+                        </View>
 
-                    {/* 3. 攻擊指令 (題目卡片) */}
-                    <View style={styles.questionCard}>
-                        <Text style={styles.questionText}>{questions[currentIndex]?.question}</Text>
-                        <Text style={styles.equalsText}>= ?</Text>
-                    </View>
+                        <View style={styles.bossStage}>
+                            {/* Ready Go 文字層 */}
+                            {prepText && (
+                                <Animated.View style={[styles.prepOverlay, animatedPrepStyle]}>
+                                    <Text style={styles.prepText}>{prepText}</Text>
+                                </Animated.View>
+                            )}
 
-                    {/* 4. 攻擊選項 (答案) */}
-                    <View style={styles.optionsGrid}>
-                        {options.map((opt, i) => (
-                            <TouchableOpacity key={i} style={styles.optionBtn} onPress={() => handleAnswer(opt)} disabled={isSaving}>
-                                <Target size={20} color="#94A3B8" style={{ marginRight: 10 }} />
-                                <Text style={styles.optionText}>{opt}</Text>
-                            </TouchableOpacity>
-                        ))}
+                            {floatingText && <FloatingText key={floatingText.id} text={floatingText.text} color={floatingText.color} onComplete={() => setFloatingText(null)} />}
+                            <Animated.Text style={[styles.bossEmoji, animatedBossStyle]}>{currentScene.boss}</Animated.Text>
+                        </View>
+
+                        <View style={[styles.gridContainer, !gameActive && { opacity: 0.3 }]}>
+                            {options.map((opt, i) => (
+                                <TouchableOpacity
+                                    key={i}
+                                    style={styles.gridBtn}
+                                    onPress={() => handleAnswer(opt)}
+                                    disabled={!gameActive}
+                                >
+                                    <Text style={styles.gridBtnText}>{opt}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
                     </View>
-                </View>
-            </SafeAreaView>
-        </ImageBackground>
+                </SafeAreaView>
+            </Animated.View>
+        </LinearGradient>
     );
 }
 
+const GAME_SCENES = {
+    easy: { bg: ['#F0FDF4', '#DCFCE7'], boss: '☁️', color: '#22C55E' },
+    medium: { bg: ['#FFFBEB', '#FEF3C7'], boss: '🌵', color: '#F59E0B' },
+    hard: { bg: ['#FEF2F2', '#FEE2E2'], boss: '🌋', color: '#EF4444' }
+} as const; // ✨ 加上這一行，TS 就會識別為特定的 Tuple 類型
+
 const styles = StyleSheet.create({
-    // 通用與背景
-    backgroundImage: { flex: 1, width: '100%', height: '100%' },
-    container: { flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.1)' }, // 讓內容背景半透明，透出遊戲背景
-    centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff', padding: 25 },
-
-    // Header
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, backgroundColor: 'rgba(255, 255, 255, 0.9)', elevation: 2 },
-    stats: { flexDirection: 'row', gap: 12 },
-    stat: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F1F5F9', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
-    statText: { fontWeight: '700', color: '#334155' },
-
-    // 戰鬥畫面 (Interface B)
-    battleArena: { flex: 1, padding: 20, alignItems: 'center' },
-    monsterHeader: { width: '100%', flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.95)', padding: 15, borderRadius: 20, elevation: 4, marginBottom: 15 },
-    monsterImage: { width: 70, height: 70 },
-    hpContainer: { flex: 1, marginLeft: 15 },
-    hpBarBg: { height: 16, backgroundColor: '#E2E8F0', borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: '#CBD5E1' },
-    hpBarFill: { height: '100%' }, // 顏色在代碼中動態設定
-    hpText: { fontSize: 10, fontWeight: '900', color: '#1E293B', marginTop: 4, textAlign: 'center' },
-
-    comboArea: { height: 40, justifyContent: 'center' },
-    comboText: { fontSize: 26, fontWeight: '900', color: '#FF4757', fontStyle: 'italic', textShadowColor: 'rgba(0,0,0,0.1)', textShadowOffset: { width: 2, height: 2 }, textShadowRadius: 3 },
-
-    questionCard: { width: '100%', backgroundColor: '#FFF', paddingVertical: 35, borderRadius: 30, alignItems: 'center', marginBottom: 20, elevation: 8, shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 20, shadowOffset: { width: 0, height: 10 } },
-    questionText: { fontSize: 48, fontWeight: '800', color: '#1E293B' },
-    equalsText: { fontSize: 22, color: '#94A3B8', fontWeight: '600' },
-
-    optionsGrid: { width: '100%', gap: 12 },
-    optionBtn: { flexDirection: 'row', backgroundColor: '#fff', padding: 20, borderRadius: 20, alignItems: 'center', borderWidth: 2, borderColor: '#E2E8F0', elevation: 2 },
-    optionText: { fontSize: 24, fontWeight: '700', color: '#334155' },
-
-    // ... 省略原本的難度選擇與結算樣式 (請使用卡片式設計) ...
+    container: { flex: 1 },
+    centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff', padding: 20 },
+    loadingText: { marginTop: 15, fontWeight: '800', color: '#64748B' },
+    menuTitle: { fontSize: 26, fontWeight: '900', marginBottom: 25, color: '#1E293B' },
+    menuList: { width: '100%', gap: 12 },
+    menuBtn: { padding: 18, borderRadius: 15, borderWidth: 3, alignItems: 'center', backgroundColor: '#fff' },
+    menuBtnText: { fontWeight: '900', fontSize: 18 },
+    hpHeader: { flexDirection: 'row', padding: 20, alignItems: 'center', gap: 12 },
+    hpBarBg: { height: 12, backgroundColor: '#E2E8F0', borderRadius: 6, overflow: 'hidden' },
+    hpBarFill: { height: '100%' },
+    hpLabel: { fontSize: 11, fontWeight: '900', marginTop: 4, color: '#475569' },
+    battleArena: { flex: 1, padding: 20, justifyContent: 'space-between' },
+    questionCard: { backgroundColor: '#fff', padding: 30, borderRadius: 25, alignItems: 'center', elevation: 6, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10 },
+    questionMain: { fontSize: 56, fontWeight: '900', color: '#1E293B' },
+    bossStage: { flex: 1, justifyContent: 'center', alignItems: 'center', position: 'relative' },
+    bossEmoji: { fontSize: 130 },
+    prepOverlay: { position: 'absolute', zIndex: 100, alignItems: 'center' },
+    prepText: { fontSize: 80, fontWeight: '900', color: '#1E293B', fontStyle: 'italic' },
+    floatingLayer: { position: 'absolute', zIndex: 50 },
+    hitText: { fontSize: 45, fontWeight: '900', fontStyle: 'italic' },
+    gridContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between' },
+    gridBtn: { width: '47%', backgroundColor: '#fff', padding: 22, borderRadius: 20, alignItems: 'center', elevation: 4 },
+    gridBtnText: { fontSize: 36, fontWeight: 'bold', color: '#334155' },
+    resultContainer: { flex: 1, padding: 25, backgroundColor: '#F8FAFC' },
+    resultTitle: { fontSize: 34, fontWeight: '900', textAlign: 'center', color: '#1E293B' },
+    resultScore: { fontSize: 22, textAlign: 'center', color: '#FF9800', fontWeight: 'bold' },
+    reviewCard: { padding: 15, borderRadius: 15, marginBottom: 10, backgroundColor: '#fff' },
+    reviewText: { fontSize: 18, fontWeight: '700' },
+    cardCorrect: { borderLeftWidth: 6, borderLeftColor: '#22C55E' },
+    cardWrong: { borderLeftWidth: 6, borderLeftColor: '#EF4444' },
+    saveBtn: { backgroundColor: '#1E293B', padding: 20, borderRadius: 20, alignItems: 'center', marginTop: 10 },
+    saveBtnText: { color: '#fff', fontWeight: '900', fontSize: 18 }
 });
