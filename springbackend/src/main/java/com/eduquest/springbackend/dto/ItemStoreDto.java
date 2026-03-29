@@ -1,11 +1,11 @@
 package com.eduquest.springbackend.dto;
 
-public record GameDto(
+public record ItemStoreDto(
         Long id,
         String type,
         String name,
-        String difficulty,
+        String description,
         String icon,
-        String description
+        Integer price
 ) {
 }

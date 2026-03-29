@@ -40,9 +40,9 @@ export default function Register() {
             return;
         }
 
-        // 檢查密碼長度 (選用，建議加上)
-        if (password.length < 6) {
-            setErrorMsg("Password must be at least 6 characters long");
+        // 檢查密碼長度 (後端要求最少8個字符)
+        if (password.length < 8) {
+            setErrorMsg("Password must be at least 8 characters long");
             return;
         }
 
@@ -53,6 +53,8 @@ export default function Register() {
                 username,
                 email,
                 password,
+                isEducator: false,  // Default to student registration
+                schoolName: null   // Optional school name
             });
             router.replace("/Profile/Login");
         } catch (error: any) {
@@ -111,7 +113,7 @@ export default function Register() {
                                 <Lock size={20} color="#888" style={styles.icon} />
                                 <TextInput
                                     style={styles.input}
-                                    placeholder="Password"
+                                    placeholder="Password (min 8 characters)"
                                     value={password}
                                     onChangeText={(t) => { setPassword(t); setErrorMsg(null); }}
                                     secureTextEntry

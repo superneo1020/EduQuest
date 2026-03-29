@@ -145,9 +145,10 @@ CREATE TABLE IF NOT EXISTS difficulty_rewards (
 CREATE INDEX IF NOT EXISTS idx_difficulty_rewards_difficulty ON difficulty_rewards(difficulty);
 ;;;
 
+
 CREATE TABLE IF NOT EXISTS games (
     id BIGSERIAL PRIMARY KEY,
-    type VARCHAR(20) NOT NULL CHECK (type IN ('ENGLISH','MATH','MEMORY','SCIENCE')),
+    type VARCHAR(20) NOT NULL CHECK (type IN ('ENGLISH','MATH','SCIENCE','CHINESE')),
     name VARCHAR(50) UNIQUE NOT NULL,
     difficulty VARCHAR(20) NOT NULL,
     icon TEXT,
@@ -180,7 +181,7 @@ CREATE INDEX IF NOT EXISTS idx_user_game_scores_user_created ON user_game_scores
 
 CREATE TABLE IF NOT EXISTS missions (
     id BIGSERIAL PRIMARY KEY,
-    type VARCHAR(20) NOT NULL CHECK (type IN ('ENGLISH','MATH','MEMORY','SCIENCE')),
+    type VARCHAR(20) NOT NULL CHECK (type IN ('ENGLISH','MATH','SCIENCE','CHINESE')),
     name VARCHAR(100) UNIQUE NOT NULL,
     difficulty VARCHAR(20) NOT NULL,
     icon TEXT,
@@ -190,6 +191,24 @@ CREATE TABLE IF NOT EXISTS missions (
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (difficulty) REFERENCES difficulty_rewards(difficulty) ON UPDATE CASCADE
 );
+;;;
+
+-- 強制更新 missions 表的類型約束，加入 CHINESE
+DO $$
+    BEGIN
+        ALTER TABLE missions DROP CONSTRAINT IF EXISTS missions_type_check;
+        ALTER TABLE missions ADD CONSTRAINT missions_type_check
+            CHECK (type IN ('ENGLISH', 'MATH', 'SCIENCE', 'CHINESE', 'MEMORY'));
+    END $$;
+;;;
+
+-- 同理，games 表也建議加上這段以防萬一
+DO $$
+    BEGIN
+        ALTER TABLE games DROP CONSTRAINT IF EXISTS games_type_check;
+        ALTER TABLE games ADD CONSTRAINT games_type_check
+            CHECK (type IN ('ENGLISH', 'MATH', 'SCIENCE', 'CHINESE'));
+    END $$;
 ;;;
 
 CREATE TABLE IF NOT EXISTS user_missions (
@@ -237,9 +256,6 @@ CREATE INDEX IF NOT EXISTS idx_user_items_user_id ON user_items(user_id);
 ;;;
 CREATE INDEX IF NOT EXISTS idx_user_items_item_id ON user_items(item_id);
 ;;;
-
-
-
 
 
 -- add trigger for sync game scores
