@@ -138,11 +138,13 @@ export default function ProfileScreen() {
     // Password change function
     const handleChangePassword = async () => {
         if (!oldPassword || !newPassword) {
+            setModalMessage({ text: 'Please fill in all password fields', type: 'error' });
             showErrorWithFeedback('Please fill in all password fields', 'Password Change - Empty Fields');
             return;
         }
         
         if (newPassword.length < 8) {
+            setModalMessage({ text: 'New password must be at least 8 characters long', type: 'error' });
             showErrorWithFeedback('New password must be at least 8 characters long', 'Password Change - Too Short');
             return;
         }
@@ -178,6 +180,7 @@ export default function ProfileScreen() {
                 context = 'Password Change - Auth Error';
             }
             
+            setModalMessage({ text: errorMessage, type: 'error' });
             showErrorWithFeedback(errorMessage, context);
         } finally {
             setLoading(false);
@@ -187,18 +190,21 @@ export default function ProfileScreen() {
     // Email change function
     const handleChangeEmail = async () => {
         if (!newEmail) {
+            setModalMessage({ text: 'Please enter a new email address', type: 'error' });
             showErrorWithFeedback('Please enter a new email address', 'Email Change - Empty Field');
             return;
         }
 
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(newEmail)) {
+            setModalMessage({ text: 'Please enter a valid email address', type: 'error' });
             showErrorWithFeedback('Please enter a valid email address', 'Email Change - Invalid Format');
             return;
         }
 
         // Check if new email is the same as current email
         if (displayUser?.email && newEmail.trim().toLowerCase() === displayUser.email.toLowerCase()) {
+            setModalMessage({ text: 'New email cannot be the same as your current email', type: 'error' });
             showErrorWithFeedback('New email cannot be the same as your current email', 'Email Change - Same Email');
             return;
         }
@@ -239,6 +245,7 @@ export default function ProfileScreen() {
                 context = 'Email Change - Auth Error';
             }
             
+            setModalMessage({ text: errorMessage, type: 'error' });
             showErrorWithFeedback(errorMessage, context);
         } finally {
             setLoading(false);
@@ -248,11 +255,13 @@ export default function ProfileScreen() {
     // Nickname change function
     const handleChangeNickname = async () => {
         if (!newNickname || newNickname.trim() === '') {
+            setModalMessage({ text: 'Please enter a nickname', type: 'error' });
             showErrorWithFeedback('Please enter a nickname', 'Nickname Change - Empty Field');
             return;
         }
 
         if (newNickname.trim().length > 50) {
+            setModalMessage({ text: 'Nickname must be 50 characters or less', type: 'error' });
             showErrorWithFeedback('Nickname must be 50 characters or less', 'Nickname Change - Too Long');
             return;
         }
@@ -298,6 +307,7 @@ export default function ProfileScreen() {
                 context = 'Nickname Change - Auth Error';
             }
 
+            setModalMessage({ text: errorMessage, type: 'error' });
             showErrorWithFeedback(errorMessage, context);
         } finally {
             setLoading(false);
@@ -497,9 +507,9 @@ export default function ProfileScreen() {
                             </View>
                         </View>
 
-                        {modalMessage.text && modalMessage.type === 'success' ? (
+                        {modalMessage.text ? (
                             <Text style={{
-                                color: '#4CAF50',
+                                color: modalMessage.type === 'success' ? '#4CAF50' : '#FF4757',
                                 textAlign: 'center',
                                 marginBottom: 15,
                                 fontSize: 16,
@@ -562,9 +572,9 @@ export default function ProfileScreen() {
                             />
                         </View>
 
-                        {modalMessage.text && modalMessage.type === 'success' ? (
+                        {modalMessage.text ? (
                             <Text style={{
-                                color: '#4CAF50',
+                                color: modalMessage.type === 'success' ? '#4CAF50' : '#FF4757',
                                 textAlign: 'center',
                                 marginBottom: 15,
                                 fontSize: 16,
@@ -624,9 +634,9 @@ export default function ProfileScreen() {
                             />
                         </View>
 
-                        {modalMessage.text && modalMessage.type === 'success' ? (
+                        {modalMessage.text ? (
                             <Text style={{
-                                color: '#4CAF50',
+                                color: modalMessage.type === 'success' ? '#4CAF50' : '#FF4757',
                                 textAlign: 'center',
                                 marginBottom: 15,
                                 fontSize: 16,
