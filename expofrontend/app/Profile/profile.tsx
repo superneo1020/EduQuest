@@ -12,6 +12,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '@/src/auth/AuthContext';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/src/api/client';
+import SkillBarsChart from "@/app/Profile/SkillRadarChart";
 
 const { width } = Dimensions.get('window');
 
@@ -110,6 +111,11 @@ export default function ProfileScreen() {
                     </View>
                 </View>
 
+                <View style={styles.radarSection}>
+                    <Text style={styles.sectionTitle}>Skill Analysis</Text>
+                    <SkillBarsChart gameHistory={gameHistory} />
+                </View>
+
                 {/* 切換標籤 */}
                 {/* 在 return 裡替換原有的 tabContainer */}
                 <View style={styles.segmentedControl}>
@@ -170,6 +176,22 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         paddingHorizontal: 20,
         marginTop: 20
+    },
+    radarSection: {
+        backgroundColor: '#FFF',
+        marginHorizontal: 20,
+        marginTop: 20,
+        borderRadius: 24,
+        padding: 20,
+        alignItems: 'center',
+        elevation: 2,
+    },
+    sectionTitle: {
+        fontSize: 16,
+        fontWeight: '800',
+        color: '#2D3436',
+        alignSelf: 'flex-start',
+        marginBottom: 10,
     },
     statCard: {
         width: '47%',

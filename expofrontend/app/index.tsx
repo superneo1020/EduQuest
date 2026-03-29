@@ -17,19 +17,22 @@ import { Calculator, Languages, Atom, Brain, LogOut, User, Trophy, Clock, Target
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/src/auth/AuthContext';
 
-import { Bot } from "lucide-react-native/icons";
+import {Bot} from "lucide-react-native/icons";
 
 export default function LandscapeOptimizedHome() {
     const router = useRouter();
     const { width, height } = useWindowDimensions();
 
+
     const { token, loading, signOut, user } = useAuth();
 
     useEffect(() => {
+
         if (!loading && !token) {
             router.replace('/Profile/Login');
         }
     }, [token, loading, router]);
+
 
     if (loading) {
         return (
@@ -41,6 +44,7 @@ export default function LandscapeOptimizedHome() {
             </SafeAreaView>
         );
     }
+
 
     const isLandscape = width > height;
 
@@ -56,21 +60,34 @@ export default function LandscapeOptimizedHome() {
             <StatusBar barStyle="dark-content" />
 
             {/* --- 美化後的 Header --- */}
+            {/* --- 仿圖片風格的 Header --- */}
+            {/* --- 仿圖片風格極簡 Header (移除 Online 狀態) --- */}
             <View style={styles.header}>
+                {/* 左側：Logo 與 名稱 */}
                 <View style={styles.headerLeft}>
-                    <Text style={styles.headerTitle}>EduQuest</Text>
-                    <View style={styles.userTag}>
-                        <View style={styles.onlineDot} />
-                        <Text style={styles.userTagText}>{user?.username || 'Guest'}</Text>
+                    <View style={styles.logoIcon}>
+                        <Sparkles size={20} color="white" fill="white" />
                     </View>
+                    <Text style={styles.headerTitle}>EduQuest</Text>
                 </View>
+
+                {/* 中間：導航文字 (保留排行榜跳轉功能) */}
+
 
                 <View style={styles.headerRight}>
                     <TouchableOpacity
-                        style={styles.headerIconBtn}
+                        style={styles.userInfoWrapper}
                         onPress={() => router.push('/Profile/profile' as any)}
                     >
-                        <User size={26} color="#2D3436" />
+                        <View style={styles.avatarCircle}>
+                            <Text style={styles.avatarLetter}>
+                                {user?.username?.charAt(0).toUpperCase() || 'U'}
+                            </Text>
+                        </View>
+                        <View style={styles.userMeta}>
+                            <Text style={styles.userNameText}>{user?.username || 'Guest'}</Text>
+                            <Text style={styles.userRoleText}>Student</Text>
+                        </View>
                     </TouchableOpacity>
 
                     {/* 新增的教师页面按钮 */}
@@ -164,7 +181,7 @@ export default function LandscapeOptimizedHome() {
                     <Text style={styles.panelTitle}>Daily Quest</Text>
                     <TouchableOpacity style={styles.questCard} activeOpacity={0.8}>
                         <Target size={28} color="#FF4757" />
-                        <View style={{ marginLeft: 15, flex: 1 }}>
+                        <View style={{marginLeft: 15, flex: 1}}>
                             <Text style={styles.questTitle}>Math Mountain</Text>
                             <Text style={styles.questSub}>Earn 20 XP</Text>
                         </View>
@@ -182,7 +199,7 @@ const styles = StyleSheet.create({
     },
     // Header 執美與字體加大
     header: {
-        height: 70,
+        height: 70, // 增加高度
         backgroundColor: 'white',
         flexDirection: 'row',
         alignItems: 'center',
@@ -197,10 +214,71 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
     },
+    logoIcon: {
+        width: 32,
+        height: 32,
+        backgroundColor: '#00A8E8',
+        borderRadius: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
     headerTitle: {
-        fontSize: 26,
-        fontWeight: '900',
-        color: '#2D3436',
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#00A8E8',
+    },
+    headerCenter: {
+        flexDirection: 'row',
+        gap: 40,
+    },
+    navBtn: { paddingVertical: 10 },
+    navText: { fontSize: 15, color: '#64748B', fontWeight: '500' },
+    navTextActive: { fontSize: 15, color: '#64748B', fontWeight: '500' }, // 圖片中 Home 是普通色
+    headerRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    userInfoWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F8FAFC',
+        paddingVertical: 4,
+        paddingHorizontal: 10,
+        borderRadius: 25,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    avatarCircle: {
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+        backgroundColor: '#00A8E8',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    avatarLetter: {
+        color: 'white',
+        fontWeight: '700',
+        fontSize: 15,
+    },
+    userMeta: {
+        marginLeft: 10,
+    },
+    userNameText: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#1E293B',
+    },
+    userRoleText: {
+        fontSize: 10,
+        color: '#94A3B8',
+        fontWeight: '600',
+    },
+    logoutIconButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#FFF1F2',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     userTag: {
         flexDirection: 'row',
@@ -223,11 +301,7 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         color: '#636E72',
     },
-    headerRight: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-    },
+
     headerIconBtn: {
         width: 46,
         height: 46,
@@ -284,7 +358,7 @@ const styles = StyleSheet.create({
         borderLeftColor: '#eee',
     },
     panelTitle: {
-        fontSize: 20,
+        fontSize: 20, // 字體加大
         fontWeight: '800',
         marginBottom: 15,
         color: '#2D3436',
@@ -305,7 +379,7 @@ const styles = StyleSheet.create({
     statVal: {
         marginLeft: 10,
         fontWeight: '900',
-        fontSize: 18,
+        fontSize: 18, // 數值放大
     },
     divider: {
         height: 1,
@@ -322,7 +396,7 @@ const styles = StyleSheet.create({
         borderColor: '#FFE3E3',
     },
     questTitle: {
-        fontSize: 17,
+        fontSize: 17, // 字體加大
         fontWeight: '800',
         color: '#2D3436',
     },
@@ -333,7 +407,7 @@ const styles = StyleSheet.create({
     },
     gameButton: {
         position: 'absolute',
-        width: 78,
+        width: 78, // 按鈕變大
         height: 78,
         borderRadius: 39,
         justifyContent: 'center',
@@ -356,7 +430,7 @@ const styles = StyleSheet.create({
         width: 70,
         height: 70,
         borderRadius: 35,
-        backgroundColor: '#6C5CE7',
+        backgroundColor: '#6C5CE7', // 使用顯眼的紫色
         justifyContent: 'center',
         alignItems: 'center',
         elevation: 10,
