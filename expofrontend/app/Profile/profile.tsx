@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import {
     Trophy, Gamepad2, Mail, User as UserIcon, Settings, ChevronRight,
-    LogOut, Calculator, BookOpen, Brain, FlaskConical, Eye, EyeOff, Key
+    LogOut, Calculator, BookOpen, Brain, FlaskConical, Eye, EyeOff, Key, ShoppingCart
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -33,10 +33,26 @@ export default function ProfileScreen() {
     // Email change state
     const [showEmailModal, setShowEmailModal] = useState(false);
     const [newEmail, setNewEmail] = useState('');
-    
+
     // Nickname change state
     const [showNicknameModal, setShowNicknameModal] = useState(false);
     const [newNickname, setNewNickname] = useState('');
+    
+    // School change state
+    const [showSchoolModal, setShowSchoolModal] = useState(false);
+    const [newSchool, setNewSchool] = useState('');
+    const [currentSchool, setCurrentSchool] = useState('');
+    
+    // Items state
+    const [userItems, setUserItems] = useState<any[]>([]);
+    const [showItemsModal, setShowItemsModal] = useState(false);
+    
+    // Missions state
+    const [userMissions, setUserMissions] = useState<any[]>([]);
+    const [showMissionsModal, setShowMissionsModal] = useState(false);
+    
+    // User roles state
+    const [userRoles, setUserRoles] = useState<string[]>([]);
     
     // Error feedback state
     const [showErrorFeedbackModal, setShowErrorFeedbackModal] = useState(false);
@@ -77,6 +93,46 @@ export default function ProfileScreen() {
                         headers: { Authorization: `Bearer ${token}` }
                     });
                     setProfileData(profileResponse.data);
+                    
+                    // Fetch school info
+                    try {
+                        const schoolResponse = await axios.get(`${getApiBaseUrl()}/api/user/school`, {
+                            headers: { Authorization: `Bearer ${token}` }
+                        });
+                        setCurrentSchool(schoolResponse.data);
+                    } catch (error) {
+                        console.log("School info not available");
+                    }
+                    
+                    // Fetch user items
+                    try {
+                        const itemsResponse = await axios.get(`${getApiBaseUrl()}/api/user/item/`, {
+                            headers: { Authorization: `Bearer ${token}` }
+                        });
+                        setUserItems(itemsResponse.data || []);
+                    } catch (error) {
+                        console.log("Items info not available");
+                    }
+                    
+                    // Fetch user missions
+                    try {
+                        const missionsResponse = await axios.get(`${getApiBaseUrl()}/api/user/mission/`, {
+                            headers: { Authorization: `Bearer ${token}` }
+                        });
+                        setUserMissions(missionsResponse.data || []);
+                    } catch (error) {
+                        console.log("Missions info not available");
+                    }
+                    
+                    // Fetch user roles
+                    try {
+                        const rolesResponse = await axios.get(`${getApiBaseUrl()}/api/user/roles`, {
+                            headers: { Authorization: `Bearer ${token}` }
+                        });
+                        setUserRoles(rolesResponse.data || []);
+                    } catch (error) {
+                        console.log("Roles info not available");
+                    }
                     
                     // Fetch game history separately
                     const gameHistoryResponse = await axios.get(`${getApiBaseUrl()}/api/user/game/score`, {
@@ -252,7 +308,57 @@ export default function ProfileScreen() {
         }
     };
 
-    // Nickname change function
+    // School change function
+    const handleChangeSchool = async () => {
+        if (!newSchool || newSchool.trim() === '') {
+            setModalMessage({ text: 'Please enter a school name', type: 'error' });
+            showErrorWithFeedback('Please enter a school name', 'School Change - Empty Field');
+            return;
+        }
+
+        if (newSchool.trim().length > 100) {
+            setModalMessage({ text: 'School name must be 100 characters or less', type: 'error' });
+            showErrorWithFeedback('School name must be 100 characters or less', 'School Change - Too Long');
+            return;
+        }
+
+        try {
+            setLoading(true);
+            await axios.post(`${getApiBaseUrl()}/api/user/school`,
+                { school: newSchool.trim() },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            
+            Alert.alert('Success', 'School updated successfully');
+            setModalMessage({ text: 'School updated successfully!', type: 'success' });
+            setTimeout(() => {
+                setShowSchoolModal(false);
+                setModalMessage({ text: '', type: '' });
+            }, 1500);
+            setNewSchool('');
+            setCurrentSchool(newSchool.trim());
+        } catch (error: any) {
+            console.error('School change error:', error);
+            let errorMessage = 'Failed to update school';
+            let context = 'School Change - Unknown Error';
+
+            if (error.response?.data?.message) {
+                errorMessage = error.response.data.message;
+                context = `School Change - Server: ${error.response.data.message}`;
+            } else if (error.response?.status === 400) {
+                errorMessage = 'Invalid school name format';
+                context = 'School Change - Validation Error';
+            } else if (error.response?.status === 401) {
+                errorMessage = 'Authentication failed. Please log in again';
+                context = 'School Change - Auth Error';
+            }
+
+            setModalMessage({ text: errorMessage, type: 'error' });
+            showErrorWithFeedback(errorMessage, context);
+        } finally {
+            setLoading(false);
+        }
+    };
     const handleChangeNickname = async () => {
         if (!newNickname || newNickname.trim() === '') {
             setModalMessage({ text: 'Please enter a nickname', type: 'error' });
@@ -356,6 +462,18 @@ export default function ProfileScreen() {
                         <Mail size={12} color="#636E72" />
                         <Text style={styles.emailText}>{displayUser?.email || 'N/A'}</Text>
                     </View>
+                    {currentSchool && (
+                        <View style={styles.schoolBadge}>
+                            <BookOpen size={12} color="#636E72" />
+                            <Text style={styles.schoolText}>{currentSchool}</Text>
+                        </View>
+                    )}
+                    {userRoles.length > 0 && (
+                        <View style={styles.rolesBadge}>
+                            <Settings size={12} color="#636E72" />
+                            <Text style={styles.rolesText}>{userRoles.join(', ')}</Text>
+                        </View>
+                    )}
                 </View>
 
 
@@ -388,6 +506,17 @@ export default function ProfileScreen() {
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={styles.settingItem}
+                        onPress={() => setShowSchoolModal(true)}
+                    >
+                        <BookOpen size={20} color="#FF9800" />
+                        <View style={styles.settingContent}>
+                            <Text style={styles.settingTitle}>Change School</Text>
+                            <Text style={styles.settingDescription}>Update your school information</Text>
+                        </View>
+                        <ChevronRight size={20} color="#BDC3C7" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.settingItem}
                         onPress={() => setShowNicknameModal(true)}
                     >
                         <UserIcon size={20} color="#9C27B0" />
@@ -410,13 +539,37 @@ export default function ProfileScreen() {
                         <Text style={styles.statNumber}>{gameHistory.length}</Text>
                         <Text style={styles.statTitle}>Games Played</Text>
                     </View>
+                    <TouchableOpacity 
+                        style={[styles.statCard, { backgroundColor: '#F3E5F5', borderColor: '#E1BEE7' }]}
+                        onPress={() => setShowMissionsModal(true)}
+                    >
+                        <Trophy size={24} color="#9C27B0" />
+                        <Text style={styles.statNumber}>{userMissions.filter(m => m.completed).length}</Text>
+                        <Text style={styles.statTitle}>Missions Done</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                        style={[styles.statCard, { backgroundColor: '#FFF3E0', borderColor: '#FFE0B2' }]}
+                        onPress={() => setShowItemsModal(true)}
+                    >
+                        <Trophy size={24} color="#FF9800" />
+                        <Text style={styles.statNumber}>{userItems.length}</Text>
+                        <Text style={styles.statTitle}>My Items</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                        style={[styles.statCard, { backgroundColor: '#E8F4F8', borderColor: '#B3E5FC' }]}
+                        onPress={() => router.push('/shop')}
+                    >
+                        <ShoppingCart size={24} color="#03A9F4" />
+                        <Text style={styles.statNumber}>Shop</Text>
+                        <Text style={styles.statTitle}>Store</Text>
+                    </TouchableOpacity>
                 </View>
 
-                {/*  <View style={styles.radarSection}>
+                  <View style={styles.radarSection}>
                     <Text style={styles.sectionTitle}>Skill Analysis</Text>
                     <SkillBarsChart gameHistory={gameHistory} />
                 </View>
-                *
+
 
                 {/* 切換標籤 */}
                 {/* 在 return 裡替換原有的 tabContainer */}
@@ -675,6 +828,171 @@ export default function ProfileScreen() {
                 </View>
             </Modal>
 
+            {/* Missions Modal */}
+            <Modal
+                visible={showMissionsModal}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setShowMissionsModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { maxHeight: '70%' }]}>
+                        <Text style={styles.modalTitle}>My Missions</Text>
+                        
+                        <ScrollView style={{ flex: 1, maxHeight: 300 }}>
+                            {userMissions.length > 0 ? userMissions.map((mission: any, index: number) => (
+                                <View key={index} style={styles.missionCard}>
+                                    <View style={[styles.missionStatus, { 
+                                        backgroundColor: mission.completed ? '#4CAF50' : '#FFC107' 
+                                    }]}>
+                                        <Text style={styles.missionStatusText}>
+                                            {mission.completed ? '✓' : '○'}
+                                        </Text>
+                                    </View>
+                                    <View style={styles.missionInfo}>
+                                        <Text style={styles.missionName}>{mission.name || 'Unknown Mission'}</Text>
+                                        <Text style={styles.missionType}>{mission.type || 'Mission'}</Text>
+                                        {mission.description && (
+                                            <Text style={styles.missionDescription}>{mission.description}</Text>
+                                        )}
+                                        <View style={styles.missionMeta}>
+                                            <Text style={styles.missionDifficulty}>
+                                                {mission.difficulty || 'Easy'}
+                                            </Text>
+                                            <Text style={styles.missionScores}>
+                                                +{mission.scores || 0} XP
+                                            </Text>
+                                        </View>
+                                    </View>
+                                </View>
+                            )) : (
+                                <View style={styles.emptyMissionsContainer}>
+                                    <Text style={styles.emptyMissionsText}>No missions yet</Text>
+                                    <Text style={styles.emptyMissionsSubText}>Start playing to unlock missions!</Text>
+                                </View>
+                            )}
+                        </ScrollView>
+
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity 
+                                style={[styles.modalBtn, styles.confirmBtn]} 
+                                onPress={() => setShowMissionsModal(false)}
+                            >
+                                <Text style={styles.confirmBtnText}>Close</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Items Modal */}
+            <Modal
+                visible={showItemsModal}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setShowItemsModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { maxHeight: '70%' }]}>
+                        <Text style={styles.modalTitle}>My Items</Text>
+                        
+                        <ScrollView style={{ flex: 1, maxHeight: 300 }}>
+                            {userItems.length > 0 ? userItems.map((item: any, index: number) => (
+                                <View key={index} style={styles.itemCard}>
+                                    <View style={styles.itemIcon}>
+                                        <Text style={styles.itemIconText}>{item.name?.charAt(0) || 'I'}</Text>
+                                    </View>
+                                    <View style={styles.itemInfo}>
+                                        <Text style={styles.itemName}>{item.name || 'Unknown Item'}</Text>
+                                        <Text style={styles.itemType}>{item.type || 'Item'}</Text>
+                                        {item.description && (
+                                            <Text style={styles.itemDescription}>{item.description}</Text>
+                                        )}
+                                    </View>
+                                </View>
+                            )) : (
+                                <View style={styles.emptyItemsContainer}>
+                                    <Text style={styles.emptyItemsText}>No items yet</Text>
+                                    <Text style={styles.emptyItemsSubText}>Complete missions to earn items!</Text>
+                                </View>
+                            )}
+                        </ScrollView>
+
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity 
+                                style={[styles.modalBtn, styles.confirmBtn]} 
+                                onPress={() => setShowItemsModal(false)}
+                            >
+                                <Text style={styles.confirmBtnText}>Close</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* School Change Modal */}
+            <Modal
+                visible={showSchoolModal}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setShowSchoolModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Change School</Text>
+                        
+                        <View style={styles.inputContainer}>
+                            <Text style={styles.inputLabel}>New School Name</Text>
+                            <TextInput
+                                style={styles.textInput}
+                                placeholder="Enter your school name"
+                                value={newSchool}
+                                onChangeText={setNewSchool}
+                                maxLength={100}
+                            />
+                        </View>
+
+                        {modalMessage.text ? (
+                            <Text style={{
+                                color: modalMessage.type === 'success' ? '#4CAF50' : '#FF4757',
+                                textAlign: 'center',
+                                marginBottom: 15,
+                                fontSize: 16,
+                                fontWeight: '600'
+                            }}>
+                                {modalMessage.text}
+                            </Text>
+                        ) : null}
+
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity 
+                                style={[styles.modalBtn, styles.cancelBtn]} 
+                                onPress={() => {
+                                    setShowSchoolModal(false);
+                                    setNewSchool('');
+                                }}
+                            >
+                                <Text style={styles.cancelBtnText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={[styles.modalBtn, styles.confirmBtn]} 
+                                onPress={handleChangeSchool}
+                                disabled={loading}
+                            >
+                                {loading ? (
+                                    <View style={styles.loadingContainer}>
+                                        <ActivityIndicator size="small" color="#FFF" />
+                                        <Text style={[styles.confirmBtnText, { marginLeft: 8 }]}>Updating...</Text>
+                                    </View>
+                                ) : (
+                                    <Text style={styles.confirmBtnText}>Update</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
             {/* Error Feedback Modal */}
             <Modal
                 visible={showErrorFeedbackModal}
@@ -736,6 +1054,7 @@ const styles = StyleSheet.create({
     profileHeader: { backgroundColor: '#FFF', marginHorizontal: 20, marginTop: 15, borderRadius: 24, padding: 25, alignItems: 'center', elevation: 4 },
     statsContainer: {
         flexDirection: 'row',
+        flexWrap: 'wrap',
         justifyContent: 'space-between',
         paddingHorizontal: 20,
         marginTop: 20
@@ -757,11 +1076,12 @@ const styles = StyleSheet.create({
         marginBottom: 10,
     },
     statCard: {
-        width: '47%',
-        padding: 15,
+        width: '31%',
+        padding: 12,
         borderRadius: 20,
         alignItems: 'center',
-        borderWidth: 1
+        borderWidth: 1,
+        marginBottom: 10
     },
     statNumber: {
         fontSize: 20,
@@ -831,6 +1151,10 @@ const styles = StyleSheet.create({
     userName: { fontSize: 22, fontWeight: '900', color: '#2D3436' },
     emailBadge: { flexDirection: 'row', alignItems: 'center', marginTop: 5 },
     emailText: { fontSize: 14, color: '#636E72', marginLeft: 5 },
+    schoolBadge: { flexDirection: 'row', alignItems: 'center', marginTop: 5 },
+    schoolText: { fontSize: 14, color: '#636E72', marginLeft: 5 },
+    rolesBadge: { flexDirection: 'row', alignItems: 'center', marginTop: 5 },
+    rolesText: { fontSize: 14, color: '#636E72', marginLeft: 5 },
     tabContainer: { flexDirection: 'row', marginLeft: 25, marginTop: 20, gap: 20 },
     tabBtn: { paddingBottom: 5, borderBottomWidth: 2, borderBottomColor: 'transparent' },
     activeTab: { borderBottomColor: '#4CAF50' },
@@ -971,5 +1295,127 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         borderWidth: 1,
         borderColor: '#FFB6B6',
+    },
+    // Items modal styles
+    itemCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 15,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F2F6',
+    },
+    itemIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#F8F9FA',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 15,
+    },
+    itemIconText: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#4CAF50',
+    },
+    itemInfo: {
+        flex: 1,
+    },
+    itemName: {
+        fontSize: 16,
+        fontWeight: '800',
+        color: '#2D3436',
+    },
+    itemType: {
+        fontSize: 12,
+        color: '#636E72',
+        marginTop: 2,
+    },
+    itemDescription: {
+        fontSize: 12,
+        color: '#A0A0A0',
+        marginTop: 4,
+    },
+    emptyItemsContainer: {
+        alignItems: 'center',
+        padding: 40,
+    },
+    emptyItemsText: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#636E72',
+    },
+    emptyItemsSubText: {
+        fontSize: 12,
+        color: '#A0A0A0',
+        marginTop: 5,
+    },
+    // Missions modal styles
+    missionCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 15,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F2F6',
+    },
+    missionStatus: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 15,
+    },
+    missionStatusText: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: '#FFF',
+    },
+    missionInfo: {
+        flex: 1,
+    },
+    missionName: {
+        fontSize: 16,
+        fontWeight: '800',
+        color: '#2D3436',
+    },
+    missionType: {
+        fontSize: 12,
+        color: '#636E72',
+        marginTop: 2,
+    },
+    missionDescription: {
+        fontSize: 12,
+        color: '#A0A0A0',
+        marginTop: 4,
+    },
+    missionMeta: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 8,
+    },
+    missionDifficulty: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#FF9800',
+    },
+    missionScores: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#4CAF50',
+    },
+    emptyMissionsContainer: {
+        alignItems: 'center',
+        padding: 40,
+    },
+    emptyMissionsText: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#636E72',
+    },
+    emptyMissionsSubText: {
+        fontSize: 12,
+        color: '#A0A0A0',
+        marginTop: 5,
     }
 });

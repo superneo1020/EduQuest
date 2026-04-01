@@ -103,6 +103,20 @@ export default function RootLayout() {
                   }
               }}
           />
+
+          <Stack.Screen
+              name="Shop"
+              options={{
+                  title: 'Shop',
+                  headerStyle: {
+                      backgroundColor: '#03A9F4',
+                  },
+                  headerTintColor: '#fff',
+                  headerTitleStyle: {
+                      fontWeight: 'bold',
+                  }
+              }}
+          />
       </Stack>
     </AuthProvider>
   );
