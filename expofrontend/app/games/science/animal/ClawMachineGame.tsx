@@ -463,7 +463,7 @@ const ClawMachineGame: React.FC = () => {
                 <TouchableOpacity onPress={goBack} style={styles.backButton}>
                     <Text style={styles.backButtonText}>← BACK</Text>
                 </TouchableOpacity>
-                <Text style={styles.title}>🐾 ANIMAL CATCHER 🐾</Text>
+                <Text style={styles.title}>Which one is an animal? Please collect them.</Text>
                 <Animated.View style={[styles.scoreContainer, { transform: [{ scale: scoreScale }] }]}>
                     <Text style={styles.scoreLabel}>SCORE</Text>
                     <Text style={[styles.scoreValue, score < 30 && styles.scoreLow, score === 100 && styles.scorePerfect]}>
@@ -497,7 +497,7 @@ const ClawMachineGame: React.FC = () => {
                     <View style={styles.machineTop}>
                         <View style={styles.railHorizontal} />
                         <View style={styles.railVertical} />
-                        <Text style={styles.machineLabel}>ANIMAL CATCHER</Text>
+                        <Text style={styles.machineLabel}>CATCHER</Text>
                     </View>
 
                     <View style={styles.gameArea}>

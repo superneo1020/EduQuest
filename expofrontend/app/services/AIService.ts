@@ -2,8 +2,6 @@
 import { Config } from '../config';
 
 // ============ 类型定义 ============
-
-// AI 游戏结果分析请求类型
 export type AIAnalysisRequest = {
     score: number;
     accuracy: number;
@@ -15,7 +13,6 @@ export type AIAnalysisRequest = {
     timestamp: string;
 };
 
-// AI 游戏结果分析响应类型
 export type AIAnalysisResponse = {
     feedback: string;
     suggestions: string[];
@@ -25,75 +22,97 @@ export type AIAnalysisResponse = {
     recommended_next_steps: string[];
 };
 
-// 题目类型定义
 export type Question = {
     id: string;
     audioText: string;
-    options: {
-        id: string;
-        text: string;
-        correct: boolean;
-    }[];
+    options: { id: string; text: string; correct: boolean }[];
     hint: string;
     level: 'easy' | 'medium' | 'hard';
 };
 
-// ============ 主服务类 ============
+// 编辑距离（Levenshtein）用于相似度去重
+function levenshteinDistance(a: string, b: string): number {
+    if (a.length === 0) return b.length;
+    if (b.length === 0) return a.length;
+    const matrix: number[][] = [];
+    for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+    for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+    for (let i = 1; i <= b.length; i++) {
+        for (let j = 1; j <= a.length; j++) {
+            const cost = a[j - 1] === b[i - 1] ? 0 : 1;
+            matrix[i][j] = Math.min(
+                matrix[i - 1][j] + 1,
+                matrix[i][j - 1] + 1,
+                matrix[i - 1][j - 1] + cost
+            );
+        }
+    }
+    return matrix[b.length][a.length];
+}
 
 class AIService {
     private baseURL: string;
     private modelName: string;
     private enabled: boolean;
+    // 游戏会话去重记录
+    private usedAnswers: Set<string> = new Set();
+    private usedFallbackIndices: Set<number> = new Set();
+    private currentLevel: 'easy' | 'medium' | 'hard' | null = null;
 
     constructor() {
-        // 使用与 chatbot.tsx 相同的后端地址
         this.baseURL = 'http://127.0.0.1:8000';
         this.modelName = Config.AI_MODEL_NAME || 'gemma';
         this.enabled = Config.AI_ENABLED !== false;
     }
 
-    // ============ 通用方法 ============
+    /** 新游戏开始时调用，清空去重记录 */
+    public resetGameSession(level: 'easy' | 'medium' | 'hard'): void {
+        this.usedAnswers.clear();
+        this.usedFallbackIndices.clear();
+        this.currentLevel = level;
+    }
 
     /**
-     * 发送请求到 AI 服务
+     * 难度映射：将外部请求的难度转换为内部实际使用的难度
+     * 新规则：
+     * - 外部 easy -> 内部 medium（原 medium 题目变成 easy）
+     * - 外部 medium -> 内部 hard（原 hard 题目变成 medium）
+     * - 外部 hard -> 内部 easy（原 easy 题目变成 hard）
      */
+    private mapLevel(level: 'easy' | 'medium' | 'hard'): 'easy' | 'medium' | 'hard' {
+        switch (level) {
+            case 'easy': return 'medium';
+            case 'medium': return 'hard';
+            case 'hard': return 'easy';
+            default: return level;
+        }
+    }
+
+    // ============ 通用方法 ============
     private async sendRequest(prompt: string): Promise<string> {
         if (!this.enabled) {
             throw new Error('AI service is disabled');
         }
 
         try {
-            console.log('Connecting to AI service:', this.baseURL);
-            console.log('Using model:', this.modelName);
-
+            console.log(`Connecting to AI service: ${this.baseURL}, model: ${this.modelName}`);
             const response = await fetch(`${this.baseURL}/chat`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    prompt: prompt
+                    prompt: prompt,
+                    model: this.modelName
                 }),
             });
 
-            console.log('AI service response status:', response.status);
-
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error('AI service error details:', errorText);
-                throw new Error(`AI service error: ${response.status} ${response.statusText}`);
+                throw new Error(`AI service error: ${response.status} ${errorText}`);
             }
 
             const data = await response.json();
-            console.log('AI raw response:', data);
-
-            const aiResponseText = data.response || data.choices?.[0]?.message?.content;
-
-            if (!aiResponseText) {
-                console.error('AI response format error:', data);
-                throw new Error('AI response format incorrect');
-            }
-
+            const aiResponseText = data.response || data.choices?.[0]?.message?.content || data.result;
+            if (!aiResponseText) throw new Error('AI response format incorrect');
             return aiResponseText;
         } catch (error: any) {
             console.error('AI service request failed:', error);
@@ -101,50 +120,27 @@ class AIService {
         }
     }
 
-    /**
-     * 清理 AI 响应文本
-     */
     private cleanResponseText(response: string): string {
-        let cleanedResponse = response.trim();
-
-        // 移除可能存在的 ```json 和 ``` 标记
-        if (cleanedResponse.startsWith('```json')) {
-            cleanedResponse = cleanedResponse.substring(7);
-        }
-        if (cleanedResponse.startsWith('```')) {
-            cleanedResponse = cleanedResponse.substring(3);
-        }
-        if (cleanedResponse.endsWith('```')) {
-            cleanedResponse = cleanedResponse.substring(0, cleanedResponse.length - 3);
-        }
-
-        return cleanedResponse.trim();
+        let cleaned = response.trim();
+        if (cleaned.startsWith('```json')) cleaned = cleaned.substring(7);
+        if (cleaned.startsWith('```')) cleaned = cleaned.substring(3);
+        if (cleaned.endsWith('```')) cleaned = cleaned.substring(0, cleaned.length - 3);
+        return cleaned.trim();
     }
 
-    // ============ 游戏结果分析功能 ============
-
-    /**
-     * 分析游戏结果
-     */
+    // ============ 游戏结果分析 ============
     async analyzeGameResults(request: AIAnalysisRequest): Promise<AIAnalysisResponse> {
-        if (!this.enabled) {
-            console.log('AI analysis function disabled');
-            return this.getDefaultAnalysisResponse();
-        }
-
+        if (!this.enabled) return this.getDefaultAnalysisResponse();
         try {
             const prompt = this.createAnalysisPrompt(request);
             const aiResponseText = await this.sendRequest(prompt);
             return this.parseAnalysisResponse(aiResponseText);
-        } catch (error: any) {
-            console.error('AI analysis failed:', error);
+        } catch (error) {
+            console.error('Analysis failed:', error);
             return this.getDefaultAnalysisResponse();
         }
     }
 
-    /**
-     * 创建分析提示词
-     */
     private createAnalysisPrompt(request: AIAnalysisRequest): string {
         return `You are an English language learning expert. Analyze this listening game performance and provide feedback in JSON format.
 
@@ -158,60 +154,40 @@ Performance Data:
 
 Please provide analysis in this JSON format:
 {
-    "feedback": "Brief performance summary (max 15 words)",
+    "feedback": "Brief summary (max 15 words)",
     "suggestions": ["Suggestion 1", "Suggestion 2", "Suggestion 3"],
     "strengths": ["Strength 1", "Strength 2"],
     "areas_to_improve": ["Area 1", "Area 2"],
-    "estimated_level": "e.g., Beginner/Intermediate/Advanced",
+    "estimated_level": "Beginner/Intermediate/Advanced",
     "recommended_next_steps": ["Step 1", "Step 2"]
 }
-
-Make sure to return ONLY valid JSON, no other text.`;
+Return ONLY valid JSON, no other text.`;
     }
 
-    /**
-     * 解析分析响应
-     */
     private parseAnalysisResponse(response: string): AIAnalysisResponse {
         try {
-            console.log('Attempting to parse AI analysis response:', response);
-            const cleanedResponse = this.cleanResponseText(response);
-            console.log('Cleaned response:', cleanedResponse);
-
-            const parsed = JSON.parse(cleanedResponse);
-
-            // 简化文本内容
+            const cleaned = this.cleanResponseText(response);
+            const parsed = JSON.parse(cleaned);
             const simplifyText = (text: string, maxWords: number = 15) => {
                 if (!text) return "";
                 const words = text.split(' ');
-                if (words.length > maxWords) {
-                    return words.slice(0, maxWords).join(' ') + '...';
-                }
-                return text;
+                return words.length > maxWords ? words.slice(0, maxWords).join(' ') + '...' : text;
             };
-
-            const simplifyArray = (arr: string[], maxWords: number = 8) => {
-                if (!Array.isArray(arr)) return [];
-                return arr.map(item => simplifyText(item, maxWords));
-            };
-
+            const simplifyArray = (arr: string[], maxWords: number = 8) =>
+                Array.isArray(arr) ? arr.map(item => simplifyText(item, maxWords)) : [];
             return {
                 feedback: parsed.feedback ? simplifyText(parsed.feedback, 15) : "Good performance! Keep practicing.",
-                suggestions: Array.isArray(parsed.suggestions) ? simplifyArray(parsed.suggestions, 8) : [],
-                strengths: Array.isArray(parsed.strengths) ? simplifyArray(parsed.strengths, 8) : [],
-                areas_to_improve: Array.isArray(parsed.areas_to_improve) ? simplifyArray(parsed.areas_to_improve, 8) : [],
+                suggestions: simplifyArray(parsed.suggestions, 8),
+                strengths: simplifyArray(parsed.strengths, 8),
+                areas_to_improve: simplifyArray(parsed.areas_to_improve, 8),
                 estimated_level: parsed.estimated_level || "To be assessed",
-                recommended_next_steps: Array.isArray(parsed.recommended_next_steps) ? simplifyArray(parsed.recommended_next_steps, 8) : []
+                recommended_next_steps: simplifyArray(parsed.recommended_next_steps, 8)
             };
         } catch (error) {
-            console.error('Failed to parse AI analysis response:', error);
             return this.getDefaultAnalysisResponse();
         }
     }
 
-    /**
-     * 获取默认分析响应
-     */
     getDefaultAnalysisResponse(): AIAnalysisResponse {
         return {
             feedback: "AI analysis feature temporarily unavailable",
@@ -223,424 +199,228 @@ Make sure to return ONLY valid JSON, no other text.`;
         };
     }
 
-    // ============ 题目生成功能 ============
-
-    /**
-     * 生成单道题目 - 每次生成全新的题目
-     */
+    // ============ 题目生成（核心） ============
     async generateSingleQuestion(level: 'easy' | 'medium' | 'hard', index: number): Promise<Question | null> {
+        // 外部级别变化时重置会话（保持原有逻辑）
+        if (this.currentLevel !== level) {
+            this.resetGameSession(level);
+        }
+
+        // 难度映射：将外部请求的难度转换为内部实际难度
+        const internalLevel = this.mapLevel(level);
+
         if (!this.enabled) {
-            console.log('AI question generation disabled, using fallback question');
-            return this.getSingleFallbackQuestion(level, index);
+            return this.getUniqueFallbackQuestion(internalLevel, index, level);
         }
 
-        try {
-            console.log(`Generating question ${index + 1} for ${level} level...`);
+        const maxRetries = 3;
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+                console.log(`Generating ${level} question (internal ${internalLevel}) ${index + 1} (attempt ${attempt + 1})...`);
+                const randomSeed = Math.floor(Math.random() * 10000) + Date.now() + attempt;
+                const prompt = this.createSingleQuestionPrompt(internalLevel, index, randomSeed);
+                const aiResponseText = await this.sendRequest(prompt);
+                const question = this.parseSingleQuestionResponse(aiResponseText, internalLevel, index);
 
-            // 添加随机种子，确保每次生成不同的题目
-            const randomSeed = Math.floor(Math.random() * 10000);
-            const prompt = this.createSingleQuestionPrompt(level, index, randomSeed);
-
-            const aiResponseText = await this.sendRequest(prompt);
-            const question = this.parseSingleQuestionResponse(aiResponseText, level, index);
-
-            if (question) {
-                return question;
-            } else {
-                console.log(`Failed to parse AI question ${index + 1}, using fallback`);
-                return this.getSingleFallbackQuestion(level, index);
+                if (question) {
+                    // 注意：去重时使用外部级别作为标识的一部分，避免不同难度互相干扰
+                    const answerKey = this.normalizeAnswer(question, internalLevel);
+                    let isDuplicate = false;
+                    for (const used of this.usedAnswers) {
+                        if (used === answerKey) {
+                            isDuplicate = true;
+                            break;
+                        }
+                        if (internalLevel !== 'easy' && levenshteinDistance(used, answerKey) <= 2) {
+                            console.warn(`Similar answer: "${used}" vs "${answerKey}"`);
+                            isDuplicate = true;
+                            break;
+                        }
+                    }
+                    if (!isDuplicate) {
+                        this.usedAnswers.add(answerKey);
+                        // 返回的 Question 中 level 字段应该使用外部级别（用户看到的难度）
+                        return {
+                            ...question,
+                            level: level
+                        };
+                    } else {
+                        console.warn(`Duplicate rejected: "${answerKey}"`);
+                        if (attempt === maxRetries) break;
+                        continue;
+                    }
+                }
+            } catch (error) {
+                console.error(`Attempt ${attempt + 1} failed:`, error);
             }
-        } catch (error: any) {
-            console.error(`AI question generation failed for question ${index + 1}:`, error);
-            return this.getSingleFallbackQuestion(level, index);
         }
+
+        console.log('Using fallback due to duplicate or failure');
+        return this.getUniqueFallbackQuestion(internalLevel, index, level);
+    }
+
+    private normalizeAnswer(question: Question, internalLevel: string): string {
+        const correctOpt = question.options.find(opt => opt.correct);
+        if (!correctOpt) return '';
+        let text = correctOpt.text.trim().toLowerCase();
+        text = text.replace(/[^\w\s]/g, '');
+        if (internalLevel === 'easy') {
+            text = text.split(/\s+/)[0];
+        }
+        return text;
     }
 
     /**
-     * 创建单题生成提示词 - 添加随机种子确保多样性
+     * 获取一个未使用过的 fallback 题目
+     * @param internalLevel 内部难度（决定使用哪个题库）
+     * @param index 题目索引
+     * @param externalLevel 外部难度（用于设置返回的 Question.level 字段）
      */
-    private createSingleQuestionPrompt(level: 'easy' | 'medium' | 'hard', index: number, randomSeed: number): string {
-        const levelDescriptions = {
-            easy: "Beginner level - simple words and basic vocabulary. Use single words",
-            medium: "Intermediate level - short phrases and common sentences. Use 3-4 word sentences.",
-            hard: "Advanced level - complete sentences.Use 5 word sentences"
+    private getUniqueFallbackQuestion(internalLevel: 'easy' | 'medium' | 'hard', index: number, externalLevel?: 'easy' | 'medium' | 'hard'): Question | null {
+        const fallbackList = this.getFallbackList(internalLevel);
+        const total = fallbackList.length;
+        if (this.usedFallbackIndices.size >= total) {
+            console.warn('All fallbacks used, resetting');
+            this.usedFallbackIndices.clear();
+        }
+        const availableIndices: number[] = [];
+        for (let i = 0; i < total; i++) {
+            if (!this.usedFallbackIndices.has(i)) availableIndices.push(i);
+        }
+        const randomIndex = availableIndices[Math.floor(Math.random() * availableIndices.length)];
+        this.usedFallbackIndices.add(randomIndex);
+        const q = fallbackList[randomIndex];
+
+        let options = q.options.map((optText, i) => ({
+            id: `${internalLevel}-fallback-${index}-opt-${i}-${Date.now()}`,
+            text: optText,
+            correct: optText === q.correct
+        }));
+        // 确保 medium/hard 的正确选项与 audioText 一致
+        if (internalLevel !== 'easy' && options.find(opt => opt.correct)?.text !== q.audioText) {
+            options = options.map(opt => ({
+                ...opt,
+                correct: opt.text === q.audioText
+            }));
+        }
+
+        const finalLevel = externalLevel !== undefined ? externalLevel : internalLevel;
+        return {
+            id: `${finalLevel}-fallback-${index + 1}-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+            audioText: q.audioText,
+            options,
+            hint: q.hint,
+            level: finalLevel
         };
+    }
 
-        // 更丰富的题目类型
-        const questionTypes = {
-            easy: [
-                "animals (pets, farm animals, wild animals)",
-                "food and drinks (meals, fruits, vegetables)",
-                "household objects (furniture, electronics, tools)",
-                "colors and shapes",
-                "family members and people",
-                "clothing and accessories",
-                "weather and nature",
-                "transportation vehicles",
-                "school supplies",
-                "sports and activities",
-                "body parts",
-                "emotions and feelings"
-            ],
-            medium: [
-                "daily routines and activities",
-                "weather descriptions",
-                "feelings and emotions",
-                "places in town (restaurant, library, hospital)",
-                "making simple requests",
-                "common social phrases",
-                "describing people and objects",
-                "talking about time and dates",
-                "shopping and prices",
-                "food and restaurant orders",
-                "travel and directions",
-                "hobbies and interests"
-            ],
-            hard: [
-                "complex questions and requests",
-                "situational dialogues (restaurant, hotel, airport)",
-                "idioms and expressions",
-                "detailed scene descriptions",
-                "abstract concepts and opinions",
-                "professional and workplace scenarios",
-                "news and current events",
-                "cultural references",
-                "problem-solving situations",
-                "giving detailed instructions",
-                "expressing preferences and reasons",
-                "making plans and arrangements"
-            ]
+    private getFallbackList(level: 'easy' | 'medium' | 'hard') {
+        // 以下题库保持不变，分别对应原 easy / medium / hard 的内容
+        const easyList = [
+            { audioText: "it is fish, live in ocean", correct: "fish", options: ["fish", "cat", "bird", "dog"], hint: "Lives in water" },
+            { audioText: "this animal has a long neck", correct: "giraffe", options: ["giraffe", "zebra", "lion", "elephant"], hint: "Tall African animal" },
+            { audioText: "yellow fruit monkeys love", correct: "banana", options: ["banana", "apple", "orange", "grape"], hint: "Curved and sweet" },
+            { audioText: "used to write on paper", correct: "pen", options: ["pen", "ruler", "eraser", "sharpener"], hint: "Writing tool with ink" },
+            { audioText: "you sit on this furniture", correct: "chair", options: ["chair", "table", "sofa", "bed"], hint: "Has legs and a back" },
+            { audioText: "vehicle that flies in sky", correct: "airplane", options: ["airplane", "car", "train", "boat"], hint: "Has wings and engines" },
+            { audioText: "red fruit often in pies", correct: "apple", options: ["apple", "pear", "peach", "plum"], hint: "Keeps doctor away" },
+            { audioText: "big animal with trunk", correct: "elephant", options: ["elephant", "rhino", "hippo", "buffalo"], hint: "Has large ears" },
+            { audioText: "you wear it on feet", correct: "shoes", options: ["shoes", "socks", "pants", "hat"], hint: "Protects your soles" },
+            { audioText: "hot drink made from beans", correct: "coffee", options: ["coffee", "tea", "milk", "juice"], hint: "Often drunk in morning" },
+            { audioText: "king of the jungle", correct: "lion", options: ["lion", "tiger", "leopard", "cheetah"], hint: "Has a mane" },
+            { audioText: "frozen water from sky", correct: "snow", options: ["snow", "rain", "hail", "ice"], hint: "White and cold" },
+            { audioText: "you read it for stories", correct: "book", options: ["book", "magazine", "newspaper", "comic"], hint: "Has pages and a cover" },
+            { audioText: "used to cut paper", correct: "scissors", options: ["scissors", "knife", "blade", "cutter"], hint: "Two blades crossing" },
+            { audioText: "round object in the sky at night", correct: "moon", options: ["moon", "sun", "star", "planet"], hint: "Glows but not hot" },
+            { audioText: "you use it to tell time", correct: "clock", options: ["clock", "watch", "timer", "calendar"], hint: "Has hands or digits" }
+        ];
+        const mediumList = [
+            { audioText: "I want to soup, it is hot", correct: "I want to soup", options: ["I want to soup", "I want to eat", "I want to drink", "I want to cook"], hint: "Desire for soup" },
+            { audioText: "She forgot her keys at home", correct: "She forgot her keys", options: ["She forgot her keys", "She lost her phone", "She missed the bus", "She broke her glasses"], hint: "Keys left behind" },
+            { audioText: "The movie starts at eight", correct: "The movie starts at eight", options: ["The movie starts at eight", "The show begins at nine", "The concert is at seven", "The play ends at ten"], hint: "Film timing" },
+            { audioText: "I need to buy some milk", correct: "I need to buy milk", options: ["I need to buy milk", "I want to drink milk", "I like cold milk", "Milk is healthy"], hint: "Grocery shopping" },
+            { audioText: "Where can I find a taxi", correct: "Where can I find a taxi", options: ["Where can I find a taxi", "How much is the fare", "Call me a cab", "Is this bus going downtown"], hint: "Looking for a cab" },
+            { audioText: "He is going to the gym", correct: "He is going to the gym", options: ["He is going to the gym", "He likes to exercise", "He works out daily", "He runs every morning"], hint: "Exercise place" },
+            { audioText: "Please turn off the light", correct: "Please turn off the light", options: ["Turn on the lamp", "Please turn off the light", "Switch off the fan", "Close the curtain"], hint: "Darken the room" },
+            { audioText: "I love eating pizza", correct: "I love eating pizza", options: ["I love eating pasta", "I enjoy burgers", "I like pizza", "Pizza is my favorite"], hint: "Italian dish" },
+            { audioText: "She is wearing a red dress", correct: "She is wearing a red dress", options: ["Red dress on her", "She wears red", "Her dress is red", "She has a red outfit"], hint: "Color and clothing" },
+            { audioText: "We need to catch the train", correct: "We need to catch the train", options: ["We must board the train", "Let's hurry to the station", "The train is leaving", "We have a train to take"], hint: "Railway travel" },
+            { audioText: "Can you help me move this table", correct: "Can you help me move this table", options: ["Help with the desk", "Move this chair please", "Assist me with the table", "Lift the table together"], hint: "Furniture relocation" },
+            { audioText: "The baby is sleeping peacefully", correct: "The baby is sleeping peacefully", options: ["Baby sleeps well", "Infant resting quietly", "Child is napping", "Little one in dreamland"], hint: "No noise please" },
+            { audioText: "I will call you tomorrow", correct: "I will call you tomorrow", options: ["Phone you next day", "Give you a ring later", "Contact you soon", "Reach out tomorrow"], hint: "Future communication" }
+        ];
+        const hardList = [
+            { audioText: "Adjusting the minute hand position is crucial", correct: "Adjusting the minute hand position is crucial", options: ["Setting the hour hand is important", "The clock needs new batteries", "Time is measured in seconds", "Winding the clock is necessary"], hint: "Clock precision" },
+            { audioText: "The conference has been postponed until next month", correct: "The conference has been postponed until next month", options: ["The meeting is cancelled", "The event is rescheduled", "The workshop is moved forward", "The seminar is delayed"], hint: "Event later than planned" },
+            { audioText: "Could you please turn down the volume?", correct: "Could you please turn down the volume", options: ["Please increase the volume", "Lower the sound please", "Mute the television", "Make it quieter"], hint: "Noise too high" },
+            { audioText: "I am looking for a gift for my mother", correct: "I am looking for a gift for my mother", options: ["Shopping for a present", "I need a birthday card", "Where is the toy section", "Do you sell flowers"], hint: "Buying a present" },
+            { audioText: "The train to London departs from platform nine", correct: "The train to London departs from platform nine", options: ["Platform for Paris", "Departure time changed", "Ticket required for boarding", "London train at gate nine"], hint: "Railway announcement" },
+            { audioText: "After the rain stopped we saw a rainbow", correct: "After the rain stopped we saw a rainbow", options: ["Rainbow appeared after rain", "We saw colors in the sky", "The storm cleared quickly", "Sun came out after shower"], hint: "Colorful arc" },
+            { audioText: "Could you explain the main idea again please", correct: "Could you explain the main idea again please", options: ["Repeat the concept", "Clarify the summary once more", "Please reiterate the point", "Say the key point again"], hint: "Request for repetition" },
+            { audioText: "I have never visited such a beautiful place", correct: "I have never visited such a beautiful place", options: ["This place is the best", "Never seen this beauty", "Most beautiful location ever", "What a gorgeous spot"], hint: "Expressing amazement" },
+            { audioText: "Make sure to save your work before closing", correct: "Make sure to save your work before closing", options: ["Don't forget to backup", "Save document then exit", "Preserve data prior to shut", "Store file before quitting"], hint: "Computer tip" },
+            { audioText: "The recipe requires two cups of flour", correct: "The recipe requires two cups of flour", options: ["Need 500g of flour", "Add flour double cup", "Two cups flour needed", "Flour amount is two cups"], hint: "Baking ingredient" }
+        ];
+        if (level === 'easy') return easyList;
+        if (level === 'medium') return mediumList;
+        return hardList;
+    }
+
+    private createSingleQuestionPrompt(internalLevel: 'easy' | 'medium' | 'hard', index: number, randomSeed: number): string {
+        const levelRules = {
+            easy: "EASY: audioText is a short description (3-6 words). Correct answer is the single noun described. Example: 'it is fish, live in ocean' -> answer 'fish'.",
+            medium: "MEDIUM: audioText is a short phrase (4-6 words). Correct answer is the exact same phrase. Example: 'I want to soup, it is hot' -> answer 'I want to soup'.",
+            hard: "HARD: audioText is a complete sentence (5-8 words). Correct answer is the exact same sentence. Example: 'Adjusting the minute hand position is crucial' -> same."
         };
-
-        // 根据索引和随机种子选择题目类型
-        const typeIndex = (index + randomSeed) % questionTypes[level].length;
-        const questionType = questionTypes[level][typeIndex];
-
-        // 添加示例来引导 AI 生成不同的题目
-        const examples = {
-            easy: [
-                'Example: "dog" (options: cat, dog, bird, fish)',
-                'Example: "red" (options: blue, red, green, yellow)',
-                'Example: "subway" (options: bus, taxi, subway, car)',
-                'Example: "sofa" (options: coffee table, tv, sofa, bed)',
-                'Example: "tomato" (options: tomato, eggplant, potatoes, lettuce)'
-            ],
-            medium: [
-                'Example: "I am hungry" (options: I am tired, I am hungry, I am happy, I am sad)',
-                'Example: "Where is the bathroom?" (options: Asking for time, Asking for location, Asking for price, Asking for help)',
-                'Example: "She is reading a book" (options: She is cooking, She is reading, She is sleeping, She is running)',
-                'Example: "It is raining outside" (options: It is sunny, It is raining, It is windy, It is snowing)',
-                'Example: "I like coffee" (options: I like tea, I like coffee, I like juice, I like milk)'
-            ],
-            hard: [
-                'Example: "Could you recommend a good restaurant nearby?" (options: Asking for directions, Asking for recommendation, Asking for price, Asking for time)',
-                'Example: "The meeting has been rescheduled to 3 PM" (options: Meeting is cancelled, Meeting is delayed, Meeting is confirmed, Meeting is moved)',
-                'Example: "I would like to book a flight to London" (options: Booking a hotel, Booking a flight, Renting a car, Buying tickets)',
-                'Example: "The train to Paris departs from platform 5" (options: Airport announcement, Train announcement, Bus announcement, Hotel announcement)',
-                'Example: "Could you please speak more slowly?" (options: Asking for directions, Asking for clarification, Asking for help, Asking for time)'
-            ]
-        };
-
-        // 随机选择一个示例
-        const exampleIndex = randomSeed % examples[level].length;
-        const example = examples[level][exampleIndex];
-
-        return `You are an English language learning expert. Generate EXACTLY ONE NEW listening comprehension question for ${levelDescriptions[level]}
-
-Topic for this question: ${questionType}
-Reference example (for format only, DO NOT copy): ${example}
-
-For this single question, provide:
-1. Audio text (what the speaker would say) - related to "${questionType}"
-2. Four answer options with only ONE correct answer
-3. A helpful hint
-
-The question should be appropriate for ${level} level learners and related to "${questionType}".
-
-IMPORTANT REQUIREMENTS:
-- DO NOT copy the example question - create a completely NEW one
-- Make it unique and different from typical examples
-- Be creative and use different vocabulary
-- Ensure the question is appropriate for ${level} level
- 
-Return the response in this EXACT JSON format with no additional text:
+        const usedList = Array.from(this.usedAnswers).slice(-5).join(', ');
+        return `You are an English language learning expert. Generate ONE listening question.
+${levelRules[internalLevel]}
+IMPORTANT: Do NOT repeat any of these recently used answers: ${usedList || 'none yet'}.
+Be creative and diverse. Use different topics and vocabulary.
+Return ONLY valid JSON, no markdown, no extra text:
 {
-    "audioText": "text to be spoken",
+    "audioText": "...",
     "options": [
-        {"text": "option 1", "correct": false},
-        {"text": "option 2", "correct": false},
-        {"text": "option 3", "correct": true},
-        {"text": "option 4", "correct": false}
+        {"text": "CORRECT ANSWER", "correct": true},
+        {"text": "distractor1", "correct": false},
+        {"text": "distractor2", "correct": false},
+        {"text": "distractor3", "correct": false}
     ],
-    "hint": "helpful hint for this question"
-}
-
-Requirements:
-- For EASY level: use simple words, 1 words per audio text
-- For MEDIUM level: use short phrases, 3-4 words per audio text
-- For HARD level: use complete sentences, Use 5 word sentences
-- The question must be related to "${questionType}"
-- Exactly 4 options, only one correct
-- The answer choices must be in different positions for each question, for example: 1a, 2d, 3b, 4c.
-- Make options plausible but clearly distinguishable
-- Return ONLY valid JSON, no other text.`;
+    "hint": "short hint (max 10 words)"
+}`;
     }
 
-    /**
-     * 解析单题响应
-     */
-    private parseSingleQuestionResponse(response: string, level: 'easy' | 'medium' | 'hard', index: number): Question | null {
+    private parseSingleQuestionResponse(response: string, internalLevel: 'easy' | 'medium' | 'hard', index: number): Question | null {
         try {
-            const cleanedResponse = this.cleanResponseText(response);
-            console.log(`Cleaned question ${index + 1} response:`, cleanedResponse);
-
-            const parsed = JSON.parse(cleanedResponse);
-
-            if (!parsed.audioText || !parsed.options || !Array.isArray(parsed.options) || parsed.options.length !== 4) {
-                throw new Error('Invalid response format');
+            const cleaned = this.cleanResponseText(response);
+            const parsed = JSON.parse(cleaned);
+            if (!parsed.audioText || !parsed.options || parsed.options.length !== 4) return null;
+            const correctOpt = parsed.options.find((opt: any) => opt.correct === true);
+            if (!correctOpt) return null;
+            // 根据内部难度进行规则校验
+            if (internalLevel === 'easy') {
+                if (correctOpt.text.includes(' ') || correctOpt.text.length < 2) return null;
+                if (parsed.audioText.split(' ').length < 2) return null;
+            } else {
+                if (correctOpt.text !== parsed.audioText) return null;
             }
-
-            // 验证是否有正确的答案
-            const hasCorrect = parsed.options.some((opt: any) => opt.correct === true);
-            if (!hasCorrect) {
-                throw new Error('No correct answer found');
-            }
-
-            // 验证是否只有一个正确答案
-            const correctCount = parsed.options.filter((opt: any) => opt.correct === true).length;
-            if (correctCount !== 1) {
-                throw new Error('More than one correct answer');
-            }
-
-            // 转换为 Question 格式
+            // 注意：这里返回的 Question.level 暂时设为 internalLevel，后续会在 generateSingleQuestion 中覆盖为外部级别
             return {
-                id: `${level}-${index + 1}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                id: `${internalLevel}-${index + 1}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                 audioText: parsed.audioText,
-                options: parsed.options.map((opt: any, optIndex: number) => ({
-                    id: `${level}-${index}-opt-${optIndex}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-                    text: opt.text || '',
+                options: parsed.options.map((opt: any, i: number) => ({
+                    id: `${internalLevel}-${index}-opt-${i}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                    text: opt.text,
                     correct: opt.correct === true
                 })),
                 hint: parsed.hint || 'Listen carefully!',
-                level: level
+                level: internalLevel  // 临时值，外部会覆盖
             };
-
-        } catch (error) {
-            console.error(`Failed to parse AI question ${index + 1}:`, error);
+        } catch (e) {
+            console.error('Parse error:', e);
             return null;
         }
     }
-
-    /**
-     * 获取单道备用题目
-     */
-    private getSingleFallbackQuestion(level: 'easy' | 'medium' | 'hard', index: number): Question | null {
-        const fallbacks = {
-            easy: [
-                {
-                    audioText: "apple",
-                    options: [
-                        { text: "apple", correct: true },
-                        { text: "banana", correct: false },
-                        { text: "orange", correct: false },
-                        { text: "grape", correct: false }
-                    ],
-                    hint: "This is a common red or green fruit."
-                },
-                {
-                    audioText: "cat",
-                    options: [
-                        { text: "dog", correct: false },
-                        { text: "cat", correct: true },
-                        { text: "bird", correct: false },
-                        { text: "fish", correct: false }
-                    ],
-                    hint: "This animal says 'meow'."
-                },
-                {
-                    audioText: "book",
-                    options: [
-                        { text: "pen", correct: false },
-                        { text: "book", correct: true },
-                        { text: "desk", correct: false },
-                        { text: "chair", correct: false }
-                    ],
-                    hint: "You read this."
-                },
-                {
-                    audioText: "car",
-                    options: [
-                        { text: "bus", correct: false },
-                        { text: "car", correct: true },
-                        { text: "train", correct: false },
-                        { text: "bike", correct: false }
-                    ],
-                    hint: "A vehicle with four wheels."
-                },
-                {
-                    audioText: "sun",
-                    options: [
-                        { text: "moon", correct: false },
-                        { text: "sun", correct: true },
-                        { text: "star", correct: false },
-                        { text: "cloud", correct: false }
-                    ],
-                    hint: "It gives us light during the day."
-                },
-                {
-                    audioText: "water",
-                    options: [
-                        { text: "milk", correct: false },
-                        { text: "juice", correct: false },
-                        { text: "water", correct: true },
-                        { text: "tea", correct: false }
-                    ],
-                    hint: "You drink this to stay hydrated."
-                }
-            ],
-            medium: [
-                {
-                    audioText: "I like coffee",
-                    options: [
-                        { text: "I like tea", correct: false },
-                        { text: "I like coffee", correct: true },
-                        { text: "I like juice", correct: false },
-                        { text: "I like milk", correct: false }
-                    ],
-                    hint: "A popular morning beverage."
-                },
-                {
-                    audioText: "It's raining outside",
-                    options: [
-                        { text: "It's sunny", correct: false },
-                        { text: "It's raining", correct: true },
-                        { text: "It's windy", correct: false },
-                        { text: "It's snowing", correct: false }
-                    ],
-                    hint: "Water is falling from the sky."
-                },
-                {
-                    audioText: "Where is the station?",
-                    options: [
-                        { text: "Asking for directions", correct: true },
-                        { text: "Asking about time", correct: false },
-                        { text: "Asking for food", correct: false },
-                        { text: "Asking for help", correct: false }
-                    ],
-                    hint: "You need to find a place to catch a train."
-                },
-                {
-                    audioText: "I'm hungry",
-                    options: [
-                        { text: "I want to sleep", correct: false },
-                        { text: "I want to eat", correct: true },
-                        { text: "I want to drink", correct: false },
-                        { text: "I want to play", correct: false }
-                    ],
-                    hint: "You need food."
-                },
-                {
-                    audioText: "She is a doctor",
-                    options: [
-                        { text: "She works in a school", correct: false },
-                        { text: "She works in a hospital", correct: true },
-                        { text: "She works in a office", correct: false },
-                        { text: "She works in a store", correct: false }
-                    ],
-                    hint: "She helps sick people."
-                },
-                {
-                    audioText: "What time is it?",
-                    options: [
-                        { text: "Asking for location", correct: false },
-                        { text: "Asking for time", correct: true },
-                        { text: "Asking for price", correct: false },
-                        { text: "Asking for name", correct: false }
-                    ],
-                    hint: "You want to know the current hour."
-                }
-            ],
-            hard: [
-                {
-                    audioText: "Could you tell me where the nearest library is?",
-                    options: [
-                        { text: "Asking for book location", correct: true },
-                        { text: "Asking for restaurant", correct: false },
-                        { text: "Asking for hospital", correct: false },
-                        { text: "Asking for school", correct: false }
-                    ],
-                    hint: "You want to find a place with books."
-                },
-                {
-                    audioText: "I would like to order a pizza with extra cheese",
-                    options: [
-                        { text: "Ordering food", correct: true },
-                        { text: "Buying clothes", correct: false },
-                        { text: "Booking a hotel", correct: false },
-                        { text: "Renting a car", correct: false }
-                    ],
-                    hint: "You are in a restaurant."
-                },
-                {
-                    audioText: "The meeting has been postponed until next week",
-                    options: [
-                        { text: "Meeting is cancelled", correct: false },
-                        { text: "Meeting is delayed", correct: true },
-                        { text: "Meeting is confirmed", correct: false },
-                        { text: "Meeting is moved earlier", correct: false }
-                    ],
-                    hint: "The event will happen later than planned."
-                },
-                {
-                    audioText: "I'm looking for something in a medium size",
-                    options: [
-                        { text: "Shopping for clothes", correct: true },
-                        { text: "Buying groceries", correct: false },
-                        { text: "Ordering coffee", correct: false },
-                        { text: "Booking tickets", correct: false }
-                    ],
-                    hint: "You are in a clothing store."
-                },
-                {
-                    audioText: "The flight to New York has been delayed by two hours",
-                    options: [
-                        { text: "Train station announcement", correct: false },
-                        { text: "Airport announcement", correct: true },
-                        { text: "Bus station announcement", correct: false },
-                        { text: "Hotel announcement", correct: false }
-                    ],
-                    hint: "You are at an airport."
-                },
-                {
-                    audioText: "Could you please speak more slowly? I'm still learning English",
-                    options: [
-                        { text: "Asking for directions", correct: false },
-                        { text: "Asking for clarification", correct: true },
-                        { text: "Asking for help", correct: false },
-                        { text: "Asking for time", correct: false }
-                    ],
-                    hint: "You don't understand the speaker's speed."
-                }
-            ]
-        };
-
-        // 确保索引在范围内
-        const safeIndex = index % fallbacks[level].length;
-        const q = fallbacks[level][safeIndex];
-
-        return {
-            id: `${level}-fallback-${index + 1}-${Date.now()}`,
-            audioText: q.audioText,
-            options: q.options.map((opt, optIndex) => ({
-                id: `${level}-fallback-${index}-opt-${optIndex}-${Date.now()}`,
-                text: opt.text,
-                correct: opt.correct
-            })),
-            hint: q.hint,
-            level: level
-        };
-    }
 }
 
-// 导出单例
 export default new AIService();
