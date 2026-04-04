@@ -14,7 +14,7 @@ import {
     StatusBar
 } from 'react-native';
 import { Calculator, Languages, Atom, Brain, LogOut, User, Trophy, Clock, Target, Sparkles, Star, Zap, GraduationCap } from 'lucide-react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, Stack } from 'expo-router';
 import { useAuth } from '@/src/auth/AuthContext';
 
 import {Bot} from "lucide-react-native/icons";
@@ -23,28 +23,27 @@ export default function LandscapeOptimizedHome() {
     const router = useRouter();
     const { width, height } = useWindowDimensions();
 
-
     const { token, loading, signOut, user } = useAuth();
 
     useEffect(() => {
-
         if (!loading && !token) {
             router.replace('/Profile/Login');
         }
     }, [token, loading, router]);
 
-
     if (loading) {
         return (
-            <SafeAreaView style={styles.container}>
-                <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color="#4CAF50" />
-                    <Text style={styles.loadingText}>Loading...</Text>
-                </View>
-            </SafeAreaView>
+            <>
+                <Stack.Screen options={{ headerShown: false }} />
+                <SafeAreaView style={styles.container}>
+                    <View style={styles.loadingContainer}>
+                        <ActivityIndicator size="large" color="#4CAF50" />
+                        <Text style={styles.loadingText}>Loading...</Text>
+                    </View>
+                </SafeAreaView>
+            </>
         );
     }
-
 
     const isLandscape = width > height;
 
@@ -56,139 +55,138 @@ export default function LandscapeOptimizedHome() {
     ];
 
     return (
-        <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="dark-content" />
+        <>
+            <Stack.Screen options={{ headerShown: false }} />
+            <SafeAreaView style={styles.container}>
+                <StatusBar barStyle="dark-content" />
 
-            {/* --- 美化後的 Header --- */}
-            {/* --- 仿圖片風格的 Header --- */}
-            {/* --- 仿圖片風格極簡 Header (移除 Online 狀態) --- */}
-            <View style={styles.header}>
-                {/* 左側：Logo 與 名稱 */}
-                <View style={styles.headerLeft}>
-                    <View style={styles.logoIcon}>
-                        <Sparkles size={20} color="white" fill="white" />
+                {/* --- 仿圖片風格極簡 Header (移除 Online 狀態) --- */}
+                <View style={styles.header}>
+                    {/* 左側：Logo 與 名稱 */}
+                    <View style={styles.headerLeft}>
+                        <View style={styles.logoIcon}>
+                            <Sparkles size={20} color="white" fill="white" />
+                        </View>
+                        <Text style={styles.headerTitle}>EduQuest</Text>
                     </View>
-                    <Text style={styles.headerTitle}>EduQuest</Text>
-                </View>
 
-                {/* 中間：導航文字 (保留排行榜跳轉功能) */}
+                    {/* 中間：導航文字 (保留排行榜跳轉功能) */}
 
-
-                <View style={styles.headerRight}>
-                    <TouchableOpacity
-                        style={styles.userInfoWrapper}
-                        onPress={() => router.push('/Profile/profile' as any)}
-                    >
-                        <View style={styles.avatarCircle}>
-                            <Text style={styles.avatarLetter}>
-                                {user?.username?.charAt(0).toUpperCase() || 'U'}
-                            </Text>
-                        </View>
-                        <View style={styles.userMeta}>
-                            <Text style={styles.userNameText}>{user?.username || 'Guest'}</Text>
-                            <Text style={styles.userRoleText}>Student</Text>
-                        </View>
-                    </TouchableOpacity>
-
-                    {/* 新增的教师页面按钮 */}
-                    <TouchableOpacity
-                        style={styles.teacherBtn}
-                        onPress={() => router.push('/Profile/teacher' as any)}
-                    >
-                        <GraduationCap size={22} color="#6C5CE7" />
-                        <Text style={styles.teacherText}>Teacher</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={styles.logoutBtn}
-                        onPress={async () => {
-                            try {
-                                await signOut();
-                                router.replace('/Profile/Login');
-                            } catch (error) {
-                                console.error("Logout Error:", error);
-                            }
-                        }}
-                    >
-                        <LogOut size={22} color="#FF4757" />
-                        <Text style={styles.logoutText}>Exit</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={styles.headerIconBtn}
-                        onPress={() => router.push('/rank/leaderboard' as any)}
-                    >
-                        <Trophy size={26} color="#2D3436" />
-                    </TouchableOpacity>
-                </View>
-            </View>
-
-            {/* 主內容區 */}
-            <View style={[styles.mainContent, isLandscape ? { flexDirection: 'row' } : { flexDirection: 'column' }]}>
-
-                {/* 地圖區域 */}
-                <View style={styles.mapSection}>
-                    <ImageBackground
-                        source={require('../assets/images/map.jpg')}
-                        style={styles.mapImage}
-                        resizeMode="cover"
-                    >
-                        {gameButtons.map((button) => {
-                            const IconComponent = button.icon;
-                            return (
-                                <TouchableOpacity
-                                    key={button.id}
-                                    style={[
-                                        styles.gameButton,
-                                        { backgroundColor: button.color, left: button.pos.x as any, top: button.pos.y as any }
-                                    ]}
-                                    onPress={() => router.push(button.route as any)}
-                                >
-                                    <IconComponent size={30} color="white" />
-                                    <Text style={styles.buttonText}>{button.title}</Text>
-                                </TouchableOpacity>
-                            );
-                        })}
-                        {/* --- 獨立的懸浮 Chatbot 按鈕 --- */}
+                    <View style={styles.headerRight}>
                         <TouchableOpacity
-                            style={styles.floatingChatBtn}
-                            onPress={() => router.push('/games/chatbot' as any)}
+                            style={styles.userInfoWrapper}
+                            onPress={() => router.push('/Profile/profile' as any)}
                         >
-                            <Bot size={32} color="white" />
-                            <View style={styles.chatBadge}>
-                                <Sparkles size={10} color="white" fill="white" />
+                            <View style={styles.avatarCircle}>
+                                <Text style={styles.avatarLetter}>
+                                    {user?.username?.charAt(0).toUpperCase() || 'U'}
+                                </Text>
+                            </View>
+                            <View style={styles.userMeta}>
+                                <Text style={styles.userNameText}>{user?.username || 'Guest'}</Text>
+                                <Text style={styles.userRoleText}>Student</Text>
                             </View>
                         </TouchableOpacity>
-                    </ImageBackground>
+
+                        {/* 新增的教师页面按钮 */}
+                        <TouchableOpacity
+                            style={styles.teacherBtn}
+                            onPress={() => router.push('/Profile/teacher' as any)}
+                        >
+                            <GraduationCap size={22} color="#6C5CE7" />
+                            <Text style={styles.teacherText}>Teacher</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.logoutBtn}
+                            onPress={async () => {
+                                try {
+                                    await signOut();
+                                    router.replace('/Profile/Login');
+                                } catch (error) {
+                                    console.error("Logout Error:", error);
+                                }
+                            }}
+                        >
+                            <LogOut size={22} color="#FF4757" />
+                            <Text style={styles.logoutText}>Exit</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.headerIconBtn}
+                            onPress={() => router.push('/rank/leaderboard' as any)}
+                        >
+                            <Trophy size={26} color="#2D3436" />
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
-                {/* 右側面板 */}
-                <View style={[styles.sidePanel, isLandscape ? { width: 280 } : { height: 'auto', marginTop: 10 }]}>
-                    <Text style={styles.panelTitle}>Progress</Text>
+                {/* 主內容區 */}
+                <View style={[styles.mainContent, isLandscape ? { flexDirection: 'row' } : { flexDirection: 'column' }]}>
 
-                    <View style={styles.statsGrid}>
-                        <View style={styles.miniStat}>
-                            <Trophy size={24} color="#FFD700" />
-                            <Text style={styles.statVal}>
-                                {String(user?.points ?? 0)}
-                            </Text>
-                        </View>
-
+                    {/* 地圖區域 */}
+                    <View style={styles.mapSection}>
+                        <ImageBackground
+                            source={require('../assets/images/map.jpg')}
+                            style={styles.mapImage}
+                            resizeMode="cover"
+                        >
+                            {gameButtons.map((button) => {
+                                const IconComponent = button.icon;
+                                return (
+                                    <TouchableOpacity
+                                        key={button.id}
+                                        style={[
+                                            styles.gameButton,
+                                            { backgroundColor: button.color, left: button.pos.x as any, top: button.pos.y as any }
+                                        ]}
+                                        onPress={() => router.push(button.route as any)}
+                                    >
+                                        <IconComponent size={30} color="white" />
+                                        <Text style={styles.buttonText}>{button.title}</Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                            {/* --- 獨立的懸浮 Chatbot 按鈕 --- */}
+                            <TouchableOpacity
+                                style={styles.floatingChatBtn}
+                                onPress={() => router.push('/games/chatbot' as any)}
+                            >
+                                <Bot size={32} color="white" />
+                                <View style={styles.chatBadge}>
+                                    <Sparkles size={10} color="white" fill="white" />
+                                </View>
+                            </TouchableOpacity>
+                        </ImageBackground>
                     </View>
 
-                    <View style={styles.divider} />
+                    {/* 右側面板 */}
+                    <View style={[styles.sidePanel, isLandscape ? { width: 280 } : { height: 'auto', marginTop: 10 }]}>
+                        <Text style={styles.panelTitle}>Progress</Text>
 
-                    <Text style={styles.panelTitle}>Daily Quest</Text>
-                    <TouchableOpacity style={styles.questCard} activeOpacity={0.8}>
-                        <Target size={28} color="#FF4757" />
-                        <View style={{marginLeft: 15, flex: 1}}>
-                            <Text style={styles.questTitle}>Math Mountain</Text>
-                            <Text style={styles.questSub}>Earn 20 XP</Text>
+                        <View style={styles.statsGrid}>
+                            <View style={styles.miniStat}>
+                                <Trophy size={24} color="#FFD700" />
+                                <Text style={styles.statVal}>
+                                    {String(user?.points ?? 0)}
+                                </Text>
+                            </View>
                         </View>
-                    </TouchableOpacity>
+
+                        <View style={styles.divider} />
+
+                        <Text style={styles.panelTitle}>Daily Quest</Text>
+                        <TouchableOpacity style={styles.questCard} activeOpacity={0.8}>
+                            <Target size={28} color="#FF4757" />
+                            <View style={{marginLeft: 15, flex: 1}}>
+                                <Text style={styles.questTitle}>Math Mountain</Text>
+                                <Text style={styles.questSub}>Earn 20 XP</Text>
+                            </View>
+                        </TouchableOpacity>
+                    </View>
                 </View>
-            </View>
-        </SafeAreaView>
+            </SafeAreaView>
+        </>
     );
 }
 

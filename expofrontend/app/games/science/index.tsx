@@ -6,11 +6,19 @@ import { useNavigation } from '@react-navigation/native';
 const ScienceGamesIndex: React.FC = () => {
     const navigation = useNavigation();
 
+    // 隱藏返回按鈕，但保留標題
+    React.useLayoutEffect(() => {
+        navigation.setOptions({
+            headerLeft: () => null, // 隱藏返回按鈕
+            title: 'Science Games', // 保留標題
+        });
+    }, [navigation]);
+
     const games = [
         {
             id: 1,
             title: 'Animal Games',
-            component: 'AnimalGamesIndex', // 改为导航到难度选择页面
+            component: 'AnimalGamesIndex',
             description: 'Learn about animals through fun games'
         },
         {
@@ -19,32 +27,22 @@ const ScienceGamesIndex: React.FC = () => {
             component: 'HumanBody',
             description: 'Learn the positions of human organs'
         },
-
     ];
 
     return (
         <ScrollView style={styles.container}>
-            <View style={styles.header}>
-                <Text style={styles.title}>Science Games</Text>
-                <Text style={styles.subtitle}>Choose a game to start learning</Text>
-            </View>
-
             <View style={styles.gamesGrid}>
                 {games.map(game => (
                     <TouchableOpacity
                         key={game.id}
                         style={styles.gameCard}
                         onPress={() => {
-                            // 使用相對路徑導航
                             if (game.id === 1) {
-                                // 導航到 science/AnimalClassificationGame
                                 navigation.navigate('science/AnimalGamesIndex' as never);
                             }
                             if (game.id === 2) {
-                                // 導航到 science/HumanBodyGame
                                 navigation.navigate('science/HumanBodyGamesIndex' as never);
                             }
-
                         }}
                     >
                         <View style={styles.gameCardContent}>
@@ -64,21 +62,6 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#f5f5f5',
-    },
-    header: {
-        padding: 20,
-        backgroundColor: '#fff',
-        marginBottom: 20,
-    },
-    title: {
-        fontSize: 32,
-        fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 10,
-    },
-    subtitle: {
-        fontSize: 16,
-        color: '#666',
     },
     gamesGrid: {
         padding: 15,

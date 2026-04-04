@@ -1,5 +1,4 @@
 // app/games/_layout.tsx
-// app/games/_layout.tsx
 import { Stack } from 'expo-router';
 
 export default function GamesLayout() {
@@ -14,29 +13,13 @@ export default function GamesLayout() {
             <Stack.Screen
                 name="science/index"
                 options={{
-                    headerShown: true,
-                    title: 'Science games',
-                    headerStyle: {
-                        backgroundColor: '#4CAF50',
-                    },
-                    headerTintColor: 'white',
-                    headerTitleStyle: {
-                        fontWeight: 'bold',
-                    },
+                    headerShown: false,  // 改为 false
                 }}
             />
             <Stack.Screen
                 name="science/AnimalClassificationGame"
                 options={{
-                    headerShown: true,
-                    title: 'Animal sorting game',
-                    headerStyle: {
-                        backgroundColor: '#4CAF50',
-                    },
-                    headerTintColor: 'white',
-                    headerTitleStyle: {
-                        fontWeight: 'bold',
-                    },
+                    headerShown: false,  // 改为 false
                 }}
             />
             <Stack.Screen
@@ -56,43 +39,33 @@ export default function GamesLayout() {
             <Stack.Screen
                 name="MatchingGame"
                 options={{
-                    headerShown: true,
-                    title: 'Word matching game',
-                    headerStyle: {
-                        backgroundColor: '#6a11cb',
-                    },
-                    headerTintColor: 'white',
-                    headerTitleStyle: {
-                        fontWeight: 'bold',
-                    },
+                    headerShown: false,  // 改为 false
                 }}
             />
             <Stack.Screen
                 name="ListeningGame"
                 options={{
-                    headerShown: true,
-                    title: 'Listening multiple choice questions',
-                    headerStyle: {
-                        backgroundColor: '#4b6cb7',
-                    },
-                    headerTintColor: 'white',
-                    headerTitleStyle: {
-                        fontWeight: 'bold',
-                    },
+                    headerShown: false,  // 改为 false
                 }}
             />
             <Stack.Screen
                 name="SentenceReorderGame"
                 options={{
-                    headerShown: true,
-                    title: 'Sentence Reordering Game',
-                    headerStyle: {
-                        backgroundColor: '#667eea',
-                    },
-                    headerTintColor: 'white',
-                    headerTitleStyle: {
-                        fontWeight: 'bold',
-                    },
+                    headerShown: false,  // 改为 false
+                }}
+            />
+            {/* 添加中文句子游戏的路由配置 */}
+            <Stack.Screen
+                name="chinese/chinesesentence"
+                options={{
+                    headerShown: false,
+                }}
+            />
+            {/* 添加中文游戏列表页面的路由配置 */}
+            <Stack.Screen
+                name="chinese/index"
+                options={{
+                    headerShown: false,
                 }}
             />
         </Stack>

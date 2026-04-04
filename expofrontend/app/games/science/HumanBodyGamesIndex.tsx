@@ -1,5 +1,5 @@
 // app/games/science/HumanBodyGamesIndex.tsx
-import React, { useState } from 'react';
+import React, { useState, useLayoutEffect } from 'react';
 import {
     View,
     Text,
@@ -53,6 +53,14 @@ const difficultyOptions: DifficultyOption[] = [
 
 const HumanBodyGamesIndex: React.FC = () => {
     const navigation = useNavigation();
+
+    // ⭐ 完全隐藏系统导航栏（包括返回按钮和标题）
+    useLayoutEffect(() => {
+        navigation.setOptions({
+            headerShown: false,
+        });
+    }, [navigation]);
+
     const [loading, setLoading] = useState(false);
     const [selectedDifficulty, setSelectedDifficulty] = useState<string | null>(null);
 

@@ -12,14 +12,19 @@ import {
     Platform,
     Animated,
     ScrollView,
+    ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import axios from 'axios';
+import { useAuth } from '@/src/auth/AuthContext';
 
 // 檢測是否是網頁環境
 const isWeb = Platform.OS === 'web';
 
 const HumanBodyGame = () => {
     const navigation = useNavigation();
+    const { token } = useAuth();
+    const [isSaving, setIsSaving] = useState(false);
     const { width, height } = useWindowDimensions();
     const [isPortrait, setIsPortrait] = useState(height > width);
 
@@ -266,6 +271,36 @@ const HumanBodyGame = () => {
     const [gameCompleted, setGameCompleted] = useState(false);
     const [currentHint, setCurrentHint] = useState<string>('');
 
+    // ========== 💾 保存分數到伺服器 ==========
+    const saveScore = async (finalScore: number) => {
+        if (!token) return;
+
+        setIsSaving(true);
+        try {
+            await axios.post('http://localhost:8080/api/user/game/score', {
+                gameName: "Human organs",
+                scores: finalScore,
+                difficulty: "ORGANS"
+            }, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            console.log("Score synced to server!");
+        } catch (e) {
+            console.error("Failed to sync score:", e);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    useEffect(() => {
+        if (gameCompleted) {
+            // 遊戲完成時保存分數
+            const totalOrgans = organs.length;
+            const finalScoreValue = Math.round((correctCount / totalOrgans) * 100);
+            saveScore(finalScoreValue);
+        }
+    }, [gameCompleted, correctCount, organs.length]);
+
     // 計算最終分數 (滿分100)
     const finalScore = useMemo(() => {
         const totalOrgans = organs.length;
@@ -442,13 +477,21 @@ const HumanBodyGame = () => {
                     </Text>
                 </View>
 
+                {/* 保存中指示器 */}
+                {isSaving && (
+                    <View style={styles.savingIndicator}>
+                        <ActivityIndicator size="small" color="#4CAF50" />
+                        <Text style={styles.savingText}>同步分數中...</Text>
+                    </View>
+                )}
+
                 <View style={styles.reportButtons}>
                     <TouchableOpacity style={styles.reportButton} onPress={resetGame}>
                         <Text style={styles.reportButtonText}>Play Again</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity style={[styles.reportButton, styles.backButton]} onPress={handleGoBack}>
-                        <Text style={styles.reportButtonText}>Go Back</Text>
+                        <Text style={styles.reportButtonText}>difficulty select</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity style={[styles.reportButton, styles.homeButton]} onPress={handleGoHome}>
@@ -1148,6 +1191,23 @@ const styles = StyleSheet.create({
         fontSize: 16,
         lineHeight: 24,
         textAlign: 'center',
+    },
+    savingIndicator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        marginBottom: 16,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        backgroundColor: '#E8F5E9',
+        borderRadius: 20,
+        alignSelf: 'center',
+    },
+    savingText: {
+        fontSize: 12,
+        color: '#4CAF50',
+        fontWeight: '500',
     },
     reportButtons: {
         flexDirection: 'row',
