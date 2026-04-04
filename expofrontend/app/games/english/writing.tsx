@@ -21,6 +21,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import axios from 'axios';
+import { useAuth } from '@/src/auth/AuthContext';
 import { writingAIService, calculateOverallScore, WritingAnalysis } from '../../services/WritingAIService';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -151,6 +153,9 @@ const imageScenes: Scene[] = [
 
 // ==================== 主元件 ====================
 export default function WritingScreen() {
+    const { token } = useAuth();
+    const [isSaving, setIsSaving] = useState(false);
+
     // 狀態管理
     const [difficulty, setDifficulty] = useState<Difficulty | null>(null);
     const [currentScene, setCurrentScene] = useState<Scene | null>(null);
@@ -178,6 +183,27 @@ export default function WritingScreen() {
     const textInputRef = useRef<TextInput>(null);
 
     // ==================== 輔助函數 ====================
+
+    // 保存分數到伺服器
+    const saveScore = async (score: number) => {
+        if (!token || !difficulty) return;
+
+        setIsSaving(true);
+        try {
+            await axios.post('http://localhost:8080/api/user/game/score', {
+                gameName: "Writing Game",
+                scores: score,
+                difficulty: difficulty === 'easy' ? 'EASY' : 'HARD'
+            }, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            console.log("Score synced to server!");
+        } catch (e) {
+            console.error("Failed to sync score:", e);
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
     const getScenesByDifficulty = (diff: Difficulty): Scene[] => {
         return imageScenes.filter(scene => {
@@ -272,6 +298,9 @@ export default function WritingScreen() {
             setFinalScore(overallScore);
             setIsFinished(true);
 
+            // 保存分數到伺服器
+            await saveScore(overallScore);
+
         } catch (error) {
             Alert.alert('Analysis Failed', 'Unable to analyze your writing. Please try again.');
             console.error('Analysis error:', error);
@@ -298,7 +327,11 @@ export default function WritingScreen() {
         setTimeout(() => textInputRef.current?.focus(), 100);
     };
 
-    const handleChangeDifficulty = () => {
+    const handleChangeDifficulty = async () => {
+        // 如果有進行中的遊戲且已有分數，保存當前分數
+        if (analysis && finalScore > 0 && difficulty) {
+            await saveScore(finalScore);
+        }
         setIsFinished(false);
         setDifficulty(null);
         setCurrentScene(null);
@@ -311,7 +344,11 @@ export default function WritingScreen() {
         setHistory([]);
     };
 
-    const handleBackToGames = () => {
+    const handleBackToGames = async () => {
+        // 如果有進行中的遊戲且已有分數，保存當前分數
+        if (analysis && finalScore > 0 && difficulty) {
+            await saveScore(finalScore);
+        }
         router.back();
     };
 
@@ -528,6 +565,14 @@ export default function WritingScreen() {
                     <Text style={[styles.totalScoreFeedback, { color: getScoreColor(finalScore) }]}>
                         {getScoreFeedback(finalScore)}
                     </Text>
+
+                    {/* 保存中指示器 */}
+                    {isSaving && (
+                        <View style={styles.savingIndicator}>
+                            <ActivityIndicator size="small" color="#4CAF50" />
+                            <Text style={styles.savingText}>Syncing score...</Text>
+                        </View>
+                    )}
                 </View>
 
                 {/* 寫作內容 */}
@@ -699,7 +744,7 @@ export default function WritingScreen() {
         );
     }
 
-    // ==================== 主寫作介面（簡化版，無標題區） ====================
+    // ==================== 主寫作介面 ====================
     return (
         <View style={styles.container}>
             <Stack.Screen
@@ -1538,6 +1583,12 @@ const styles = StyleSheet.create({
     sceneInfo: {
         padding: 12,
     },
+    sceneTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#333',
+        marginBottom: 4,
+    },
     sceneCategory: {
         fontSize: 12,
         color: '#999',
@@ -1614,6 +1665,21 @@ const styles = StyleSheet.create({
     totalScoreFeedback: {
         fontSize: 20,
         fontWeight: '600',
+    },
+    savingIndicator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginTop: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        backgroundColor: '#E8F5E9',
+        borderRadius: 20,
+    },
+    savingText: {
+        fontSize: 12,
+        color: '#4CAF50',
+        fontWeight: '500',
     },
     summaryDetailCard: {
         backgroundColor: 'white',

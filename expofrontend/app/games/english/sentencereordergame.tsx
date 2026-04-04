@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LayoutList } from 'lucide-react-native';
-import { Stack, router, useNavigation } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import Animated, {
@@ -94,7 +94,6 @@ interface GameState {
 }
 
 export default function SentenceReorderScreen() {
-    const navigation = useNavigation();
     const [isSaving, setIsSaving] = useState(false);
     const { token } = useAuth();
 
@@ -126,14 +125,6 @@ export default function SentenceReorderScreen() {
     });
 
     const currentQuestion = gameState.questions[gameState.currentQuestion];
-
-    // 隱藏標題列
-    useEffect(() => {
-        navigation.setOptions({
-            headerShown: false,
-            title: '',
-        });
-    }, [navigation]);
 
     // 螢幕震動動畫樣式
     const animatedScreenStyle = useAnimatedStyle(() => ({
@@ -492,12 +483,7 @@ export default function SentenceReorderScreen() {
     const renderDifficultySelector = () => {
         return (
             <SafeAreaView style={styles.container}>
-                {/* 自定義返回按鈕 */}
-                <TouchableOpacity style={styles.customBackButton} onPress={goToHome}>
-                    <Ionicons name="arrow-back" size={24} color="#4b6cb7" />
-                    <Text style={styles.customBackText}>Back</Text>
-                </TouchableOpacity>
-
+                <Stack.Screen options={{ headerShown: false }} />
                 <ScrollView contentContainerStyle={styles.scrollContent}>
                     <View style={styles.headerSection}>
                         <LayoutList size={60} color="#4A90E2" style={{ marginBottom: 20 }} />
@@ -557,12 +543,6 @@ export default function SentenceReorderScreen() {
 
         return (
             <ScrollView style={styles.container} contentContainerStyle={styles.completionContainer}>
-                {/* 自定義返回按鈕 */}
-                <TouchableOpacity style={styles.customBackButton} onPress={backToDifficulty}>
-                    <Ionicons name="arrow-back" size={24} color="#fff" />
-                    <Text style={[styles.customBackText, { color: '#fff' }]}>Back</Text>
-                </TouchableOpacity>
-
                 <LinearGradient
                     colors={['#4b6cb7', '#182848']}
                     style={styles.completionHeader}
@@ -625,16 +605,22 @@ export default function SentenceReorderScreen() {
 
         return (
             <View style={styles.container}>
+                <Stack.Screen
+                    options={{
+                        headerShown: false,
+                    }}
+                />
+
                 <Animated.View style={[{ flex: 1 }, animatedScreenStyle]}>
                     <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-                        {/* 簡化遊戲標題區域 - 包含返回按鈕 */}
-                        <View style={styles.simpleHeader}>
-                            <TouchableOpacity style={styles.simpleBackButton} onPress={backToDifficulty}>
-                                <Ionicons name="arrow-back" size={24} color="#fff" />
-                            </TouchableOpacity>
-                            <Text style={styles.simpleHeaderTitle}>Sentence Reorder</Text>
-                            <View style={{ width: 40 }} />
-                        </View>
+                        {/* 遊戲標題 */}
+                        <LinearGradient
+                            colors={['#4b6cb7', '#182848']}
+                            style={styles.header}
+                        >
+                            <Text style={styles.headerTitle}>🔤 Sentence Reorder</Text>
+                            <Text style={styles.headerSubtitle}>Arrange the words to form correct sentences</Text>
+                        </LinearGradient>
 
                         {/* 倒數覆蓋層 */}
                         {prepText && (
@@ -810,41 +796,9 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#999',
     },
-    // 自定義返回按鈕
-    customBackButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingTop: 12,
-        paddingBottom: 8,
-        zIndex: 10,
-    },
-    customBackText: {
-        fontSize: 16,
-        color: '#4b6cb7',
-        marginLeft: 4,
-    },
-    // 簡化的標題區域
-    simpleHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingTop: 12,
-        paddingBottom: 12,
-        paddingHorizontal: 16,
-        backgroundColor: '#4b6cb7',
-        marginBottom: 20,
-    },
-    simpleBackButton: {
-        padding: 8,
-        marginLeft: -8,
-    },
-    simpleHeaderTitle: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: '#fff',
-        textAlign: 'center',
-        flex: 1,
+    headerBackButton: {
+        marginLeft: 10,
+        padding: 5,
     },
     // 倒數覆蓋層
     prepOverlay: {
@@ -893,7 +847,7 @@ const styles = StyleSheet.create({
     // 難度選擇頁面樣式
     headerSection: {
         alignItems: 'center',
-        paddingTop: 20,
+        paddingTop: 50,
         paddingHorizontal: 20,
         paddingBottom: 30,
         backgroundColor: '#fff',
@@ -971,6 +925,25 @@ const styles = StyleSheet.create({
         lineHeight: 20,
     },
     // 遊戲主界面樣式
+    header: {
+        paddingTop: 40,
+        paddingBottom: 30,
+        paddingHorizontal: 20,
+        borderBottomLeftRadius: 30,
+        borderBottomRightRadius: 30,
+        marginBottom: 20,
+    },
+    headerTitle: {
+        fontSize: 32,
+        fontWeight: 'bold',
+        color: '#fff',
+        marginBottom: 8,
+    },
+    headerSubtitle: {
+        fontSize: 16,
+        color: '#fff',
+        opacity: 0.9,
+    },
     progressBar: {
         height: 4,
         backgroundColor: '#e0e0e0',
@@ -1150,10 +1123,9 @@ const styles = StyleSheet.create({
     completionContainer: {
         flexGrow: 1,
         paddingBottom: 30,
-        backgroundColor: '#f5f5f5',
     },
     completionHeader: {
-        paddingTop: 40,
+        paddingTop: 50,
         paddingBottom: 30,
         paddingHorizontal: 20,
         borderBottomLeftRadius: 30,

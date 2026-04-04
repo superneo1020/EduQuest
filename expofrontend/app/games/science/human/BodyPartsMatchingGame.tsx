@@ -1,5 +1,5 @@
 // science/BodyPartsMatchingGame.tsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import {
     View,
     Text,
@@ -9,8 +9,11 @@ import {
     useWindowDimensions,
     Platform,
     ScrollView,
+    ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import axios from 'axios';
+import { useAuth } from '@/src/auth/AuthContext';
 
 const isWeb = Platform.OS === 'web';
 
@@ -65,9 +68,18 @@ interface Card {
 
 const BodyPartsMatchingGame = () => {
     const navigation = useNavigation();
+    const { token } = useAuth();
+    const [isSaving, setIsSaving] = useState(false);
     const { width: screenWidth, height: screenHeight } = useWindowDimensions();
     const [isPortrait, setIsPortrait] = useState(screenHeight > screenWidth);
     const startTimeRef = useRef<number>(Date.now());
+
+    // ⭐ 完全隐藏系统导航栏（包括返回按钮和标题）
+    useLayoutEffect(() => {
+        navigation.setOptions({
+            headerShown: false,
+        });
+    }, [navigation]);
 
     // 監聽屏幕方向變化
     useEffect(() => {
@@ -91,8 +103,29 @@ const BodyPartsMatchingGame = () => {
     // 計算總對數
     const totalPairs = BODY_PARTS.length;
 
+    // ========== 💾 保存分數到伺服器 ==========
+    const saveScore = async (finalScore: number) => {
+        if (!token) return;
+
+        setIsSaving(true);
+        try {
+            await axios.post('http://localhost:8080/api/user/game/score', {
+                gameName: "Body Parts Matching",
+                scores: finalScore,
+                difficulty: "MATCHING"
+            }, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            console.log("Score synced to server!");
+        } catch (e) {
+            console.error("Failed to sync score:", e);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     // 計算完成時間並生成分數
-    const calculateScoreAndReport = () => {
+    const calculateScoreAndReport = async () => {
         const endTime = Date.now();
         const timeSpent = (endTime - startTimeRef.current) / 1000; // 秒數
         let finalScore = 0;
@@ -110,6 +143,9 @@ const BodyPartsMatchingGame = () => {
             finalScore = Math.max(0, 100 - deduction);
             summary = `⏱️ 你花了 ${Math.round(timeSpent)} 秒完成遊戲，超過1分鐘後每15秒扣10分，最終得分為 ${finalScore} 分。下次可以試著加快配對速度喔！`;
         }
+
+        // 保存分數到伺服器
+        await saveScore(finalScore);
 
         setFinalReport({ summary, finalScore, timeSpent });
         setIsFinished(true);
@@ -133,7 +169,7 @@ const BodyPartsMatchingGame = () => {
         startTimeRef.current = Date.now();
     };
 
-    // 返回上一頁
+    // ⭐ 返回上一頁函數
     const handleGoBack = () => {
         navigation.goBack();
     };
@@ -260,19 +296,13 @@ const BodyPartsMatchingGame = () => {
         return rows;
     };
 
-    // 總結頁面
+    // 總結頁面 - 简化顶部栏，移除返回按钮
     if (isFinished) {
         return (
             <ScrollView style={styles.container}>
-                {/* 頂部導航欄 */}
-                <View style={styles.headerBar}>
-                    <TouchableOpacity onPress={handleGoBack} style={styles.backButtonHeader}>
-                        <Text style={styles.backButtonText}>← Back</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Game Result</Text>
-                    <TouchableOpacity onPress={handleGoToGameList} style={styles.gameListButtonHeader}>
-                        <Text style={styles.gameListButtonText}>Game List</Text>
-                    </TouchableOpacity>
+                {/* 簡化頂部欄 - 只保留標題 */}
+                <View style={styles.headerBarSimplified}>
+                    <Text style={styles.headerTitle}>Body Parts Matching</Text>
                 </View>
 
                 <View style={styles.reportContainer}>
@@ -282,6 +312,14 @@ const BodyPartsMatchingGame = () => {
                         <Text style={styles.scoreCircleNumber}>{finalReport.finalScore}</Text>
                         <Text style={styles.scoreCircleLabel}>/ 100</Text>
                     </View>
+
+                    {/* 保存中指示器 */}
+                    {isSaving && (
+                        <View style={styles.savingIndicator}>
+                            <ActivityIndicator size="small" color="#4CAF50" />
+                            <Text style={styles.savingText}>同步分數中...</Text>
+                        </View>
+                    )}
 
                     <View style={styles.resultsContainer}>
                         <View style={styles.resultRow}>
@@ -317,10 +355,10 @@ const BodyPartsMatchingGame = () => {
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                            style={[styles.modalButton, styles.backButton]}
+                            style={[styles.modalButton, styles.gameListButton]}
                             onPress={handleGoBack}
                         >
-                            <Text style={styles.modalButtonText}>Back</Text>
+                            <Text style={styles.modalButtonText}>select level</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
@@ -335,18 +373,12 @@ const BodyPartsMatchingGame = () => {
         );
     }
 
-    // 遊戲主頁面
+    // 遊戲主頁面 - 简化顶部栏，移除返回按钮
     const renderContent = () => (
         <>
-            {/* 頂部導航欄 */}
-            <View style={styles.headerBar}>
-                <TouchableOpacity onPress={handleGoBack} style={styles.backButtonHeader}>
-                    <Text style={styles.backButtonText}>← Back</Text>
-                </TouchableOpacity>
+            {/* 簡化頂部欄 - 只保留標題 */}
+            <View style={styles.headerBarSimplified}>
                 <Text style={styles.headerTitle}>Body Parts Matching</Text>
-                <TouchableOpacity onPress={handleGoToGameList} style={styles.gameListButtonHeader}>
-                    <Text style={styles.gameListButtonText}>Game List</Text>
-                </TouchableOpacity>
             </View>
 
             <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -412,10 +444,8 @@ const styles = StyleSheet.create({
         padding: 20,
         paddingBottom: 40,
     },
-    // 頂部導航欄樣式
-    headerBar: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
+    // 簡化頂部欄樣式（只保留標題）
+    headerBarSimplified: {
         alignItems: 'center',
         paddingHorizontal: 16,
         paddingTop: 48,
@@ -424,28 +454,10 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: '#e0e0e0',
     },
-    backButtonHeader: {
-        paddingVertical: 8,
-        paddingRight: 12,
-    },
-    backButtonText: {
-        fontSize: 16,
-        color: '#2196F3',
-        fontWeight: '600',
-    },
     headerTitle: {
         fontSize: 18,
         fontWeight: 'bold',
         color: '#333',
-    },
-    gameListButtonHeader: {
-        paddingVertical: 8,
-        paddingLeft: 12,
-    },
-    gameListButtonText: {
-        fontSize: 16,
-        color: '#2196F3',
-        fontWeight: '600',
     },
     // 遊戲主頁面樣式
     header: {
@@ -607,6 +619,23 @@ const styles = StyleSheet.create({
         color: '#666',
         marginTop: -5,
     },
+    savingIndicator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        marginBottom: 16,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        backgroundColor: '#E8F5E9',
+        borderRadius: 20,
+        alignSelf: 'center',
+    },
+    savingText: {
+        fontSize: 12,
+        color: '#4CAF50',
+        fontWeight: '500',
+    },
     resultsContainer: {
         backgroundColor: '#fff',
         borderRadius: 12,
@@ -647,9 +676,10 @@ const styles = StyleSheet.create({
     },
     modalButtons: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        gap: 10,
+        justifyContent: 'center',
+        gap: 12,
         marginBottom: 30,
+        flexWrap: 'wrap',
     },
     modalButton: {
         flex: 1,
@@ -657,12 +687,10 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         marginHorizontal: 5,
         alignItems: 'center',
+        minWidth: 120,
     },
     playAgainButton: {
         backgroundColor: '#4CAF50',
-    },
-    backButton: {
-        backgroundColor: '#FF9800',
     },
     gameListButton: {
         backgroundColor: '#2196F3',

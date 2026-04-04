@@ -21,6 +21,8 @@ import { router, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Star, Sparkles, Heart, Utensils } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import axios from 'axios';
+import { useAuth } from '@/src/auth/AuthContext';
 import ChineseAIService, { ChineseQuestion } from '../../services/ChineseAIService';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -71,7 +73,7 @@ const FloatingText = ({ text, color, onComplete }: { text: string, color: string
                 useNativeDriver: true,
             }),
         ]).start(() => onComplete());
-    }, []);
+    }, [onComplete, opacity, translateY]);
 
     return (
         <Animated.View style={[styles.floatingLayer, { opacity, transform: [{ translateY }] }]}>
@@ -81,6 +83,8 @@ const FloatingText = ({ text, color, onComplete }: { text: string, color: string
 };
 
 const ChineseRestaurantGame = () => {
+    const { token } = useAuth();
+    const [isSaving, setIsSaving] = useState(false);
     const [questions, setQuestions] = useState<ExtendedQuestion[]>([]);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [gameState, setGameState] = useState<GameState>('difficulty_select');
@@ -140,6 +144,27 @@ const ChineseRestaurantGame = () => {
         return 1;
     };
 
+    // 保存分數到伺服器
+    const saveScore = async (finalScore: number) => {
+        if (!token || !difficulty) return;
+
+        setIsSaving(true);
+        try {
+            await axios.post('http://localhost:8080/api/user/game/score', {
+                gameName: "ChineseGame",
+                scores: finalScore,
+                difficulty: difficulty === 'beginner' ? 'BEGINNER' : 'ADVANCED'
+            }, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            console.log("Score synced to server!");
+        } catch (e) {
+            console.error("Failed to sync score:", e);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     // 倒數準備序列
     const startPrepSequence = () => {
         setGameActive(false);
@@ -153,7 +178,7 @@ const ChineseRestaurantGame = () => {
                 tension: 100,
                 useNativeDriver: true,
             }).start();
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
         }, 100);
 
         setTimeout(() => {
@@ -165,7 +190,7 @@ const ChineseRestaurantGame = () => {
                 tension: 150,
                 useNativeDriver: true,
             }).start();
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         }, 1000);
 
         setTimeout(() => {
@@ -185,6 +210,12 @@ const ChineseRestaurantGame = () => {
             Animated.timing(screenShake, { toValue: -5, duration: 50, useNativeDriver: true }),
             Animated.timing(screenShake, { toValue: 0, duration: 50, useNativeDriver: true }),
         ]).start();
+    };
+
+    // 獲取 Animated.Value 的當前值
+    const getAnimatedValue = (value: Animated.Value): number => {
+        // @ts-ignore - 使用 __getValue 作為替代方案
+        return value.__getValue();
     };
 
     useEffect(() => {
@@ -235,7 +266,7 @@ const ChineseRestaurantGame = () => {
                 ])
             ).start();
         }
-    }, [isGameActive, gameComplete, nextQuestionDelay]);
+    }, [isGameActive, gameComplete, nextQuestionDelay, conveyorAnim]);
 
     useEffect(() => {
         if (isGameActive && currentQuestion && !nextQuestionDelay && items.length < 5) {
@@ -253,11 +284,12 @@ const ChineseRestaurantGame = () => {
             const moveInterval = setInterval(() => {
                 setItems(prev => {
                     const updated = prev.map(item => {
-                        const newX = item.x._value - 3.5;
+                        const currentX = getAnimatedValue(item.x);
+                        const newX = currentX - 3.5;
                         item.x.setValue(newX);
                         return item;
                     });
-                    const filtered = updated.filter(item => item.x._value > -ITEM_SIZE);
+                    const filtered = updated.filter(item => getAnimatedValue(item.x) > -ITEM_SIZE);
                     return filtered;
                 });
             }, 30);
@@ -275,8 +307,8 @@ const ChineseRestaurantGame = () => {
         let explanation = '';
 
         if (isCorrectItem) {
-            const correctOption = currentQuestion.options[currentQuestion.correctAnswer];
-            itemText = correctOption;
+            const correctAnswerText = currentQuestion.options[currentQuestion.correctAnswer];
+            itemText = correctAnswerText;
             isCorrect = true;
             pinyin = currentQuestion.pinyin || '';
             explanation = currentQuestion.explanation || '';
@@ -309,7 +341,7 @@ const ChineseRestaurantGame = () => {
         }]);
     };
 
-    const animateItemToCustomer = (item: ConveyorItem, isCorrect: boolean) => {
+    const animateItemToCustomer = (item: ConveyorItem, _isCorrect: boolean) => {
         return new Promise<void>((resolve) => {
             Animated.parallel([
                 Animated.timing(item.scale, {
@@ -384,7 +416,7 @@ const ChineseRestaurantGame = () => {
 
         if (item.isCorrect) {
             // ✅ 正確 - 打擊回饋
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
             setFloatingText({ id: Date.now(), text: 'HIT!', color: '#FFD700' });
 
             const newCombo = combo + 1;
@@ -409,7 +441,7 @@ const ChineseRestaurantGame = () => {
             showTemporaryHint(`🎉 太美味了！ +${pointsEarned} 分`, '#4CAF50');
         } else {
             // ❌ 錯誤 - 被打擊回饋
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
             triggerScreenShake();
             setFloatingText({ id: Date.now(), text: 'OUCH!', color: '#FF4757' });
 
@@ -449,11 +481,14 @@ const ChineseRestaurantGame = () => {
         setTimeout(() => setHintVisible(false), 1500);
     };
 
-    const handleGameComplete = () => {
+    const handleGameComplete = async () => {
         setIsGameActive(false);
         setGameActive(false);
         setGameComplete(true);
         setNextQuestionDelay(false);
+
+        // 保存分數到伺服器
+        await saveScore(score);
 
         const totalQuestions = questions.length;
         const correctCount = questions.filter(q => q.isAnsweredCorrectly).length;
@@ -522,7 +557,11 @@ const ChineseRestaurantGame = () => {
         loadQuestions(level);
     };
 
-    const handleRestart = () => {
+    const handleRestart = async () => {
+        // 如果遊戲正在進行中且有分數，保存當前分數
+        if (gameState === 'playing' && score > 0 && difficulty) {
+            await saveScore(score);
+        }
         setDifficulty(null);
         setGameState('difficulty_select');
         resetGame();
@@ -532,7 +571,12 @@ const ChineseRestaurantGame = () => {
     };
 
     const handleTryAgain = () => {
-        if (difficulty) loadQuestions(difficulty);
+        if (difficulty) {
+            setScore(0);
+            setCombo(0);
+            setMaxCombo(0);
+            loadQuestions(difficulty);
+        }
     };
 
     const handleBackToGames = () => router.back();
@@ -561,7 +605,7 @@ const ChineseRestaurantGame = () => {
     };
 
     const renderPlaying = () => (
-        <SafeAreaView style={styles.gameContainer}>
+        <View style={styles.gameContainer}>
             <StatusBar barStyle="dark-content" />
 
             <Animated.View style={{ flex: 1, transform: [{ translateX: screenShake }] }}>
@@ -726,11 +770,11 @@ const ChineseRestaurantGame = () => {
                     </Animated.View>
                 )}
             </Animated.View>
-        </SafeAreaView>
+        </View>
     );
 
     const renderDifficultySelect = () => (
-        <SafeAreaView style={styles.container}>
+        <View style={styles.container}>
             <StatusBar barStyle="dark-content" />
             <ScrollView contentContainerStyle={styles.scrollContent}>
                 <View style={styles.headerSection}>
@@ -774,13 +818,13 @@ const ChineseRestaurantGame = () => {
                     <Text style={styles.backLinkText}>← 返回遊戲列表</Text>
                 </TouchableOpacity>
             </ScrollView>
-        </SafeAreaView>
+        </View>
     );
 
     const renderResult = () => {
         const { totalQuestions, correctCount, accuracy } = calculateScoreStats();
         return (
-            <SafeAreaView style={styles.container}>
+            <View style={styles.container}>
                 <StatusBar barStyle="dark-content" />
                 <View style={styles.resultHeader}>
                     <TouchableOpacity onPress={handleRestart} style={styles.resultBackButton}>
@@ -796,6 +840,12 @@ const ChineseRestaurantGame = () => {
                             <Text style={styles.scorePercentage}>{score}</Text>
                             <Text style={styles.scoreLabel}>總分數</Text>
                         </View>
+                        {isSaving && (
+                            <View style={styles.savingIndicator}>
+                                <ActivityIndicator size="small" color="#4CAF50" />
+                                <Text style={styles.savingText}>同步分數中...</Text>
+                            </View>
+                        )}
                         <View style={styles.scoreDetails}>
                             <Text style={styles.scoreDetailText}>✅ 正確出餐: {correctCount}/{totalQuestions}</Text>
                             <Text style={styles.scoreDetailText}>🔥 最高連擊: x{maxCombo}</Text>
@@ -834,7 +884,7 @@ const ChineseRestaurantGame = () => {
                         </View>
                     </View>
                 </ScrollView>
-            </SafeAreaView>
+            </View>
         );
     };
 
@@ -1392,6 +1442,21 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#666',
         marginTop: 5,
+    },
+    savingIndicator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 15,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        backgroundColor: '#E8F5E9',
+        borderRadius: 20,
+    },
+    savingText: {
+        fontSize: 12,
+        color: '#4CAF50',
+        fontWeight: '500',
     },
     scoreDetails: {
         alignItems: 'center',
