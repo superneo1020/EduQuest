@@ -23,6 +23,11 @@ public class UserController {
         this.authService = authService;
     }
 
+    @GetMapping("/")
+    public ResponseEntity<?> getMyBasicInfo(@AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(userService.findBasicInfoByUsername(userDetails.getUsername()));
+    }
+
     @GetMapping("/point")
     public ResponseEntity<?> getMyPoints(@AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(userService.findPointsByUsername(userDetails.getUsername()));
