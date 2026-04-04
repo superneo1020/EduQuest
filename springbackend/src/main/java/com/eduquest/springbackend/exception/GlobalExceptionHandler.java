@@ -59,8 +59,6 @@ public class GlobalExceptionHandler {
                 ex.getMessage()
         );
         problemDetail.setTitle("Insufficient Points");
-        problemDetail.setType(URI.create("/api/problems/insufficient-points"));
-        problemDetail.setInstance(URI.create("/api/user/item/"));
         problemDetail.setProperty("timestamp", Instant.now());
         return problemDetail;
     }
