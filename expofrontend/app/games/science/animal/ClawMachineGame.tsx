@@ -10,6 +10,7 @@ import {
     Animated,
     Platform,
     ScrollView,
+    ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
@@ -33,7 +34,8 @@ interface AnimalType {
     isAnimal: boolean;
 }
 
-const ANIMAL_TYPES: AnimalType[] = [
+// ========== 🐾 完整動物列表（22 種） ==========
+const ALL_ANIMAL_TYPES: AnimalType[] = [
     { name: 'Bear', icon: '🐻', width: 44, height: 52, isAnimal: true },
     { name: 'Bunny', icon: '🐰', width: 44, height: 56, isAnimal: true },
     { name: 'Penguin', icon: '🐧', width: 48, height: 46, isAnimal: true },
@@ -44,6 +46,18 @@ const ANIMAL_TYPES: AnimalType[] = [
     { name: 'Monkey', icon: '🐒', width: 44, height: 52, isAnimal: true },
     { name: 'Elephant', icon: '🐘', width: 48, height: 52, isAnimal: true },
     { name: 'Giraffe', icon: '🦒', width: 48, height: 56, isAnimal: true },
+    { name: 'Dog', icon: '🐶', width: 44, height: 52, isAnimal: true },
+    { name: 'Cat', icon: '🐱', width: 44, height: 52, isAnimal: true },
+    { name: 'Lion', icon: '🦁', width: 48, height: 52, isAnimal: true },
+    { name: 'Tiger', icon: '🐯', width: 48, height: 52, isAnimal: true },
+    { name: 'Goldfish', icon: '🐠', width: 44, height: 40, isAnimal: true },
+    { name: 'Fish', icon: '🐟', width: 44, height: 40, isAnimal: true },
+    { name: 'Whale', icon: '🐳', width: 52, height: 44, isAnimal: true },
+    { name: 'Dolphin', icon: '🐬', width: 52, height: 44, isAnimal: true },
+    { name: 'Butterfly', icon: '🦋', width: 44, height: 40, isAnimal: true },
+    { name: 'Bird', icon: '🐦', width: 44, height: 40, isAnimal: true },
+    { name: 'Eagle', icon: '🦅', width: 48, height: 48, isAnimal: true },
+    { name: 'Frog', icon: '🐸', width: 44, height: 44, isAnimal: true },
 ];
 
 // 非動物干擾物
@@ -64,7 +78,7 @@ interface Item {
     isAnimal: boolean;
 }
 
-// ========== 🎯 浮動文字元件 (HIT / OUCH) ==========
+// ========== 🎯 浮動文字元件 ==========
 interface FloatingTextProps {
     text: string;
     color: string;
@@ -113,7 +127,6 @@ const ClawMachineGame: React.FC = () => {
     const { token } = useAuth();
     const [isSaving, setIsSaving] = useState(false);
 
-    // ⭐ 完全隐藏系统导航栏（包括返回按钮和标题）
     useLayoutEffect(() => {
         navigation.setOptions({
             headerShown: false,
@@ -135,6 +148,7 @@ const ClawMachineGame: React.FC = () => {
     const [gameComplete, setGameComplete] = useState<boolean>(false);
     const [showReport, setShowReport] = useState<boolean>(false);
     const [feedbackMessage, setFeedbackMessage] = useState<{ text: string; type: 'correct' | 'wrong' } | null>(null);
+    const [processing, setProcessing] = useState<boolean>(false);
 
     // AI 出題模式狀態
     const [currentQuestion, setCurrentQuestion] = useState<AIQuestion | null>(null);
@@ -142,12 +156,9 @@ const ClawMachineGame: React.FC = () => {
     const [isAiThinking, setIsAiThinking] = useState<boolean>(false);
     const [showQuestionHint, setShowQuestionHint] = useState<boolean>(false);
 
-    // ========== ✨ 新增特效狀態 ==========
-    // 1. 浮動文字特效
+    // 特效狀態
     const [floatingText, setFloatingText] = useState<{ id: number; text: string; color: string } | null>(null);
-    // 2. 螢幕震動效果
     const screenShake = useRef(new Animated.Value(0)).current;
-    // 3. 倒數準備狀態
     const [prepText, setPrepText] = useState<string | null>(null);
     const prepScale = useRef(new Animated.Value(0)).current;
 
@@ -159,15 +170,26 @@ const ClawMachineGame: React.FC = () => {
     const scoreAnim = useRef(new Animated.Value(1)).current;
     const feedbackAnim = useRef(new Animated.Value(0)).current;
 
-    // 計算統計
-    const totalAnimals = items.filter(i => i.isAnimal).length;
-    const correctCatches = collectedAnimals.filter(a => a.isAnimal).length;
-    const wrongCatches = collectedAnimals.length - correctCatches;
+    // 请求去重
+    const refreshAIPromiseRef = useRef<Promise<void> | null>(null);
+
+    // 總動物數量（固定為 8）
+    const totalAnimalsCount = 8;
+    const pointsPerAnimal = 100 / totalAnimalsCount; // 12.5 分/隻
+
+    // 計算正確捕獲數量
+    const correctCatches = collectedAnimals.length;
+
+    // 獲取當前場上未被抓的動物名稱（用於 AI 出題）
+    const getAvailableAnimalNames = useCallback((): string[] => {
+        return items
+            .filter(item => item.isAnimal && !item.caught)
+            .map(item => item.type.name);
+    }, [items]);
 
     // ========== 💾 保存分數到伺服器 ==========
     const saveScore = async (finalScore: number) => {
         if (!token) return;
-
         setIsSaving(true);
         try {
             await axios.post('http://localhost:8080/api/user/game/score', {
@@ -185,13 +207,6 @@ const ClawMachineGame: React.FC = () => {
         }
     };
 
-    // 獲取當前場上未被抓的動物名稱
-    const getAvailableAnimalNames = useCallback((): string[] => {
-        return items
-            .filter(item => item.isAnimal && !item.caught)
-            .map(item => item.type.name);
-    }, [items]);
-
     // ========== 🎬 螢幕震動效果 ==========
     const triggerScreenShake = () => {
         Animated.sequence([
@@ -203,29 +218,25 @@ const ClawMachineGame: React.FC = () => {
         ]).start();
     };
 
-    // ========== 🎯 顯示打擊回饋 ==========
-    const showHitFeedback = (isCorrect: boolean, animalName?: string) => {
-        // 觸覺回饋
+    // ========== 🎯 打擊回饋（HIT! / OUCH! + 震動 + 觸覺） ==========
+    const showHitFeedback = (isCorrect: boolean) => {
         if (isCorrect) {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            triggerScreenShake();
         } else {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-            // 錯誤時觸發螢幕震動
             triggerScreenShake();
         }
-
-        // 浮動文字
         setFloatingText({
             id: Date.now(),
-            text: isCorrect ? '✨ GREAT! ✨' : '💥 OH NO! 💥',
+            text: isCorrect ? 'HIT!' : 'OUCH!',
             color: isCorrect ? '#FFD700' : '#FF4757',
         });
     };
 
-    // ========== 🎪 倒數準備動畫 (withSpring 彈性效果) ==========
+    // ========== 🎪 倒數準備動畫 ==========
     const startPrepSequence = () => {
-        // READY 彈跳
         setTimeout(() => {
             setPrepText('READY');
             prepScale.setValue(0);
@@ -237,8 +248,6 @@ const ClawMachineGame: React.FC = () => {
             }).start();
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         }, 100);
-
-        // GO! 更大的彈跳
         setTimeout(() => {
             setPrepText('GO!');
             prepScale.setValue(0);
@@ -250,8 +259,6 @@ const ClawMachineGame: React.FC = () => {
             }).start();
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }, 1000);
-
-        // 隱藏倒數文字，開始遊戲
         setTimeout(() => {
             Animated.timing(prepScale, {
                 toValue: 0,
@@ -261,20 +268,67 @@ const ClawMachineGame: React.FC = () => {
         }, 1600);
     };
 
-    // 初始化物品（確保所有動物都出現）
+    // ========== 🧠 刷新 AI 題目（非同步，問題框內顯示 loading） ==========
+    const refreshAIQuestion = useCallback(async () => {
+        // 防止重复调用
+        if (refreshAIPromiseRef.current) {
+            console.log("AI refresh already in progress, waiting...");
+            return refreshAIPromiseRef.current;
+        }
+
+        const promise = (async () => {
+            const availableAnimals = getAvailableAnimalNames();
+            if (availableAnimals.length === 0) {
+                console.log("No available animals, keep current question");
+                return;
+            }
+
+            setIsAiThinking(true);
+            try {
+                console.log("Generating new question for animals:", availableAnimals);
+                const newQuestion = await clawAIService.generateQuestionAsync(availableAnimals);
+                if (newQuestion && newQuestion.description && newQuestion.targetAnimal) {
+                    setCurrentQuestion(newQuestion);
+                    console.log("New question set:", newQuestion.description);
+                } else {
+                    console.warn("Generated question is invalid, using fallback");
+                    const fallbackQuestion = clawAIService.generateQuestionWithAvailableAnimals(availableAnimals);
+                    if (fallbackQuestion) {
+                        setCurrentQuestion(fallbackQuestion);
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to generate AI question:', error);
+                const fallbackQuestion = clawAIService.generateQuestionWithAvailableAnimals(availableAnimals);
+                if (fallbackQuestion) {
+                    setCurrentQuestion(fallbackQuestion);
+                }
+            } finally {
+                setIsAiThinking(false);
+                refreshAIPromiseRef.current = null;
+            }
+        })();
+
+        refreshAIPromiseRef.current = promise;
+        return promise;
+    }, [getAvailableAnimalNames]);
+
+    // ========== 初始化物品（隨機選取 8 種動物 + 4 個干擾物） ==========
     const initializeItems = () => {
         const newItems: Item[] = [];
         const itemCount = 12;
+        const animalCount = 8;
+        const nonAnimalCount = itemCount - animalCount;
+
+        const shuffledAnimals = [...ALL_ANIMAL_TYPES].sort(() => 0.5 - Math.random());
+        const selectedAnimals = shuffledAnimals.slice(0, animalCount);
+
         const startX = 20;
         const bottomY = GAME_HEIGHT - 70;
         const spacingX = (GAME_WIDTH - 40) / itemCount;
 
-        // 使用全部10種動物
-        const animalCount = 10;
-        const nonAnimalCount = itemCount - animalCount; // 2個干擾物
-
-        for (let i = 0; i < animalCount; i++) {
-            const animalType = ANIMAL_TYPES[i % ANIMAL_TYPES.length];
+        for (let i = 0; i < selectedAnimals.length; i++) {
+            const animalType = selectedAnimals[i];
             newItems.push({
                 id: i,
                 type: animalType,
@@ -285,13 +339,13 @@ const ClawMachineGame: React.FC = () => {
             });
         }
 
-        const shuffledNonAnimals = [...NON_ANIMAL_TYPES].sort(() => 0.5 - Math.random());
+        const shuffledNon = [...NON_ANIMAL_TYPES].sort(() => 0.5 - Math.random());
         for (let i = 0; i < nonAnimalCount; i++) {
-            const nonAnimalType = shuffledNonAnimals[i % shuffledNonAnimals.length];
+            const nonType = shuffledNon[i % shuffledNon.length];
             newItems.push({
-                id: animalCount + i,
-                type: nonAnimalType,
-                x: startX + (animalCount + i) * spacingX + (Math.random() - 0.5) * 10,
+                id: selectedAnimals.length + i,
+                type: nonType,
+                x: startX + (selectedAnimals.length + i) * spacingX + (Math.random() - 0.5) * 10,
                 y: bottomY + (Math.random() - 0.5) * 6,
                 caught: false,
                 isAnimal: false,
@@ -305,34 +359,28 @@ const ClawMachineGame: React.FC = () => {
         setGameComplete(false);
         setShowReport(false);
         setClawX((GAME_WIDTH - 36) / 2);
+        clawAIService.resetGame();
+        setCurrentQuestion(null);  // 重置题目，等待首次生成
     };
 
-    // 生成 AI 題目（確保目標動物存在）
-    const generateValidQuestion = useCallback(() => {
-        const availableAnimals = getAvailableAnimalNames();
-        if (availableAnimals.length > 0) {
-            const newQuestion = clawAIService.generateQuestionWithAvailableAnimals(availableAnimals);
-            setCurrentQuestion(newQuestion);
-        } else {
-            const newQuestion = clawAIService.generateQuestion();
-            setCurrentQuestion(newQuestion);
-        }
-    }, [getAvailableAnimalNames]);
-
-    // 初始化遊戲和倒數
+    // ========== 初始化遊戲和倒數 ==========
     useEffect(() => {
         initializeItems();
-        // 遊戲初始化完成後開始倒數
         setTimeout(() => {
             startPrepSequence();
         }, 500);
     }, []);
 
+    // 當物品清單變化時（初始化或正確抓取後）重新生成 AI 題目
     useEffect(() => {
-        if (items.length > 0) {
-            generateValidQuestion();
+        if (items.length > 0 && !gameOver && !gameComplete && !showReport && prepText === null) {
+            // 延迟一点点，避免与 processCatch 中的刷新冲突，但去重会处理
+            const timer = setTimeout(() => {
+                refreshAIQuestion();
+            }, 100);
+            return () => clearTimeout(timer);
         }
-    }, [items, generateValidQuestion]);
+    }, [items, gameOver, gameComplete, showReport, prepText, refreshAIQuestion]);
 
     // 脈衝動畫
     useEffect(() => {
@@ -387,13 +435,13 @@ const ClawMachineGame: React.FC = () => {
 
     // 移動邏輯
     useEffect(() => {
-        if (leftPressed && !isDropping && !gameOver && !gameComplete && !showReport && prepText === null) {
+        if (leftPressed && !isDropping && !gameOver && !gameComplete && !showReport && prepText === null && !processing && !isAiThinking) {
             const interval = setInterval(() => {
                 setClawX(prev => Math.max(8, prev - 12));
             }, 50);
             setMoveInterval(interval);
             return () => clearInterval(interval);
-        } else if (rightPressed && !isDropping && !gameOver && !gameComplete && !showReport && prepText === null) {
+        } else if (rightPressed && !isDropping && !gameOver && !gameComplete && !showReport && prepText === null && !processing && !isAiThinking) {
             const interval = setInterval(() => {
                 setClawX(prev => Math.min(GAME_WIDTH - 44, prev + 12));
             }, 50);
@@ -403,7 +451,7 @@ const ClawMachineGame: React.FC = () => {
             clearInterval(moveInterval);
             setMoveInterval(null);
         }
-    }, [leftPressed, rightPressed, isDropping, gameOver, gameComplete, showReport, prepText]);
+    }, [leftPressed, rightPressed, isDropping, gameOver, gameComplete, showReport, prepText, processing, isAiThinking]);
 
     useEffect(() => {
         return () => {
@@ -444,67 +492,70 @@ const ClawMachineGame: React.FC = () => {
         return null;
     };
 
-    // AI 處理答案
-    const handleAIAnswer = async (caughtItem: Item) => {
-        if (!caughtItem.isAnimal) return;
-        setIsAiThinking(true);
+    // 處理抓取結果
+    const processCatch = async (caughtItem: Item) => {
+        setProcessing(true);
+        let isCorrect = false;
+
         try {
-            const feedback = await clawAIService.checkAnswer(caughtItem.type.name);
-            setAiFeedback(feedback);
-            showFeedback(feedback.message, feedback.isCorrect ? 'correct' : 'wrong');
-            setScore(prev => Math.min(100, Math.max(0, prev + feedback.scoreChange)));
-            generateValidQuestion();
-            setShowQuestionHint(false);
-            setTimeout(() => setAiFeedback(null), 4000);
+            if (!caughtItem.isAnimal) {
+                isCorrect = false;
+                showFeedback(`❌ ${caughtItem.type.name} It's not an animal! Try again.～`, 'wrong');
+                showHitFeedback(false);
+                // 抓错非动物后刷新题目
+                await refreshAIQuestion();
+            } else {
+                if (!currentQuestion) {
+                    showFeedback('🤖 The AI questions are not ready yet, please wait.', 'wrong');
+                    setProcessing(false);
+                    return;
+                }
+                const aiResult = await clawAIService.checkAnswer(caughtItem.type.name);
+                isCorrect = aiResult.isCorrect;
+                setAiFeedback(aiResult);
+                showFeedback(aiResult.message, aiResult.isCorrect ? 'correct' : 'wrong');
+                showHitFeedback(aiResult.isCorrect);
+                setTimeout(() => setAiFeedback(null), 4000);
+
+                if (isCorrect) {
+                    const newScore = Math.min(100, score + pointsPerAnimal);
+                    setScore(newScore);
+                    animateScore();
+
+                    setItems(prev => prev.map(i =>
+                        i.id === caughtItem.id ? { ...i, caught: true } : i
+                    ));
+                    setCollectedAnimals(prev => [...prev, caughtItem]);
+
+                    const remainingAnimals = items.filter(i => i.isAnimal && !i.caught && i.id !== caughtItem.id).length;
+                    if (remainingAnimals === 0) {
+                        setGameComplete(true);
+                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                        await saveScore(newScore);
+                        setShowReport(true);
+                        setProcessing(false);
+                        return;
+                    }
+                    // 正确抓取后，让 useEffect 来刷新题目（避免重复刷新）
+                    // 注意：items 更新后会触发 useEffect 中的 refreshAIQuestion
+                } else {
+                    showFeedback(`❌ That's not right! The question asks for... ${currentQuestion.targetIcon} ${currentQuestion.targetAnimal}，Try again`, 'wrong');
+                    // 回答错误也刷新题目
+                    await refreshAIQuestion();
+                }
+            }
         } catch (error) {
-            console.error('AI 處理失敗:', error);
-        }
-        setIsAiThinking(false);
-    };
-
-    const handleCatch = (caughtItem: Item) => {
-        let newScore = score;
-        let message = '';
-        let type: 'correct' | 'wrong' = 'correct';
-
-        if (caughtItem.isAnimal) {
-            message = `🎉 ${caughtItem.type.name} caught! +10 points! 🎉`;
-            type = 'correct';
-            animateScore();
-            // ✨ 顯示打擊回饋
-            showHitFeedback(true, caughtItem.type.name);
-            handleAIAnswer(caughtItem);
-            newScore = Math.min(100, score + 10);
-        } else {
-            newScore = Math.max(0, score - 10);
-            message = `💔 Oops! ${caughtItem.type.name} is not an animal! -10 points 💔`;
-            type = 'wrong';
-            animateScore();
-            // ✨ 顯示錯誤打擊回饋
-            showHitFeedback(false);
-            setScore(newScore);
-        }
-
-        showFeedback(message, type);
-        setItems(prev => prev.map(i =>
-            i.id === caughtItem.id ? { ...i, caught: true } : i
-        ));
-        if (caughtItem.isAnimal) {
-            setCollectedAnimals(prev => [...prev, caughtItem]);
-        }
-
-        const remainingAnimalsCount = items.filter(i => i.isAnimal && !i.caught && i.id !== caughtItem.id).length;
-        if (newScore <= 0) {
-            setGameOver(true);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        } else if (remainingAnimalsCount === 0) {
-            setGameComplete(true);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            console.error('Handling fetch failures:', error);
+            showFeedback('System error, please try again.', 'wrong');
+        } finally {
+            setProcessing(false);
+            setIsSuction(false);
+            setSuctionItem(null);
         }
     };
 
     const dropClaw = () => {
-        if (isDropping || gameOver || gameComplete || showReport || prepText !== null) return;
+        if (isDropping || gameOver || gameComplete || showReport || prepText !== null || processing || isAiThinking) return;
         setIsDropping(true);
         Animated.timing(dropAnim, {
             toValue: 1,
@@ -530,14 +581,14 @@ const ClawMachineGame: React.FC = () => {
                     }),
                 ]).start();
                 setTimeout(() => {
-                    handleCatch(caughtItem);
-                    setIsSuction(false);
-                    setSuctionItem(null);
+                    processCatch(caughtItem);
                 }, 200);
             } else {
-                showFeedback('❌ Missed! Position the claw above an item! ❌', 'wrong');
-                // 抓空也有輕微回饋
+                showFeedback('❌ Didn\'t catch it! Try moving the claw over the item again.', 'wrong');
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setTimeout(() => {
+                    setIsDropping(false);
+                }, 350);
             }
             setTimeout(() => {
                 Animated.timing(dropAnim, {
@@ -560,21 +611,23 @@ const ClawMachineGame: React.FC = () => {
         setGameComplete(false);
         setShowReport(false);
         setFloatingText(null);
+        setAiFeedback(null);
+        setCurrentQuestion(null);
+        setScore(0);
+        setCollectedAnimals([]);
         dropAnim.setValue(0);
         clawAIService.resetGame();
-        // 重新開始倒數
+        setProcessing(false);
         setTimeout(() => {
             startPrepSequence();
         }, 500);
     };
 
     const showReportPage = async () => {
-        // 保存分數到伺服器
-        await saveScore(score);
+        await saveScore(Math.round(score));
         setShowReport(true);
     };
 
-    // ⭐  goBack 函数，不再需要返回按钮
     const handleGoBack = () => {
         navigation.goBack();
     };
@@ -596,13 +649,9 @@ const ClawMachineGame: React.FC = () => {
         outputRange: [20, -10, 0],
     });
     const feedbackOpacity = feedbackAnim;
-
-    // ✨ 螢幕震動動畫樣式
     const screenShakeStyle = {
         transform: [{ translateX: screenShake }],
     };
-
-    // ✨ 倒數動畫樣式
     const prepAnimatedStyle = {
         transform: [{ scale: prepScale }],
         opacity: prepScale.interpolate({
@@ -617,38 +666,30 @@ const ClawMachineGame: React.FC = () => {
                 <ScrollView contentContainerStyle={styles.reportScrollContent}>
                     <View style={styles.reportCard}>
                         <Text style={styles.reportEmoji}>
-                            {score === 100 ? '🏆' : score >= 70 ? '🎉' : '📊'}
+                            {Math.round(score) === 100 ? '🏆' : Math.round(score) >= 70 ? '🎉' : '📊'}
                         </Text>
-                        <Text style={styles.reportTitle}>遊戲總結</Text>
+                        <Text style={styles.reportTitle}>Game Summary</Text>
                         <View style={styles.reportScoreBox}>
-                            <Text style={styles.reportScoreLabel}>最終分數</Text>
-                            <Text style={styles.reportScoreValue}>{score}/100</Text>
+                            <Text style={styles.reportScoreLabel}>Final score</Text>
+                            <Text style={styles.reportScoreValue}>{Math.round(score)}/100</Text>
                         </View>
-
-                        {/* 保存中指示器 */}
                         {isSaving && (
                             <View style={styles.savingIndicator}>
                                 <ActivityIndicator size="small" color="#4CAF50" />
-                                <Text style={styles.savingText}>同步分數中...</Text>
+                                <Text style={styles.savingText}>In synchronous scores...</Text>
                             </View>
                         )}
-
                         <View style={styles.reportStatsBox}>
                             <View style={styles.reportStatItem}>
                                 <Text style={styles.reportStatEmoji}>🐾</Text>
-                                <Text style={styles.reportStatLabel}>抓到動物</Text>
-                                <Text style={styles.reportStatValue}>{correctCatches}/{totalAnimals}</Text>
-                            </View>
-                            <View style={styles.reportStatItem}>
-                                <Text style={styles.reportStatEmoji}>⚠️</Text>
-                                <Text style={styles.reportStatLabel}>錯誤抓取</Text>
-                                <Text style={styles.reportStatValue}>{wrongCatches}</Text>
+                                <Text style={styles.reportStatLabel}>Correct capture</Text>
+                                <Text style={styles.reportStatValue}>{correctCatches}/{totalAnimalsCount}</Text>
                             </View>
                             <View style={styles.reportStatItem}>
                                 <Text style={styles.reportStatEmoji}>🎯</Text>
-                                <Text style={styles.reportStatLabel}>準確率</Text>
+                                <Text style={styles.reportStatLabel}>Completeness</Text>
                                 <Text style={styles.reportStatValue}>
-                                    {totalAnimals > 0 ? Math.round((correctCatches / totalAnimals) * 100) : 0}%
+                                    {Math.round((correctCatches / totalAnimalsCount) * 100)}%
                                 </Text>
                             </View>
                         </View>
@@ -671,7 +712,6 @@ const ClawMachineGame: React.FC = () => {
 
     return (
         <Animated.View style={[styles.container, screenShakeStyle]}>
-            {/* 倒數準備覆蓋層 */}
             {prepText && (
                 <Animated.View style={[styles.prepOverlay, prepAnimatedStyle]}>
                     <View style={styles.prepCard}>
@@ -680,13 +720,12 @@ const ClawMachineGame: React.FC = () => {
                         </Text>
                         <Text style={styles.prepText}>{prepText}</Text>
                         <Text style={styles.prepSubtext}>
-                            {prepText === 'READY' ? '準備好抓動物了嗎？' : 'GO GO GO!'}
+                            {prepText === 'READY' ? 'Ready to catch some animals?' : 'GO GO GO!'}
                         </Text>
                     </View>
                 </Animated.View>
             )}
 
-            {/* 浮動文字特效 */}
             {floatingText && (
                 <FloatingText
                     key={floatingText.id}
@@ -696,50 +735,57 @@ const ClawMachineGame: React.FC = () => {
                 />
             )}
 
-            {/* 頂部欄 - 移除返回按鈕，只保留標題和分數 */}
             <View style={styles.header}>
                 <View style={styles.headerPlaceholder} />
-                <Text style={styles.title}>🐾 動物抓抓樂 🐾</Text>
+                <Text style={styles.title}>🐾 Animal Scratch Fun 🐾</Text>
                 <Animated.View style={[styles.scoreContainer, { transform: [{ scale: scoreScale }] }]}>
-                    <Text style={styles.scoreValue}>{score}</Text>
+                    <Text style={styles.scoreValue}>{Math.round(score)}</Text>
                     <Text style={styles.scoreMax}>/100</Text>
                 </Animated.View>
             </View>
 
-            {/* AI 出題面板 */}
-            {currentQuestion && (
-                <View style={styles.aiQuestionPanel}>
-                    <View style={styles.questionBox}>
-                        <Text style={styles.questionLabel}>📋 題目</Text>
-                        <Text style={styles.questionText}>{currentQuestion.description}</Text>
-                        <TouchableOpacity
-                            style={styles.hintButton}
-                            onPress={() => setShowQuestionHint(!showQuestionHint)}
-                        >
-                            <Text style={styles.hintButtonText}>💡 提示</Text>
-                        </TouchableOpacity>
-                        {showQuestionHint && (
-                            <Text style={styles.hintText}>🔍 {currentQuestion.hint}</Text>
-                        )}
+            {/* AI 問題面板：內部顯示 loading 或題目 */}
+            <View style={styles.aiQuestionPanel}>
+                {isAiThinking ? (
+                    <View style={styles.questionBoxLoading}>
+                        <ActivityIndicator size="large" color="#FFD700" />
+                        <Text style={styles.aiLoadingText}>🤖 AI is thinking about the question....</Text>
+                        <Text style={styles.aiLoadingSubtext}>Almost done！</Text>
                     </View>
-                    {aiFeedback && (
-                        <Animated.View style={[
-                            styles.aiFeedbackBox,
-                            aiFeedback.isCorrect ? styles.feedbackCorrectBox : styles.feedbackWrongBox
-                        ]}>
-                            <Text style={styles.aiFunFact}>📖 {aiFeedback.funFact}</Text>
-                            <Text style={styles.aiEncouragement}>💪 {aiFeedback.encouragement}</Text>
-                        </Animated.View>
-                    )}
-                    {isAiThinking && (
-                        <View style={styles.aiThinkingBox}>
-                            <Text style={styles.aiThinkingText}>🤖 AI 評分中...</Text>
+                ) : currentQuestion ? (
+                    <>
+                        <View style={styles.questionBox}>
+                            <Text style={styles.questionLabel}>📋 question</Text>
+                            <Text style={styles.questionText}>{currentQuestion.description}</Text>
+                            <TouchableOpacity
+                                style={styles.hintButton}
+                                onPress={() => setShowQuestionHint(!showQuestionHint)}
+                            >
+                                <Text style={styles.hintButtonText}>💡 hint</Text>
+                            </TouchableOpacity>
+                            {showQuestionHint && (
+                                <Text style={styles.hintText}>🔍 {currentQuestion.hint}</Text>
+                            )}
                         </View>
-                    )}
-                </View>
-            )}
+                        {aiFeedback && (
+                            <Animated.View style={[
+                                styles.aiFeedbackBox,
+                                aiFeedback.isCorrect ? styles.feedbackCorrectBox : styles.feedbackWrongBox
+                            ]}>
+                                <Text style={styles.aiFunFact}>📖 {aiFeedback.funFact}</Text>
+                                <Text style={styles.aiEncouragement}>💪 {aiFeedback.encouragement}</Text>
+                            </Animated.View>
+                        )}
+                    </>
+                ) : (
+                    // 备用显示：没有题目时（例如初始状态）显示占位符
+                    <View style={styles.questionBoxLoading}>
+                        <Text style={styles.aiLoadingText}>🐣 Get ready...</Text>
+                        <Text style={styles.aiLoadingSubtext}>AI will ask a question soon!</Text>
+                    </View>
+                )}
+            </View>
 
-            {/* 夾公仔機 */}
             <View style={styles.machineContainer}>
                 <View style={styles.machineBody}>
                     <View style={styles.machineTop}>
@@ -813,7 +859,7 @@ const ClawMachineGame: React.FC = () => {
                             style={[styles.controlBtn, styles.leftBtn]}
                             onPressIn={() => setLeftPressed(true)}
                             onPressOut={() => setLeftPressed(false)}
-                            disabled={isDropping || gameOver || gameComplete || showReport || prepText !== null}
+                            disabled={isDropping || gameOver || gameComplete || showReport || prepText !== null || processing || isAiThinking}
                             activeOpacity={0.7}
                         >
                             <Text style={styles.btnText}>◀</Text>
@@ -822,17 +868,17 @@ const ClawMachineGame: React.FC = () => {
                             <TouchableOpacity
                                 style={[styles.controlBtn, styles.grabBtn]}
                                 onPress={dropClaw}
-                                disabled={isDropping || gameOver || gameComplete || showReport || prepText !== null}
+                                disabled={isDropping || gameOver || gameComplete || showReport || prepText !== null || processing || isAiThinking}
                                 activeOpacity={0.7}
                             >
-                                <Text style={styles.grabBtnText}>⚡ 抓取 ⚡</Text>
+                                <Text style={styles.grabBtnText}>⚡ Scraping ⚡</Text>
                             </TouchableOpacity>
                         </Animated.View>
                         <TouchableOpacity
                             style={[styles.controlBtn, styles.rightBtn]}
                             onPressIn={() => setRightPressed(true)}
                             onPressOut={() => setRightPressed(false)}
-                            disabled={isDropping || gameOver || gameComplete || showReport || prepText !== null}
+                            disabled={isDropping || gameOver || gameComplete || showReport || prepText !== null || processing || isAiThinking}
                             activeOpacity={0.7}
                         >
                             <Text style={styles.btnText}>▶</Text>
@@ -840,10 +886,10 @@ const ClawMachineGame: React.FC = () => {
                     </View>
                     <View style={styles.bottomBar}>
                         <TouchableOpacity style={styles.resetBtn} onPress={resetGame}>
-                            <Text style={styles.resetBtnText}>⟳ 重來</Text>
+                            <Text style={styles.resetBtnText}>⟳ Start over</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.completeBtn} onPress={showReportPage} disabled={showReport}>
-                            <Text style={styles.completeBtnText}>✓ 完成</Text>
+                            <Text style={styles.completeBtnText}>✓ Finish</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -884,7 +930,7 @@ const styles = StyleSheet.create({
         marginBottom: 10,
     },
     headerPlaceholder: {
-        width: 40, // 佔位符，保持標題置中
+        width: 40,
     },
     title: {
         fontSize: 14,
@@ -926,6 +972,15 @@ const styles = StyleSheet.create({
         padding: 12,
         borderWidth: 2,
         borderColor: '#ffaa44',
+    },
+    questionBoxLoading: {
+        backgroundColor: '#2d2b1f',
+        borderRadius: 12,
+        padding: 24,
+        borderWidth: 2,
+        borderColor: '#ffaa44',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     questionLabel: {
         fontSize: 11,
@@ -979,16 +1034,17 @@ const styles = StyleSheet.create({
         fontSize: 11,
         color: '#ffdd88',
     },
-    aiThinkingBox: {
-        backgroundColor: '#3a2a1f',
-        borderRadius: 12,
-        padding: 10,
-        marginTop: 8,
-        alignItems: 'center',
-    },
-    aiThinkingText: {
-        fontSize: 11,
+    aiLoadingText: {
+        fontSize: 16,
+        fontWeight: 'bold',
         color: '#ffdd88',
+        marginTop: 12,
+        fontFamily: Platform.OS === 'web' ? 'monospace' : 'Courier',
+    },
+    aiLoadingSubtext: {
+        fontSize: 12,
+        color: '#c9a87b',
+        marginTop: 4,
     },
     machineContainer: {
         width: MACHINE_WIDTH,
@@ -1349,9 +1405,6 @@ const styles = StyleSheet.create({
         borderColor: '#ffaa44',
     },
     reportHomeBtnText: { fontSize: 14, fontWeight: 'bold', color: '#ffaa44' },
-
-    // ========== ✨ 新增特效樣式 ==========
-    // 浮動文字樣式
     floatingContainer: {
         position: 'absolute',
         top: '30%',
@@ -1369,7 +1422,6 @@ const styles = StyleSheet.create({
         textShadowOffset: { width: 2, height: 2 },
         textShadowRadius: 4,
     },
-    // 倒數準備覆蓋層樣式
     prepOverlay: {
         position: 'absolute',
         top: 0,

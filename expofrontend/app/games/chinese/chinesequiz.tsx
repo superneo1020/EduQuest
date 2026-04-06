@@ -1,5 +1,6 @@
 // app/games/chinese/chinesequiz.tsx
 // 餐廳大作戰 - 傳送帶版本（加入打擊回饋與倒數特效版）
+// 修改：總分滿分為100分
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -138,13 +139,14 @@ const ChineseRestaurantGame = () => {
         return foodIcons[Math.floor(Math.random() * foodIcons.length)];
     };
 
+    // 修改：倍率調整為 1 / 1.2 / 1.5，配合滿分100
     const getMultiplier = (currentCombo: number) => {
-        if (currentCombo >= 5) return 3;
-        if (currentCombo >= 3) return 2;
+        if (currentCombo >= 5) return 1.5;
+        if (currentCombo >= 3) return 1.2;
         return 1;
     };
 
-    // 保存分數到伺服器
+    // 保存分數到伺服器（滿分100）
     const saveScore = async (finalScore: number) => {
         if (!token || !difficulty) return;
 
@@ -226,12 +228,12 @@ const ChineseRestaurantGame = () => {
             }
             if (gameState === 'playing') {
                 Alert.alert(
-                    '退出餐廳',
-                    '確定要離開嗎？進度將不會保存。',
+                    'Exit the restaurant',
+                    'Are you sure you want to leave? Progress will not be saved.',
                     [
-                        { text: '繼續做菜', style: 'cancel' },
+                        { text: 'Continue cooking', style: 'cancel' },
                         {
-                            text: '離開',
+                            text: 'Exit',
                             style: 'destructive',
                             onPress: () => {
                                 setGameState('difficulty_select');
@@ -421,8 +423,10 @@ const ChineseRestaurantGame = () => {
 
             const newCombo = combo + 1;
             const multiplier = getMultiplier(newCombo);
-            const pointsEarned = 10 * multiplier;
-            const newScore = score + pointsEarned;
+            const pointsEarned = Math.round(10 * multiplier); // 四捨五入取整
+            let newScore = score + pointsEarned;
+            // 滿分限制 100
+            if (newScore > 100) newScore = 100;
             setScore(newScore);
             setCombo(newCombo);
             setMaxCombo(prev => Math.max(prev, newCombo));
@@ -438,20 +442,21 @@ const ChineseRestaurantGame = () => {
 
             setCustomerState('happy');
             await animateCustomerReaction(true);
-            showTemporaryHint(`🎉 太美味了！ +${pointsEarned} 分`, '#4CAF50');
+            showTemporaryHint(`🎉 So delicious! +${pointsEarned} `, '#4CAF50');
         } else {
             // ❌ 錯誤 - 被打擊回饋
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
             triggerScreenShake();
             setFloatingText({ id: Date.now(), text: 'OUCH!', color: '#FF4757' });
 
-            const newScore = Math.max(0, score - 5);
+            let newScore = score - 5;
+            if (newScore < 0) newScore = 0;
             setScore(newScore);
             setCombo(0);
 
             setCustomerState('angry');
             await animateCustomerReaction(false);
-            showTemporaryHint(`😠 這不是我要的！ -5 分`, '#F44336');
+            showTemporaryHint(`😠 This is not what I want！ -5 `, '#F44336');
         }
 
         // 清除浮動文字
@@ -487,22 +492,23 @@ const ChineseRestaurantGame = () => {
         setGameComplete(true);
         setNextQuestionDelay(false);
 
-        // 保存分數到伺服器
+        // 保存分數到伺服器 (滿分100)
         await saveScore(score);
 
         const totalQuestions = questions.length;
         const correctCount = questions.filter(q => q.isAnsweredCorrectly).length;
         const accuracy = totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0;
 
+        // 根據滿分100調整評價反饋
         let feedback = '';
-        if (score >= 300) {
-            feedback = `🍽️ 五星級大廚！你完成了 ${correctCount}/${totalQuestions} 道菜！\n🔥 最高連擊: ${maxCombo} | 🎯 準確率: ${Math.round(accuracy)}%\n太厲害了！歡迎下次光臨！🌟`;
-        } else if (score >= 200) {
-            feedback = `🍲 優秀廚師！你完成了 ${correctCount}/${totalQuestions} 道菜！\n🔥 最高連擊: ${maxCombo} | 🎯 準確率: ${Math.round(accuracy)}%\n再練習一下就能成為大師了！💪`;
-        } else if (score >= 100) {
-            feedback = `🥗 繼續努力！你完成了 ${correctCount}/${totalQuestions} 道菜\n🔥 最高連擊: ${maxCombo}\n多點正確食材，顧客會更開心！✨`;
+        if (score >= 90) {
+            feedback = `🍽️ Five-star chef! You did it ${correctCount}/${totalQuestions} Dish!\n🔥 Highest Combo: ${maxCombo} | 🎯 準確率: ${Math.round(accuracy)}%\n Amazing! Welcome to visit again next time!🌟`;
+        } else if (score >= 70) {
+            feedback = `🍲 Excellent chef! You did it ${correctCount}/${totalQuestions} Dish!\n🔥 Highest Combo: ${maxCombo} | 🎯 準確率: ${Math.round(accuracy)}%\n With a bit more practice, you can become a master！💪`;
+        } else if (score >= 50) {
+            feedback = `🥗 Keep it up! You did it ${correctCount}/${totalQuestions} Dish\n🔥 Highest Combo: ${maxCombo}\n More correct ingredients will make customers happier！✨`;
         } else {
-            feedback = `🍜 加油小廚師！你完成了 ${correctCount}/${totalQuestions} 道菜\n試試看點擊顧客想吃的食材！\n下次會更好！🎈`;
+            feedback = `🍜 Go for it, little chef! You did it. ${correctCount}/${totalQuestions} Dish\n Try clicking on the ingredients that the customer wants to eat！\n It will be better next time！🎈`;
         }
 
         setAiFeedback(feedback);
@@ -598,9 +604,9 @@ const ChineseRestaurantGame = () => {
 
     const getCustomerMessage = () => {
         switch (customerState) {
-            case 'happy': return '太好吃啦！';
-            case 'angry': return '這不是我要的...';
-            default: return '我想吃...';
+            case 'happy': return 'It\'s so delicious!';
+            case 'angry': return 'This is not what I want...';
+            default: return 'I want to eat...';
         }
     };
 
@@ -611,13 +617,13 @@ const ChineseRestaurantGame = () => {
             <Animated.View style={{ flex: 1, transform: [{ translateX: screenShake }] }}>
                 <View style={styles.gameHeader}>
                     <TouchableOpacity onPress={handleRestart} style={styles.exitButton}>
-                        <Text style={styles.exitButtonText}>← 離開</Text>
+                        <Text style={styles.exitButtonText}>← Leave</Text>
                     </TouchableOpacity>
                     <View style={styles.statsRow}>
                         <View style={styles.statBox}>
                             <Star size={18} color="#FFD966" />
                             <Animated.Text style={[styles.statValue, { transform: [{ scale: scoreAnim }] }]}>
-                                {score}
+                                {score}/100
                             </Animated.Text>
                         </View>
                         <View style={styles.statBox}>
@@ -735,8 +741,8 @@ const ChineseRestaurantGame = () => {
 
                             {items.length === 0 && isGameActive && !gameComplete && !nextQuestionDelay && gameActive && (
                                 <View style={styles.conveyorHint}>
-                                    <Text style={styles.conveyorHintText}>✨ 食材從這裡出來 ✨</Text>
-                                    <Text style={[styles.conveyorHintText, { fontSize: 10, marginTop: 4 }]}>→ 向左移動</Text>
+                                    <Text style={styles.conveyorHintText}>✨ The ingredients come out from here ✨</Text>
+                                    <Text style={[styles.conveyorHintText, { fontSize: 10, marginTop: 4 }]}>→ Move to the left</Text>
                                 </View>
                             )}
                         </View>
@@ -750,17 +756,17 @@ const ChineseRestaurantGame = () => {
                             <View style={[styles.progressFill, { width: `${((currentIndex + 1) / questions.length) * 100}%` }]} />
                         </View>
                         <Text style={styles.multiplierText}>
-                            {combo >= 3 && `🔥 ${combo} 連擊！ ${getMultiplier(combo)}x 分數`}
+                            {combo >= 3 && `🔥 ${combo} Combo! ${getMultiplier(combo)}x score`}
                         </Text>
                     </View>
                 </View>
 
                 <View style={styles.controlPanel}>
                     <TouchableOpacity style={styles.resetGameBtn} onPress={resetGame}>
-                        <Text style={styles.resetGameBtnText}>⟳ 重新開始</Text>
+                        <Text style={styles.resetGameBtnText}>⟳ Start over</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.completeGameBtn} onPress={handleGameComplete}>
-                        <Text style={styles.completeGameBtnText}>✓ 結束營業</Text>
+                        <Text style={styles.completeGameBtnText}>✓ Closed for business</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -779,9 +785,9 @@ const ChineseRestaurantGame = () => {
             <ScrollView contentContainerStyle={styles.scrollContent}>
                 <View style={styles.headerSection}>
                     <Utensils size={60} color="#FFA07A" style={{ marginBottom: 20 }} />
-                    <Text style={styles.mainTitle}>🍜 餐廳大作戰</Text>
+                    <Text style={styles.mainTitle}>🍜 Restaurant Battle</Text>
                     <Text style={styles.subTitle}>
-                        顧客想吃什麼？快把正確的食材從傳送帶上拿給他！
+                        What does the customer want to eat? Quickly take the correct ingredients from the conveyor belt to them! Total score: 100 points!
                     </Text>
                 </View>
                 <View style={styles.menuGrid}>
@@ -807,7 +813,7 @@ const ChineseRestaurantGame = () => {
                                 <Text style={styles.diffDesc}>{option.description}</Text>
                                 <View style={styles.startButtonContainer}>
                                     <View style={[styles.startButton, { backgroundColor: option.color }]}>
-                                        <Text style={styles.startButtonText}>開始接單 🍽️</Text>
+                                        <Text style={styles.startButtonText}>Start taking orders 🍽️</Text>
                                     </View>
                                 </View>
                             </View>
@@ -815,7 +821,7 @@ const ChineseRestaurantGame = () => {
                     ))}
                 </View>
                 <TouchableOpacity style={styles.backLink} onPress={handleBackToGames}>
-                    <Text style={styles.backLinkText}>← 返回遊戲列表</Text>
+                    <Text style={styles.backLinkText}>← Return to game list</Text>
                 </TouchableOpacity>
             </ScrollView>
         </View>
@@ -830,36 +836,36 @@ const ChineseRestaurantGame = () => {
                     <TouchableOpacity onPress={handleRestart} style={styles.resultBackButton}>
                         <Ionicons name="arrow-back" size={24} color="#333" />
                     </TouchableOpacity>
-                    <Text style={styles.resultHeaderTitle}>營業結束</Text>
+                    <Text style={styles.resultHeaderTitle}>Business Closed</Text>
                     <View style={{ width: 40 }} />
                 </View>
                 <ScrollView contentContainerStyle={styles.resultContainer}>
                     <View style={styles.resultCard}>
-                        <Text style={styles.resultTitle}>🍽️ 今日業績 🍽️</Text>
+                        <Text style={styles.resultTitle}>🍽️ Today's performance 🍽️</Text>
                         <View style={styles.scoreCircle}>
                             <Text style={styles.scorePercentage}>{score}</Text>
-                            <Text style={styles.scoreLabel}>總分數</Text>
+                            <Text style={styles.scoreLabel}>Total Score (Full Score 100)</Text>
                         </View>
                         {isSaving && (
                             <View style={styles.savingIndicator}>
                                 <ActivityIndicator size="small" color="#4CAF50" />
-                                <Text style={styles.savingText}>同步分數中...</Text>
+                                <Text style={styles.savingText}>Synchronizing scores...</Text>
                             </View>
                         )}
                         <View style={styles.scoreDetails}>
-                            <Text style={styles.scoreDetailText}>✅ 正確出餐: {correctCount}/{totalQuestions}</Text>
-                            <Text style={styles.scoreDetailText}>🔥 最高連擊: x{maxCombo}</Text>
+                            <Text style={styles.scoreDetailText}>✅ Serve the correct order: {correctCount}/{totalQuestions}</Text>
+                            <Text style={styles.scoreDetailText}>🔥 Highest Combo: x{maxCombo}</Text>
                             <View style={styles.percentageBadge}>
-                                <Text style={styles.percentageText}>🎯 顧客滿意度: {accuracy}%</Text>
+                                <Text style={styles.percentageText}>🎯 Customer satisfaction: {accuracy}%</Text>
                             </View>
                         </View>
                         <View style={styles.summaryContainer}>
-                            <Text style={styles.summaryTitle}>📝 點餐紀錄：</Text>
+                            <Text style={styles.summaryTitle}>📝 Order History：</Text>
                             {questions.map((q, index) => (
                                 <View key={index} style={styles.summaryItem}>
                                     <Text style={styles.summaryNumber}>{index + 1}.</Text>
                                     <Text style={styles.summaryAnswer} numberOfLines={1}>
-                                        {q.userAnswer || '未出餐'}
+                                        {q.userAnswer || 'Meal not served'}
                                     </Text>
                                     <Text style={[styles.summaryScore, q.isAnsweredCorrectly ? styles.correctScore : styles.incorrectScore]}>
                                         {q.isAnsweredCorrectly ? '✓' : '✗'}
@@ -868,18 +874,18 @@ const ChineseRestaurantGame = () => {
                             ))}
                         </View>
                         <View style={styles.feedbackBox}>
-                            <Text style={styles.feedbackTitle}>💡 主廚評價</Text>
+                            <Text style={styles.feedbackTitle}>💡 Chef's Review</Text>
                             <Text style={styles.feedbackText}>{aiFeedback}</Text>
                         </View>
                         <View style={styles.resultButtonContainer}>
                             <TouchableOpacity style={[styles.resultButton, styles.tryAgainResultButton]} onPress={handleTryAgain}>
-                                <Text style={styles.resultButtonText}>🔄 再玩一次</Text>
+                                <Text style={styles.resultButtonText}>🔄 Play again</Text>
                             </TouchableOpacity>
                             <TouchableOpacity style={[styles.resultButton, styles.newDifficultyButton]} onPress={handleRestart}>
-                                <Text style={styles.resultButtonText}>🎯 選擇難度</Text>
+                                <Text style={styles.resultButtonText}>🎯 Select Difficulty</Text>
                             </TouchableOpacity>
                             <TouchableOpacity style={[styles.resultButton, styles.backToGamesResultButton]} onPress={handleBackToGames}>
-                                <Text style={styles.resultButtonText}>🎮 返回遊戲</Text>
+                                <Text style={styles.resultButtonText}>🎮 Return to game</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -892,9 +898,9 @@ const ChineseRestaurantGame = () => {
         {
             id: 'beginner',
             level: 'beginner' as const,
-            title: '實習廚師',
-            badgeText: '輕鬆上菜',
-            description: '傳送帶較慢，簡單菜色，適合剛開始的小廚師',
+            title: 'Intern chef',
+            badgeText: 'Easy to serve',
+            description: 'The conveyor belt is slower, with simple dishes, suitable for beginner little chefs.',
             icon: '👨‍🍳',
             color: '#FFA07A',
             bgColor: '#FFF3E0',
@@ -902,9 +908,9 @@ const ChineseRestaurantGame = () => {
         {
             id: 'advanced',
             level: 'advanced' as const,
-            title: '特級廚師',
-            badgeText: '高手挑戰',
-            description: '傳送帶較快，複雜菜色，考驗你的反應速度',
+            title: 'Master Chef',
+            badgeText: 'Expert Challenge',
+            description: 'The conveyor belt is faster, with complex dishes, testing your reaction speed.',
             icon: '👩‍🍳',
             color: '#E67E22',
             bgColor: '#FFE4C4',
@@ -915,7 +921,7 @@ const ChineseRestaurantGame = () => {
         return (
             <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#FFA07A" />
-                <Text style={styles.loadingText}>準備菜單中...</Text>
+                <Text style={styles.loadingText}>Menu in preparation...</Text>
             </View>
         );
     }

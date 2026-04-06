@@ -1,9 +1,16 @@
-import React from "react";
+import React, {useLayoutEffect} from "react";
 import {useNavigation} from "@react-navigation/native";
-import {ScrollView, StyleSheet, Text, TouchableOpacity, View} from "react-native";
+import {SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View} from "react-native";
 
 const MathGamesIndex: React.FC = () => {
     const navigation = useNavigation();
+
+    // 隐藏整个系统导航栏（返回按钮和标题栏）
+    useLayoutEffect(() => {
+        navigation.setOptions({
+            headerShown: false,
+        });
+    }, [navigation]);
 
     const games = [
         {
@@ -22,46 +29,55 @@ const MathGamesIndex: React.FC = () => {
     ];
 
     return (
-        <ScrollView style={styles.container}>
-            <View style={styles.header}>
-                <Text style={styles.title}>Mathematics Games</Text>
-                <Text style={styles.subtitle}>Choose a game to start learning</Text>
-            </View>
+        <SafeAreaView style={styles.safeArea}>
+            <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+                <View style={styles.header}>
+                    <Text style={styles.title}>Mathematics Games</Text>
+                    <Text style={styles.subtitle}>Choose a game to start learning</Text>
+                </View>
 
-            <View style={styles.gamesGrid}>
-                {games.map(game => (
-                    <TouchableOpacity
-                        key={game.id}
-                        style={styles.gameCard}
-                        onPress={() => {
-                            // 使用相對路徑導航
-                            if (game.id === 1) {
-                                // 導航到 math/CalculationGame
-                                navigation.navigate('math/CalculationGame' as never);
-                            }
-                            if (game.id === 2) {
-                                // 導航到 math/HumanBodyGame
-                                navigation.navigate('math/AppliedMath' as never);
-                            }
-                        }}
-                    >
-                        <View style={styles.gameCardContent}>
-                            <Text style={styles.gameTitle}>{game.title}</Text>
-                            <Text style={styles.gameDescription}>
-                                {game.description}
-                            </Text>
-                        </View>
-                    </TouchableOpacity>
-                ))}
-            </View>
-        </ScrollView>
+                <View style={styles.gamesGrid}>
+                    {games.map(game => (
+                        <TouchableOpacity
+                            key={game.id}
+                            style={styles.gameCard}
+                            onPress={() => {
+                                // 使用相對路徑導航
+                                if (game.id === 1) {
+                                    // 導航到 math/CalculationGame
+                                    navigation.navigate('math/CalculationGame' as never);
+                                }
+                                if (game.id === 2) {
+                                    // 導航到 math/HumanBodyGame
+                                    navigation.navigate('math/AppliedMath' as never);
+                                }
+                            }}
+                        >
+                            <View style={styles.gameCardContent}>
+                                <Text style={styles.gameTitle}>{game.title}</Text>
+                                <Text style={styles.gameDescription}>
+                                    {game.description}
+                                </Text>
+                            </View>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+            </ScrollView>
+        </SafeAreaView>
     );
 };
 
 const styles = StyleSheet.create({
-    container: {
+    safeArea: {
         flex: 1,
         backgroundColor: '#f5f5f5',
+    },
+    container: {
+        flex: 1,
+        backgroundColor: 'transparent',
+    },
+    scrollContent: {
+        flexGrow: 1,
     },
     header: {
         padding: 20,

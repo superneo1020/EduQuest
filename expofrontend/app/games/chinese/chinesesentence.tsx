@@ -59,28 +59,28 @@ const FloatingText = ({ text, color, onComplete }: { text: string, color: string
 
 // 可愛角色狀態配置
 const CHARACTER_STATES = {
-    idle: { icon: '🐼', message: '來學習中文吧！', bgColor: '#E8F5E9' },
-    thinking: { icon: '🤔🐼', message: '想一想...', bgColor: '#FFF3E0' },
-    correct: { icon: '🎉🐼', message: '太棒了！', bgColor: '#E8F5E9' },
-    perfect: { icon: '🌟🐼✨', message: '完美答案！', bgColor: '#E8F5E9' },
-    incorrect: { icon: '😊🐼', message: '沒關係，再試一次！', bgColor: '#FFEBEE' },
-    encouraging: { icon: '💪🐼', message: '加油！你可以的！', bgColor: '#E3F2FD' },
-    celebrate: { icon: '🎊🐼🎉', message: '恭喜完成！', bgColor: '#FFF9C4' }
+    idle: { icon: '🐼', message: 'Let\'s learn Chinese!', bgColor: '#E8F5E9' },
+    thinking: { icon: '🤔🐼', message: 'Think about it...', bgColor: '#FFF3E0' },
+    correct: { icon: '🎉🐼', message: 'Great！', bgColor: '#E8F5E9' },
+    perfect: { icon: '🌟🐼✨', message: 'Perfect answer！', bgColor: '#E8F5E9' },
+    incorrect: { icon: '😊🐼', message: 'It\'s okay, try again！', bgColor: '#FFEBEE' },
+    encouraging: { icon: '💪🐼', message: 'Come on! You can do it！', bgColor: '#E3F2FD' },
+    celebrate: { icon: '🎊🐼🎉', message: 'Congratulations on completing！', bgColor: '#FFF9C4' }
 };
 
 // 鼓勵語錄庫
 const ENCOURAGEMENT_MESSAGES = {
-    great: [
-        '🎉 太厲害了！', '🌟 你是天才！', '💪 繼續保持！',
-        '✨ 完美！', '🏆 超級棒！', '🎈 哇！好厲害！'
+    ggreat: [
+        '🎉 Amazing!', '🌟 You are a genius!', '💪 Keep it up!',
+        '✨ Perfect!', '🏆 Super awesome!', '🎈 Wow! So impressive!'
     ],
     good: [
-        '👍 不錯喔！', '📚 學得真快！', '✨ 再接再厲！',
-        '💡 很好！', '🌟 進步很多！', '🎯 繼續加油！'
+        '👍 Not bad!', '📚 You learn fast!', '✨ Keep going!',
+        '💡 Very good!', '🌟 Much improved!', '🎯 Keep it up!'
     ],
     tryAgain: [
-        '🌱 再試一次會更好', '💡 差一點點！', '🎈 沒關係，加油！',
-        '📖 看看提示吧', '🌟 下次會更好', '💪 再努力一下！'
+        '🌱 Try again — you’ll do better', '💡 So close!', '🎈 It’s okay, keep trying!',
+        '📖 Take a look at the hints', '🌟 You’ll do better next time', '💪 Give it another try!'
     ]
 };
 
@@ -107,23 +107,23 @@ const difficultyOptions = [
         id: 'easy',
         title: 'Easy',
         level: 'beginner',
-        description: '簡單的詞彙和句子，適合剛開始學習的小朋友！',
+        description: 'Simple vocabulary and sentences, suitable for children who are just starting to learn!',
         icon: '🌱',
         color: '#6B8C5C',
         bgColor: '#E8F5E9',
         gradientColors: ['#E8F5E9', '#C8E6C9'],
-        features: ['🎨 可愛角色陪伴', '💡 詳細提示']
+        features: ['🎨 Cute character companionship', '💡 Detailed prompt']
     },
     {
         id: 'medium',
         title: 'Medium',
         level: 'advanced',
-        description: '日常用語和稍微複雜的句子，挑戰一下自己吧！',
+        description: 'Everyday expressions and slightly more complex sentences, challenge yourself！',
         icon: '🌳',
         color: '#FF9F4A',
         bgColor: '#FFF3E0',
         gradientColors: ['#FFF3E0', '#FFE0B5'],
-        features: ['🎨 可愛角色陪伴', '💡 詳細提示']
+        features: ['🎨 Cute character companionship', '💡 Detailed prompt']
     }
 ];
 
@@ -370,12 +370,12 @@ export default function ChineseSentenceGame() {
 
     const handleSubmit = async () => {
         if (!gameActive) {
-            Alert.alert('提示', '請稍後，遊戲準備中！');
+            Alert.alert('Prompt', 'Please wait, the game is being prepared！');
             return;
         }
         if (!inputText.trim()) {
-            Alert.alert('提示', '請輸入答案');
-            updateCharacterState('thinking', '💭 輸入你的答案吧！');
+            Alert.alert('Prompt', 'Please enter the answer');
+            updateCharacterState('thinking', '💭 Enter your answer！');
             return;
         }
 
@@ -470,15 +470,15 @@ export default function ChineseSentenceGame() {
 
         let feedback = '';
         if (score.correct === TOTAL_QUESTIONS) {
-            feedback = `🎉 太完美了！你答對了全部 ${score.correct} 題！你是中文小天才！ 🌟🌟🌟`;
+            feedback = `🎉 Perfect! You got them all right. ${score.correct} Question! You are a little Chinese genius! 🌟🌟🌟`;
         } else if (percentage >= 90) {
-            feedback = `🌟 超級棒！你答對了 ${score.correct} 題，繼續保持！ 👍`;
+            feedback = `🌟 Awesome! You got it right. ${score.correct} Keep it up! 👍`;
         } else if (percentage >= 70) {
-            feedback = `📚 很不錯喔！答對了 ${score.correct} 題，再練習一下會更厲害！ 💪`;
+            feedback = `📚 Very good! You got it right. ${score.correct} Practice the problems a bit more and you'll get even better! 💪`;
         } else if (percentage >= 50) {
-            feedback = `🌱 有進步！答對了 ${score.correct} 題，繼續加油！ 📖`;
+            feedback = `🌱 Improvement! You got it right. ${score.correct} Keep it up with the questions! 📖`;
         } else {
-            feedback = `💪 別灰心！答對了 ${score.correct} 題，再試一次會更好！ 我們一起努力！ ✨`;
+            feedback = `💪 Don't be discouraged! You got it right. ${score.correct} Try again, it will be better! Let's work hard together! ✨`;
         }
 
         setAiFeedback(feedback);
@@ -595,7 +595,7 @@ export default function ChineseSentenceGame() {
                 ]}
             >
                 <View style={styles.feedbackRow}>
-                    <Text style={styles.feedbackLabel}>得分：</Text>
+                    <Text style={styles.feedbackLabel}>Score：</Text>
                     <Text style={[styles.scoreText, score >= 8 ? styles.highScore : score >= 6 ? styles.mediumScore : styles.lowScore]}>
                         {score}/10
                     </Text>
@@ -603,14 +603,14 @@ export default function ChineseSentenceGame() {
 
                 {!currentQuestion.isCorrect && (
                     <View style={styles.feedbackRow}>
-                        <Text style={styles.feedbackLabel}>正確答案：</Text>
+                        <Text style={styles.feedbackLabel}>Correct answer：</Text>
                         <Text style={styles.correctAnswerText}>{currentQuestion.correctAnswer}</Text>
                     </View>
                 )}
 
                 <View style={styles.feedbackRow}>
-                    <Text style={styles.feedbackLabel}>改進建議：</Text>
-                    <Text style={styles.suggestionText}>{currentQuestion.feedback || '繼續加油！'}</Text>
+                    <Text style={styles.feedbackLabel}>Improvement Suggestions：</Text>
+                    <Text style={styles.suggestionText}>{currentQuestion.feedback || 'Keep going！'}</Text>
                 </View>
 
                 <TouchableOpacity
@@ -618,7 +618,7 @@ export default function ChineseSentenceGame() {
                     onPress={handleNext}
                 >
                     <Text style={styles.nextButtonText}>
-                        {currentIndex + 1 >= TOTAL_QUESTIONS ? '🎉 完成挑戰 🎉' : '➡️ 下一題'}
+                        {currentIndex + 1 >= TOTAL_QUESTIONS ? '🎉 Complete the challenge 🎉' : '➡️ Next question'}
                     </Text>
                 </TouchableOpacity>
             </Animated.View>
@@ -661,7 +661,7 @@ export default function ChineseSentenceGame() {
 
                     <View style={styles.progressContainer}>
                         <Text style={styles.progressText}>
-                            📝 第 {currentIndex + 1} / {TOTAL_QUESTIONS} 題
+                            📝  {currentIndex + 1} / {TOTAL_QUESTIONS} question
                         </Text>
                         <View style={styles.progressBar}>
                             <View
@@ -699,7 +699,7 @@ export default function ChineseSentenceGame() {
                                     style={[styles.input, !gameActive && styles.disabledInput]}
                                     value={inputText}
                                     onChangeText={setInputText}
-                                    placeholder="✏️ 請輸入答案..."
+                                    placeholder="✏️ Please enter the answer..."
                                     placeholderTextColor="#999"
                                     editable={!submitting && !loading && gameActive}
                                 />
@@ -715,7 +715,7 @@ export default function ChineseSentenceGame() {
 
                             {showHint && currentQuestion.hint && (
                                 <View style={[styles.hintContainer, { backgroundColor: currentTheme.bgColor || currentTheme.characterBg }]}>
-                                    <Text style={styles.hintText}>💡 小提示：{currentQuestion.hint}</Text>
+                                    <Text style={styles.hintText}>💡 Tip：{currentQuestion.hint}</Text>
                                 </View>
                             )}
 
@@ -727,7 +727,7 @@ export default function ChineseSentenceGame() {
                                 {submitting ? (
                                     <ActivityIndicator color="#fff" />
                                 ) : (
-                                    <Text style={styles.submitButtonText}>✨ 提交答案 ✨</Text>
+                                    <Text style={styles.submitButtonText}>✨ Submit Answer ✨</Text>
                                 )}
                             </TouchableOpacity>
                         </>
@@ -745,9 +745,9 @@ export default function ChineseSentenceGame() {
             <ScrollView contentContainerStyle={styles.scrollContent}>
                 <View style={styles.headerSection}>
                     <Languages size={60} color="#FF9F4A" style={{ marginBottom: 20 }} />
-                    <Text style={styles.mainTitle}>🐼 中文填空樂園 🐼</Text>
+                    <Text style={styles.mainTitle}>🐼 Chinese Fill-in-the-Blank Paradise 🐼</Text>
                     <Text style={styles.subTitle}>
-                        和可愛的熊貓一起學習中文吧！完成填空就能獲得成就感！✨
+                        Learn Chinese together with the cute panda! Complete the fill-in-the-blank exercises to gain a sense of accomplishment!✨
                     </Text>
                 </View>
 
@@ -772,7 +772,7 @@ export default function ChineseSentenceGame() {
                                     </Text>
                                     <View style={[styles.levelBadge, { backgroundColor: option.color }]}>
                                         <Text style={styles.levelBadgeText}>
-                                            {option.level === 'beginner' ? '🌟 輕鬆學' : '⚡ 挑戰'}
+                                            {option.level === 'beginner' ? '🌟 Learn Easily' : '⚡ Challenge'}
                                         </Text>
                                     </View>
                                 </View>
@@ -790,7 +790,7 @@ export default function ChineseSentenceGame() {
                                 <View style={styles.startButtonContainer}>
                                     <View style={[styles.startButton, { backgroundColor: option.color }]}>
                                         <Text style={styles.startButtonText}>
-                                            🚀 開始遊戲 →
+                                            🚀 Start Game →
                                         </Text>
                                     </View>
                                 </View>
@@ -809,46 +809,46 @@ export default function ChineseSentenceGame() {
         return (
             <ScrollView contentContainerStyle={styles.resultContainer}>
                 <View style={styles.resultCard}>
-                    <Text style={styles.resultTitle}>🎉 遊戲結果 🎉</Text>
+                    <Text style={styles.resultTitle}>🎉 Game Result 🎉</Text>
 
                     {renderCharacter()}
 
                     <View style={styles.scoreCircle}>
                         <Text style={styles.scorePercentage}>{score.totalScore}</Text>
                         <Text style={styles.scorePercentSign}>/100</Text>
-                        <Text style={styles.scoreLabel}>總分</Text>
+                        <Text style={styles.scoreLabel}>Total Score</Text>
                     </View>
 
                     {isSaving && (
                         <View style={styles.savingIndicator}>
                             <ActivityIndicator size="small" color="#4CAF50" />
-                            <Text style={styles.savingText}>同步分數中...</Text>
+                            <Text style={styles.savingText}>Synchronizing scores...</Text>
                         </View>
                     )}
 
                     <View style={styles.scoreDetails}>
                         <Text style={styles.scoreDetailText}>
-                            ✅ 答對 {score.correct} / {score.total} 題
+                            ✅ Correct {score.correct} / {score.total} question
                         </Text>
                         <View style={[styles.percentageBadge, { backgroundColor: '#E8F5E9' }]}>
                             <Text style={[styles.percentageText, { color: '#4CAF50' }]}>
-                                正確率 {score.percentage}%
+                                Accuracy {score.percentage}%
                             </Text>
                         </View>
                     </View>
 
                     <View style={styles.feedbackBox}>
-                        <Text style={styles.feedbackTitle}>💡 AI 學習建議</Text>
+                        <Text style={styles.feedbackTitle}>💡 AI Study Tips</Text>
                         <Text style={styles.feedbackText}>{aiFeedback}</Text>
                     </View>
 
                     <View style={styles.summaryContainer}>
-                        <Text style={styles.summaryTitle}>📝 答題摘要：</Text>
+                        <Text style={styles.summaryTitle}>📝 Answer Summary：</Text>
                         {questions.map((q, index) => (
                             <View key={index} style={styles.summaryItem}>
                                 <Text style={styles.summaryNumber}>{index + 1}.</Text>
                                 <Text style={styles.summaryAnswer} numberOfLines={1}>
-                                    {q.userAnswer || '未答'}
+                                    {q.userAnswer || 'Not answered'}
                                 </Text>
                                 <Text style={[
                                     styles.summaryScore,
@@ -865,28 +865,28 @@ export default function ChineseSentenceGame() {
                             style={[styles.resultButton, styles.tryAgainButton]}
                             onPress={handleTryAgain}
                         >
-                            <Text style={styles.resultButtonText}>🔄 再玩一次</Text>
+                            <Text style={styles.resultButtonText}>🔄 Play again</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
                             style={[styles.resultButton, styles.newDifficultyButton]}
                             onPress={handleNewDifficulty}
                         >
-                            <Text style={styles.resultButtonText}>🎯 更換難度</Text>
+                            <Text style={styles.resultButtonText}>🎯 Replacement Difficulty</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
                             style={[styles.resultButton, styles.backToGamesButton]}
                             onPress={handleBackToGames}
                         >
-                            <Text style={styles.resultButtonText}>🎮 返回遊戲列表</Text>
+                            <Text style={styles.resultButtonText}>🎮 Return to game list</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
                             style={[styles.resultButton, styles.homeButton]}
                             onPress={handleBackToHome}
                         >
-                            <Text style={styles.resultButtonText}>🏠 返回主頁</Text>
+                            <Text style={styles.resultButtonText}>🏠 Return to homepage</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -900,8 +900,8 @@ export default function ChineseSentenceGame() {
                 <Stack.Screen options={{ headerShown: false }} />
                 <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color="#FF9F4A" />
-                    <Text style={styles.loadingText}>🤖 AI 正在生成題目...</Text>
-                    <Text style={styles.loadingSubText}>熊貓在準備驚喜給你！</Text>
+                    <Text style={styles.loadingText}>🤖 AI Generating questions...</Text>
+                    <Text style={styles.loadingSubText}>The panda is preparing a surprise for you!</Text>
                 </View>
             </>
         );
@@ -919,7 +919,7 @@ export default function ChineseSentenceGame() {
                             <Ionicons name="arrow-back" size={24} color="#fff" />
                         </TouchableOpacity>
                         <Text style={styles.headerTitle}>
-                            🐼 中文填空 - {difficulty === 'easy' ? '簡單模式' : '中等模式'}
+                            🐼 Chinese fill-in-the-blank - {difficulty === 'easy' ? 'Simple mode' : 'Medium mode'}
                         </Text>
                         <View style={[styles.scoreBadge, { backgroundColor: '#fff' }]}>
                             <Text style={[styles.scoreBadgeText, { color: currentTheme.primary }]}>
@@ -943,7 +943,7 @@ export default function ChineseSentenceGame() {
                         <TouchableOpacity onPress={handleBack} style={styles.headerButton}>
                             <Ionicons name="arrow-back" size={24} color="#fff" />
                         </TouchableOpacity>
-                        <Text style={styles.headerTitle}>🎉 遊戲結果 🎉</Text>
+                        <Text style={styles.headerTitle}>🎉 Game Result 🎉</Text>
                         <View style={styles.headerButton} />
                     </View>
                     {renderResult()}
@@ -962,7 +962,7 @@ export default function ChineseSentenceGame() {
                     <TouchableOpacity onPress={handleBack} style={styles.headerButton}>
                         <Ionicons name="arrow-back" size={24} color="#fff" />
                     </TouchableOpacity>
-                    <Text style={styles.headerTitle}>🐼 中文填空樂園</Text>
+                    <Text style={styles.headerTitle}>🐼 Chinese Fill-in-the-Blank Paradise</Text>
                     <View style={styles.headerButton} />
                 </View>
                 {renderDifficultySelector()}
