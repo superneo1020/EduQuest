@@ -16,7 +16,7 @@ public class DtoMapper {
                 user.getEmail(),
                 user.getPoints(),
                 user.getRoles().stream().map(Role::getName).toList(),
-                user.getSchool().getName(),
+                user.getSchool() != null ? user.getSchool().getName() : null,
                 user.getCreatedAt(),
                 user.getUpdatedAt()
         );
