@@ -5,6 +5,7 @@ import com.eduquest.springbackend.dao.SchoolRepository;
 import com.eduquest.springbackend.dao.UserRepository;
 import com.eduquest.springbackend.dto.ResetEmailRequest;
 import com.eduquest.springbackend.dto.ResetSchoolRequest;
+import com.eduquest.springbackend.dto.UserDto;
 import com.eduquest.springbackend.exception.DuplicateResourceException;
 import com.eduquest.springbackend.model.AppUser;
 import com.eduquest.springbackend.model.Role;
@@ -22,11 +23,13 @@ public class UserService {
     private final UserRepository userRepo;
     private final RoleRepository roleRepo;
     private final SchoolRepository schoolRepo;
+    private final DtoMapper dtoMapper;
 
-    public UserService(UserRepository userRepo, RoleRepository roleRepo, SchoolRepository schoolRepo) {
+    public UserService(UserRepository userRepo, RoleRepository roleRepo, SchoolRepository schoolRepo, DtoMapper dtoMapper) {
         this.userRepo = userRepo;
         this.roleRepo = roleRepo;
         this.schoolRepo = schoolRepo;
+        this.dtoMapper = dtoMapper;
     }
 
     @Transactional(readOnly = true)
@@ -120,5 +123,12 @@ public class UserService {
     public Collection<String> findRoleNamesByUsername(String username) {
         return userRepo.findRoleNamesByUsernameOptional(username).orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found：　" + username));
+    }
+
+    @Transactional(readOnly = true)
+    public UserDto findBasicInfoByUsername(String username) {
+        AppUser user = userRepo.findByUsername(username).orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found：　" + username));
+        return dtoMapper.toUser(user);
     }
 }

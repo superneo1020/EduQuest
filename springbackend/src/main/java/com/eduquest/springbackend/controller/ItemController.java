@@ -1,6 +1,6 @@
 package com.eduquest.springbackend.controller;
 
-import com.eduquest.springbackend.dto.ItemStoreRequest;
+import com.eduquest.springbackend.dto.ItemShopRequest;
 import com.eduquest.springbackend.service.ItemService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Pageable;
@@ -24,7 +24,7 @@ public class ItemController {
     @GetMapping("/find")
     public ResponseEntity<?> findItems(
             @AuthenticationPrincipal UserDetails userDetails,
-            @Valid ItemStoreRequest req,
+            @Valid ItemShopRequest req,
             @PageableDefault Pageable pageable
     ) {
         return ResponseEntity.ok(itemService.findItemByFilter(req, userDetails.getUsername(), pageable));
