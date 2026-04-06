@@ -13,7 +13,7 @@ import {
     Platform,
     StatusBar
 } from 'react-native';
-import { Calculator, Languages, Atom, Brain, LogOut, User, Trophy, Clock, Target, Sparkles, Star, Zap, GraduationCap } from 'lucide-react-native';
+import { Calculator, Languages, Atom, Brain, LogOut, User, Trophy, Clock, Target, Sparkles, Star, Zap, GraduationCap, Rocket } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/src/auth/AuthContext';
 
@@ -178,12 +178,16 @@ export default function LandscapeOptimizedHome() {
 
                     <View style={styles.divider} />
 
-                    <Text style={styles.panelTitle}>Daily Quest</Text>
-                    <TouchableOpacity style={styles.questCard} activeOpacity={0.8}>
-                        <Target size={28} color="#FF4757" />
+                    <Text style={styles.panelTitle}>Missions</Text>
+                    <TouchableOpacity 
+                        style={styles.questCard} 
+                        activeOpacity={0.8}
+                        onPress={() => router.push('/mission/missionScreen' as any)}
+                    >
+                        <Rocket size={28} color="#FF4757" />
                         <View style={{marginLeft: 15, flex: 1}}>
-                            <Text style={styles.questTitle}>Math Mountain</Text>
-                            <Text style={styles.questSub}>Earn 20 XP</Text>
+                            <Text style={styles.questTitle}>View Missions</Text>
+                            <Text style={styles.questSub}>Complete quests for rewards</Text>
                         </View>
                     </TouchableOpacity>
                 </View>
