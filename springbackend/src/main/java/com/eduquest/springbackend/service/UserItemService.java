@@ -6,6 +6,7 @@ import com.eduquest.springbackend.dao.UserRepository;
 import com.eduquest.springbackend.dto.UserItemDto;
 import com.eduquest.springbackend.dto.UserItemRequest;
 import com.eduquest.springbackend.dto.UserItemResponse;
+import com.eduquest.springbackend.exception.InsufficientPointsException;
 import com.eduquest.springbackend.model.AppUser;
 import com.eduquest.springbackend.model.Item;
 import com.eduquest.springbackend.model.UserItem;
@@ -41,8 +42,18 @@ public class UserItemService {
         Long userId = userService.checkIdByUsername(username);
         Long itemId = itemService.checkIdByName(req.itemName());
 
-        AppUser user = userRepo.getReferenceById(userId);
-        Item item = itemRepo.getReferenceById(itemId);
+        AppUser user = userRepo.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Item item = itemRepo.findById(itemId)
+                .orElseThrow(() -> new RuntimeException("Item not found"));
+
+        // Check if user has enough points
+        if (user.getPoints() < item.getPrice()) {
+            throw new InsufficientPointsException(
+                String.format("Insufficient points: current=%d, required=%d", 
+                    user.getPoints(), item.getPrice())
+            );
+        }
 
         UserItem userItem = new UserItem(user, item);
         UserItem savedUserItem = userItemRepo.save(userItem);
