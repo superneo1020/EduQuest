@@ -412,12 +412,21 @@ CREATE OR REPLACE FUNCTION fn_sync_user_item_purchase()
     RETURNS TRIGGER AS $$
 DECLARE
     v_price INT;
+    v_current_points INT;
 BEGIN
     -- buy items: reduce points
     IF (TG_OP = 'INSERT') THEN
         SELECT price INTO v_price FROM items WHERE id = NEW.item_id;
-        UPDATE users SET points = points - v_price WHERE id = NEW.user_id;
-    -- delete record (like refund): add points
+        SELECT points INTO v_current_points FROM users WHERE id = NEW.user_id;
+
+        -- Only deduct if user has enough points
+        IF v_current_points >= v_price THEN
+            UPDATE users SET points = points - v_price WHERE id = NEW.user_id;
+        ELSE
+            -- Raise an error that can be caught by the application
+            RAISE EXCEPTION 'Insufficient points: current=%, required=%', v_current_points, v_price;
+        END IF;
+        -- delete record (like refund): add points
     ELSIF (TG_OP = 'DELETE') THEN
         SELECT price INTO v_price FROM items WHERE id = OLD.item_id;
         UPDATE users SET points = points + v_price WHERE id = OLD.user_id;
