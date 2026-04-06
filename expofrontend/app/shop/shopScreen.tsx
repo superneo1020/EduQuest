@@ -60,6 +60,12 @@ export default function ShopScreen() {
 
     // 2. 購買邏輯 (利用資料庫 Trigger 自動扣分)
     const handlePurchase = async (item: any) => {
+        if (!token) {
+            const errorMsg = "請先登入後再購買";
+            Platform.OS === 'web' ? alert(errorMsg) : Alert.alert("需要登入", errorMsg);
+            return;
+        }
+        
         console.log("🚀 Buy item:", item.name);
         const testRes = await axios.get(`${getApiBaseUrl()}/api/user/point`, {
             headers: { Authorization: `Bearer ${token}` }
@@ -96,16 +102,42 @@ export default function ShopScreen() {
                 throw tokenTestError; // Re-throw other errors
             }
 
-            const response = await axios.post(
-                `${getApiBaseUrl()}/api/user/item`,
-                { itemName: item.name },
-                {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
+            // Use the same authHeader pattern that works for GET requests
+            const cleanToken = token!.trim();
+            const authHeader = { Authorization: `Bearer ${cleanToken}` };
+            console.log("🔧 Using authHeader:", authHeader.Authorization.substring(0, 30) + "...");
+            
+            let response;
+            try {
+                response = await axios.post(
+                    `${getApiBaseUrl()}/api/user/item/`,
+                    { itemName: item.name },
+                    {
+                        headers: authHeader,
+                        timeout: 10000
                     }
+                );
+            } catch (postError: any) {
+                if (postError.response?.status === 401) {
+                    console.log("🔄 POST failed with 401, retrying with fresh token validation...");
+                    // Retry once after re-validating token
+                    const retryTokenTest = await axios.get(`${getApiBaseUrl()}/api/user/point`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+                    console.log("🔄 Retry token validation successful:", retryTokenTest.data);
+                    
+                    response = await axios.post(
+                        `${getApiBaseUrl()}/api/user/item/`,
+                        { itemName: item.name },
+                        {
+                            headers: authHeader,
+                            timeout: 10000
+                        }
+                    );
+                } else {
+                    throw postError;
                 }
-            );
+            }
 
             console.log("✅ 購買成功響應:", response.data);
 
