@@ -182,6 +182,7 @@ class ChineseSentenceAIService {
 - 填空部分只能有 "一個" 空位，用 "__" 表示（兩個底線）
 - 絕對不能生成兩個或多個空位的句子
 - 句子中只能出現一次 "__"
+- 請生成內容快點
 
 ${difficultyPrompt}
 這是第 ${request.currentQuestionIndex + 1} 題，總共 10 題

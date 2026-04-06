@@ -1,4 +1,4 @@
-// app/games/science/chinese.tsx
+// app/games/science/index.tsx
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -31,6 +31,12 @@ const ScienceGamesIndex: React.FC = () => {
 
     return (
         <ScrollView style={styles.container}>
+            {/* 页面内标题区域 */}
+            <View style={styles.header}>
+                <Text style={styles.title}>Science Games</Text>
+                <Text style={styles.subtitle}>Choose a game to start learning</Text>
+            </View>
+
             <View style={styles.gamesGrid}>
                 {games.map(game => (
                     <TouchableOpacity
@@ -62,6 +68,21 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#f5f5f5',
+    },
+    header: {
+        padding: 20,
+        backgroundColor: '#fff',
+        marginBottom: 20,
+    },
+    title: {
+        fontSize: 32,
+        fontWeight: 'bold',
+        color: '#333',
+        marginBottom: 10,
+    },
+    subtitle: {
+        fontSize: 16,
+        color: '#666',
     },
     gamesGrid: {
         padding: 15,

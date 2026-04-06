@@ -13,7 +13,7 @@ const GAME_CATEGORIES = [
     "Speed Calculation",
     "AI Math Adventure",
     "Listening Game",
-    "Writing Game",
+    "Dialogue Selection",
     "Sentence Reorder",
     "Animal Catcher",
     "Human organs",

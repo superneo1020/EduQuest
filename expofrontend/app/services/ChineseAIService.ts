@@ -94,7 +94,7 @@ class ChineseAIService {
 FORMAT: Questions in CHINESE, Options in ENGLISH
 - Question: Ask about the meaning of a Chinese word/phrase
 - Options: All options must be in ENGLISH
-- Example: "What does 爸爸 (bàba) mean in English?"
+- Example: "What does "爸爸"  mean in English?"   //"..."must be Chinese!!!!!
 - Options: ["Father", "Mother", "Brother", "Sister"]
 - Focus on basic vocabulary (HSK 1-2)`,
 
@@ -134,17 +134,17 @@ Format your response as a JSON array with EXACTLY ${count} objects:
     }
 ]
 
-EXAMPLES for BEGINNER level (題目中文，選項英文):
+EXAMPLES for BEGINNER level (題目中文，選項英文): "..."must be Chinese
 [
     {
-        "question": "What does 爸爸 (bàba) mean?",
+        "question": "What does "爸爸"  mean?",
         "options": ["Father", "Mother", "Brother", "Sister"],
         "correctAnswer": 0,
         "explanation": "爸爸 (bàba) means father in Chinese.",
         "pinyin": "bàba"
     },
     {
-        "question": "What does 老师 (lǎoshī) mean?",
+        "question": "What does "老师"  mean?",
         "options": ["Teacher", "Doctor", "Student", "Lawyer"],
         "correctAnswer": 0,
         "explanation": "老师 (lǎoshī) means teacher.",
