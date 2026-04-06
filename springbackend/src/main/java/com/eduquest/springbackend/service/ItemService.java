@@ -1,10 +1,11 @@
 package com.eduquest.springbackend.service;
 
 import com.eduquest.springbackend.dao.ItemRepository;
+import com.eduquest.springbackend.dto.ItemDto;
+import com.eduquest.springbackend.dto.ItemShopRequest;
 import com.eduquest.springbackend.dto.PageResponse;
-import com.eduquest.springbackend.dto.ItemStoreDto;
-import com.eduquest.springbackend.dto.ItemStoreRequest;
 import com.eduquest.springbackend.model.Item;
+import com.eduquest.springbackend.util.PageableUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -15,6 +16,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class ItemService {
@@ -22,6 +24,10 @@ public class ItemService {
     private final ItemRepository itemRepository;
     private final UserService userService;
     private final DtoMapper dtoMapper;
+
+    private final Set<String> ITEM_DTO_FIELDS = Set.of(
+            "id", "type", "name", "description", "icon", "price"
+    );
 
     public ItemService(ItemRepository itemRepository, UserService userService, DtoMapper dtoMapper) {
         this.itemRepository = itemRepository;
@@ -36,7 +42,8 @@ public class ItemService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<ItemStoreDto> findItemByFilter(ItemStoreRequest req, String username, Pageable pageable) {
+    public PageResponse<ItemDto> findItemByFilter(ItemShopRequest req, String username, Pageable pageable) {
+        Pageable cleanPageable = PageableUtils.filterSort(pageable, ITEM_DTO_FIELDS);
         List<Specification<Item>> specs = new ArrayList<>();
 
         // 1. Add Type filter
@@ -58,9 +65,9 @@ public class ItemService {
 
         // 4. Combine all using the new 'allOf' method
         // If the list is empty, it effectively returns 'findAll()'
-        var items = itemRepository.findAll(Specification.allOf(specs), pageable);
+        var items = itemRepository.findAll(Specification.allOf(specs), cleanPageable);
 
-        Page<ItemStoreDto> dtoPage = items.map(item -> new ItemStoreDto(
+        Page<ItemDto> dtoPage = items.map(item -> new ItemDto(
                 item.getId(),
                 item.getType(),
                 item.getName(),

@@ -52,6 +52,17 @@ public class GlobalExceptionHandler {
                 .body(toException(HttpStatus.BAD_REQUEST, e.getMessage()));
     }
 
+    @ExceptionHandler(InsufficientPointsException.class)
+    public ProblemDetail handleInsufficientPoints(InsufficientPointsException ex) {
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST,
+                ex.getMessage()
+        );
+        problemDetail.setTitle("Insufficient Points");
+        problemDetail.setProperty("timestamp", Instant.now());
+        return problemDetail;
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ProblemDetail handleDataIntegrity(DataIntegrityViolationException ex) {
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
