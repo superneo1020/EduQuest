@@ -12,10 +12,10 @@ export default function EnglishGamesIndex() {
             route: 'games/english/listeninggame',
         },
         {
-            id: 'writing',
-            title: 'Writing Game',
-            description: 'Describe scenes and get AI feedback on your writing',
-            route: 'games/english/writing',
+            id: 'dialogue',
+            title: 'Dialogue Selection',
+            description: 'Describe scenes and get AI feedback on your conversation',
+            route: 'games/english/dialogueselection',
         },
         {
             id: 'sentencereorder',
