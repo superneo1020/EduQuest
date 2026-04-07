@@ -6,22 +6,27 @@ import {
     StyleSheet,
     TouchableOpacity,
     Alert,
-    Animated,
+    Animated as RNAnimated,
     ScrollView,
     Dimensions,
     Vibration,
     ActivityIndicator,
+    Easing,
+    Image,
 } from 'react-native';
+import { Star, Fish } from 'lucide-react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Speech from 'expo-speech';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AIService, { Question } from '../../services/AIService';
-import {useAuth} from "@/src/auth/AuthContext";
+import { useAuth } from "@/src/auth/AuthContext";
 import axios from "axios";
+import ReAnimated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 // 游戏数据类型
 type Difficulty = 'easy' | 'medium' | 'hard';
@@ -30,6 +35,18 @@ type Option = {
     id: string;
     text: string;
     correct: boolean;
+    color?: string;
+    emoji?: string;
+};
+
+// 魚的位置類型
+type FishPosition = {
+    x: RNAnimated.Value;
+    y: RNAnimated.Value;
+    direction: number;
+    speed: number;
+    amplitude: number;
+    phase: RNAnimated.Value;
 };
 
 // 游戏状态类型
@@ -48,6 +65,7 @@ type GameState = {
     selectedOptionId: string | null;
     isLoading: boolean;
     questions: Question[];
+    fishCaught: boolean;
 };
 
 // 难度配置
@@ -75,6 +93,16 @@ const DIFFICULTY_CONFIG: Record<Difficulty, { label: string; color: string; desc
     }
 };
 
+// 魚的顏色配置
+const FISH_COLORS = {
+    easy: ['#FFB6C1', '#FFC0CB', '#FF69B4', '#FF1493'],
+    medium: ['#87CEEB', '#00BFFF', '#1E90FF', '#4169E1'],
+    hard: ['#FFA500', '#FF8C00', '#FF7F50', '#FF6347'],
+};
+
+// 魚的表情
+const FISH_EMOJIS = ['🐟', '🐠', '🐡', '🎏', '🐋'];
+
 export default function ListeningScreen() {
     // 游戏状态
     const [gameState, setGameState] = useState<GameState>({
@@ -92,14 +120,65 @@ export default function ListeningScreen() {
         selectedOptionId: null,
         isLoading: false,
         questions: [],
+        fishCaught: false,
     });
+
+    // 准备动画相关
+    const [prepText, setPrepText] = useState<string | null>(null);
+    const prepScale = useSharedValue(0);
+    const prepTriggered = useRef(false);
+
+    const prepAnimatedStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: prepScale.value }],
+        opacity: prepScale.value === 0 ? 0 : 1,
+    }));
+
     const { token } = useAuth();
     const [isSaving, setIsSaving] = useState(false);
     const [highScore, setHighScore] = useState(0);
+    const [fishPositions, setFishPositions] = useState<FishPosition[]>([]);
+    const [rippleAnim] = useState(new RNAnimated.Value(0));
+    const [caughtFishAnim] = useState(new RNAnimated.Value(0));
+    const [waterLevel] = useState(new RNAnimated.Value(0));
+    const [bobberAnim] = useState(new RNAnimated.Value(0));
 
     // 动画引用
-    const scaleAnim = useRef(new Animated.Value(1)).current;
-    const progressAnim = useRef(new Animated.Value(0)).current;
+    const scaleAnim = useRef(new RNAnimated.Value(1)).current;
+    const progressAnim = useRef(new RNAnimated.Value(0)).current;
+
+    // 定义难度选项
+    const difficultyOptions = [
+        {
+            id: 'easy' as const,
+            title: 'Easy',
+            badgeText: 'Beginner',
+            description: 'Simple words and phrases. Catch the right fish!',
+            icon: '🐟',
+            color: '#4CAF50',
+            bgColor: '#E8F5E9',
+            features: ['Slow speed', 'Basic vocabulary', '6 Questions', 'Colorful fish']
+        },
+        {
+            id: 'medium' as const,
+            title: 'Medium',
+            badgeText: 'Intermediate',
+            description: 'Short everyday sentences. Watch them swim faster!',
+            icon: '🐠',
+            color: '#FF9800',
+            bgColor: '#FFF3E0',
+            features: ['Normal speed', 'Common phrases', '6 Questions', 'Faster fish']
+        },
+        {
+            id: 'hard' as const,
+            title: 'Hard',
+            badgeText: 'Advanced',
+            description: 'Complex sentences. Can you catch the right one?',
+            icon: '🐡',
+            color: '#F44336',
+            bgColor: '#FFEBEE',
+            features: ['Fast speed', 'Idiomatic usage', '6 Questions', 'Very fast fish']
+        }
+    ];
 
     // 加载最高分
     useEffect(() => {
@@ -107,6 +186,43 @@ export default function ListeningScreen() {
             loadHighScore();
         }
     }, [gameState.currentLevel]);
+
+    // 播放水波動畫
+    useEffect(() => {
+        RNAnimated.loop(
+            RNAnimated.sequence([
+                RNAnimated.timing(waterLevel, {
+                    toValue: 1,
+                    duration: 2000,
+                    useNativeDriver: true,
+                    easing: Easing.inOut(Easing.sin),
+                }),
+                RNAnimated.timing(waterLevel, {
+                    toValue: 0,
+                    duration: 2000,
+                    useNativeDriver: true,
+                    easing: Easing.inOut(Easing.sin),
+                }),
+            ])
+        ).start();
+
+        RNAnimated.loop(
+            RNAnimated.sequence([
+                RNAnimated.timing(bobberAnim, {
+                    toValue: 1,
+                    duration: 1500,
+                    useNativeDriver: true,
+                    easing: Easing.inOut(Easing.sin),
+                }),
+                RNAnimated.timing(bobberAnim, {
+                    toValue: 0,
+                    duration: 1500,
+                    useNativeDriver: true,
+                    easing: Easing.inOut(Easing.sin),
+                }),
+            ])
+        ).start();
+    }, []);
 
     const loadHighScore = async () => {
         try {
@@ -128,60 +244,135 @@ export default function ListeningScreen() {
         }
     };
 
-    // 加载题目
-    const loadQuestions = async (level: Difficulty) => {
+    // 初始化魚的位置
+    const initFishPositions = (options: Option[]) => {
+        const positions: FishPosition[] = [];
+        const speedMultiplier = gameState.currentLevel === 'easy' ? 0.5 :
+            gameState.currentLevel === 'medium' ? 1 : 1.5;
+
+        options.forEach((option, index) => {
+            const startX = Math.random() * (width - 100);
+            const startY = 100 + (index * 80) + Math.random() * 60;
+
+            positions.push({
+                x: new RNAnimated.Value(startX),
+                y: new RNAnimated.Value(startY),
+                direction: Math.random() > 0.5 ? 1 : -1,
+                speed: (0.5 + Math.random() * 0.5) * speedMultiplier,
+                amplitude: 15 + Math.random() * 15,
+                phase: new RNAnimated.Value(Math.random() * Math.PI * 2),
+            });
+        });
+
+        setFishPositions(positions);
+        startFishAnimation(positions);
+    };
+
+    // 啟動魚的游動動畫
+    const startFishAnimation = (positions: FishPosition[]) => {
+        positions.forEach((fish, index) => {
+            const animate = () => {
+                let newX = fish.x._value + (fish.direction * fish.speed);
+
+                if (newX > width - 80) {
+                    newX = width - 80;
+                    fish.direction = -1;
+                } else if (newX < 20) {
+                    newX = 20;
+                    fish.direction = 1;
+                }
+
+                fish.x.setValue(newX);
+
+                fish.phase.setValue(fish.phase._value + 0.05);
+                const sinValue = Math.sin(fish.phase._value);
+                const newY = 100 + (index * 70) + (sinValue * fish.amplitude);
+                fish.y.setValue(Math.max(50, Math.min(height - 150, newY)));
+
+                requestAnimationFrame(animate);
+            };
+            animate();
+        });
+    };
+
+    // 生成并追加指定索引的题目
+    const generateAndAddQuestion = async (index: number, level: Difficulty): Promise<Question | null> => {
+        try {
+            const question = await AIService.generateSingleQuestion(level, index);
+            if (!question) return null;
+
+            const coloredOptions = question.options.map((opt, idx) => ({
+                ...opt,
+                color: FISH_COLORS[level][idx % FISH_COLORS[level].length],
+                emoji: FISH_EMOJIS[idx % FISH_EMOJIS.length],
+            }));
+
+            return { ...question, options: coloredOptions };
+        } catch (error) {
+            console.error(`Failed to generate question at index ${index}:`, error);
+            return null;
+        }
+    };
+
+    // 加载第一题
+    const loadFirstQuestion = async (level: Difficulty) => {
         setGameState(prev => ({ ...prev, isLoading: true, questions: [] }));
 
         try {
-            const questions: Question[] = [];
-            const totalNeeded = 6;
-
-            for (let i = 0; i < totalNeeded; i++) {
-                const question = await AIService.generateSingleQuestion(level, i);
-
-                if (question) {
-                    questions.push(question);
-
-                    setGameState(prev => ({
-                        ...prev,
-                        questions: [...questions],
-                        totalQuestions: questions.length,
-                    }));
-
-                    console.log(`Generated question ${i + 1}/${totalNeeded}:`, question.audioText);
-                }
-
-                if (i < totalNeeded - 1) {
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                }
+            const firstQuestion = await generateAndAddQuestion(0, level);
+            if (firstQuestion) {
+                setGameState(prev => ({
+                    ...prev,
+                    isLoading: false,
+                    questions: [firstQuestion],
+                    totalQuestions: 6,
+                    currentQuestionIndex: 0,
+                    gameCompleted: false,
+                    score: 0,
+                    streak: 0,
+                    maxStreak: 0,
+                    correctAnswers: 0,
+                    isAnswered: false,
+                    fishCaught: false,
+                }));
+                progressAnim.setValue(0);
+            } else {
+                setGameState(prev => ({ ...prev, isLoading: false }));
             }
-
-            setGameState(prev => ({
-                ...prev,
-                isLoading: false,
-                questions: questions,
-                totalQuestions: questions.length,
-                currentQuestionIndex: 0,
-                gameCompleted: false,
-                score: 0,
-                streak: 0,
-                maxStreak: 0,
-                correctAnswers: 0,
-                isAnswered: false,
-            }));
-
-            progressAnim.setValue(0);
-
-            console.log(`All ${questions.length} questions generated successfully`);
-
         } catch (error) {
-            console.error('Failed to load questions:', error);
+            console.error('Failed to load first question:', error);
             setGameState(prev => ({ ...prev, isLoading: false }));
         }
     };
 
+    // 准备动画
+    const startPrepSequence = () => {
+        setPrepText('READY');
+        prepScale.value = 0;
+        prepScale.value = withSpring(1.2);
+        setTimeout(() => {
+            setPrepText('GO!');
+            prepScale.value = 0;
+            prepScale.value = withSpring(1.5);
+            setTimeout(() => {
+                setPrepText(null);
+            }, 600);
+        }, 1000);
+    };
+
+    // 监听加载完成，触发准备动画
+    useEffect(() => {
+        if (!gameState.isLoading && !gameState.gameCompleted && gameState.currentLevel && gameState.questions.length > 0 && !prepTriggered.current) {
+            prepTriggered.current = true;
+            startPrepSequence();
+        }
+    }, [gameState.isLoading, gameState.gameCompleted, gameState.currentLevel, gameState.questions.length]);
+
     // 选择难度并开始游戏
     const selectDifficulty = async (level: Difficulty) => {
+        prepTriggered.current = false;
+        AIService.resetGameSession(level);
+
         setGameState(prev => ({
             ...prev,
             currentLevel: level,
@@ -197,17 +388,19 @@ export default function ListeningScreen() {
             gameCompleted: false,
             showHint: false,
             selectedOptionId: null,
+            fishCaught: false,
         }));
 
         progressAnim.setValue(0);
-        await loadQuestions(level);
+        await loadFirstQuestion(level);
     };
 
     // 重新开始游戏
     const restartGame = async () => {
         if (!gameState.currentLevel) return;
-
         stopAudio();
+        prepTriggered.current = false;
+        AIService.resetGameSession(gameState.currentLevel);
 
         setGameState(prev => ({
             ...prev,
@@ -223,21 +416,23 @@ export default function ListeningScreen() {
             gameCompleted: false,
             showHint: false,
             selectedOptionId: null,
+            fishCaught: false,
         }));
 
         progressAnim.setValue(0);
-        await loadQuestions(gameState.currentLevel);
+        await loadFirstQuestion(gameState.currentLevel);
     };
 
-    // 重试加载
+    // 重试加载第一题
     const retryLoadQuestions = async () => {
         if (!gameState.currentLevel) return;
         setGameState(prev => ({ ...prev, isLoading: true }));
-        await loadQuestions(gameState.currentLevel);
+        await loadFirstQuestion(gameState.currentLevel);
     };
 
     // 返回难度选择页面
     const backToDifficultySelect = () => {
+        prepTriggered.current = false;
         stopAudio();
         setGameState({
             currentLevel: null,
@@ -254,7 +449,9 @@ export default function ListeningScreen() {
             selectedOptionId: null,
             isLoading: false,
             questions: [],
+            fishCaught: false,
         });
+        setFishPositions([]);
     };
 
     // 返回主页面
@@ -270,8 +467,8 @@ export default function ListeningScreen() {
 
     // 播放语音
     const playAudio = async () => {
-        if (gameState.isPlaying) {
-            stopAudio();
+        if (gameState.isPlaying || prepText !== null) {
+            if (gameState.isPlaying) stopAudio();
             return;
         }
 
@@ -280,13 +477,13 @@ export default function ListeningScreen() {
 
         setGameState(prev => ({ ...prev, isPlaying: true }));
 
-        Animated.sequence([
-            Animated.timing(scaleAnim, {
+        RNAnimated.sequence([
+            RNAnimated.timing(scaleAnim, {
                 toValue: 0.95,
                 duration: 100,
                 useNativeDriver: true,
             }),
-            Animated.timing(scaleAnim, {
+            RNAnimated.timing(scaleAnim, {
                 toValue: 1,
                 duration: 100,
                 useNativeDriver: true,
@@ -321,21 +518,40 @@ export default function ListeningScreen() {
         setGameState(prev => ({ ...prev, isPlaying: false }));
     };
 
-    // 选择选项
-    const handleOptionSelect = (option: Option) => {
-        if (gameState.isAnswered || gameState.gameCompleted) return;
+    // 釣魚！選擇選項
+    const catchFish = (option: Option, index: number) => {
+        if (gameState.isAnswered || gameState.gameCompleted || gameState.fishCaught || prepText !== null) return;
 
         stopAudio();
 
         const isCorrect = option.correct;
-        setGameState(prev => ({
-            ...prev,
-            isAnswered: true,
-            selectedOptionId: option.id
-        }));
+        setGameState(prev => ({ ...prev, isAnswered: true, selectedOptionId: option.id, fishCaught: true }));
+
+        RNAnimated.sequence([
+            RNAnimated.timing(rippleAnim, {
+                toValue: 1,
+                duration: 300,
+                useNativeDriver: true,
+            }),
+            RNAnimated.timing(rippleAnim, {
+                toValue: 0,
+                duration: 300,
+                useNativeDriver: true,
+            }),
+        ]).start();
+
+        RNAnimated.spring(caughtFishAnim, {
+            toValue: 1,
+            friction: 3,
+            useNativeDriver: true,
+        }).start();
+
+        setTimeout(() => {
+            caughtFishAnim.setValue(0);
+        }, 500);
 
         if (isCorrect) {
-            Vibration.vibrate(50);
+            Vibration.vibrate(100);
             const newStreak = gameState.streak + 1;
             const newScore = gameState.score + 10 * newStreak;
             const newMaxStreak = Math.max(newStreak, gameState.maxStreak);
@@ -348,48 +564,81 @@ export default function ListeningScreen() {
                 correctAnswers: prev.correctAnswers + 1
             }));
         } else {
-            Vibration.vibrate([0, 50, 50, 50]);
+            Vibration.vibrate([0, 100, 100, 100]);
             setGameState(prev => ({ ...prev, streak: 0 }));
         }
 
-        Animated.timing(progressAnim, {
+        RNAnimated.timing(progressAnim, {
             toValue: ((gameState.currentQuestionIndex + 1) / gameState.totalQuestions) * 100,
             duration: 500,
             useNativeDriver: false,
         }).start();
     };
 
-    // 下一题或结束游戏
-    const nextQuestion = () => {
-        if (gameState.currentQuestionIndex >= gameState.totalQuestions - 1) {
+    // 下一题或结束游戏（动态生成）
+    const nextQuestion = async () => {
+        if (prepText !== null) return;
+        if (gameState.isLoading) return;
+
+        const nextIndex = gameState.currentQuestionIndex + 1;
+
+        if (nextIndex >= gameState.totalQuestions) {
             endGame();
             return;
         }
 
-        setGameState(prev => ({
-            ...prev,
-            currentQuestionIndex: prev.currentQuestionIndex + 1,
-            isAnswered: false,
-            showHint: false,
-            selectedOptionId: null
-        }));
-
-        stopAudio();
+        if (gameState.questions.length > nextIndex) {
+            setGameState(prev => ({
+                ...prev,
+                currentQuestionIndex: nextIndex,
+                isAnswered: false,
+                showHint: false,
+                selectedOptionId: null,
+                fishCaught: false,
+            }));
+            stopAudio();
+        } else {
+            setGameState(prev => ({ ...prev, isLoading: true }));
+            try {
+                const newQuestion = await generateAndAddQuestion(nextIndex, gameState.currentLevel!);
+                if (newQuestion) {
+                    setGameState(prev => ({
+                        ...prev,
+                        isLoading: false,
+                        questions: [...prev.questions, newQuestion],
+                        currentQuestionIndex: nextIndex,
+                        isAnswered: false,
+                        showHint: false,
+                        selectedOptionId: null,
+                        fishCaught: false,
+                    }));
+                    stopAudio();
+                } else {
+                    Alert.alert('Error', 'Failed to load next fish. Please try again.', [
+                        { text: 'Retry', onPress: () => nextQuestion() },
+                        { text: 'Cancel', style: 'cancel' }
+                    ]);
+                    setGameState(prev => ({ ...prev, isLoading: false }));
+                }
+            } catch (error) {
+                console.error('Error generating next question:', error);
+                setGameState(prev => ({ ...prev, isLoading: false }));
+                Alert.alert('Error', 'Unable to load next question. Please try again.');
+            }
+        }
     };
 
-    // 结束游戏
     // 结束游戏
     const endGame = async () => {
         setGameState(prev => ({ ...prev, gameCompleted: true }));
         saveHighScore(gameState.score);
-
-        // Save score to database
         const percentageScore = calculatePercentageScore();
         await saveScore(percentageScore);
     };
 
     // 显示提示
     const toggleHint = () => {
+        if (prepText !== null) return;
         setGameState(prev => ({ ...prev, showHint: !prev.showHint }));
     };
 
@@ -403,19 +652,18 @@ export default function ListeningScreen() {
         return Math.round((gameState.correctAnswers / gameState.totalQuestions) * 100);
     };
 
-    // 计算分数（满分100分制）
+    // 计算分数
     const calculatePercentageScore = (): number => {
-        // 最高分 = 总题数 * 10 * (最大连击系数，最高6) = 6 * 10 * 6 = 360
         const maxPossibleScore = gameState.totalQuestions * 10 * 6;
         return Math.round((gameState.score / maxPossibleScore) * 100);
     };
 
     // 获取结果消息
     const getResultMessage = (accuracy: number): string => {
-        if (accuracy === 100) return "Excellent! Perfect score! Your listening skills are outstanding!";
-        if (accuracy >= 80) return "Great! Your listening skills are excellent, keep it up!";
-        if (accuracy >= 60) return "Good! With more practice, you'll get even better!";
-        return "Keep practicing! Language learning takes time, and persistence pays off!";
+        if (accuracy === 100) return "🐟 Amazing! You caught all the right fish! 🎣";
+        if (accuracy >= 80) return "🎣 Great fishing! Your listening skills are excellent!";
+        if (accuracy >= 60) return "🐠 Good catch! Keep practicing to catch more fish!";
+        return "🐡 Keep trying! Every fisherman learns with practice!";
     };
 
     // 获取星级评价
@@ -426,95 +674,108 @@ export default function ListeningScreen() {
     const saveScore = async (finalScore: number) => {
         setIsSaving(true);
         try {
-            // 注意：這裡建議使用你電腦的 IP 地址代替 localhost，如果是手機實體機測試的話
             await axios.post('http://localhost:8080/api/user/game/score', {
-                gameName: "Listening Game",
+                gameName: "Listening Game - Fishing Mode",
                 scores: finalScore,
                 difficulty: getLevelLabel(gameState.currentLevel!).toUpperCase()
             }, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-
-            // 儲存成功後可以選擇跳轉或留在結果頁
-            // router.push('/rank/leaderboard');
         } catch (e) {
             console.error("Save score failed:", e);
-            // 如果失敗了，我們至少讓玩家留在結果頁看到自己的分數
         } finally {
             setIsSaving(false);
         }
     };
+
+    // 當問題改變時初始化魚的位置
+    useEffect(() => {
+        const currentQ = getCurrentQuestion();
+        if (currentQ && !gameState.isLoading && !gameState.gameCompleted && !prepText) {
+            initFishPositions(currentQ.options);
+        }
+    }, [gameState.currentQuestionIndex, gameState.questions, gameState.isLoading, gameState.gameCompleted, prepText]);
 
     const currentQuestion = getCurrentQuestion();
     const accuracy = calculateAccuracy();
     const percentageScore = calculatePercentageScore();
     const stars = getStarRating(percentageScore);
 
-    // 难度选择页面 (采用 writing.tsx 风格)
+    // 难度选择页面
     if (gameState.currentLevel === null) {
         return (
-            <View style={styles.container}>
-                <Stack.Screen
-                    options={{
-                        title: 'Listening Game',
-                        headerStyle: { backgroundColor: '#4b6cb7' },
-                        headerTintColor: '#fff',
-                        headerLeft: () => (
-                            <TouchableOpacity onPress={goBackToGames} style={{ marginLeft: 10 }}>
-                                <Ionicons name="arrow-back" size={24} color="white" />
-                            </TouchableOpacity>
-                        ),
-                    }}
-                />
-                <ScrollView
-                    style={styles.difficultyScroll}
-                    contentContainerStyle={styles.difficultyScrollContent}
-                    showsVerticalScrollIndicator={false}
-                >
-                    <View style={styles.difficultyContainer}>
-                        <Text style={styles.difficultyTitle}>Listening Game</Text>
-                        <Text style={styles.difficultySubtitle}>Test your listening skills</Text>
-
-                        <View style={styles.difficultyOptions}>
-                            {(Object.keys(DIFFICULTY_CONFIG) as Difficulty[]).map((level) => {
-                                const config = DIFFICULTY_CONFIG[level];
-                                return (
-                                    <TouchableOpacity
-                                        key={level}
-                                        style={[
-                                            styles.difficultyCard,
-                                            { borderColor: config.color }
-                                        ]}
-                                        onPress={() => selectDifficulty(level)}
-                                    >
-                                        <View style={[styles.difficultyBadge, { backgroundColor: config.color }]}>
-                                            <Text style={styles.difficultyBadgeText}>{config.label}</Text>
-                                        </View>
-                                        <Text style={styles.difficultyDescription}>
-                                            {config.description}
-                                        </Text>
-                                        <Text style={styles.difficultyHint}>
-                                            {config.hint}
-                                        </Text>
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </View>
+            <SafeAreaView style={styles.container}>
+                <Stack.Screen options={{ headerShown: false }} />
+                <ScrollView contentContainerStyle={styles.scrollContent}>
+                    <View style={styles.headerSection}>
+                        <Fish size={60} color="#4b6cb7" style={{ marginBottom: 20 }} />
+                        <Text style={styles.mainTitle}>Fishing Listening Game</Text>
+                        <Text style={styles.subTitle}>
+                            Listen carefully and catch the right fish! 🎣
+                        </Text>
                     </View>
+
+                    <View style={styles.menuGrid}>
+                        {difficultyOptions.map((option) => (
+                            <TouchableOpacity
+                                key={option.id}
+                                style={[
+                                    styles.diffCard,
+                                    { backgroundColor: option.bgColor, borderColor: option.color }
+                                ]}
+                                onPress={() => selectDifficulty(option.id)}
+                                activeOpacity={0.8}
+                            >
+                                <View style={styles.cardIconContainer}>
+                                    <Text style={styles.cardIcon}>{option.icon}</Text>
+                                </View>
+
+                                <View style={styles.cardContent}>
+                                    <View style={styles.cardHeader}>
+                                        <Text style={[styles.diffBtnText, { color: option.color }]}>
+                                            {option.title}
+                                        </Text>
+                                        <View style={[styles.levelBadge, { backgroundColor: option.color }]}>
+                                            <Text style={styles.levelBadgeText}>{option.badgeText}</Text>
+                                        </View>
+                                    </View>
+
+                                    <Text style={styles.diffDesc}>{option.description}</Text>
+
+                                    <View style={styles.featuresList}>
+                                        {option.features.map((feature, index) => (
+                                            <View key={index} style={styles.featureItem}>
+                                                <Star size={12} color={option.color} style={styles.featureIcon} />
+                                                <Text style={styles.featureText}>{feature}</Text>
+                                            </View>
+                                        ))}
+                                    </View>
+
+                                    <View style={styles.startButtonContainer}>
+                                        <View style={[styles.startButton, { backgroundColor: option.color }]}>
+                                            <Text style={styles.startButtonText}>Start Fishing →</Text>
+                                        </View>
+                                    </View>
+                                </View>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+
+                    <TouchableOpacity style={styles.backLink} onPress={goBackToGames}>
+                        <Text style={styles.backLinkText}>← Back to Game Library</Text>
+                    </TouchableOpacity>
                 </ScrollView>
-            </View>
+            </SafeAreaView>
         );
     }
 
     // 加载进度
     if (gameState.isLoading) {
-        const progress = (gameState.questions.length / 6) * 100;
-
         return (
             <View style={styles.container}>
                 <Stack.Screen
                     options={{
-                        title: 'Listening Game',
+                        title: 'Fishing Game',
                         headerStyle: { backgroundColor: '#4b6cb7' },
                         headerTintColor: '#fff',
                         headerLeft: () => (
@@ -527,10 +788,10 @@ export default function ListeningScreen() {
                 <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color="#4b6cb7" />
                     <Text style={styles.loadingText}>
-                        Generating questions with AI... ({gameState.questions.length}/6)
+                        🎣 Preparing fishing pond... (1/6)
                     </Text>
                     <View style={styles.loadingProgressBar}>
-                        <View style={[styles.loadingProgressFill, { width: `${progress}%` }]} />
+                        <View style={[styles.loadingProgressFill, { width: '16%' }]} />
                     </View>
                 </View>
             </View>
@@ -543,7 +804,7 @@ export default function ListeningScreen() {
             <View style={styles.container}>
                 <Stack.Screen
                     options={{
-                        title: 'Listening Game',
+                        title: 'Fishing Game',
                         headerStyle: { backgroundColor: '#4b6cb7' },
                         headerTintColor: '#fff',
                         headerLeft: () => (
@@ -555,28 +816,22 @@ export default function ListeningScreen() {
                 />
                 <View style={styles.loadingContainer}>
                     <Ionicons name="alert-circle" size={50} color="#F44336" />
-                    <Text style={styles.errorText}>Failed to load questions</Text>
+                    <Text style={styles.errorText}>Failed to load fishing pond!</Text>
                     <TouchableOpacity style={styles.retryButton} onPress={retryLoadQuestions}>
                         <Text style={styles.retryButtonText}>Try Again</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.retryButton, { backgroundColor: '#FF5722', marginTop: 10 }]}
-                        onPress={backToDifficultySelect}
-                    >
-                        <Text style={styles.retryButtonText}>Back to Difficulty</Text>
                     </TouchableOpacity>
                 </View>
             </View>
         );
     }
 
-    // 游戏结束页面 - 显示结果
+    // 游戏结束页面
     if (gameState.gameCompleted) {
         return (
             <View style={styles.container}>
                 <Stack.Screen
                     options={{
-                        title: 'Game Results',
+                        title: 'Fishing Results',
                         headerStyle: { backgroundColor: '#4b6cb7' },
                         headerTintColor: '#fff',
                         headerLeft: () => (
@@ -587,22 +842,17 @@ export default function ListeningScreen() {
                     }}
                 />
                 <ScrollView contentContainerStyle={styles.resultPageContainer}>
-                    <LinearGradient
-                        colors={['#4b6cb7', '#182848']}
-                        style={styles.resultHeader}
-                    >
-                        <Ionicons name="trophy" size={60} color="#FFD700" />
-                        <Text style={styles.resultHeaderTitle}>Quiz Completed!</Text>
+                    <LinearGradient colors={['#4b6cb7', '#182848']} style={styles.resultHeader}>
+                        <Fish size={60} color="#FFD700" />
+                        <Text style={styles.resultHeaderTitle}>Fishing Trip Completed!</Text>
                     </LinearGradient>
 
                     <View style={styles.resultCard}>
-                        {/* 分数显示 */}
                         <View style={styles.scoreCircle}>
                             <Text style={styles.scoreCircleNumber}>{percentageScore}</Text>
-                            <Text style={styles.scoreCircleLabel}>out of 100</Text>
+                            <Text style={styles.scoreCircleLabel}>points</Text>
                         </View>
 
-                        {/* 星级评价 */}
                         <View style={styles.resultStars}>
                             {[...Array(5)].map((_, i) => (
                                 <Ionicons
@@ -616,14 +866,13 @@ export default function ListeningScreen() {
 
                         <Text style={styles.resultMessage}>{getResultMessage(accuracy)}</Text>
 
-                        {/* 详细数据 */}
                         <View style={styles.resultStats}>
                             <View style={styles.resultStatItem}>
                                 <View style={styles.resultStatIcon}>
-                                    <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+                                    <Ionicons name="fish" size={24} color="#4CAF50" />
                                 </View>
                                 <View style={styles.resultStatInfo}>
-                                    <Text style={styles.resultStatLabel}>Correct Answers</Text>
+                                    <Text style={styles.resultStatLabel}>Fish Caught</Text>
                                     <Text style={styles.resultStatValue}>
                                         {gameState.correctAnswers} / {gameState.totalQuestions}
                                     </Text>
@@ -642,16 +891,6 @@ export default function ListeningScreen() {
 
                             <View style={styles.resultStatItem}>
                                 <View style={styles.resultStatIcon}>
-                                    <Ionicons name="flag" size={24} color="#4b6cb7" />
-                                </View>
-                                <View style={styles.resultStatInfo}>
-                                    <Text style={styles.resultStatLabel}>Total Points</Text>
-                                    <Text style={styles.resultStatValue}>{gameState.score}</Text>
-                                </View>
-                            </View>
-
-                            <View style={styles.resultStatItem}>
-                                <View style={styles.resultStatIcon}>
                                     <Ionicons name="flame" size={24} color="#F44336" />
                                 </View>
                                 <View style={styles.resultStatInfo}>
@@ -659,54 +898,22 @@ export default function ListeningScreen() {
                                     <Text style={styles.resultStatValue}>{gameState.maxStreak}</Text>
                                 </View>
                             </View>
-
-                            <View style={styles.resultStatItem}>
-                                <View style={styles.resultStatIcon}>
-                                    <Ionicons name="medal" size={24} color="#FFD700" />
-                                </View>
-                                <View style={styles.resultStatInfo}>
-                                    <Text style={styles.resultStatLabel}>Difficulty</Text>
-                                    <Text style={styles.resultStatValue}>
-                                        {getLevelLabel(gameState.currentLevel!)}
-                                    </Text>
-                                </View>
-                            </View>
-
-                            <View style={styles.resultStatItem}>
-                                <View style={styles.resultStatIcon}>
-                                    <Ionicons name="trophy" size={24} color="#FF9800" />
-                                </View>
-                                <View style={styles.resultStatInfo}>
-                                    <Text style={styles.resultStatLabel}>High Score</Text>
-                                    <Text style={styles.resultStatValue}>{highScore}</Text>
-                                </View>
-                            </View>
                         </View>
 
-                        {/* 操作按钮 */}
                         <View style={styles.resultButtons}>
-                            <TouchableOpacity
-                                style={[styles.resultButton, styles.playAgainButton]}
-                                onPress={restartGame}
-                            >
+                            <TouchableOpacity style={[styles.resultButton, styles.playAgainButton]} onPress={restartGame}>
                                 <Ionicons name="refresh" size={20} color="white" />
-                                <Text style={styles.resultButtonText}>Play Again</Text>
+                                <Text style={styles.resultButtonText}>Fish Again</Text>
                             </TouchableOpacity>
 
-                            <TouchableOpacity
-                                style={[styles.resultButton, styles.changeDifficultyButton]}
-                                onPress={backToDifficultySelect}
-                            >
+                            <TouchableOpacity style={[styles.resultButton, styles.changeDifficultyButton]} onPress={backToDifficultySelect}>
                                 <Ionicons name="options" size={20} color="white" />
                                 <Text style={styles.resultButtonText}>Change Difficulty</Text>
                             </TouchableOpacity>
 
-                            <TouchableOpacity
-                                style={[styles.resultButton, styles.homeButton]}
-                                onPress={goBackToGames}
-                            >
+                            <TouchableOpacity style={[styles.resultButton, styles.backToGameButton]} onPress={goBackToGames}>
                                 <Ionicons name="home" size={20} color="white" />
-                                <Text style={styles.resultButtonText}>Back to Home</Text>
+                                <Text style={styles.resultButtonText}>Back to Game</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -715,12 +922,12 @@ export default function ListeningScreen() {
         );
     }
 
-    // 游戏主界面
+    // 游戏主界面 - 釣魚模式
     return (
         <View style={styles.container}>
             <Stack.Screen
                 options={{
-                    title: `Listening Game - ${getLevelLabel(gameState.currentLevel)}`,
+                    title: `Fishing Game - ${getLevelLabel(gameState.currentLevel)}`,
                     headerStyle: { backgroundColor: '#4b6cb7' },
                     headerTintColor: '#fff',
                     headerLeft: () => (
@@ -733,175 +940,286 @@ export default function ListeningScreen() {
 
             <ScrollView
                 style={styles.scrollView}
-                contentContainerStyle={styles.scrollContent}
+                contentContainerStyle={styles.fishingScrollContent}
                 showsVerticalScrollIndicator={false}
             >
                 {/* 游戏信息 */}
-                <View style={styles.gameInfo}>
-                    <View style={styles.stats}>
-                        <View style={styles.statBox}>
-                            <Text style={styles.statValue}>{gameState.score}</Text>
-                            <Text style={styles.statLabel}>Points</Text>
+                <View style={styles.fishingGameInfo}>
+                    <View style={styles.fishingStats}>
+                        <View style={styles.fishingStatBox}>
+                            <Fish size={24} color="#4b6cb7" />
+                            <Text style={styles.fishingStatValue}>{gameState.score}</Text>
+                            <Text style={styles.fishingStatLabel}>Points</Text>
                         </View>
-                        <View style={styles.statBox}>
-                            <Text style={styles.statValue}>
+                        <View style={styles.fishingStatBox}>
+                            <Ionicons name="flag" size={24} color="#FF9800" />
+                            <Text style={styles.fishingStatValue}>
                                 {gameState.currentQuestionIndex + 1}/{gameState.totalQuestions}
                             </Text>
-                            <Text style={styles.statLabel}>Question</Text>
+                            <Text style={styles.fishingStatLabel}>Question</Text>
                         </View>
-                        <View style={styles.statBox}>
-                            <Text style={styles.statValue}>{gameState.streak}</Text>
-                            <Text style={styles.statLabel}>Streak</Text>
+                        <View style={styles.fishingStatBox}>
+                            <Ionicons name="flame" size={24} color="#F44336" />
+                            <Text style={styles.fishingStatValue}>{gameState.streak}</Text>
+                            <Text style={styles.fishingStatLabel}>Streak</Text>
                         </View>
-                    </View>
-
-                    <View style={styles.currentDifficultyBadge}>
-                        <Text style={styles.currentDifficultyText}>
-                            {getLevelLabel(gameState.currentLevel)}
-                        </Text>
                     </View>
                 </View>
 
-                {/* 问题区域 */}
-                <View style={styles.questionArea}>
-                    <Text style={styles.questionText}>
-                        {gameState.currentLevel === 'easy' ? 'Listen and choose the correct word' :
-                            gameState.currentLevel === 'medium' ? 'Listen and choose the correct sentence' :
-                                'Listen and choose the correct meaning'}
-                    </Text>
+                {/* 钓鱼区域 */}
+                <View style={styles.fishingArea}>
+                    {/* 水波纹背景 */}
+                    <RNAnimated.View
+                        style={[
+                            styles.waterBackground,
+                            {
+                                transform: [{
+                                    translateY: waterLevel.interpolate({
+                                        inputRange: [0, 1],
+                                        outputRange: [0, 8]
+                                    })
+                                }]
+                            }
+                        ]}
+                    />
 
-                    <View style={styles.audioControls}>
-                        <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-                            <TouchableOpacity
-                                style={[styles.playButton, gameState.isPlaying && styles.playButtonPlaying]}
-                                onPress={playAudio}
-                                activeOpacity={0.7}
-                            >
-                                <Ionicons
-                                    name={gameState.isPlaying ? "pause" : "volume-high"}
-                                    size={32}
-                                    color="white"
-                                />
-                            </TouchableOpacity>
-                        </Animated.View>
+                    {/* 海草图片装饰 */}
+                    <View style={styles.seaweedContainer} pointerEvents="none">
+                        <Image
+                            source={require('../../../assets/images/seaweed.png')}
+                            style={[styles.seaweedImage, styles.seaweedImage1]}
+                            resizeMode="contain"
+                        />
+                        <Image
+                            source={require('../../../assets/images/seaweed.png')}
+                            style={[styles.seaweedImage, styles.seaweedImage2]}
+                            resizeMode="contain"
+                        />
+                        <Image
+                            source={require('../../../assets/images/seaweed.png')}
+                            style={[styles.seaweedImage, styles.seaweedImage3]}
+                            resizeMode="contain"
+                        />
+                        <Image
+                            source={require('../../../assets/images/seaweed.png')}
+                            style={[styles.seaweedImage, styles.seaweedImage4]}
+                            resizeMode="contain"
+                        />
+                    </View>
 
-                        <View style={[styles.audioInfo, gameState.isPlaying && styles.audioInfoPlaying]}>
-                            <Ionicons
-                                name={gameState.isPlaying ? "play" : "musical-notes"}
-                                size={16}
-                                color={gameState.isPlaying ? "#4b6cb7" : "#666"}
-                            />
-                            <Text style={[
-                                styles.audioInfoText,
-                                gameState.isPlaying && styles.audioInfoTextPlaying
-                            ]}>
-                                {gameState.isPlaying ? "Playing..." : "Tap to play"}
-                            </Text>
+                    {/* 岩石图片装饰 */}
+
+
+                    {/* 浮标 */}
+                    <RNAnimated.View
+                        style={[
+                            styles.bobber,
+                            {
+                                transform: [{
+                                    translateY: bobberAnim.interpolate({
+                                        inputRange: [0, 1],
+                                        outputRange: [0, 8]
+                                    })
+                                }]
+                            }
+                        ]}
+                    >
+                        <View style={styles.bobberLine} />
+                        <View style={styles.bobberFloat}>
+                            <Ionicons name="radio-button-on" size={20} color="#FF6B6B" />
                         </View>
-                    </View>
+                    </RNAnimated.View>
 
-                    <View style={styles.progressBar}>
-                        <Animated.View style={[styles.progressFill, { width: progressAnim.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }) }]} />
-                    </View>
-                </View>
+                    {/* 游动的鱼 */}
+                    {currentQuestion?.options.map((option, index) => {
+                        const fishPos = fishPositions[index];
+                        if (!fishPos) return null;
 
-                {/* 选项容器 */}
-                <View style={styles.optionsGrid}>
-                    {currentQuestion?.options.map((option) => {
-                        const isSelected = gameState.isAnswered && option.correct;
-                        const isIncorrect = gameState.isAnswered &&
-                            !option.correct &&
-                            option.id === gameState.selectedOptionId;
+                        const isCaught = gameState.isAnswered && option.id === gameState.selectedOptionId;
 
                         return (
-                            <TouchableOpacity
+                            <RNAnimated.View
                                 key={option.id}
                                 style={[
-                                    styles.option,
-                                    isSelected && styles.optionCorrect,
-                                    isIncorrect && styles.optionIncorrect
+                                    styles.fish,
+                                    {
+                                        transform: [
+                                            { translateX: fishPos.x },
+                                            { translateY: fishPos.y },
+                                        ],
+                                        opacity: isCaught ? 0 : 1,
+                                    }
                                 ]}
-                                onPress={() => handleOptionSelect(option)}
-                                disabled={gameState.isAnswered || gameState.gameCompleted}
-                                activeOpacity={0.7}
                             >
-                                <Text style={styles.optionText}>{option.text}</Text>
-
-                                {gameState.isAnswered && (
-                                    <View style={styles.optionFeedback}>
-                                        {option.correct ? (
-                                            <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
-                                        ) : isIncorrect ? (
-                                            <Ionicons name="close-circle" size={24} color="#F44336" />
-                                        ) : null}
-                                    </View>
-                                )}
-                            </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={() => catchFish(option, index)}
+                                    disabled={gameState.isAnswered || prepText !== null}
+                                    activeOpacity={0.8}
+                                >
+                                    <LinearGradient
+                                        colors={[option.color || '#FFB6C1', (option.color || '#FFB6C1') + 'CC']}
+                                        style={[
+                                            styles.fishBody,
+                                            {
+                                                transform: [{ scaleX: fishPos.direction === 1 ? 1 : -1 }]
+                                            }
+                                        ]}
+                                    >
+                                        <View style={styles.fishContent}>
+                                            <Text style={styles.fishEmoji}>
+                                                {option.emoji || '🐟'}
+                                            </Text>
+                                            <Text
+                                                style={[
+                                                    styles.fishText,
+                                                    {
+                                                        transform: [{ scaleX: fishPos.direction === 1 ? 1 : -1 }]
+                                                    }
+                                                ]}
+                                            >
+                                                {option.text}
+                                            </Text>
+                                        </View>
+                                        {!gameState.isAnswered && (
+                                            <View style={styles.fishBubble}>
+                                                <Text style={styles.bubbleText}>?</Text>
+                                            </View>
+                                        )}
+                                    </LinearGradient>
+                                </TouchableOpacity>
+                            </RNAnimated.View>
                         );
                     })}
+
+                    {/* 涟漪效果 */}
+                    {gameState.fishCaught && (
+                        <RNAnimated.View
+                            style={[
+                                styles.ripple,
+                                {
+                                    opacity: rippleAnim,
+                                    transform: [{ scale: rippleAnim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 2] }) }]
+                                }
+                            ]}
+                        />
+                    )}
+
+                    {/* 钓起的鱼动画 */}
+                    {gameState.fishCaught && (
+                        <RNAnimated.View
+                            style={[
+                                styles.caughtFish,
+                                {
+                                    transform: [{ scale: caughtFishAnim }],
+                                    opacity: caughtFishAnim,
+                                }
+                            ]}
+                        >
+                            <Text style={styles.caughtFishEmoji}>
+                                {gameState.streak > 0 ? '🎣✨' : '😢💧'}
+                            </Text>
+                        </RNAnimated.View>
+                    )}
+                </View>
+
+                {/* 音频控制区域 */}
+                <View style={styles.fishingAudioArea}>
+                    <RNAnimated.View style={{ transform: [{ scale: scaleAnim }] }}>
+                        <TouchableOpacity
+                            style={[styles.fishingPlayButton, gameState.isPlaying && styles.fishingPlayButtonPlaying]}
+                            onPress={playAudio}
+                            activeOpacity={0.7}
+                            disabled={prepText !== null}
+                        >
+                            <Ionicons
+                                name={gameState.isPlaying ? "pause" : "volume-high"}
+                                size={32}
+                                color="white"
+                            />
+                        </TouchableOpacity>
+                    </RNAnimated.View>
+                    <Text style={styles.fishingAudioText}>
+                        {gameState.isPlaying ? "🎵 Listening..." : "🔊 Listen to the fish!"}
+                    </Text>
+                </View>
+
+                {/* 进度条 */}
+                <View style={styles.fishingProgressBar}>
+                    <RNAnimated.View style={[styles.fishingProgressFill, { width: progressAnim.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }) }]} />
                 </View>
 
                 {/* 反馈区域 */}
                 {gameState.isAnswered && (
                     <View style={[
-                        styles.feedbackArea,
-                        gameState.streak > 0 ? styles.feedbackCorrect : styles.feedbackIncorrect
+                        styles.fishingFeedback,
+                        gameState.streak > 0 ? styles.fishingFeedbackCorrect : styles.fishingFeedbackIncorrect
                     ]}>
-                        <Text style={styles.feedbackText}>
+                        <Text style={styles.fishingFeedbackText}>
                             {gameState.streak > 0
-                                ? `Correct! +${10 * gameState.streak} points`
-                                : "Incorrect! Try again"}
+                                ? `🎣 Great catch! +${10 * gameState.streak} points! ${gameState.streak >= 3 ? '🔥 Hot streak!' : ''}`
+                                : "😢 Oops! That fish got away... Try again!"}
                         </Text>
                     </View>
                 )}
 
                 {/* 提示区域 */}
                 {gameState.showHint && currentQuestion && (
-                    <View style={styles.hintArea}>
-                        <View style={styles.hintTitle}>
+                    <View style={styles.fishingHintArea}>
+                        <View style={styles.fishingHintTitle}>
                             <Ionicons name="bulb" size={20} color="#ff8f00" />
-                            <Text style={styles.hintTitleText}>Hint</Text>
+                            <Text style={styles.fishingHintTitleText}>Fishing Tip</Text>
                         </View>
-                        <Text style={styles.hintText}>{currentQuestion.hint}</Text>
+                        <Text style={styles.fishingHintText}>🎣 {currentQuestion.hint}</Text>
                     </View>
                 )}
 
                 {/* 控制按钮 */}
-                <View style={styles.controls}>
+                <View style={styles.fishingControls}>
                     <TouchableOpacity
-                        style={[styles.controlButton, styles.hintButton]}
+                        style={[styles.fishingControlButton, styles.fishingHintButton]}
                         onPress={toggleHint}
-                        disabled={gameState.isAnswered}
+                        disabled={gameState.isAnswered || prepText !== null}
                     >
                         <Ionicons name="bulb" size={20} color="#666" />
-                        <Text style={styles.hintButtonText}>
-                            {gameState.showHint ? "Hide Hint" : "Show Hint"}
+                        <Text style={styles.fishingHintButtonText}>
+                            {gameState.showHint ? "Hide Tip" : "Get Tip"}
                         </Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={[styles.controlButton, styles.nextButton]}
+                        style={[styles.fishingControlButton, styles.fishingNextButton]}
                         onPress={nextQuestion}
-                        disabled={!gameState.isAnswered}
+                        disabled={!gameState.isAnswered || prepText !== null || gameState.isLoading}
                     >
                         <Ionicons
                             name={gameState.currentQuestionIndex >= gameState.totalQuestions - 1 ? "flag" : "arrow-forward"}
                             size={20}
                             color="white"
                         />
-                        <Text style={styles.nextButtonText}>
+                        <Text style={styles.fishingNextButtonText}>
                             {gameState.currentQuestionIndex >= gameState.totalQuestions - 1
-                                ? "Finish"
-                                : "Next"}
+                                ? "Finish Fishing"
+                                : "Next Fish →"}
                         </Text>
                     </TouchableOpacity>
                 </View>
 
-                <View style={styles.highScoreContainer}>
+                <View style={styles.fishingHighScoreContainer}>
                     <Ionicons name="trophy" size={16} color="#FFD700" />
-                    <Text style={styles.highScoreText}>High Score: {highScore}</Text>
+                    <Text style={styles.fishingHighScoreText}>Best Catch: {highScore}</Text>
                 </View>
             </ScrollView>
+
+            {/* 准备动画覆盖层 */}
+            <ReAnimated.View
+                style={[
+                    styles.prepOverlay,
+                    prepAnimatedStyle,
+                    { display: prepText !== null ? 'flex' : 'none' }
+                ]}
+            >
+                <Text style={styles.prepText}>{prepText}</Text>
+            </ReAnimated.View>
         </View>
     );
 }
@@ -909,71 +1227,129 @@ export default function ListeningScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f5f5f5',
+        backgroundColor: '#E8F4FD',
     },
-    // 难度选择页面样式 (采用 writing.tsx 风格)
-    difficultyScroll: {
-        flex: 1,
-        backgroundColor: '#f5f5f5',
-    },
-    difficultyScrollContent: {
+    scrollContent: {
         flexGrow: 1,
-        justifyContent: 'center',
-        paddingVertical: 40,
     },
-    difficultyContainer: {
+    headerSection: {
+        alignItems: 'center',
+        paddingTop: 40,
         paddingHorizontal: 20,
+        paddingBottom: 30,
+        backgroundColor: '#fff',
     },
-    difficultyTitle: {
+    mainTitle: {
         fontSize: 32,
-        fontWeight: 'bold',
-        color: '#333',
+        fontWeight: '800',
+        color: '#1E293B',
         textAlign: 'center',
         marginBottom: 8,
     },
-    difficultySubtitle: {
+    subTitle: {
         fontSize: 16,
-        color: '#666',
+        color: '#64748B',
         textAlign: 'center',
-        marginBottom: 32,
+        marginBottom: 10,
     },
-    difficultyOptions: {
-        gap: 16,
+    menuGrid: {
+        width: '100%',
+        paddingHorizontal: 20,
+        gap: 20,
     },
-    difficultyCard: {
-        backgroundColor: 'white',
-        borderRadius: 20,
+    diffCard: {
+        flexDirection: 'row',
         padding: 20,
+        borderRadius: 16,
         borderWidth: 2,
-        borderColor: 'transparent',
-        elevation: 3,
+        gap: 15,
+        marginBottom: 20,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
-        shadowRadius: 4,
+        shadowRadius: 8,
+        elevation: 3,
     },
-    difficultyBadge: {
-        alignSelf: 'flex-start',
-        paddingHorizontal: 12,
-        paddingVertical: 4,
-        borderRadius: 20,
-        marginBottom: 12,
+    cardIconContainer: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        elevation: 2,
     },
-    difficultyBadgeText: {
-        fontSize: 14,
-        fontWeight: 'bold',
-        color: 'white',
+    cardIcon: {
+        fontSize: 32,
     },
-    difficultyDescription: {
-        fontSize: 16,
-        fontWeight: '500',
-        color: '#333',
+    cardContent: {
+        flex: 1,
+    },
+    cardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
         marginBottom: 8,
     },
-    difficultyHint: {
+    diffBtnText: {
+        fontSize: 20,
+        fontWeight: '700',
+    },
+    levelBadge: {
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    levelBadgeText: {
+        fontSize: 10,
+        color: '#fff',
+        fontWeight: '600',
+    },
+    diffDesc: {
+        fontSize: 14,
+        color: '#64748B',
+        marginBottom: 12,
+        lineHeight: 20,
+    },
+    featuresList: {
+        marginBottom: 15,
+        gap: 6,
+    },
+    featureItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    featureIcon: {
+        marginRight: 4,
+    },
+    featureText: {
         fontSize: 12,
-        color: '#999',
-        fontStyle: 'italic',
+        color: '#475569',
+    },
+    startButtonContainer: {
+        alignItems: 'flex-end',
+    },
+    startButton: {
+        paddingHorizontal: 20,
+        paddingVertical: 8,
+        borderRadius: 20,
+        minWidth: 120,
+        alignItems: 'center',
+    },
+    startButtonText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#fff',
+    },
+    backLink: {
+        marginTop: 20,
+        alignItems: 'center',
+    },
+    backLinkText: {
+        fontSize: 16,
+        color: '#4b6cb7',
+        fontWeight: '600',
     },
     loadingContainer: {
         flex: 1,
@@ -1024,87 +1400,189 @@ const styles = StyleSheet.create({
     scrollView: {
         flex: 1,
     },
-    scrollContent: {
+    fishingScrollContent: {
         flexGrow: 1,
         paddingBottom: 30,
     },
-    gameInfo: {
-        backgroundColor: 'white',
-        borderRadius: 16,
-        padding: 20,
-        marginHorizontal: 20,
-        marginTop: 20,
-        marginBottom: 20,
-        elevation: 2,
+    fishingGameInfo: {
+        backgroundColor: 'rgba(255,255,255,0.9)',
+        borderRadius: 20,
+        padding: 15,
+        marginHorizontal: 15,
+        marginTop: 15,
+        marginBottom: 10,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 4,
+        elevation: 3,
     },
-    stats: {
+    fishingStats: {
         flexDirection: 'row',
         justifyContent: 'space-around',
-        marginBottom: 15,
     },
-    statBox: {
+    fishingStatBox: {
         alignItems: 'center',
+        gap: 5,
     },
-    statValue: {
-        fontSize: 24,
+    fishingStatValue: {
+        fontSize: 20,
         fontWeight: 'bold',
         color: '#4b6cb7',
     },
-    statLabel: {
+    fishingStatLabel: {
         fontSize: 12,
         color: '#666',
-        marginTop: 5,
     },
-    currentDifficultyBadge: {
+    fishingArea: {
+        height: 400,
+        backgroundColor: '#6BB5FF',
+        borderRadius: 30,
+        marginHorizontal: 15,
+        marginVertical: 10,
+        overflow: 'hidden',
+        position: 'relative',
+        borderWidth: 2,
+        borderColor: '#4A90E2',
+    },
+    waterBackground: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: '#6BB5FF',
+        zIndex: 0,
+    },
+    // 海草图片样式
+    seaweedContainer: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 100,
+        zIndex: 1,
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        alignItems: 'flex-end',
+        paddingHorizontal: 10,
+    },
+    seaweedImage: {
+        width: 140,
+        height: 160,
+    },
+    seaweedImage1: {
+        height: 170,
+        width: 135,
+    },
+    seaweedImage2: {
+        height: 190,
+        width: 145,
+    },
+    seaweedImage3: {
+        height: 160,
+        width: 130,
+    },
+    seaweedImage4: {
+        height: 185,
+        width: 140,
+    },
+    bobber: {
+        position: 'absolute',
+        top: 20,
+        right: 30,
+        zIndex: 10,
         alignItems: 'center',
-        paddingTop: 10,
-        borderTopWidth: 1,
-        borderTopColor: '#f0f0f0',
     },
-    currentDifficultyText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#4b6cb7',
-        backgroundColor: 'rgba(75, 108, 183, 0.1)',
-        paddingHorizontal: 16,
-        paddingVertical: 6,
-        borderRadius: 20,
+    bobberLine: {
+        width: 2,
+        height: 60,
+        backgroundColor: '#8B4513',
     },
-    questionArea: {
-        backgroundColor: 'white',
-        borderRadius: 16,
-        padding: 20,
-        marginHorizontal: 20,
-        marginBottom: 20,
+    bobberFloat: {
+        width: 20,
+        height: 20,
+        backgroundColor: '#FF6B6B',
+        borderRadius: 10,
+        justifyContent: 'center',
         alignItems: 'center',
-        elevation: 2,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
+        borderWidth: 1,
+        borderColor: '#fff',
     },
-    questionText: {
-        fontSize: 16,
-        color: '#333',
-        textAlign: 'center',
-        marginBottom: 20,
-        lineHeight: 24,
+    fish: {
+        position: 'absolute',
+        zIndex: 5,
     },
-    audioControls: {
+    fishBody: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
-        gap: 15,
-        marginBottom: 15,
-    },
-    playButton: {
-        width: 60,
-        height: 60,
+        paddingHorizontal: 15,
+        paddingVertical: 10,
         borderRadius: 30,
+        borderWidth: 2,
+        borderColor: '#fff',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 3,
+        elevation: 3,
+    },
+    fishEmoji: {
+        fontSize: 24,
+        marginRight: 8,
+    },
+    fishText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#fff',
+        textShadowColor: 'rgba(0,0,0,0.2)',
+        textShadowOffset: { width: 1, height: 1 },
+        textShadowRadius: 2,
+    },
+    fishBubble: {
+        position: 'absolute',
+        top: -15,
+        right: -10,
+        backgroundColor: 'rgba(255,255,255,0.9)',
+        borderRadius: 15,
+        paddingHorizontal: 6,
+        paddingVertical: 3,
+    },
+    bubbleText: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        color: '#4b6cb7',
+    },
+    ripple: {
+        position: 'absolute',
+        width: 100,
+        height: 100,
+        borderRadius: 50,
+        backgroundColor: 'rgba(255,255,255,0.6)',
+        top: '50%',
+        left: '50%',
+        marginLeft: -50,
+        marginTop: -50,
+        zIndex: 20,
+    },
+    caughtFish: {
+        position: 'absolute',
+        top: '40%',
+        left: '50%',
+        marginLeft: -40,
+        zIndex: 30,
+    },
+    caughtFishEmoji: {
+        fontSize: 80,
+    },
+    fishingAudioArea: {
+        alignItems: 'center',
+        marginVertical: 15,
+    },
+    fishingPlayButton: {
+        width: 70,
+        height: 70,
+        borderRadius: 35,
         backgroundColor: '#4b6cb7',
         justifyContent: 'center',
         alignItems: 'center',
@@ -1114,136 +1592,85 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
         elevation: 5,
     },
-    playButtonPlaying: {
+    fishingPlayButtonPlaying: {
         backgroundColor: '#182848',
+        transform: [{ scale: 1.05 }],
     },
-    audioInfo: {
-        backgroundColor: '#f8f9fa',
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 20,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-    },
-    audioInfoPlaying: {
-        backgroundColor: '#e8edff',
-    },
-    audioInfoText: {
+    fishingAudioText: {
+        marginTop: 10,
         fontSize: 14,
-        color: '#666',
-    },
-    audioInfoTextPlaying: {
         color: '#4b6cb7',
-        fontWeight: '600',
+        fontWeight: '500',
     },
-    progressBar: {
-        width: '100%',
+    fishingProgressBar: {
         height: 8,
         backgroundColor: '#e0e0e0',
         borderRadius: 4,
-        marginTop: 10,
+        marginHorizontal: 20,
+        marginVertical: 10,
         overflow: 'hidden',
     },
-    progressFill: {
+    fishingProgressFill: {
         height: '100%',
         backgroundColor: '#4b6cb7',
         borderRadius: 4,
     },
-    optionsGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'space-between',
+    fishingFeedback: {
         marginHorizontal: 20,
-        marginBottom: 20,
-    },
-    option: {
-        width: '48%',
-        minHeight: 100,
-        borderWidth: 2,
-        borderColor: '#e0e0e0',
-        borderRadius: 16,
-        backgroundColor: 'white',
         padding: 15,
-        alignItems: 'center',
+        borderRadius: 16,
+        marginVertical: 10,
         justifyContent: 'center',
-        marginBottom: 15,
-        elevation: 2,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
+        alignItems: 'center',
     },
-    optionCorrect: {
+    fishingFeedbackCorrect: {
+        backgroundColor: 'rgba(76, 175, 80, 0.2)',
+        borderWidth: 1,
         borderColor: '#4CAF50',
-        backgroundColor: 'rgba(76, 175, 80, 0.1)',
     },
-    optionIncorrect: {
+    fishingFeedbackIncorrect: {
+        backgroundColor: 'rgba(244, 67, 54, 0.2)',
+        borderWidth: 1,
         borderColor: '#F44336',
-        backgroundColor: 'rgba(244, 67, 54, 0.1)',
     },
-    optionText: {
+    fishingFeedbackText: {
         fontSize: 16,
         fontWeight: '600',
         color: '#333',
-        textAlign: 'center',
     },
-    optionFeedback: {
-        position: 'absolute',
-        top: 8,
-        right: 8,
-    },
-    feedbackArea: {
-        marginHorizontal: 20,
-        padding: 15,
-        borderRadius: 12,
-        marginBottom: 20,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    feedbackCorrect: {
-        backgroundColor: 'rgba(76, 175, 80, 0.15)',
-    },
-    feedbackIncorrect: {
-        backgroundColor: 'rgba(244, 67, 54, 0.15)',
-    },
-    feedbackText: {
-        fontSize: 16,
-        fontWeight: '500',
-    },
-    hintArea: {
-        backgroundColor: '#fff8e1',
-        borderRadius: 12,
+    fishingHintArea: {
+        backgroundColor: '#FFF8E7',
+        borderRadius: 16,
         padding: 15,
         marginHorizontal: 20,
-        marginBottom: 20,
+        marginVertical: 10,
         borderLeftWidth: 4,
-        borderLeftColor: '#ffb300',
+        borderLeftColor: '#FFB300',
     },
-    hintTitle: {
+    fishingHintTitle: {
         flexDirection: 'row',
         alignItems: 'center',
         marginBottom: 8,
     },
-    hintTitleText: {
+    fishingHintTitleText: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#ff8f00',
+        color: '#FF8F00',
         marginLeft: 8,
     },
-    hintText: {
+    fishingHintText: {
         fontSize: 14,
-        color: '#5d4037',
+        color: '#5D4037',
         lineHeight: 20,
     },
-    controls: {
+    fishingControls: {
         flexDirection: 'row',
         justifyContent: 'center',
         gap: 15,
         marginHorizontal: 20,
-        marginBottom: 20,
+        marginVertical: 10,
     },
-    controlButton: {
+    fishingControlButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
@@ -1253,36 +1680,35 @@ const styles = StyleSheet.create({
         flex: 1,
         gap: 8,
     },
-    hintButton: {
+    fishingHintButton: {
         backgroundColor: 'white',
         borderWidth: 2,
         borderColor: '#ddd',
     },
-    hintButtonText: {
+    fishingHintButtonText: {
         fontSize: 14,
         fontWeight: '600',
         color: '#666',
     },
-    nextButton: {
+    fishingNextButton: {
         backgroundColor: '#4b6cb7',
     },
-    nextButtonText: {
+    fishingNextButtonText: {
         fontSize: 14,
         fontWeight: '600',
         color: 'white',
     },
-    highScoreContainer: {
+    fishingHighScoreContainer: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         gap: 10,
-        marginBottom: 20,
+        marginVertical: 10,
     },
-    highScoreText: {
+    fishingHighScoreText: {
         fontSize: 14,
         color: '#666',
     },
-    // 结果页面样式
     resultPageContainer: {
         flexGrow: 1,
         backgroundColor: '#f5f5f5',
@@ -1390,12 +1816,33 @@ const styles = StyleSheet.create({
     changeDifficultyButton: {
         backgroundColor: '#FF9800',
     },
-    homeButton: {
+    backToGameButton: {
         backgroundColor: '#FF5722',
     },
     resultButtonText: {
         fontSize: 16,
         fontWeight: '600',
         color: 'white',
+    },
+    prepOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1000,
+    },
+    prepText: {
+        fontSize: 80,
+        fontWeight: '900',
+        color: '#FFD700',
+        fontStyle: 'italic',
+    },
+    fishContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
     },
 });

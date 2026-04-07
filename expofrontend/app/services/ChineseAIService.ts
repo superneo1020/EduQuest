@@ -94,9 +94,9 @@ class ChineseAIService {
 FORMAT: Questions in CHINESE, Options in ENGLISH
 - Question: Ask about the meaning of a Chinese word/phrase
 - Options: All options must be in ENGLISH
-- Example: "What does 爸爸 (bàba) mean in English?"
+- Example: "What does "爸爸"  mean in English?"   //"..."must be Chinese!!!!!
 - Options: ["Father", "Mother", "Brother", "Sister"]
-- Focus on basic vocabulary (HSK 1-2)`,
+- Focus on basic vocabulary (HSK 1-3)`,
 
             advanced: `
 FORMAT: Questions in ENGLISH, Options in CHINESE
@@ -104,7 +104,7 @@ FORMAT: Questions in ENGLISH, Options in CHINESE
 - Options: All options must be in CHINESE characters
 - Example: "What is the Chinese word for 'father'?"
 - Options: ["爸爸", "妈妈", "哥哥", "姐姐"]
-- Focus on intermediate vocabulary (HSK 3-4) and common phrases`
+- Focus on intermediate vocabulary (HSK 4-6) and common phrases`
         };
 
         return `You are a professional Chinese language teacher. Create EXACTLY ${count} UNIQUE multiple-choice questions for ${request.difficulty} level learners.
@@ -122,6 +122,7 @@ IMPORTANT RULES:
 4. Incorrect options should be plausible but wrong
 5. Include pinyin for the correct answer
 6. NEVER include the answer in the question itself
+7. Make every question unique and creative
 
 Format your response as a JSON array with EXACTLY ${count} objects:
 [
@@ -134,48 +135,48 @@ Format your response as a JSON array with EXACTLY ${count} objects:
     }
 ]
 
-EXAMPLES for BEGINNER level (題目中文，選項英文):
-[
-    {
-        "question": "What does 爸爸 (bàba) mean?",
-        "options": ["Father", "Mother", "Brother", "Sister"],
-        "correctAnswer": 0,
-        "explanation": "爸爸 (bàba) means father in Chinese.",
-        "pinyin": "bàba"
-    },
-    {
-        "question": "What does 老师 (lǎoshī) mean?",
-        "options": ["Teacher", "Doctor", "Student", "Lawyer"],
-        "correctAnswer": 0,
-        "explanation": "老师 (lǎoshī) means teacher.",
-        "pinyin": "lǎoshī"
-    }
-]
-
-EXAMPLES for ADVANCED level (題目英文，選項中文):
-[
-    {
-        "question": "What is the Chinese word for 'father'?",
-        "options": ["爸爸", "妈妈", "哥哥", "姐姐"],
-        "correctAnswer": 0,
-        "explanation": "爸爸 (bàba) means father.",
-        "pinyin": "bàba"
-    },
-    {
-        "question": "How do you say 'teacher' in Chinese?",
-        "options": ["老师", "医生", "学生", "律师"],
-        "correctAnswer": 0,
-        "explanation": "老师 (lǎoshī) means teacher.",
-        "pinyin": "lǎoshī"
-    },
-    {
-        "question": "What is the Chinese word for 'delicious'?",
-        "options": ["好吃", "好看", "好听", "好玩"],
-        "correctAnswer": 0,
-        "explanation": "好吃 (hǎochī) means delicious.",
-        "pinyin": "hǎochī"
-    }
-]
+// EXAMPLES for BEGINNER level (題目中文，選項英文): "..."must be Chinese
+// [
+//     {
+//         "question": "What does "爸爸"  mean?",
+//         "options": ["Father", "Mother", "Brother", "Sister"],
+//         "correctAnswer": 0,
+//         "explanation": "爸爸 (bàba) means father in Chinese.",
+//         "pinyin": "bàba"
+//     },
+//     {
+//         "question": "What does "老师"  mean?",
+//         "options": ["Teacher", "Doctor", "Student", "Lawyer"],
+//         "correctAnswer": 0,
+//         "explanation": "老师 (lǎoshī) means teacher.",
+//         "pinyin": "lǎoshī"
+//     }
+// ]
+//
+// EXAMPLES for ADVANCED level (題目英文，選項中文):
+// [
+//     {
+//         "question": "What is the Chinese word for 'father'?",
+//         "options": ["爸爸", "妈妈", "哥哥", "姐姐"],
+//         "correctAnswer": 0,
+//         "explanation": "爸爸 (bàba) means father.",
+//         "pinyin": "bàba"
+//     },
+//     {
+//         "question": "How do you say 'teacher' in Chinese?",
+//         "options": ["老师", "医生", "学生", "律师"],
+//         "correctAnswer": 0,
+//         "explanation": "老师 (lǎoshī) means teacher.",
+//         "pinyin": "lǎoshī"
+//     },
+//     {
+//         "question": "What is the Chinese word for 'delicious'?",
+//         "options": ["好吃", "好看", "好听", "好玩"],
+//         "correctAnswer": 0,
+//         "explanation": "好吃 (hǎochī) means delicious.",
+//         "pinyin": "hǎochī"
+//     }
+// ]
 
 Make sure ALL ${count} questions cover DIFFERENT topics and vocabulary words.
 Return ONLY the JSON array, no other text.`;

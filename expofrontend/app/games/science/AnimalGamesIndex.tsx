@@ -55,6 +55,17 @@ const difficultyOptions: DifficultyOption[] = [
 
 const AnimalGamesIndex: React.FC = () => {
     const navigation = useNavigation();
+
+    // 隱藏導航欄的返回按鈕和標題
+    React.useLayoutEffect(() => {
+        navigation.setOptions({
+            headerShown: false, // 完全隱藏整個導航欄
+            // 或者如果只想隱藏返回按鈕，可以使用：
+            // headerLeft: () => null,
+            // title: '',
+        });
+    }, [navigation]);
+
     const [loading, setLoading] = useState(false);
     const [selectedDifficulty, setSelectedDifficulty] = useState<string | null>(null);
 
@@ -62,7 +73,7 @@ const AnimalGamesIndex: React.FC = () => {
         setLoading(true);
         setSelectedDifficulty(difficultyId);
 
-        // 模拟加载延迟，让用户看到加载效果
+        // 模擬加載延遲，讓用戶看到加載效果
         setTimeout(() => {
             if (gameComponent === 'ClawMachineGame') {
                 navigation.navigate('science/animal/ClawMachineGame' as never);
@@ -92,7 +103,7 @@ const AnimalGamesIndex: React.FC = () => {
     return (
         <SafeAreaView style={styles.container}>
             <ScrollView contentContainerStyle={styles.scrollContent}>
-                {/* 头部区域 - 类似 AppliedMath 的样式 */}
+                {/* 頭部區域 - 類似 AppliedMath 的樣式 */}
                 <View style={styles.header}>
                     <Brain size={60} color="#4CAF50" style={{ marginBottom: 20 }} />
                     <Text style={styles.mainTitle}>Animal Theme Games</Text>
@@ -101,7 +112,7 @@ const AnimalGamesIndex: React.FC = () => {
                     </Text>
                 </View>
 
-                {/* 难度选择卡片 - 类似 AppliedMath 的 diffCard 样式 */}
+                {/* 難度選擇卡片 - 類似 AppliedMath 的 diffCard 樣式 */}
                 <View style={styles.menuGrid}>
                     {difficultyOptions.map((option) => (
                         <TouchableOpacity
@@ -139,7 +150,7 @@ const AnimalGamesIndex: React.FC = () => {
                                     ))}
                                 </View>
 
-                                {/* 开始按钮 */}
+                                {/* 開始按鈕 */}
                                 <View style={styles.startButtonContainer}>
                                     <View style={[styles.startButton, { backgroundColor: option.color }]}>
                                         <Text style={styles.startButtonText}>
@@ -152,10 +163,9 @@ const AnimalGamesIndex: React.FC = () => {
                     ))}
                 </View>
 
-                {/* 游戏信息区域 - 类似 AppliedMath 的额外信息 */}
+                {/* 遊戲信息區域 - 類似 AppliedMath 的額外信息 */}
 
-
-                {/* 动物趣味知识 - 保持趣味性但更简洁 */}
+                {/* 動物趣味知識 - 保持趣味性但更簡潔 */}
 
             </ScrollView>
         </SafeAreaView>
