@@ -13,7 +13,7 @@ import {
     Platform,
     StatusBar
 } from 'react-native';
-import { Calculator, Languages, Atom, Brain, LogOut, User, Trophy, Clock, Target, Sparkles, Star, Zap, GraduationCap, Rocket } from 'lucide-react-native';
+import { Calculator, Languages, Atom, Brain, LogOut, User, Trophy, Clock, Target, Sparkles, Star, Zap, GraduationCap, Rocket, ShoppingCart } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/src/auth/AuthContext';
 
@@ -120,6 +120,13 @@ export default function LandscapeOptimizedHome() {
                     >
                         <Trophy size={26} color="#2D3436" />
                     </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.headerIconBtn}
+                        onPress={() => router.push('/shop/shopScreen' as any)}
+                    >
+                        <ShoppingCart size={26} color="#2D3436" />
+                    </TouchableOpacity>
                 </View>
             </View>
 
@@ -201,6 +208,7 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#F8F9FA',
     },
+
     // Header 執美與字體加大
     header: {
         height: 70, // 增加高度

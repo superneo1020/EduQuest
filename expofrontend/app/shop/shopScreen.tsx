@@ -1,14 +1,30 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    ActivityIndicator, Alert, RefreshControl, Dimensions, Image, Platform
+    ActivityIndicator, Alert, RefreshControl, Dimensions, Image, Platform,
+    SafeAreaView, StatusBar
 } from 'react-native';
 import axios from 'axios';
-import { ShoppingBag, Coins, Package, CheckCircle2, AlertCircle } from 'lucide-react-native';
+import { ShoppingBag, Coins, Package, CheckCircle2, AlertCircle, Star, Sparkles, Gift } from 'lucide-react-native';
 import { getApiBaseUrl } from '@/src/api/client';
 import { useAuth } from '@/src/auth/AuthContext';
 
 const { width } = Dimensions.get('window');
+// 物品類型定義
+const ITEM_TYPES = ['ALL', 'AVATAR', 'BACKGROUND', 'BADGE'];
+
+// 狀態中添加篩選器
+
+
+// 輔助函數：根據物品類型返回顏色
+const getItemColor = (type: string) => {
+    switch (type?.toUpperCase()) {
+        case 'AVATAR': return '#FF6B6B';
+        case 'BACKGROUND': return '#4ECDC4';
+        case 'BADGE': return '#FFD93D';
+        default: return '#A8E6CF';
+    }
+};
 
 export default function ShopScreen() {
     const { token } = useAuth();
@@ -18,7 +34,9 @@ export default function ShopScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [buyingId, setBuyingId] = useState<number | null>(null);
 
-    // 1. 獲取數據 (參考 Profile 做法以避開 401)
+    const [selectedType, setSelectedType] = useState<string>('ALL');
+
+    // 保持原有的數據獲取邏輯
     const fetchData = useCallback(async () => {
         if (!token) return;
 
@@ -26,21 +44,22 @@ export default function ShopScreen() {
             setLoading(true);
             const authHeader = { Authorization: `Bearer ${token.trim()}` };
 
-            // 同步獲取：個人資料(含積分) + 商店商品
             const [pointsRes, itemsRes] = await Promise.all([
                 axios.get(`${getApiBaseUrl()}/api/user/point`, { headers: authHeader }),
                 axios.get(`${getApiBaseUrl()}/api/item/find`, {
-                    params: { page: 0, size: 50 },
+                    params: {
+                        page: 0,
+                        size: 50,
+                        type: selectedType === 'ALL' ? undefined : selectedType // 添加類型篩選
+                    },
                     headers: authHeader
                 })
             ]);
 
-            // 設定積分
             if (pointsRes.data !== undefined) {
                 setUserPoints(pointsRes.data);
             }
 
-            // 設定商品清單
             setItems(itemsRes.data.content || []);
 
         } catch (error: any) {
@@ -50,63 +69,39 @@ export default function ShopScreen() {
             }
         } finally {
             setLoading(false);
-            setRefreshing(false);
         }
-    }, [token]);
+    }, [token, selectedType]); // 添加 selectedType 到依賴
 
-    useEffect(() => {
-        fetchData();
-    }, [fetchData]);
-
-    // 2. 購買邏輯 (利用資料庫 Trigger 自動扣分)
+    // 保持原有的購買邏輯
     const handlePurchase = async (item: any) => {
         if (!token) {
-            const errorMsg = "請先登入後再購買";
-            Platform.OS === 'web' ? alert(errorMsg) : Alert.alert("需要登入", errorMsg);
+            Alert.alert("請先登入", "需要登入才能兌換道具。");
             return;
         }
-        
-        console.log("🚀 Buy item:", item.name);
-        const testRes = await axios.get(`${getApiBaseUrl()}/api/user/point`, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
 
-
-        // 1. 基本檢查：積分不足直接阻斷
         if (userPoints < item.price) {
-            const msg = `積分不足！需要 ${item.price}，你只有 ${userPoints}`;
-            Platform.OS === 'web' ? alert(msg) : Alert.alert("提示", msg);
+            Alert.alert("積分不足", `需要 ${item.price} 積分才能兌換這個道具！`);
             return;
         }
 
-        // 2. 開始執行購買流程
         try {
             setBuyingId(item.id);
 
-            console.log("Token being sent:", token ? token.substring(0, 20) + "..." : "No token");
-            console.log("Item being purchased:", item.name);
-
-            // First test if token is valid by calling a simple authenticated endpoint
+            // Token validation (保持原有邏輯)
             try {
-                console.log("🔍 Testing token validity...");
-                const tokenTest = await axios.get(`${getApiBaseUrl()}/api/user/point`, {
+                await axios.get(`${getApiBaseUrl()}/api/user/point`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
-                console.log("✅ Token validation successful, current points:", tokenTest.data);
             } catch (tokenTestError: any) {
-                console.log("❌ Token validation failed:", tokenTestError.response?.status);
                 if (tokenTestError.response?.status === 401) {
-                    console.log("Token is expired or invalid");
                     throw new Error("Token expired or invalid");
                 }
-                throw tokenTestError; // Re-throw other errors
+                throw tokenTestError;
             }
 
-            // Use the same authHeader pattern that works for GET requests
             const cleanToken = token!.trim();
             const authHeader = { Authorization: `Bearer ${cleanToken}` };
-            console.log("🔧 Using authHeader:", authHeader.Authorization.substring(0, 30) + "...");
-            
+
             let response;
             try {
                 response = await axios.post(
@@ -119,13 +114,10 @@ export default function ShopScreen() {
                 );
             } catch (postError: any) {
                 if (postError.response?.status === 401) {
-                    console.log("🔄 POST failed with 401, retrying with fresh token validation...");
-                    // Retry once after re-validating token
                     const retryTokenTest = await axios.get(`${getApiBaseUrl()}/api/user/point`, {
                         headers: { Authorization: `Bearer ${token}` }
                     });
-                    console.log("🔄 Retry token validation successful:", retryTokenTest.data);
-                    
+
                     response = await axios.post(
                         `${getApiBaseUrl()}/api/user/item/`,
                         { itemName: item.name },
@@ -139,180 +131,506 @@ export default function ShopScreen() {
                 }
             }
 
-            console.log("✅ 購買成功響應:", response.data);
-
-            // 成功後的提示
             const successMsg = `成功兌換 ${item.name}！`;
             Platform.OS === 'web' ? alert(successMsg) : Alert.alert("成功", successMsg);
 
-            // 3. 刷新數據 (這會觸發 Profile 接口拿到 Trigger 扣除後的積分)
             fetchData();
-
         } catch (error: any) {
-            console.error("❌ 購買失敗詳情:", error.response?.data || error.message);
-            
-            // Check if it's a 401 error - token might be expired
-            if (error.response?.status === 401) {
-                const errorMsg = "登入已過期，請重新登入後再試";
-                Platform.OS === 'web' ? alert(errorMsg) : Alert.alert("需要重新登入", errorMsg);
-                
-                // Optionally clear the invalid token and redirect to login
-                // You might want to use navigation to go to login screen
-                return;
-            }
-
-            let errorMsg = "購買失敗，請稍後再試";
-            if (error.response?.status === 500) {
-                errorMsg = "伺服器錯誤 (500)：請檢查後端日誌，可能是餘額扣除失敗或重複購買。";
-            }
-
-            Platform.OS === 'web' ? alert(errorMsg) : Alert.alert("錯誤", errorMsg);
+            console.error("Purchase Error:", error);
+            Alert.alert("購買失敗", error.response?.data?.message || "請稍後再試");
         } finally {
             setBuyingId(null);
         }
     };
 
-    const onRefresh = () => {
+    const onRefresh = useCallback(() => {
         setRefreshing(true);
-        fetchData();
-    };
+        fetchData().finally(() => setRefreshing(false));
+    }, [fetchData]);
 
-    if (loading && !refreshing) {
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
+
+    if (loading) {
         return (
-            <View style={styles.center}><ActivityIndicator size="large" color="#4b6cb7" /></View>
+            <SafeAreaView style={styles.container}>
+                <View style={styles.center}>
+                    <ActivityIndicator size="large" color="#4CAF50" />
+                    <Text style={styles.loadingText}>載入中...</Text>
+                </View>
+            </SafeAreaView>
         );
     }
 
     return (
-        <View style={styles.container}>
-            {/* 頂部積分欄 */}
+        <SafeAreaView style={styles.container}>
+            <StatusBar barStyle="dark-content" />
+
+            {/* 可愛的頂部標題區 */}
             <View style={styles.header}>
-                <View style={styles.pointsWrapper}>
-                    <Coins size={20} color="#F1C40F" />
-                    <Text style={styles.pointsValue}>{userPoints.toLocaleString()}</Text>
-                    <Text style={styles.pointsLabel}>可用積分</Text>
+                <View style={styles.headerLeft}>
+                    <View style={styles.logoContainer}>
+                        <ShoppingBag size={24} color="#FFF" />
+                    </View>
+                    <View>
+                        <Text style={styles.headerTitle}>道具商城</Text>
+                        <Text style={styles.headerSubtitle}>用積分兌換精美道具！</Text>
+                    </View>
+                </View>
+
+                {/* 積分顯示 - 更有趣的設計 */}
+                <View style={styles.pointsCard}>
+                    <View style={styles.pointsIconContainer}>
+                        <Coins size={22} color="#FFF" />
+                    </View>
+                    <View style={styles.pointsInfo}>
+                        <Text style={styles.pointsValue}>{userPoints}</Text>
+                        <Text style={styles.pointsLabel}>我的積分</Text>
+                    </View>
+                    <View style={styles.pointsDecoration}>
+                        <Sparkles size={16} color="#FFD700" />
+                    </View>
                 </View>
             </View>
 
-            <ScrollView
-                contentContainerStyle={styles.scrollContent}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-            >
-                <View style={styles.sectionHeader}>
-                    <ShoppingBag size={22} color="#333" />
-                    <Text style={styles.sectionTitle}>道具商城</Text>
+            {/* 物品類型篩選器 */}
+            <View style={styles.filterSection}>
+                <View style={styles.filterHeader}>
+                    <Package size={20} color="#4CAF50" />
+                    <Text style={styles.filterTitle}>物品類型</Text>
                 </View>
 
-                <View style={styles.grid}>
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.filterScroll}
+                    contentContainerStyle={styles.filterScrollContent}
+                >
+                    {ITEM_TYPES.map((type) => (
+                        <TouchableOpacity
+                            key={type}
+                            style={[
+                                styles.filterChip,
+                                selectedType === type && styles.filterChipActive
+                            ]}
+                            onPress={() => setSelectedType(type)}
+                            activeOpacity={0.8}
+                        >
+                            <Text style={[
+                                styles.filterChipText,
+                                selectedType === type && styles.filterChipTextActive
+                            ]}>
+                                {type === 'ALL' ? '全部' :
+                                    type === 'AVATAR' ? '頭像' :
+                                        type === 'BACKGROUND' ? '背景' : '徽章'}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
+            </View>
+            <ScrollView
+                refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#4CAF50']} />
+                }
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+            >
+                {/* 商品分類標題 */}
+                <View style={styles.categorySection}>
+                    <View style={styles.categoryHeader}>
+                        <Gift size={20} color="#4CAF50" />
+                        <Text style={styles.categoryTitle}>精選道具</Text>
+                        <View style={styles.categoryBadge}>
+                            <Text style={styles.badgeText}>{items.length}</Text>
+                        </View>
+                    </View>
+                </View>
+
+                <View style={styles.itemsGrid}>
                     {items.map((item) => {
                         const isBuying = buyingId === item.id;
                         const canAfford = userPoints >= item.price;
+                        const itemType = item.type || 'AVATAR';
+                        const itemColor = getItemColor(itemType);
 
                         return (
-                            <View key={item.id} style={styles.card}>
-                                <View style={styles.iconContainer}>
-                                    <Package size={40} color="#4b6cb7" strokeWidth={1.5} />
-                                </View>
-
-                                <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
-                                <Text style={styles.itemDesc} numberOfLines={2}>{item.description || "暫無描述"}</Text>
-
-                                <View style={styles.priceTag}>
-                                    <Coins size={14} color="#F1C40F" />
-                                    <Text style={styles.priceText}>{item.price}</Text>
-                                </View>
-
-                                <TouchableOpacity
-                                    style={[
-                                        styles.buyButton,
-                                        (!canAfford || isBuying) && styles.buyButtonDisabled
-                                    ]}
-                                    onPress={() => handlePurchase(item)} // 確保這裡正確觸發
-                                    disabled={isBuying} // 只有正在買的時候禁用，餘額不足依然可以按（進去跳提示）
-                                >
-                                    {isBuying ? (
-                                        <ActivityIndicator size="small" color="#fff" />
-                                    ) : (
-                                        <Text style={styles.buyButtonText}>
-                                            {canAfford ? "兌換" : "積分不足"}
-                                        </Text>
+                            <View key={item.id} style={[
+                                styles.itemCard,
+                                !canAfford && styles.itemCardDisabled
+                            ]}>
+                                {/* 可愛的物品圖標 */}
+                                <View style={[
+                                    styles.itemIconContainer,
+                                    { backgroundColor: itemColor }
+                                ]}>
+                                    <Package size={32} color="#FFF" strokeWidth={2} />
+                                    {item.price > 100 && (
+                                        <View style={styles.rareBadge}>
+                                            <Star size={10} color="#FFF" fill="#FFF" />
+                                        </View>
                                     )}
-                                </TouchableOpacity>
+                                </View>
+
+                                {/* 物品信息 */}
+                                <View style={styles.itemInfo}>
+                                    <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
+                                    <Text style={styles.itemDesc} numberOfLines={2}>{item.description || "超酷的道具！"}</Text>
+                                </View>
+
+                                {/* 價格和購買按鈕 */}
+                                <View style={styles.itemBottom}>
+                                    <View style={styles.priceContainer}>
+                                        <Coins size={16} color={canAfford ? "#F1C40F" : "#95A5A6"} />
+                                        <Text style={[
+                                            styles.priceText,
+                                            !canAfford && styles.priceTextDisabled
+                                        ]}>{item.price}</Text>
+                                    </View>
+
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.buyButton,
+                                            canAfford ? styles.buyButtonEnabled : styles.buyButtonDisabled,
+                                            isBuying && styles.buyButtonLoading
+                                        ]}
+                                        onPress={() => handlePurchase(item)}
+                                        disabled={isBuying}
+                                        activeOpacity={0.8}
+                                    >
+                                        {isBuying ? (
+                                            <ActivityIndicator size="small" color="#FFF" />
+                                        ) : (
+                                            <View style={styles.buyButtonContent}>
+                                                <Text style={[
+                                                    styles.buyButtonText,
+                                                    !canAfford && styles.buyButtonTextDisabled
+                                                ]}>
+                                                    {canAfford ? "兌換" : "積分不足"}
+                                                </Text>
+                                                {canAfford && <Sparkles size={12} color="#FFF" />}
+                                            </View>
+                                        )}
+                                    </TouchableOpacity>
+                                </View>
                             </View>
                         );
                     })}
                 </View>
             </ScrollView>
-        </View>
+        </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#F8F9FA' },
+    container: { flex: 1, backgroundColor: '#F0F9F0' }, // 淺綠色背景，更有親和力
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+    // Header 設計
     header: {
-        backgroundColor: '#fff',
-        paddingTop: 60,
-        paddingBottom: 20,
+        backgroundColor: '#FFF',
         paddingHorizontal: 20,
-        borderBottomWidth: 1,
-        borderBottomColor: '#EEE',
+        paddingVertical: 15,
+        borderBottomLeftRadius: 24,
+        borderBottomRightRadius: 24,
+        elevation: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
     },
-    pointsWrapper: {
+    headerLeft: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#1A2A6C',
-        paddingVertical: 12,
-        paddingHorizontal: 20,
-        borderRadius: 15,
-        alignSelf: 'center',
-        elevation: 4,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-    },
-    pointsValue: { color: '#FFF', fontSize: 22, fontWeight: 'bold', marginLeft: 10 },
-    pointsLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 12, marginLeft: 8, marginTop: 4 },
-    scrollContent: { padding: 15 },
-    sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, marginTop: 10 },
-    sectionTitle: { fontSize: 20, fontWeight: '700', marginLeft: 10, color: '#333' },
-    grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-    card: {
-        backgroundColor: '#FFF',
-        width: (width - 45) / 2,
-        borderRadius: 16,
-        padding: 15,
         marginBottom: 15,
+    },
+    logoContainer: {
+        width: 48,
+        height: 48,
+        backgroundColor: '#4CAF50',
+        borderRadius: 16,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    headerTitle: {
+        fontSize: 20,
+        fontWeight: '800',
+        color: '#2D3436',
+    },
+    headerSubtitle: {
+        fontSize: 12,
+        color: '#636E72',
+        marginTop: 2,
+    },
+
+    // 積分卡片設計
+    pointsCard: {
+        flexDirection: 'row',
+        backgroundColor: '#667EEA',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        borderRadius: 20,
+        alignItems: 'center',
+        elevation: 4,
+        shadowColor: '#667EEA',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 6,
+    },
+    pointsIconContainer: {
+        width: 36,
+        height: 36,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        borderRadius: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    pointsInfo: {
+        flex: 1,
+    },
+    pointsValue: {
+        fontSize: 24,
+        fontWeight: '900',
+        color: '#FFF',
+    },
+    pointsLabel: {
+        fontSize: 11,
+        color: 'rgba(255,255,255,0.8)',
+        marginTop: 1,
+    },
+    pointsDecoration: {
+        marginLeft: 8,
+    },
+
+    // 分類區域
+    categorySection: {
+        marginBottom: 20,
+    },
+    categoryHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFF',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        borderRadius: 16,
         elevation: 2,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.1,
         shadowRadius: 3,
-        alignItems: 'center',
     },
-    iconContainer: {
-        width: 70,
-        height: 70,
-        backgroundColor: '#F0F4FF',
-        borderRadius: 35,
-        justifyContent: 'center',
+    categoryTitle: {
+        flex: 1,
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#2D3436',
+        marginLeft: 10,
+    },
+    categoryBadge: {
+        backgroundColor: '#4CAF50',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    badgeText: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#FFF',
+    },
+    // 篩選器樣式
+    filterSection: {
+        backgroundColor: '#FFF',
+        marginHorizontal: 15,
+        marginVertical: 10,
+        padding: 15,
+        borderRadius: 16,
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+    },
+    filterHeader: {
+        flexDirection: 'row',
         alignItems: 'center',
         marginBottom: 12,
     },
-    itemName: { fontSize: 16, fontWeight: 'bold', color: '#2D3436', marginBottom: 4 },
-    itemDesc: { fontSize: 12, color: '#636E72', textAlign: 'center', height: 32, marginBottom: 10 },
-    priceTag: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
-    priceText: { marginLeft: 5, fontWeight: '700', color: '#2D3436', fontSize: 16 },
-    buyButton: {
-        backgroundColor: '#4b6cb7',
-        width: '100%',
-        paddingVertical: 8,
-        borderRadius: 10,
-        alignItems: 'center',
+    filterTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#2D3436',
+        marginLeft: 8,
     },
-    buyButtonDisabled: { backgroundColor: '#BDC3C7' },
-    buyButtonText: { color: '#FFF', fontWeight: 'bold', fontSize: 14 },
+    filterScroll: {
+        flexGrow: 0,
+    },
+    filterScrollContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingRight: 20,
+    },
+    filterChip: {
+        backgroundColor: '#F1F3F4',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
+        marginRight: 8,
+        borderWidth: 1,
+        borderColor: '#E0E0E0',
+    },
+    filterChipActive: {
+        backgroundColor: '#4CAF50',
+        borderColor: '#4CAF50',
+    },
+    filterChipText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#636E72',
+    },
+    filterChipTextActive: {
+        color: '#FFF',
+    },
+
+    // 商品網格
+    scrollContent: { padding: 12 },
+    itemsGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between', // 改為向左對齊，靠卡片的 margin 自動撐開中間間距
+        paddingHorizontal: 4, // 稍微給一點側邊緩衝
+    },
+    itemCard: {
+        backgroundColor: '#FFF',
+        width: (width - 40) / 2, // 兩列佈局
+        borderRadius: 20,         // 稍微縮小圓角
+        padding: 12,
+        marginBottom: 12,         // 縮小底部間距
+        alignItems: 'center',
+        elevation: 3,
+        shadowColor: '#000',
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        borderWidth: 1.5,
+        borderColor: '#E8F5E9',
+    },
+    itemCardDisabled: {
+        opacity: 0.6,
+        borderColor: '#E0E0E0',
+    },
+
+    // 物品圖標
+    itemIconContainer: {
+        width: 80,  // 增加到 80
+        height: 80, // 增加到 80
+        borderRadius: 40,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 12,
+        elevation: 3,
+        shadowColor: '#000',
+        shadowOpacity: 0.2,
+    },
+    rareBadge: {
+        position: 'absolute',
+        top: -2,
+        right: -2,
+        width: 16, // 從20減少到16
+        height: 16, // 從20減少到16
+        backgroundColor: '#FFD700',
+        borderRadius: 8, // 從10減少到8
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1, // 從2減少到1
+        borderColor: '#FFF',
+    },
+
+    // 物品信息
+    itemInfo: {
+        marginBottom: 8,
+    },
+    itemName: {
+        fontSize: 18, // 字體放大到 18
+        fontWeight: '800',
+        color: '#2D3436',
+        marginBottom: 6,
+        textAlign: 'center',
+    },
+    itemDesc: {
+        fontSize: 14, // 說明文字放大到 14
+        color: '#636E72',
+        textAlign: 'center',
+        lineHeight: 18,
+        height: 40, // 給予足夠高度顯示兩行說明
+        marginBottom: 12,
+    },
+
+    // 底部區域
+    itemBottom: {
+        alignItems: 'center',
+        width: '100%',
+    },
+    priceContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFF9E6',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 12,
+        marginBottom: 12,
+    },
+    priceText: {
+        fontSize: 20, // 從16減少到14
+        fontWeight: '900',
+        color: '#F1C40F',
+        marginLeft: 6, // 從4減少到2
+    },
+    priceTextDisabled: {
+        color: '#95A5A6',
+    },
+
+    // 購買按鈕
+    buyButton: {
+        width: '100%',
+        paddingVertical: 14, // 從10減少到6
+        borderRadius: 18, // 從16減少到8
+        alignItems: 'center',
+        elevation: 4,
+    },
+    buyButtonEnabled: {
+        backgroundColor: '#4CAF50',
+        shadowColor: '#4CAF50',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+    },
+    buyButtonDisabled: {
+        backgroundColor: '#BDC3C7',
+        elevation: 0,
+    },
+    buyButtonLoading: {
+        opacity: 0.7,
+    },
+    buyButtonContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    buyButtonText: {
+        fontSize: 16, // 從14減少到11
+        fontWeight: '800',
+        color: '#FFF',
+    },
+    buyButtonTextDisabled: {
+        color: 'rgba(255,255,255,0.7)',
+    },
+
+    loadingText: {
+        marginTop: 10,
+        fontSize: 18,
+        color: '#666',
+    },
     emptyContainer: { width: '100%', alignItems: 'center', marginTop: 100 },
     emptyText: { marginTop: 15, color: '#95A5A6', fontSize: 16 }
 });
