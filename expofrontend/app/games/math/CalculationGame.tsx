@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useLayoutEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert, ActivityIndicator, Dimensions, ScrollView } from 'react-native';
 import { ArrowLeft, Trophy, Clock, Zap, Heart, CheckCircle2, XCircle, Brain } from 'lucide-react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useNavigation } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import Animated, {
@@ -70,7 +70,13 @@ const GAME_SCENES = {
 
 export default function CalculationGame() {
     const router = useRouter();
+    const navigation = useNavigation();
     const { token } = useAuth();
+
+    // 完全隐藏系统导航栏（包括返回按钮）
+    useLayoutEffect(() => {
+        navigation.setOptions({ headerShown: false });
+    }, [navigation]);
 
     // 遊戲狀態
     const [gameStarted, setGameStarted] = useState(false);

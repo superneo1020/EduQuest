@@ -270,6 +270,7 @@ const HumanBodyGame = () => {
     const [wrongCount, setWrongCount] = useState(0);
     const [gameCompleted, setGameCompleted] = useState(false);
     const [currentHint, setCurrentHint] = useState<string>('');
+    const [currentOrganInfo, setCurrentOrganInfo] = useState<{ name: string; description: string; hint: string } | null>(null);
 
     // ========== 💾 保存分數到伺服器 ==========
     const saveScore = async (finalScore: number) => {
@@ -320,16 +321,22 @@ const HumanBodyGame = () => {
         };
     };
 
-    // 處理器官卡片點擊
+    // 處理器官卡片點擊（修改：顯示器官介紹，取消綠色提示）
     const handleOrganSelect = (organId: number) => {
         const organ = organs.find(o => o.id === organId);
         if (!organ || placedOrgans[organId]) return;
 
         setSelectedOrgan(organId);
+        // 顯示器官名稱、介紹和提示
+        setCurrentOrganInfo({
+            name: organ.name,
+            description: organ.description,
+            hint: organ.hint
+        });
         setCurrentHint(organ.hint);
 
-        const suggestedCells = getSuggestedCells(organ);
-        setHighlightedCells(suggestedCells);
+        // 取消綠色提示：不再調用 getSuggestedCells，清空高亮
+        setHighlightedCells([]);
 
         Animated.spring(organAnimations[organId], {
             toValue: 1,
@@ -346,38 +353,7 @@ const HumanBodyGame = () => {
         });
     };
 
-    // 獲取建議放置的網格單元
-    const getSuggestedCells = (organ: any) => {
-        const cells = [];
-        const targetRow = organ.gridPosition.row;
-        const targetCol = organ.gridPosition.col;
-
-        switch (organ.id) {
-            case 1: // 心臟
-                cells.push({ row: targetRow, col: targetCol });
-                cells.push({ row: targetRow, col: targetCol + 1 });
-                cells.push({ row: targetRow + 1, col: targetCol });
-                break;
-            case 2: // 大腸
-                for (let r = targetRow - 1; r <= targetRow + 1; r++) {
-                    for (let c = targetCol - 1; c <= targetCol + 1; c++) {
-                        if (r >= 0 && r < rows && c >= 0 && c < cols) {
-                            cells.push({ row: r, col: c });
-                        }
-                    }
-                }
-                break;
-            case 3: // 肺
-                cells.push({ row: targetRow, col: targetCol });
-                cells.push({ row: targetRow, col: targetCol + 1 });
-                break;
-            default:
-                cells.push({ row: targetRow, col: targetCol });
-                break;
-        }
-
-        return cells;
-    };
+    // 移除 getSuggestedCells 函數（不再需要）
 
     // 處理網格點擊
     const handleGridClick = (row: number, col: number) => {
@@ -426,6 +402,7 @@ const HumanBodyGame = () => {
 
         setSelectedOrgan(null);
         setCurrentHint('');
+        setCurrentOrganInfo(null);
         setHighlightedCells([]);
 
         const newPlacedCount = Object.keys(placedOrgans).length + 1;
@@ -447,6 +424,7 @@ const HumanBodyGame = () => {
         setWrongCount(0);
         setGameCompleted(false);
         setCurrentHint('');
+        setCurrentOrganInfo(null);
         setHighlightedCells([]);
 
         Object.values(organAnimations).forEach(anim => {
@@ -628,12 +606,14 @@ const HumanBodyGame = () => {
                 </View>
             </View>
 
-            {currentHint && (
+            {/* 修改：顯示器官介紹區塊 */}
+            {currentOrganInfo && (
                 <View style={styles.selectionHint}>
-                    <Text style={styles.selectionText}>Selected Organ</Text>
-                    <Text style={styles.hintText}>Hint: {currentHint}</Text>
+                    <Text style={styles.selectionText}>Selected Organ: {currentOrganInfo.name}</Text>
+                    <Text style={styles.descriptionText}>{currentOrganInfo.description}</Text>
+                    <Text style={styles.hintText}>Hint: {currentOrganInfo.hint}</Text>
                     <Text style={styles.instructionText}>
-                        Click on the grid to place the organ. Green cells are suggested positions.
+                        Click on the grid to place the organ.
                     </Text>
                 </View>
             )}
@@ -912,6 +892,12 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: '#1565c0',
         marginBottom: 5,
+    },
+    descriptionText: {
+        fontSize: isWeb ? 16 : 15,
+        color: '#2c3e50',
+        marginBottom: 8,
+        textAlign: 'center',
     },
     hintText: {
         fontSize: isWeb ? 16 : 15,

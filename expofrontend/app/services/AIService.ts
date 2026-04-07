@@ -81,9 +81,9 @@ class AIService {
      */
     private mapLevel(level: 'easy' | 'medium' | 'hard'): 'easy' | 'medium' | 'hard' {
         switch (level) {
-            case 'easy': return 'medium';
-            case 'medium': return 'hard';
-            case 'hard': return 'easy';
+            case 'easy': return 'easy';
+            case 'medium': return 'medium';
+            case 'hard': return 'hard';
             default: return level;
         }
     }

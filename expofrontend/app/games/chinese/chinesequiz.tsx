@@ -1,6 +1,6 @@
 // app/games/chinese/chinesequiz.tsx
 // 餐廳大作戰 - 傳送帶版本（加入打擊回饋與倒數特效版）
-// 修改：總分滿分為100分
+// 修改：總分滿分為100分，传送带条纹使用 Skia 实现持续向左移动（仅原生平台）
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -12,19 +12,32 @@ import {
     ActivityIndicator,
     Alert,
     BackHandler,
-    SafeAreaView,
     Animated,
     Dimensions,
     StatusBar,
     Easing,
+    Platform,
 } from 'react-native';
-import { router, Stack } from 'expo-router';
+import { Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Star, Sparkles, Heart, Utensils } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import axios from 'axios';
 import { useAuth } from '@/src/auth/AuthContext';
 import ChineseAIService, { ChineseQuestion } from '../../services/ChineseAIService';
+
+// 只在非 Web 环境导入 Skia
+const isWeb = Platform.OS === 'web';
+let Canvas: any = null;
+let Rect: any = null;
+let Group: any = null;
+
+if (!isWeb) {
+    const Skia = require('@shopify/react-native-skia');
+    Canvas = Skia.Canvas;
+    Rect = Skia.Rect;
+    Group = Skia.Group;
+}
 
 const { width: screenWidth } = Dimensions.get('window');
 const CONVEYOR_WIDTH = Math.min(700, screenWidth - 40);
@@ -56,7 +69,7 @@ interface ExtendedQuestion extends ChineseQuestion {
 type CustomerState = 'happy' | 'angry' | 'waiting';
 
 // --- 💥 浮動文字元件 (HIT / OUCH) ---
-const FloatingText = ({ text, color, onComplete }: { text: string, color: string, onComplete: () => void }) => {
+const FloatingText = ({ text, color, onComplete }: { text: string; color: string; onComplete: () => void }) => {
     const opacity = useRef(new Animated.Value(1)).current;
     const translateY = useRef(new Animated.Value(0)).current;
 
@@ -74,7 +87,7 @@ const FloatingText = ({ text, color, onComplete }: { text: string, color: string
                 useNativeDriver: true,
             }),
         ]).start(() => onComplete());
-    }, [onComplete, opacity, translateY]);
+    }, []);
 
     return (
         <Animated.View style={[styles.floatingLayer, { opacity, transform: [{ translateY }] }]}>
@@ -83,6 +96,139 @@ const FloatingText = ({ text, color, onComplete }: { text: string, color: string
     );
 };
 
+// ---------- ✨ Skia 传送带条纹组件（仅原生平台，持续向左移动）----------
+interface StripesCanvasProps {
+    beltWidth: number;
+    beltHeight: number;
+    isActive: boolean;
+    speedPxPerSec: number;
+}
+
+const StripesCanvas: React.FC<StripesCanvasProps> = ({ beltWidth, beltHeight, isActive, speedPxPerSec }) => {
+    const [offsetX, setOffsetX] = useState(0);
+    const animationRef = useRef<number | null>(null);
+    const stripeWidth = 20;
+    const gap = 10;
+    const patternWidth = stripeWidth + gap;
+    const stripesCount = Math.ceil(beltWidth / patternWidth) + 2;
+
+    useEffect(() => {
+        if (!isActive) {
+            if (animationRef.current) {
+                cancelAnimationFrame(animationRef.current);
+                animationRef.current = null;
+            }
+            return;
+        }
+
+        let lastTime = performance.now();
+        const animate = (time: number) => {
+            const delta = time - lastTime;
+            lastTime = time;
+
+            setOffsetX(prev => {
+                const newOffset = prev - (speedPxPerSec * delta) / 1000;
+                if (newOffset <= -patternWidth) {
+                    return 0;
+                }
+                return newOffset;
+            });
+
+            animationRef.current = requestAnimationFrame(animate);
+        };
+
+        animationRef.current = requestAnimationFrame(animate);
+
+        return () => {
+            if (animationRef.current) {
+                cancelAnimationFrame(animationRef.current);
+            }
+        };
+    }, [isActive, speedPxPerSec, patternWidth]);
+
+    const stripes = [];
+    for (let i = 0; i < stripesCount; i++) {
+        stripes.push(
+            <Rect
+                key={i}
+                x={i * patternWidth}
+                y={0}
+                width={stripeWidth}
+                height={beltHeight}
+                color="#DAA520"
+                opacity={0.5}
+            />
+        );
+    }
+
+    return (
+        <Canvas style={[StyleSheet.absoluteFillObject, { height: beltHeight, width: beltWidth }]} pointerEvents="none">
+            <Group transform={[{ translateX: offsetX }]}>
+                {stripes}
+            </Group>
+        </Canvas>
+    );
+};
+
+// ---------- Web 环境使用的简单条纹组件 ----------
+const WebStripes: React.FC<{ beltWidth: number; beltHeight: number; isActive: boolean }> = ({ beltWidth, beltHeight, isActive }) => {
+    const [offsetX, setOffsetX] = useState(0);
+    const animationRef = useRef<number | null>(null);
+    const stripeWidth = 20;
+    const gap = 10;
+    const patternWidth = stripeWidth + gap;
+    const stripesCount = Math.ceil(beltWidth / patternWidth) + 2;
+
+    useEffect(() => {
+        if (!isActive) {
+            if (animationRef.current) {
+                cancelAnimationFrame(animationRef.current);
+                animationRef.current = null;
+            }
+            return;
+        }
+
+        let lastTime = performance.now();
+        const animate = (time: number) => {
+            const delta = time - lastTime;
+            lastTime = time;
+            setOffsetX(prev => {
+                let newOffset = prev - (116.6667 * delta) / 1000;
+                if (newOffset <= -patternWidth) {
+                    newOffset = 0;
+                }
+                return newOffset;
+            });
+            animationRef.current = requestAnimationFrame(animate);
+        };
+
+        animationRef.current = requestAnimationFrame(animate);
+        return () => {
+            if (animationRef.current) cancelAnimationFrame(animationRef.current);
+        };
+    }, [isActive, patternWidth]);
+
+    const stripes = [];
+    for (let i = 0; i < stripesCount; i++) {
+        stripes.push(
+            <View
+                key={i}
+                style={{
+                    position: 'absolute',
+                    left: i * patternWidth + offsetX,
+                    width: stripeWidth,
+                    height: beltHeight,
+                    backgroundColor: '#DAA520',
+                    opacity: 0.5,
+                }}
+            />
+        );
+    }
+
+    return <View style={StyleSheet.absoluteFillObject}>{stripes}</View>;
+};
+
+// 主游戏组件
 const ChineseRestaurantGame = () => {
     const { token } = useAuth();
     const [isSaving, setIsSaving] = useState(false);
@@ -112,12 +258,11 @@ const ChineseRestaurantGame = () => {
     const [gameActive, setGameActive] = useState(false);
 
     // 特效狀態
-    const [floatingText, setFloatingText] = useState<{ id: number, text: string, color: string } | null>(null);
+    const [floatingText, setFloatingText] = useState<{ id: number; text: string; color: string } | null>(null);
     const screenShake = useRef(new Animated.Value(0)).current;
 
     const scoreAnim = useRef(new Animated.Value(1)).current;
     const comboAnim = useRef(new Animated.Value(1)).current;
-    const conveyorAnim = useRef(new Animated.Value(0)).current;
     const customerAnim = useRef(new Animated.Value(1)).current;
 
     const currentQuestion = questions[currentIndex];
@@ -134,22 +279,20 @@ const ChineseRestaurantGame = () => {
         '🍮', '🍯', '🥛', '☕', '🍵', '🧃', '🥤', '🧋'
     ];
 
-    // 隨機獲取圖標
     const getRandomIcon = (): string => {
         return foodIcons[Math.floor(Math.random() * foodIcons.length)];
     };
 
-    // 修改：倍率調整為 1 / 1.2 / 1.5，配合滿分100
+    // 倍率調整
     const getMultiplier = (currentCombo: number) => {
         if (currentCombo >= 5) return 1.5;
         if (currentCombo >= 3) return 1.2;
         return 1;
     };
 
-    // 保存分數到伺服器（滿分100）
+    // 保存分數到伺服器
     const saveScore = async (finalScore: number) => {
         if (!token || !difficulty) return;
-
         setIsSaving(true);
         try {
             await axios.post('http://localhost:8080/api/user/game/score', {
@@ -159,7 +302,6 @@ const ChineseRestaurantGame = () => {
             }, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            console.log("Score synced to server!");
         } catch (e) {
             console.error("Failed to sync score:", e);
         } finally {
@@ -170,7 +312,6 @@ const ChineseRestaurantGame = () => {
     // 倒數準備序列
     const startPrepSequence = () => {
         setGameActive(false);
-
         setTimeout(() => {
             setPrepText('READY');
             prepScale.setValue(0);
@@ -182,7 +323,6 @@ const ChineseRestaurantGame = () => {
             }).start();
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
         }, 100);
-
         setTimeout(() => {
             setPrepText('GO!');
             prepScale.setValue(0);
@@ -194,7 +334,6 @@ const ChineseRestaurantGame = () => {
             }).start();
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         }, 1000);
-
         setTimeout(() => {
             setPrepText(null);
             setGameActive(true);
@@ -214,12 +353,11 @@ const ChineseRestaurantGame = () => {
         ]).start();
     };
 
-    // 獲取 Animated.Value 的當前值
     const getAnimatedValue = (value: Animated.Value): number => {
-        // @ts-ignore - 使用 __getValue 作為替代方案
-        return value.__getValue();
+        return (value as any).__getValue();
     };
 
+    // 硬件返回处理
     useEffect(() => {
         const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
             if (gameState === 'result') {
@@ -249,27 +387,7 @@ const ChineseRestaurantGame = () => {
         return () => backHandler.remove();
     }, [gameState]);
 
-    useEffect(() => {
-        if (isGameActive && !gameComplete && !nextQuestionDelay) {
-            Animated.loop(
-                Animated.sequence([
-                    Animated.timing(conveyorAnim, {
-                        toValue: 1,
-                        duration: 500,
-                        useNativeDriver: true,
-                        easing: Easing.linear,
-                    }),
-                    Animated.timing(conveyorAnim, {
-                        toValue: 0,
-                        duration: 500,
-                        useNativeDriver: true,
-                        easing: Easing.linear,
-                    }),
-                ])
-            ).start();
-        }
-    }, [isGameActive, gameComplete, nextQuestionDelay, conveyorAnim]);
-
+    // 物品生成逻辑
     useEffect(() => {
         if (isGameActive && currentQuestion && !nextQuestionDelay && items.length < 5) {
             const spawnInterval = setInterval(() => {
@@ -281,6 +399,7 @@ const ChineseRestaurantGame = () => {
         }
     }, [isGameActive, currentQuestion, items.length, nextQuestionDelay]);
 
+    // 物品移动逻辑
     useEffect(() => {
         if (isGameActive && !gameComplete && !nextQuestionDelay && items.length > 0) {
             const moveInterval = setInterval(() => {
@@ -291,8 +410,7 @@ const ChineseRestaurantGame = () => {
                         item.x.setValue(newX);
                         return item;
                     });
-                    const filtered = updated.filter(item => getAnimatedValue(item.x) > -ITEM_SIZE);
-                    return filtered;
+                    return updated.filter(item => getAnimatedValue(item.x) > -ITEM_SIZE);
                 });
             }, 30);
             return () => clearInterval(moveInterval);
@@ -370,29 +488,13 @@ const ChineseRestaurantGame = () => {
         return new Promise<void>((resolve) => {
             if (isHappy) {
                 Animated.sequence([
-                    Animated.timing(customerAnim, {
-                        toValue: 1.2,
-                        duration: 100,
-                        useNativeDriver: true,
-                    }),
-                    Animated.timing(customerAnim, {
-                        toValue: 1,
-                        duration: 100,
-                        useNativeDriver: true,
-                    }),
+                    Animated.timing(customerAnim, { toValue: 1.2, duration: 100, useNativeDriver: true }),
+                    Animated.timing(customerAnim, { toValue: 1, duration: 100, useNativeDriver: true }),
                 ]).start(() => resolve());
             } else {
                 Animated.sequence([
-                    Animated.timing(customerAnim, {
-                        toValue: 0.8,
-                        duration: 100,
-                        useNativeDriver: true,
-                    }),
-                    Animated.timing(customerAnim, {
-                        toValue: 1,
-                        duration: 100,
-                        useNativeDriver: true,
-                    }),
+                    Animated.timing(customerAnim, { toValue: 0.8, duration: 100, useNativeDriver: true }),
+                    Animated.timing(customerAnim, { toValue: 1, duration: 100, useNativeDriver: true }),
                 ]).start(() => resolve());
             }
         });
@@ -402,9 +504,7 @@ const ChineseRestaurantGame = () => {
         if (!isGameActive || gameComplete || nextQuestionDelay || !gameActive) return;
 
         setNextQuestionDelay(true);
-
         await animateItemToCustomer(item, item.isCorrect);
-
         setItems(prev => prev.filter(i => i.id !== item.id));
 
         const updatedQuestions = [...questions];
@@ -417,20 +517,16 @@ const ChineseRestaurantGame = () => {
         setQuestions(updatedQuestions);
 
         if (item.isCorrect) {
-            // ✅ 正確 - 打擊回饋
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
             setFloatingText({ id: Date.now(), text: 'HIT!', color: '#FFD700' });
-
             const newCombo = combo + 1;
             const multiplier = getMultiplier(newCombo);
-            const pointsEarned = Math.round(10 * multiplier); // 四捨五入取整
+            const pointsEarned = Math.round(10 * multiplier);
             let newScore = score + pointsEarned;
-            // 滿分限制 100
             if (newScore > 100) newScore = 100;
             setScore(newScore);
             setCombo(newCombo);
             setMaxCombo(prev => Math.max(prev, newCombo));
-
             Animated.sequence([
                 Animated.timing(scoreAnim, { toValue: 1.3, duration: 150, useNativeDriver: true }),
                 Animated.timing(scoreAnim, { toValue: 1, duration: 150, useNativeDriver: true }),
@@ -439,30 +535,23 @@ const ChineseRestaurantGame = () => {
                 Animated.timing(comboAnim, { toValue: 1.5, duration: 100, useNativeDriver: true }),
                 Animated.timing(comboAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
             ]).start();
-
             setCustomerState('happy');
             await animateCustomerReaction(true);
-            showTemporaryHint(`🎉 So delicious! +${pointsEarned} `, '#4CAF50');
+            showTemporaryHint(`🎉 So delicious! +${pointsEarned}`, '#4CAF50');
         } else {
-            // ❌ 錯誤 - 被打擊回饋
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
             triggerScreenShake();
             setFloatingText({ id: Date.now(), text: 'OUCH!', color: '#FF4757' });
-
             let newScore = score - 5;
             if (newScore < 0) newScore = 0;
             setScore(newScore);
             setCombo(0);
-
             setCustomerState('angry');
             await animateCustomerReaction(false);
-            showTemporaryHint(`😠 This is not what I want！ -5 `, '#F44336');
+            showTemporaryHint(`😠 This is not what I want！ -5`, '#F44336');
         }
 
-        // 清除浮動文字
-        setTimeout(() => {
-            setFloatingText(null);
-        }, 800);
+        setTimeout(() => setFloatingText(null), 800);
 
         setTimeout(() => {
             const isLast = currentIndex + 1 >= questions.length;
@@ -471,7 +560,6 @@ const ChineseRestaurantGame = () => {
                 setItems([]);
                 setCustomerState('waiting');
                 setNextQuestionDelay(false);
-                // 每題之間重新倒數
                 startPrepSequence();
             } else {
                 handleGameComplete();
@@ -491,15 +579,12 @@ const ChineseRestaurantGame = () => {
         setGameActive(false);
         setGameComplete(true);
         setNextQuestionDelay(false);
-
-        // 保存分數到伺服器 (滿分100)
         await saveScore(score);
 
         const totalQuestions = questions.length;
         const correctCount = questions.filter(q => q.isAnsweredCorrectly).length;
         const accuracy = totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0;
 
-        // 根據滿分100調整評價反饋
         let feedback = '';
         if (score >= 90) {
             feedback = `🍽️ Five-star chef! You did it ${correctCount}/${totalQuestions} Dish!\n🔥 Highest Combo: ${maxCombo} | 🎯 準確率: ${Math.round(accuracy)}%\n Amazing! Welcome to visit again next time!🌟`;
@@ -531,7 +616,6 @@ const ChineseRestaurantGame = () => {
             resetGame();
             setGameState('playing');
             setIsGameActive(true);
-            // 開始倒數
             startPrepSequence();
         } catch (error) {
             console.error('Failed to load questions:', error);
@@ -564,7 +648,6 @@ const ChineseRestaurantGame = () => {
     };
 
     const handleRestart = async () => {
-        // 如果遊戲正在進行中且有分數，保存當前分數
         if (gameState === 'playing' && score > 0 && difficulty) {
             await saveScore(score);
         }
@@ -585,7 +668,11 @@ const ChineseRestaurantGame = () => {
         }
     };
 
-    const handleBackToGames = () => router.back();
+    const handleBackToGames = () => {
+        if (router.canGoBack()) {
+            router.back();
+        }
+    };
 
     const calculateScoreStats = () => {
         const totalQuestions = questions.length;
@@ -610,10 +697,10 @@ const ChineseRestaurantGame = () => {
         }
     };
 
+    // 渲染游戏主界面
     const renderPlaying = () => (
         <View style={styles.gameContainer}>
             <StatusBar barStyle="dark-content" />
-
             <Animated.View style={{ flex: 1, transform: [{ translateX: screenShake }] }}>
                 <View style={styles.gameHeader}>
                     <TouchableOpacity onPress={handleRestart} style={styles.exitButton}>
@@ -664,19 +751,15 @@ const ChineseRestaurantGame = () => {
                             style={styles.conveyorBelt}
                             onLayout={(e) => {
                                 const { width } = e.nativeEvent.layout;
-                                if (width > 0) {
-                                    setBeltWidth(width);
-                                }
+                                if (width > 0) setBeltWidth(width);
                             }}
                         >
-                            {/* 倒數覆蓋層 */}
                             {prepText && (
                                 <Animated.View style={[styles.prepOverlay, { transform: [{ scale: prepScale }] }]}>
                                     <Text style={styles.prepText}>{prepText}</Text>
                                 </Animated.View>
                             )}
 
-                            {/* 浮動文字特效 */}
                             {floatingText && (
                                 <FloatingText
                                     key={floatingText.id}
@@ -686,23 +769,21 @@ const ChineseRestaurantGame = () => {
                                 />
                             )}
 
-                            <Animated.View
-                                style={[
-                                    styles.conveyorStripes,
-                                    {
-                                        transform: [{
-                                            translateX: conveyorAnim.interpolate({
-                                                inputRange: [0, 1],
-                                                outputRange: [0, -20]
-                                            })
-                                        }]
-                                    }
-                                ]}
-                            >
-                                {[...Array(20)].map((_, i) => (
-                                    <View key={i} style={styles.conveyorStripe} />
-                                ))}
-                            </Animated.View>
+                            {/* 条纹层 - 根据平台选择不同实现 */}
+                            {!isWeb ? (
+                                <StripesCanvas
+                                    beltWidth={beltWidth}
+                                    beltHeight={CONVEYOR_HEIGHT}
+                                    isActive={gameActive && !gameComplete && !nextQuestionDelay}
+                                    speedPxPerSec={116.6667}
+                                />
+                            ) : (
+                                <WebStripes
+                                    beltWidth={beltWidth}
+                                    beltHeight={CONVEYOR_HEIGHT}
+                                    isActive={gameActive && !gameComplete && !nextQuestionDelay}
+                                />
+                            )}
 
                             {items.map(item => (
                                 <Animated.View
@@ -710,10 +791,7 @@ const ChineseRestaurantGame = () => {
                                     style={[
                                         styles.conveyorItem,
                                         {
-                                            transform: [
-                                                { translateX: item.x },
-                                                { scale: item.scale }
-                                            ],
+                                            transform: [{ translateX: item.x }, { scale: item.scale }],
                                             opacity: item.opacity,
                                             top: item.y,
                                         }
@@ -726,10 +804,7 @@ const ChineseRestaurantGame = () => {
                                         disabled={!gameActive}
                                     >
                                         <Text style={styles.foodIcon}>{item.icon}</Text>
-                                        <Text style={[
-                                            styles.foodText,
-                                            item.isCorrect ? styles.correctText : styles.wrongText
-                                        ]}>
+                                        <Text style={[styles.foodText, item.isCorrect ? styles.correctText : styles.wrongText]}>
                                             {item.text}
                                         </Text>
                                         {item.isCorrect && item.pinyin && (
@@ -746,7 +821,6 @@ const ChineseRestaurantGame = () => {
                                 </View>
                             )}
                         </View>
-
                         <View style={styles.conveyorLeftWheel} />
                         <View style={styles.conveyorRightWheel} />
                     </View>
@@ -779,54 +853,81 @@ const ChineseRestaurantGame = () => {
         </View>
     );
 
-    const renderDifficultySelect = () => (
-        <View style={styles.container}>
-            <StatusBar barStyle="dark-content" />
-            <ScrollView contentContainerStyle={styles.scrollContent}>
-                <View style={styles.headerSection}>
-                    <Utensils size={60} color="#FFA07A" style={{ marginBottom: 20 }} />
-                    <Text style={styles.mainTitle}>🍜 Restaurant Battle</Text>
-                    <Text style={styles.subTitle}>
-                        What does the customer want to eat? Quickly take the correct ingredients from the conveyor belt to them! Total score: 100 points!
-                    </Text>
-                </View>
-                <View style={styles.menuGrid}>
-                    {difficultyOptions.map((option) => (
-                        <TouchableOpacity
-                            key={option.id}
-                            style={[styles.diffCard, { backgroundColor: option.bgColor, borderColor: option.color }]}
-                            onPress={() => handleSelectDifficulty(option.level)}
-                            activeOpacity={0.8}
-                        >
-                            <View style={styles.cardIconContainer}>
-                                <Text style={styles.cardIcon}>{option.icon}</Text>
-                            </View>
-                            <View style={styles.cardContent}>
-                                <View style={styles.cardHeader}>
-                                    <Text style={[styles.diffBtnText, { color: option.color }]}>
-                                        {option.title}
-                                    </Text>
-                                    <View style={[styles.levelBadge, { backgroundColor: option.color }]}>
-                                        <Text style={styles.levelBadgeText}>{option.badgeText}</Text>
-                                    </View>
-                                </View>
-                                <Text style={styles.diffDesc}>{option.description}</Text>
-                                <View style={styles.startButtonContainer}>
-                                    <View style={[styles.startButton, { backgroundColor: option.color }]}>
-                                        <Text style={styles.startButtonText}>Start taking orders 🍽️</Text>
-                                    </View>
-                                </View>
-                            </View>
-                        </TouchableOpacity>
-                    ))}
-                </View>
-                <TouchableOpacity style={styles.backLink} onPress={handleBackToGames}>
-                    <Text style={styles.backLinkText}>← Return to game list</Text>
-                </TouchableOpacity>
-            </ScrollView>
-        </View>
-    );
+    // 渲染难度选择界面
+    const renderDifficultySelect = () => {
+        const difficultyOptions = [
+            {
+                id: 'beginner',
+                level: 'beginner' as const,
+                title: 'Intern chef',
+                badgeText: 'Easy to serve',
+                description: 'The conveyor belt is slower, with simple dishes, suitable for beginner little chefs.',
+                icon: '👨‍🍳',
+                color: '#FFA07A',
+                bgColor: '#FFF3E0',
+            },
+            {
+                id: 'advanced',
+                level: 'advanced' as const,
+                title: 'Master Chef',
+                badgeText: 'Expert Challenge',
+                description: 'The conveyor belt is faster, with complex dishes, testing your reaction speed.',
+                icon: '👩‍🍳',
+                color: '#E67E22',
+                bgColor: '#FFE4C4',
+            }
+        ];
 
+        return (
+            <View style={styles.container}>
+                <StatusBar barStyle="dark-content" />
+                <ScrollView contentContainerStyle={styles.scrollContent}>
+                    <View style={styles.headerSection}>
+                        <Utensils size={60} color="#FFA07A" style={{ marginBottom: 20 }} />
+                        <Text style={styles.mainTitle}>🍜 Restaurant Battle</Text>
+                        <Text style={styles.subTitle}>
+                            What does the customer want to eat? Quickly take the correct ingredients from the conveyor belt to them! Total score: 100 points!
+                        </Text>
+                    </View>
+                    <View style={styles.menuGrid}>
+                        {difficultyOptions.map((option) => (
+                            <TouchableOpacity
+                                key={option.id}
+                                style={[styles.diffCard, { backgroundColor: option.bgColor, borderColor: option.color }]}
+                                onPress={() => handleSelectDifficulty(option.level)}
+                                activeOpacity={0.8}
+                            >
+                                <View style={styles.cardIconContainer}>
+                                    <Text style={styles.cardIcon}>{option.icon}</Text>
+                                </View>
+                                <View style={styles.cardContent}>
+                                    <View style={styles.cardHeader}>
+                                        <Text style={[styles.diffBtnText, { color: option.color }]}>
+                                            {option.title}
+                                        </Text>
+                                        <View style={[styles.levelBadge, { backgroundColor: option.color }]}>
+                                            <Text style={styles.levelBadgeText}>{option.badgeText}</Text>
+                                        </View>
+                                    </View>
+                                    <Text style={styles.diffDesc}>{option.description}</Text>
+                                    <View style={styles.startButtonContainer}>
+                                        <View style={[styles.startButton, { backgroundColor: option.color }]}>
+                                            <Text style={styles.startButtonText}>Start taking orders 🍽️</Text>
+                                        </View>
+                                    </View>
+                                </View>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                    <TouchableOpacity style={styles.backLink} onPress={handleBackToGames}>
+                        <Text style={styles.backLinkText}>← Return to game list</Text>
+                    </TouchableOpacity>
+                </ScrollView>
+            </View>
+        );
+    };
+
+    // 渲染结果界面
     const renderResult = () => {
         const { totalQuestions, correctCount, accuracy } = calculateScoreStats();
         return (
@@ -893,29 +994,6 @@ const ChineseRestaurantGame = () => {
             </View>
         );
     };
-
-    const difficultyOptions = [
-        {
-            id: 'beginner',
-            level: 'beginner' as const,
-            title: 'Intern chef',
-            badgeText: 'Easy to serve',
-            description: 'The conveyor belt is slower, with simple dishes, suitable for beginner little chefs.',
-            icon: '👨‍🍳',
-            color: '#FFA07A',
-            bgColor: '#FFF3E0',
-        },
-        {
-            id: 'advanced',
-            level: 'advanced' as const,
-            title: 'Master Chef',
-            badgeText: 'Expert Challenge',
-            description: 'The conveyor belt is faster, with complex dishes, testing your reaction speed.',
-            icon: '👩‍🍳',
-            color: '#E67E22',
-            bgColor: '#FFE4C4',
-        }
-    ];
 
     if (loading) {
         return (
@@ -1177,23 +1255,6 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
         position: 'relative',
     },
-    conveyorStripes: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-around',
-    },
-    conveyorStripe: {
-        width: 15,
-        height: CONVEYOR_HEIGHT,
-        backgroundColor: '#DAA520',
-        marginHorizontal: 5,
-        opacity: 0.5,
-    },
     conveyorItem: {
         position: 'absolute',
         width: ITEM_SIZE,
@@ -1342,7 +1403,6 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: 'bold',
     },
-    // 倒數覆蓋層樣式
     prepOverlay: {
         position: 'absolute',
         top: '30%',
@@ -1368,7 +1428,6 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
         elevation: 5,
     },
-    // 浮動文字層樣式
     floatingLayer: {
         position: 'absolute',
         top: '20%',
@@ -1386,7 +1445,6 @@ const styles = StyleSheet.create({
         textShadowOffset: { width: 2, height: 2 },
         textShadowRadius: 4,
     },
-    // 結果頁面樣式
     resultHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',

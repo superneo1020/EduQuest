@@ -11,10 +11,10 @@ import {
     Dimensions,
     Vibration,
     ActivityIndicator,
-    PanResponder,
     Easing,
+    Image,
 } from 'react-native';
-import { Volume2, Star, Headphones, Fish } from 'lucide-react-native';
+import { Star, Fish } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, router } from 'expo-router';
@@ -35,17 +35,17 @@ type Option = {
     id: string;
     text: string;
     correct: boolean;
-    color?: string; // 魚的顏色
-    emoji?: string; // 魚的表情
+    color?: string;
+    emoji?: string;
 };
 
 // 魚的位置類型
 type FishPosition = {
     x: RNAnimated.Value;
     y: RNAnimated.Value;
-    direction: number; // 1: 向右, -1: 向左
+    direction: number;
     speed: number;
-    amplitude: number; // 上下擺動幅度
+    amplitude: number;
     phase: RNAnimated.Value;
 };
 
@@ -66,7 +66,6 @@ type GameState = {
     isLoading: boolean;
     questions: Question[];
     fishCaught: boolean;
-    // 是否已釣到魚
 };
 
 // 难度配置
@@ -129,7 +128,6 @@ export default function ListeningScreen() {
     const prepScale = useSharedValue(0);
     const prepTriggered = useRef(false);
 
-    // 将 useAnimatedStyle 移到组件顶层，始终调用
     const prepAnimatedStyle = useAnimatedStyle(() => ({
         transform: [{ scale: prepScale.value }],
         opacity: prepScale.value === 0 ? 0 : 1,
@@ -143,7 +141,6 @@ export default function ListeningScreen() {
     const [caughtFishAnim] = useState(new RNAnimated.Value(0));
     const [waterLevel] = useState(new RNAnimated.Value(0));
     const [bobberAnim] = useState(new RNAnimated.Value(0));
-    const fishingLineRef = useRef<RNAnimated.Value>(new RNAnimated.Value(0));
 
     // 动画引用
     const scaleAnim = useRef(new RNAnimated.Value(1)).current;
@@ -275,10 +272,8 @@ export default function ListeningScreen() {
     const startFishAnimation = (positions: FishPosition[]) => {
         positions.forEach((fish, index) => {
             const animate = () => {
-                // 水平移動
                 let newX = fish.x._value + (fish.direction * fish.speed);
 
-                // 邊界檢測，超出則反向
                 if (newX > width - 80) {
                     newX = width - 80;
                     fish.direction = -1;
@@ -289,7 +284,6 @@ export default function ListeningScreen() {
 
                 fish.x.setValue(newX);
 
-                // 上下擺動（正弦波）
                 fish.phase.setValue(fish.phase._value + 0.05);
                 const sinValue = Math.sin(fish.phase._value);
                 const newY = 100 + (index * 70) + (sinValue * fish.amplitude);
@@ -301,51 +295,52 @@ export default function ListeningScreen() {
         });
     };
 
-    // 加载题目
-    const loadQuestions = async (level: Difficulty) => {
+    // 生成并追加指定索引的题目
+    const generateAndAddQuestion = async (index: number, level: Difficulty): Promise<Question | null> => {
+        try {
+            const question = await AIService.generateSingleQuestion(level, index);
+            if (!question) return null;
+
+            const coloredOptions = question.options.map((opt, idx) => ({
+                ...opt,
+                color: FISH_COLORS[level][idx % FISH_COLORS[level].length],
+                emoji: FISH_EMOJIS[idx % FISH_EMOJIS.length],
+            }));
+
+            return { ...question, options: coloredOptions };
+        } catch (error) {
+            console.error(`Failed to generate question at index ${index}:`, error);
+            return null;
+        }
+    };
+
+    // 加载第一题
+    const loadFirstQuestion = async (level: Difficulty) => {
         setGameState(prev => ({ ...prev, isLoading: true, questions: [] }));
 
         try {
-            const questions: Question[] = [];
-            const totalNeeded = 6;
-
-            for (let i = 0; i < totalNeeded; i++) {
-                const question = await AIService.generateSingleQuestion(level, i);
-
-                if (question) {
-                    // 為選項添加魚的顏色和表情
-                    const coloredOptions = question.options.map((opt, idx) => ({
-                        ...opt,
-                        color: FISH_COLORS[level][idx % FISH_COLORS[level].length],
-                        emoji: FISH_EMOJIS[idx % FISH_EMOJIS.length],
-                    }));
-                    questions.push({ ...question, options: coloredOptions });
-                }
-
-                if (i < totalNeeded - 1) {
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                }
+            const firstQuestion = await generateAndAddQuestion(0, level);
+            if (firstQuestion) {
+                setGameState(prev => ({
+                    ...prev,
+                    isLoading: false,
+                    questions: [firstQuestion],
+                    totalQuestions: 6,
+                    currentQuestionIndex: 0,
+                    gameCompleted: false,
+                    score: 0,
+                    streak: 0,
+                    maxStreak: 0,
+                    correctAnswers: 0,
+                    isAnswered: false,
+                    fishCaught: false,
+                }));
+                progressAnim.setValue(0);
+            } else {
+                setGameState(prev => ({ ...prev, isLoading: false }));
             }
-
-            setGameState(prev => ({
-                ...prev,
-                isLoading: false,
-                questions: questions,
-                totalQuestions: questions.length,
-                currentQuestionIndex: 0,
-                gameCompleted: false,
-                score: 0,
-                streak: 0,
-                maxStreak: 0,
-                correctAnswers: 0,
-                isAnswered: false,
-                fishCaught: false,
-            }));
-
-            progressAnim.setValue(0);
-
         } catch (error) {
-            console.error('Failed to load questions:', error);
+            console.error('Failed to load first question:', error);
             setGameState(prev => ({ ...prev, isLoading: false }));
         }
     };
@@ -367,15 +362,17 @@ export default function ListeningScreen() {
 
     // 监听加载完成，触发准备动画
     useEffect(() => {
-        if (!gameState.isLoading && !gameState.gameCompleted && gameState.currentLevel && !prepTriggered.current) {
+        if (!gameState.isLoading && !gameState.gameCompleted && gameState.currentLevel && gameState.questions.length > 0 && !prepTriggered.current) {
             prepTriggered.current = true;
             startPrepSequence();
         }
-    }, [gameState.isLoading, gameState.gameCompleted, gameState.currentLevel]);
+    }, [gameState.isLoading, gameState.gameCompleted, gameState.currentLevel, gameState.questions.length]);
 
     // 选择难度并开始游戏
     const selectDifficulty = async (level: Difficulty) => {
-        prepTriggered.current = false; // 重置动画标记
+        prepTriggered.current = false;
+        AIService.resetGameSession(level);
+
         setGameState(prev => ({
             ...prev,
             currentLevel: level,
@@ -395,14 +392,15 @@ export default function ListeningScreen() {
         }));
 
         progressAnim.setValue(0);
-        await loadQuestions(level);
+        await loadFirstQuestion(level);
     };
 
     // 重新开始游戏
     const restartGame = async () => {
         if (!gameState.currentLevel) return;
         stopAudio();
-        prepTriggered.current = false; // 重置动画标记
+        prepTriggered.current = false;
+        AIService.resetGameSession(gameState.currentLevel);
 
         setGameState(prev => ({
             ...prev,
@@ -422,19 +420,19 @@ export default function ListeningScreen() {
         }));
 
         progressAnim.setValue(0);
-        await loadQuestions(gameState.currentLevel);
+        await loadFirstQuestion(gameState.currentLevel);
     };
 
-    // 重试加载
+    // 重试加载第一题
     const retryLoadQuestions = async () => {
         if (!gameState.currentLevel) return;
         setGameState(prev => ({ ...prev, isLoading: true }));
-        await loadQuestions(gameState.currentLevel);
+        await loadFirstQuestion(gameState.currentLevel);
     };
 
     // 返回难度选择页面
     const backToDifficultySelect = () => {
-        prepTriggered.current = false; // 重置动画标记
+        prepTriggered.current = false;
         stopAudio();
         setGameState({
             currentLevel: null,
@@ -529,7 +527,6 @@ export default function ListeningScreen() {
         const isCorrect = option.correct;
         setGameState(prev => ({ ...prev, isAnswered: true, selectedOptionId: option.id, fishCaught: true }));
 
-        // 漣漪動畫
         RNAnimated.sequence([
             RNAnimated.timing(rippleAnim, {
                 toValue: 1,
@@ -543,7 +540,6 @@ export default function ListeningScreen() {
             }),
         ]).start();
 
-        // 釣起魚的動畫
         RNAnimated.spring(caughtFishAnim, {
             toValue: 1,
             friction: 3,
@@ -579,28 +575,56 @@ export default function ListeningScreen() {
         }).start();
     };
 
-    // 下一题或结束游戏
-    const nextQuestion = () => {
+    // 下一题或结束游戏（动态生成）
+    const nextQuestion = async () => {
         if (prepText !== null) return;
-        if (gameState.currentQuestionIndex >= gameState.totalQuestions - 1) {
+        if (gameState.isLoading) return;
+
+        const nextIndex = gameState.currentQuestionIndex + 1;
+
+        if (nextIndex >= gameState.totalQuestions) {
             endGame();
             return;
         }
 
-        setGameState(prev => ({
-            ...prev,
-            currentQuestionIndex: prev.currentQuestionIndex + 1,
-            isAnswered: false,
-            showHint: false,
-            selectedOptionId: null,
-            fishCaught: false,
-        }));
-
-        stopAudio();
-        // 重新初始化魚的位置
-        const nextQuestionData = gameState.questions[gameState.currentQuestionIndex + 1];
-        if (nextQuestionData) {
-            initFishPositions(nextQuestionData.options);
+        if (gameState.questions.length > nextIndex) {
+            setGameState(prev => ({
+                ...prev,
+                currentQuestionIndex: nextIndex,
+                isAnswered: false,
+                showHint: false,
+                selectedOptionId: null,
+                fishCaught: false,
+            }));
+            stopAudio();
+        } else {
+            setGameState(prev => ({ ...prev, isLoading: true }));
+            try {
+                const newQuestion = await generateAndAddQuestion(nextIndex, gameState.currentLevel!);
+                if (newQuestion) {
+                    setGameState(prev => ({
+                        ...prev,
+                        isLoading: false,
+                        questions: [...prev.questions, newQuestion],
+                        currentQuestionIndex: nextIndex,
+                        isAnswered: false,
+                        showHint: false,
+                        selectedOptionId: null,
+                        fishCaught: false,
+                    }));
+                    stopAudio();
+                } else {
+                    Alert.alert('Error', 'Failed to load next fish. Please try again.', [
+                        { text: 'Retry', onPress: () => nextQuestion() },
+                        { text: 'Cancel', style: 'cancel' }
+                    ]);
+                    setGameState(prev => ({ ...prev, isLoading: false }));
+                }
+            } catch (error) {
+                console.error('Error generating next question:', error);
+                setGameState(prev => ({ ...prev, isLoading: false }));
+                Alert.alert('Error', 'Unable to load next question. Please try again.');
+            }
         }
     };
 
@@ -667,10 +691,10 @@ export default function ListeningScreen() {
     // 當問題改變時初始化魚的位置
     useEffect(() => {
         const currentQ = getCurrentQuestion();
-        if (currentQ && !gameState.isLoading && !gameState.gameCompleted) {
+        if (currentQ && !gameState.isLoading && !gameState.gameCompleted && !prepText) {
             initFishPositions(currentQ.options);
         }
-    }, [gameState.currentQuestionIndex, gameState.questions]);
+    }, [gameState.currentQuestionIndex, gameState.questions, gameState.isLoading, gameState.gameCompleted, prepText]);
 
     const currentQuestion = getCurrentQuestion();
     const accuracy = calculateAccuracy();
@@ -747,7 +771,6 @@ export default function ListeningScreen() {
 
     // 加载进度
     if (gameState.isLoading) {
-        const progress = (gameState.questions.length / 6) * 100;
         return (
             <View style={styles.container}>
                 <Stack.Screen
@@ -765,10 +788,10 @@ export default function ListeningScreen() {
                 <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color="#4b6cb7" />
                     <Text style={styles.loadingText}>
-                        🎣 Preparing fishing pond... ({gameState.questions.length}/6)
+                        🎣 Preparing fishing pond... (1/6)
                     </Text>
                     <View style={styles.loadingProgressBar}>
-                        <View style={[styles.loadingProgressFill, { width: `${progress}%` }]} />
+                        <View style={[styles.loadingProgressFill, { width: '16%' }]} />
                     </View>
                 </View>
             </View>
@@ -960,6 +983,33 @@ export default function ListeningScreen() {
                         ]}
                     />
 
+                    {/* 海草图片装饰 */}
+                    <View style={styles.seaweedContainer} pointerEvents="none">
+                        <Image
+                            source={require('../../../assets/images/seaweed.png')}
+                            style={[styles.seaweedImage, styles.seaweedImage1]}
+                            resizeMode="contain"
+                        />
+                        <Image
+                            source={require('../../../assets/images/seaweed.png')}
+                            style={[styles.seaweedImage, styles.seaweedImage2]}
+                            resizeMode="contain"
+                        />
+                        <Image
+                            source={require('../../../assets/images/seaweed.png')}
+                            style={[styles.seaweedImage, styles.seaweedImage3]}
+                            resizeMode="contain"
+                        />
+                        <Image
+                            source={require('../../../assets/images/seaweed.png')}
+                            style={[styles.seaweedImage, styles.seaweedImage4]}
+                            resizeMode="contain"
+                        />
+                    </View>
+
+                    {/* 岩石图片装饰 */}
+
+
                     {/* 浮标 */}
                     <RNAnimated.View
                         style={[
@@ -1006,23 +1056,19 @@ export default function ListeningScreen() {
                                     disabled={gameState.isAnswered || prepText !== null}
                                     activeOpacity={0.8}
                                 >
-                                    {/* 魚的身體 (包含背景和內容) */}
                                     <LinearGradient
                                         colors={[option.color || '#FFB6C1', (option.color || '#FFB6C1') + 'CC']}
                                         style={[
                                             styles.fishBody,
                                             {
-                                                // 只翻轉身體背景和布局方向
                                                 transform: [{ scaleX: fishPos.direction === 1 ? 1 : -1 }]
                                             }
                                         ]}
                                     >
                                         <View style={styles.fishContent}>
-                                            {/* 魚的表情符號也會跟著翻轉，看起來像轉向 */}
                                             <Text style={styles.fishEmoji}>
                                                 {option.emoji || '🐟'}
                                             </Text>
-                                            {/* 文字單獨再翻轉回來，保持正常閱讀方向 */}
                                             <Text
                                                 style={[
                                                     styles.fishText,
@@ -1143,7 +1189,7 @@ export default function ListeningScreen() {
                     <TouchableOpacity
                         style={[styles.fishingControlButton, styles.fishingNextButton]}
                         onPress={nextQuestion}
-                        disabled={!gameState.isAnswered || prepText !== null}
+                        disabled={!gameState.isAnswered || prepText !== null || gameState.isLoading}
                     >
                         <Ionicons
                             name={gameState.currentQuestionIndex >= gameState.totalQuestions - 1 ? "flag" : "arrow-forward"}
@@ -1164,7 +1210,7 @@ export default function ListeningScreen() {
                 </View>
             </ScrollView>
 
-            {/* 准备动画覆盖层 - 现在始终渲染，通过条件控制显示 */}
+            {/* 准备动画覆盖层 */}
             <ReAnimated.View
                 style={[
                     styles.prepOverlay,
@@ -1181,9 +1227,11 @@ export default function ListeningScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#E8F4FD', // 海洋藍色背景
+        backgroundColor: '#E8F4FD',
     },
-    // 难度选择样式
+    scrollContent: {
+        flexGrow: 1,
+    },
     headerSection: {
         alignItems: 'center',
         paddingTop: 40,
@@ -1303,7 +1351,6 @@ const styles = StyleSheet.create({
         color: '#4b6cb7',
         fontWeight: '600',
     },
-    // 加载样式
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',
@@ -1357,7 +1404,6 @@ const styles = StyleSheet.create({
         flexGrow: 1,
         paddingBottom: 30,
     },
-    // 釣魚模式專屬樣式
     fishingGameInfo: {
         backgroundColor: 'rgba(255,255,255,0.9)',
         borderRadius: 20,
@@ -1407,6 +1453,39 @@ const styles = StyleSheet.create({
         bottom: 0,
         backgroundColor: '#6BB5FF',
         zIndex: 0,
+    },
+    // 海草图片样式
+    seaweedContainer: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 100,
+        zIndex: 1,
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        alignItems: 'flex-end',
+        paddingHorizontal: 10,
+    },
+    seaweedImage: {
+        width: 140,
+        height: 160,
+    },
+    seaweedImage1: {
+        height: 170,
+        width: 135,
+    },
+    seaweedImage2: {
+        height: 190,
+        width: 145,
+    },
+    seaweedImage3: {
+        height: 160,
+        width: 130,
+    },
+    seaweedImage4: {
+        height: 185,
+        width: 140,
     },
     bobber: {
         position: 'absolute',
@@ -1630,7 +1709,6 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#666',
     },
-    // 結果頁面樣式
     resultPageContainer: {
         flexGrow: 1,
         backgroundColor: '#f5f5f5',
@@ -1739,14 +1817,13 @@ const styles = StyleSheet.create({
         backgroundColor: '#FF9800',
     },
     backToGameButton: {
-        backgroundColor: '#FF5722', // 与 sentencereordergame 中的 homeButton 一致
+        backgroundColor: '#FF5722',
     },
     resultButtonText: {
         fontSize: 16,
         fontWeight: '600',
         color: 'white',
     },
-    // 准备动画覆盖层
     prepOverlay: {
         position: 'absolute',
         top: 0,
@@ -1763,5 +1840,9 @@ const styles = StyleSheet.create({
         fontWeight: '900',
         color: '#FFD700',
         fontStyle: 'italic',
+    },
+    fishContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
     },
 });

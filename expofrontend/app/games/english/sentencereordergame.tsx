@@ -79,15 +79,17 @@ interface WordItem {
 }
 
 interface GameState {
-    currentQuestion: number;
+    currentQuestionIndex: number;      // 當前第幾題 (0-based)
+    totalQuestions: number;             // 總題數
     score: number;
     words: WordItem[];
     feedback: string;
     isChecking: boolean;
     correctAnswers: number;
     wrongAnswers: number;
-    questions: ReorderQuestion[];
-    isLoading: boolean;
+    currentQuestion: ReorderQuestion | null;  // 當前題目
+    isLoading: boolean;                 // 正在生成題目
+    isLoadingNext: boolean;             // 正在加載下一題
     difficulty: Difficulty | null;
     gameStarted: boolean;
     gameFinished: boolean;
@@ -110,21 +112,21 @@ export default function SentenceReorderScreen() {
 
     // 遊戲狀態
     const [gameState, setGameState] = useState<GameState>({
-        currentQuestion: 0,
+        currentQuestionIndex: 0,
+        totalQuestions: 5,
         score: 0,
         words: [],
         feedback: '',
         isChecking: false,
         correctAnswers: 0,
         wrongAnswers: 0,
-        questions: [],
+        currentQuestion: null,
         isLoading: false,
+        isLoadingNext: false,
         difficulty: null,
         gameStarted: false,
         gameFinished: false
     });
-
-    const currentQuestion = gameState.questions[gameState.currentQuestion];
 
     // 螢幕震動動畫樣式
     const animatedScreenStyle = useAnimatedStyle(() => ({
@@ -160,76 +162,23 @@ export default function SentenceReorderScreen() {
         }, 1600);
     }, []);
 
-    // 初始化遊戲
-    const initializeGame = useCallback(async (difficulty: Difficulty) => {
-        setGameState(prev => ({
-            ...prev,
-            isLoading: true,
-            difficulty: difficulty,
-            gameStarted: true,
-            gameFinished: false
-        }));
+    // 生成單一題目（使用AI或備用）
+    const generateQuestion = useCallback(async (difficulty: Difficulty, questionNumber: number): Promise<ReorderQuestion> => {
+        const aiAvailable = await ReorderService.isAIAvailable();
+        console.log(`Generating question ${questionNumber + 1}, AI available:`, aiAvailable);
 
-        try {
-            const aiAvailable = await ReorderService.isAIAvailable();
-            console.log('AI available:', aiAvailable);
-
-            const questionsCount = DIFFICULTY_LEVELS[difficulty].questionsPerGame;
-            let generatedQuestions: ReorderQuestion[];
-
-            if (aiAvailable) {
-                console.log('Generating questions with AI...');
-                generatedQuestions = await ReorderService.generateQuestions(difficulty, questionsCount);
-                console.log(`Generated ${generatedQuestions.length} questions`);
-            } else {
-                console.log('Using fallback questions...');
-                generatedQuestions = [];
-                for (let i = 0; i < questionsCount; i++) {
-                    generatedQuestions.push(ReorderService.getFallbackQuestion(difficulty, i));
-                }
-            }
-
-            setGameState(prev => ({
-                ...prev,
-                questions: generatedQuestions,
-                currentQuestion: 0,
-                score: 0,
-                correctAnswers: 0,
-                wrongAnswers: 0,
-                isLoading: false
-            }));
-
-            if (generatedQuestions.length > 0) {
-                initializeQuestion(generatedQuestions[0]);
-                // 開始倒數
-                startPrepSequence();
-            }
-
-        } catch (error) {
-            console.error('Failed to initialize game:', error);
-            Alert.alert('Error', 'Failed to generate questions. Using fallback questions.');
-
-            const questionsCount = DIFFICULTY_LEVELS[difficulty].questionsPerGame;
-            const fallbackQuestions: ReorderQuestion[] = [];
-            for (let i = 0; i < questionsCount; i++) {
-                fallbackQuestions.push(ReorderService.getFallbackQuestion(difficulty, i));
-            }
-
-            setGameState(prev => ({
-                ...prev,
-                questions: fallbackQuestions,
-                isLoading: false
-            }));
-
-            if (fallbackQuestions.length > 0) {
-                initializeQuestion(fallbackQuestions[0]);
-                startPrepSequence();
+        if (aiAvailable) {
+            const question = await ReorderService.generateSingleQuestion(difficulty, questionNumber);
+            if (question) {
+                return question;
             }
         }
-    }, [startPrepSequence]);
+        // 使用備用題目
+        return ReorderService.getFallbackQuestion(difficulty, questionNumber);
+    }, []);
 
-    // 初始化當前題目
-    const initializeQuestion = (question: ReorderQuestion) => {
+    // 初始化當前題目的單詞順序
+    const initializeQuestionWords = (question: ReorderQuestion) => {
         const shuffled = ReorderService.shuffleWords(question.words);
 
         const words: WordItem[] = shuffled.map((item, newIndex) => ({
@@ -246,6 +195,109 @@ export default function SentenceReorderScreen() {
             isChecking: false
         }));
     };
+
+    // 加載第一題並開始遊戲
+    const loadFirstQuestion = useCallback(async (difficulty: Difficulty) => {
+        setGameState(prev => ({
+            ...prev,
+            isLoading: true,
+            difficulty: difficulty,
+            gameStarted: true,
+            gameFinished: false,
+            currentQuestionIndex: 0,
+            score: 0,
+            correctAnswers: 0,
+            wrongAnswers: 0
+        }));
+
+        try {
+            const firstQuestion = await generateQuestion(difficulty, 0);
+
+            setGameState(prev => ({
+                ...prev,
+                currentQuestion: firstQuestion,
+                isLoading: false
+            }));
+
+            initializeQuestionWords(firstQuestion);
+            startPrepSequence();
+
+        } catch (error) {
+            console.error('Failed to generate first question:', error);
+            // 使用備用題目
+            const fallbackQuestion = ReorderService.getFallbackQuestion(difficulty, 0);
+            setGameState(prev => ({
+                ...prev,
+                currentQuestion: fallbackQuestion,
+                isLoading: false
+            }));
+            initializeQuestionWords(fallbackQuestion);
+            startPrepSequence();
+        }
+    }, [generateQuestion, startPrepSequence]);
+
+    // 初始化遊戲（選擇難度後調用）
+    const initializeGame = useCallback(async (difficulty: Difficulty) => {
+        const questionsCount = DIFFICULTY_LEVELS[difficulty].questionsPerGame;
+
+        setGameState(prev => ({
+            ...prev,
+            totalQuestions: questionsCount,
+            difficulty: difficulty,
+            gameStarted: true,
+            gameFinished: false,
+            currentQuestionIndex: 0,
+            score: 0,
+            correctAnswers: 0,
+            wrongAnswers: 0,
+            currentQuestion: null,
+            isLoading: true
+        }));
+
+        await loadFirstQuestion(difficulty);
+    }, [loadFirstQuestion]);
+
+    // 加載下一題
+    const loadNextQuestion = useCallback(async () => {
+        const nextIndex = gameState.currentQuestionIndex + 1;
+        const difficulty = gameState.difficulty!;
+
+        setGameState(prev => ({
+            ...prev,
+            isLoadingNext: true
+        }));
+
+        try {
+            const nextQuestion = await generateQuestion(difficulty, nextIndex);
+
+            setGameState(prev => ({
+                ...prev,
+                currentQuestion: nextQuestion,
+                currentQuestionIndex: nextIndex,
+                isLoadingNext: false,
+                feedback: '',
+                isChecking: false
+            }));
+
+            initializeQuestionWords(nextQuestion);
+            startPrepSequence();
+
+        } catch (error) {
+            console.error('Failed to generate next question:', error);
+            // 使用備用題目
+            const fallbackQuestion = ReorderService.getFallbackQuestion(difficulty, nextIndex);
+            setGameState(prev => ({
+                ...prev,
+                currentQuestion: fallbackQuestion,
+                currentQuestionIndex: nextIndex,
+                isLoadingNext: false,
+                feedback: '',
+                isChecking: false
+            }));
+            initializeQuestionWords(fallbackQuestion);
+            startPrepSequence();
+        }
+    }, [gameState.currentQuestionIndex, gameState.difficulty, generateQuestion, startPrepSequence]);
 
     // 向左移動單詞
     const moveLeft = (wordId: string) => {
@@ -286,7 +338,7 @@ export default function SentenceReorderScreen() {
 
     // 檢查答案
     const checkAnswer = () => {
-        if (gameState.isChecking || !gameActive) return;
+        if (gameState.isChecking || !gameActive || !gameState.currentQuestion) return;
 
         setGameState(prev => ({ ...prev, isChecking: true }));
 
@@ -295,16 +347,10 @@ export default function SentenceReorderScreen() {
             .map(word => word.originalIndex);
 
         const isCorrect = ReorderService.checkAnswer(currentOrder);
-
-        const currentSentence = gameState.words
-            .sort((a, b) => a.currentIndex - b.currentIndex)
-            .map(word => word.text)
-            .join(' ');
-
-        const originalSentence = currentQuestion.sentence;
+        const originalSentence = gameState.currentQuestion.sentence;
 
         if (isCorrect) {
-            // ✅ 正確 - 打擊回饋
+            // ✅ 正確
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
             setFloatingText({ id: Date.now(), text: 'HIT!', color: '#FFD700' });
 
@@ -320,7 +366,7 @@ export default function SentenceReorderScreen() {
                 isChecking: false
             }));
         } else {
-            // ❌ 錯誤 - 被打擊回饋
+            // ❌ 錯誤
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
             triggerScreenShake();
             setFloatingText({ id: Date.now(), text: 'OUCH!', color: '#FF4757' });
@@ -333,7 +379,6 @@ export default function SentenceReorderScreen() {
             }));
         }
 
-        // 清除浮動文字
         setTimeout(() => {
             setFloatingText(null);
         }, 800);
@@ -343,15 +388,10 @@ export default function SentenceReorderScreen() {
     const nextQuestion = () => {
         if (!gameActive) return;
 
-        if (gameState.currentQuestion < gameState.questions.length - 1) {
-            setGameState(prev => ({
-                ...prev,
-                currentQuestion: prev.currentQuestion + 1,
-                feedback: ''
-            }));
-            initializeQuestion(gameState.questions[gameState.currentQuestion + 1]);
-            // 每題之間重新倒數
-            startPrepSequence();
+        // 檢查是否還有下一題
+        if (gameState.currentQuestionIndex + 1 < gameState.totalQuestions) {
+            // 加載下一題
+            loadNextQuestion();
         } else {
             // 遊戲完成
             setGameActive(false);
@@ -365,8 +405,8 @@ export default function SentenceReorderScreen() {
 
     // 重來當前題目
     const retryQuestion = () => {
-        if (!gameActive) return;
-        initializeQuestion(currentQuestion);
+        if (!gameActive || !gameState.currentQuestion) return;
+        initializeQuestionWords(gameState.currentQuestion);
         startPrepSequence();
     };
 
@@ -376,15 +416,17 @@ export default function SentenceReorderScreen() {
             initializeGame(gameState.difficulty);
         } else {
             setGameState({
-                currentQuestion: 0,
+                currentQuestionIndex: 0,
+                totalQuestions: 5,
                 score: 0,
                 words: [],
                 feedback: '',
                 isChecking: false,
                 correctAnswers: 0,
                 wrongAnswers: 0,
-                questions: [],
+                currentQuestion: null,
                 isLoading: false,
+                isLoadingNext: false,
                 difficulty: null,
                 gameStarted: false,
                 gameFinished: false
@@ -399,7 +441,7 @@ export default function SentenceReorderScreen() {
             gameStarted: false,
             gameFinished: false,
             difficulty: null,
-            questions: []
+            currentQuestion: null
         }));
     };
 
@@ -417,7 +459,7 @@ export default function SentenceReorderScreen() {
 
     // 計算滿分百分比
     const getScorePercentage = () => {
-        const maxScore = DIFFICULTY_LEVELS[gameState.difficulty as Difficulty]?.questionsPerGame * 20 || 100;
+        const maxScore = gameState.totalQuestions * 20;
         return Math.round((gameState.score / maxScore) * 100);
     };
 
@@ -431,8 +473,8 @@ export default function SentenceReorderScreen() {
 
     // 獲取進度百分比
     const getProgress = () => {
-        if (gameState.questions.length === 0) return 0;
-        return ((gameState.currentQuestion + 1) / gameState.questions.length) * 100;
+        if (gameState.totalQuestions === 0) return 0;
+        return ((gameState.currentQuestionIndex + 1) / gameState.totalQuestions) * 100;
     };
 
     const getLevelLabel = (difficulty: Difficulty): string => {
@@ -532,7 +574,7 @@ export default function SentenceReorderScreen() {
 
     // 遊戲完成頁面
     const renderCompletionScreen = () => {
-        const maxScore = DIFFICULTY_LEVELS[gameState.difficulty as Difficulty]?.questionsPerGame * 20 || 100;
+        const maxScore = gameState.totalQuestions * 20;
         const scorePercentage = getScorePercentage();
 
         let performanceMessage = '';
@@ -599,9 +641,27 @@ export default function SentenceReorderScreen() {
         );
     };
 
+    // 加載下一題的提示界面
+    const renderLoadingNext = () => {
+        return (
+            <View style={styles.loadingOverlay}>
+                <View style={styles.loadingCard}>
+                    <ActivityIndicator size="large" color="#4b6cb7" />
+                    <Text style={styles.loadingNextText}>Generating next question...</Text>
+                    <Text style={styles.loadingNextSubText}>AI is creating a new sentence for you ✨</Text>
+                </View>
+            </View>
+        );
+    };
+
     // 遊戲主界面
     const renderGameScreen = () => {
-        if (!currentQuestion) return null;
+        if (!gameState.currentQuestion) return null;
+
+        // 如果正在加載下一題，顯示加載界面
+        if (gameState.isLoadingNext) {
+            return renderLoadingNext();
+        }
 
         return (
             <View style={styles.container}>
@@ -660,7 +720,7 @@ export default function SentenceReorderScreen() {
                             </View>
                             <View style={styles.statBox}>
                                 <Text style={styles.statValue}>
-                                    {gameState.currentQuestion + 1}/{gameState.questions.length}
+                                    {gameState.currentQuestionIndex + 1}/{gameState.totalQuestions}
                                 </Text>
                                 <Text style={styles.statLabel}>Question</Text>
                             </View>
@@ -669,7 +729,7 @@ export default function SentenceReorderScreen() {
                         {/* 題目區域 */}
                         <View style={[styles.questionCard, !gameActive && styles.inactiveCard]}>
                             <View style={styles.questionHeader}>
-                                <Text style={styles.questionTitle}>Question {gameState.currentQuestion + 1}</Text>
+                                <Text style={styles.questionTitle}>Question {gameState.currentQuestionIndex + 1}</Text>
                                 <View style={[styles.difficultyBadge, { backgroundColor: DIFFICULTY_LEVELS[gameState.difficulty as Difficulty]?.color }]}>
                                     <Text style={styles.difficultyBadgeText}>
                                         {DIFFICULTY_LEVELS[gameState.difficulty as Difficulty]?.label}
@@ -677,7 +737,7 @@ export default function SentenceReorderScreen() {
                                 </View>
                             </View>
 
-                            <Text style={styles.translation}>{currentQuestion.translation}</Text>
+                            <Text style={styles.translation}>{gameState.currentQuestion.translation}</Text>
 
                             <View style={styles.wordsContainer}>
                                 {gameState.words.length > 0 ? (
@@ -731,7 +791,7 @@ export default function SentenceReorderScreen() {
                                 disabled={!gameActive}
                             >
                                 <Text style={styles.buttonText}>
-                                    {gameState.currentQuestion === gameState.questions.length - 1 ? 'Finish' : 'Next'}
+                                    {gameState.currentQuestionIndex === gameState.totalQuestions - 1 ? 'Finish' : 'Next'}
                                 </Text>
                             </TouchableOpacity>
                         </View>
@@ -741,13 +801,13 @@ export default function SentenceReorderScreen() {
         );
     };
 
-    // 加載界面
+    // 初始加載界面
     if (gameState.isLoading) {
         return (
             <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#4b6cb7" />
-                <Text style={styles.loadingText}>Generating questions with AI...</Text>
-                <Text style={styles.loadingSubText}>This may take a few seconds</Text>
+                <Text style={styles.loadingText}>Generating first question with AI...</Text>
+                <Text style={styles.loadingSubText}>This may take a few seconds ✨</Text>
             </View>
         );
     }
@@ -795,6 +855,37 @@ const styles = StyleSheet.create({
         marginTop: 8,
         fontSize: 14,
         color: '#999',
+    },
+    // 加載下一題的覆蓋層
+    loadingOverlay: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.5)',
+    },
+    loadingCard: {
+        backgroundColor: 'white',
+        borderRadius: 20,
+        padding: 30,
+        alignItems: 'center',
+        width: width * 0.8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 5,
+    },
+    loadingNextText: {
+        marginTop: 20,
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#4b6cb7',
+    },
+    loadingNextSubText: {
+        marginTop: 8,
+        fontSize: 14,
+        color: '#999',
+        textAlign: 'center',
     },
     headerBackButton: {
         marginLeft: 10,
