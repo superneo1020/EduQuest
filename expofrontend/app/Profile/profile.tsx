@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import {
     Trophy, Gamepad2, Mail, User as UserIcon, Settings, ChevronRight,
-    LogOut, Calculator, BookOpen, Brain, FlaskConical, Eye, EyeOff, Key, ShoppingCart
+    LogOut, Calculator, BookOpen, Brain, FlaskConical, Eye, EyeOff, Key, ShoppingCart, List
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -22,14 +22,14 @@ export default function ProfileScreen() {
     const [profileData, setProfileData] = useState<any>(null);
     const [loading, setLoading] = useState(false);
     const [recordMode, setRecordMode] = useState<'recent' | 'best'>('recent');
-    
+
     // Password change state
     const [showPasswordModal, setShowPasswordModal] = useState(false);
     const [oldPassword, setOldPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [showOldPassword, setShowOldPassword] = useState(false);
     const [showNewPassword, setShowNewPassword] = useState(false);
-    
+
     // Email change state
     const [showEmailModal, setShowEmailModal] = useState(false);
     const [newEmail, setNewEmail] = useState('');
@@ -37,23 +37,23 @@ export default function ProfileScreen() {
     // Nickname change state
     const [showNicknameModal, setShowNicknameModal] = useState(false);
     const [newNickname, setNewNickname] = useState('');
-    
+
     // School change state
     const [showSchoolModal, setShowSchoolModal] = useState(false);
     const [newSchool, setNewSchool] = useState('');
     const [currentSchool, setCurrentSchool] = useState('');
-    
+
     // Items state
     const [userItems, setUserItems] = useState<any[]>([]);
     const [showItemsModal, setShowItemsModal] = useState(false);
-    
+
     // Missions state
     const [userMissions, setUserMissions] = useState<any[]>([]);
     const [showMissionsModal, setShowMissionsModal] = useState(false);
-    
+
     // User roles state
     const [userRoles, setUserRoles] = useState<string[]>([]);
-    
+
     // Error feedback state
     const [showErrorFeedbackModal, setShowErrorFeedbackModal] = useState(false);
     const [errorContext, setErrorContext] = useState('');
@@ -64,7 +64,7 @@ export default function ProfileScreen() {
     // Function to show error with feedback option
     const showErrorWithFeedback = (errorMessage: string, context: string) => {
         Alert.alert(
-            'Error', 
+            'Error',
             errorMessage,
             [
                 {
@@ -93,7 +93,7 @@ export default function ProfileScreen() {
                         headers: { Authorization: `Bearer ${token}` }
                     });
                     setProfileData(profileResponse.data);
-                    
+
                     // Fetch school info
                     try {
                         const schoolResponse = await axios.get(`${getApiBaseUrl()}/api/user/school`, {
@@ -103,7 +103,7 @@ export default function ProfileScreen() {
                     } catch (error) {
                         console.log("School info not available");
                     }
-                    
+
                     // Fetch user items
                     try {
                         const itemsResponse = await axios.get(`${getApiBaseUrl()}/api/user/item/`, {
@@ -113,7 +113,7 @@ export default function ProfileScreen() {
                     } catch (error) {
                         console.log("Items info not available");
                     }
-                    
+
                     // Fetch user missions
                     try {
                         const missionsResponse = await axios.get(`${getApiBaseUrl()}/api/user/mission/`, {
@@ -123,7 +123,7 @@ export default function ProfileScreen() {
                     } catch (error) {
                         console.log("Missions info not available");
                     }
-                    
+
                     // Fetch user roles
                     try {
                         const rolesResponse = await axios.get(`${getApiBaseUrl()}/api/user/roles`, {
@@ -133,13 +133,13 @@ export default function ProfileScreen() {
                     } catch (error) {
                         console.log("Roles info not available");
                     }
-                    
+
                     // Fetch game history separately
                     const gameHistoryResponse = await axios.get(`${getApiBaseUrl()}/api/user/game/score`, {
                         params: { page: 0, size: 50 }, // Get up to 50 recent game records
                         headers: { Authorization: `Bearer ${token}` }
                     });
-                    
+
                     // Combine profile data with game history
                     setProfileData({
                         ...profileResponse.data,
@@ -198,7 +198,7 @@ export default function ProfileScreen() {
             showErrorWithFeedback('Please fill in all password fields', 'Password Change - Empty Fields');
             return;
         }
-        
+
         if (newPassword.length < 8) {
             setModalMessage({ text: 'New password must be at least 8 characters long', type: 'error' });
             showErrorWithFeedback('New password must be at least 8 characters long', 'Password Change - Too Short');
@@ -207,11 +207,11 @@ export default function ProfileScreen() {
 
         try {
             setLoading(true);
-            await axios.post(`${getApiBaseUrl()}/api/user/password`, 
+            await axios.post(`${getApiBaseUrl()}/api/user/password`,
                 { oldPassword, newPassword },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
-            
+
             Alert.alert('Success', 'Password changed successfully');
             setModalMessage({ text: 'Password changed successfully!', type: 'success' });
             setTimeout(() => {
@@ -224,7 +224,7 @@ export default function ProfileScreen() {
             console.error('Password change error:', error);
             let errorMessage = 'Failed to change password';
             let context = 'Password Change - Unknown Error';
-            
+
             if (error.response?.data?.message) {
                 errorMessage = error.response.data.message;
                 context = `Password Change - Server: ${error.response.data.message}`;
@@ -235,7 +235,7 @@ export default function ProfileScreen() {
                 errorMessage = 'Authentication failed. Please log in again';
                 context = 'Password Change - Auth Error';
             }
-            
+
             setModalMessage({ text: errorMessage, type: 'error' });
             showErrorWithFeedback(errorMessage, context);
         } finally {
@@ -271,7 +271,7 @@ export default function ProfileScreen() {
                 { newEmail: newEmail.trim() },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
-            
+
             Alert.alert('Success', 'Email changed successfully');
             setModalMessage({ text: 'Email changed successfully!', type: 'success' });
             setTimeout(() => {
@@ -279,7 +279,7 @@ export default function ProfileScreen() {
                 setModalMessage({ text: '', type: '' });
             }, 1500);
             setNewEmail('');
-            
+
             // Refresh profile data to get new email
             const response = await axios.get(`${getApiBaseUrl()}/api/user/profile/`, {
                 headers: { Authorization: `Bearer ${token}` }
@@ -289,7 +289,7 @@ export default function ProfileScreen() {
             console.error('Email change error:', error);
             let errorMessage = 'Failed to change email';
             let context = 'Email Change - Unknown Error';
-            
+
             if (error.response?.data?.message) {
                 errorMessage = error.response.data.message;
                 context = `Email Change - Server: ${error.response.data.message}`;
@@ -300,7 +300,7 @@ export default function ProfileScreen() {
                 errorMessage = 'Authentication failed. Please log in again';
                 context = 'Email Change - Auth Error';
             }
-            
+
             setModalMessage({ text: errorMessage, type: 'error' });
             showErrorWithFeedback(errorMessage, context);
         } finally {
@@ -328,7 +328,7 @@ export default function ProfileScreen() {
                 { school: newSchool.trim() },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
-            
+
             Alert.alert('Success', 'School updated successfully');
             setModalMessage({ text: 'School updated successfully!', type: 'success' });
             setTimeout(() => {
@@ -391,9 +391,9 @@ export default function ProfileScreen() {
             const profileResponse = await axios.get(`${getApiBaseUrl()}/api/user/profile/`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            
+
             // Preserve existing game history while updating profile
-            setProfileData(prev => ({
+            setProfileData((prev: any) => ({
                 ...profileResponse.data,
                 userGameScores: prev?.userGameScores || []
             }));
@@ -430,12 +430,12 @@ export default function ProfileScreen() {
                 timestamp: new Date().toISOString(),
                 userAgent: 'EduQuest Mobile App'
             };
-            
+
             console.log('User feedback submitted:', feedbackData);
-            
+
             // You could also send this to a logging service
             // await axios.post(`${getApiBaseUrl()}/api/feedback`, feedbackData);
-            
+
             Alert.alert('Thank You', 'Your feedback has been submitted. We\'ll look into this issue.');
             setShowErrorFeedbackModal(false);
             setUserFeedback('');
@@ -480,8 +480,8 @@ export default function ProfileScreen() {
                 {/* Settings Section */}
                 <View style={styles.settingsContainer}>
                     <Text style={styles.sectionTitle}>Account Settings</Text>
-                    
-                    <TouchableOpacity 
+
+                    <TouchableOpacity
                         style={styles.settingItem}
                         onPress={() => setShowPasswordModal(true)}
                     >
@@ -493,7 +493,7 @@ export default function ProfileScreen() {
                         <ChevronRight size={20} color="#BDC3C7" />
                     </TouchableOpacity>
 
-                    <TouchableOpacity 
+                    <TouchableOpacity
                         style={styles.settingItem}
                         onPress={() => setShowEmailModal(true)}
                     >
@@ -528,46 +528,47 @@ export default function ProfileScreen() {
                     </TouchableOpacity>
                 </View>
 
-                <View style={styles.statsContainer}>
-                    <View style={[styles.statCard, { backgroundColor: '#FFF9E6', borderColor: '#FFEAA7' }]}>
-                        <Trophy size={24} color="#F1C40F" />
-                        <Text style={styles.statNumber}>{displayUser?.points || 0}</Text>
-                        <Text style={styles.statTitle}>Total Points</Text>
+                <View style={styles.statsAndSkillsContainer}>
+                    {/* Stats Section - Left Side */}
+                    <View style={styles.statsColumn}>
+                        <Text style={styles.sectionTitle}>Statistics</Text>
+                        <View style={styles.statsContainer}>
+                            <View style={[styles.statCard, { backgroundColor: '#FFF9E6', borderColor: '#FFEAA7' }]}>
+                                <Trophy size={24} color="#F1C40F" />
+                                <Text style={styles.statNumber}>{displayUser?.points || 0}</Text>
+                                <Text style={styles.statTitle}>Total Points</Text>
+                            </View>
+                            <View style={[styles.statCard, { backgroundColor: '#E8F5E9', borderColor: '#C8E6C9' }]}>
+                                <Gamepad2 size={24} color="#4CAF50" />
+                                <Text style={styles.statNumber}>{gameHistory.length}</Text>
+                                <Text style={styles.statTitle}>Games Played</Text>
+                            </View>
+                            <TouchableOpacity
+                                style={[styles.statCard, { backgroundColor: '#F3E5F5', borderColor: '#E1BEE7' }]}
+                                onPress={() => setShowMissionsModal(true)}
+                            >
+                                <Trophy size={24} color="#9C27B0" />
+                                <Text style={styles.statNumber}>{userMissions.filter(m => m.completed).length}</Text>
+                                <Text style={styles.statTitle}>Missions Done</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.statCard, { backgroundColor: '#FFF3E0', borderColor: '#FFE0B2' }]}
+                                onPress={() => setShowItemsModal(true)}
+                            >
+                                <Trophy size={24} color="#FF9800" />
+                                <Text style={styles.statNumber}>{userItems.length}</Text>
+                                <Text style={styles.statTitle}>My Items</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
-                    <View style={[styles.statCard, { backgroundColor: '#E8F5E9', borderColor: '#C8E6C9' }]}>
-                        <Gamepad2 size={24} color="#4CAF50" />
-                        <Text style={styles.statNumber}>{gameHistory.length}</Text>
-                        <Text style={styles.statTitle}>Games Played</Text>
-                    </View>
-                    <TouchableOpacity 
-                        style={[styles.statCard, { backgroundColor: '#F3E5F5', borderColor: '#E1BEE7' }]}
-                        onPress={() => setShowMissionsModal(true)}
-                    >
-                        <Trophy size={24} color="#9C27B0" />
-                        <Text style={styles.statNumber}>{userMissions.filter(m => m.completed).length}</Text>
-                        <Text style={styles.statTitle}>Missions Done</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                        style={[styles.statCard, { backgroundColor: '#FFF3E0', borderColor: '#FFE0B2' }]}
-                        onPress={() => setShowItemsModal(true)}
-                    >
-                        <Trophy size={24} color="#FF9800" />
-                        <Text style={styles.statNumber}>{userItems.length}</Text>
-                        <Text style={styles.statTitle}>My Items</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                        style={[styles.statCard, { backgroundColor: '#E8F4F8', borderColor: '#B3E5FC' }]}
-                        onPress={() => router.push('/shop')}
-                    >
-                        <ShoppingCart size={24} color="#03A9F4" />
-                        <Text style={styles.statNumber}>Shop</Text>
-                        <Text style={styles.statTitle}>Store</Text>
-                    </TouchableOpacity>
-                </View>
 
-                  <View style={styles.radarSection}>
-                    <Text style={styles.sectionTitle}>Skill Analysis</Text>
-                    <SkillBarsChart gameHistory={gameHistory} />
+                    {/* Skill Analysis - Right Side */}
+                    <View style={styles.skillsColumn}>
+                        <Text style={styles.sectionTitle}>Skill Analysis</Text>
+                        <View style={styles.radarSection}>
+                            <SkillBarsChart gameHistory={gameHistory} />
+                        </View>
+                    </View>
                 </View>
 
 
@@ -612,6 +613,16 @@ export default function ProfileScreen() {
                     )) : <Text style={styles.emptyText}>No records found.</Text>}
                 </View>
 
+                {/* View All Game Records Button */}
+                <TouchableOpacity 
+                    style={styles.viewAllRecordsBtn} 
+                    onPress={() => router.push('/Profile/GameRecords')}
+                >
+                    <List size={20} color="#4CAF50" />
+                    <Text style={styles.viewAllRecordsText}>View All Game Records</Text>
+                    <ChevronRight size={20} color="#4CAF50" />
+                </TouchableOpacity>
+
                 <TouchableOpacity style={styles.logoutBtn} onPress={signOut}>
                     <Text style={styles.logoutText}>Sign Out</Text>
                 </TouchableOpacity>
@@ -627,7 +638,7 @@ export default function ProfileScreen() {
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <Text style={styles.modalTitle}>Change Password</Text>
-                        
+
                         <View style={styles.inputContainer}>
                             <Text style={styles.inputLabel}>Current Password</Text>
                             <View style={styles.passwordInput}>
@@ -673,8 +684,8 @@ export default function ProfileScreen() {
                         ) : null}
 
                         <View style={styles.modalButtons}>
-                            <TouchableOpacity 
-                                style={[styles.modalBtn, styles.cancelBtn]} 
+                            <TouchableOpacity
+                                style={[styles.modalBtn, styles.cancelBtn]}
                                 onPress={() => {
                                     setShowPasswordModal(false);
                                     setOldPassword('');
@@ -683,8 +694,8 @@ export default function ProfileScreen() {
                             >
                                 <Text style={styles.cancelBtnText}>Cancel</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity 
-                                style={[styles.modalBtn, styles.confirmBtn]} 
+                            <TouchableOpacity
+                                style={[styles.modalBtn, styles.confirmBtn]}
                                 onPress={handleChangePassword}
                                 disabled={loading}
                             >
@@ -712,7 +723,7 @@ export default function ProfileScreen() {
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <Text style={styles.modalTitle}>Change Email</Text>
-                        
+
                         <View style={styles.inputContainer}>
                             <Text style={styles.inputLabel}>New Email Address</Text>
                             <TextInput
@@ -738,8 +749,8 @@ export default function ProfileScreen() {
                         ) : null}
 
                         <View style={styles.modalButtons}>
-                            <TouchableOpacity 
-                                style={[styles.modalBtn, styles.cancelBtn]} 
+                            <TouchableOpacity
+                                style={[styles.modalBtn, styles.cancelBtn]}
                                 onPress={() => {
                                     setShowEmailModal(false);
                                     setNewEmail('');
@@ -747,8 +758,8 @@ export default function ProfileScreen() {
                             >
                                 <Text style={styles.cancelBtnText}>Cancel</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity 
-                                style={[styles.modalBtn, styles.confirmBtn]} 
+                            <TouchableOpacity
+                                style={[styles.modalBtn, styles.confirmBtn]}
                                 onPress={handleChangeEmail}
                                 disabled={loading}
                             >
@@ -838,12 +849,12 @@ export default function ProfileScreen() {
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalContent, { maxHeight: '70%' }]}>
                         <Text style={styles.modalTitle}>My Missions</Text>
-                        
+
                         <ScrollView style={{ flex: 1, maxHeight: 300 }}>
                             {userMissions.length > 0 ? userMissions.map((mission: any, index: number) => (
                                 <View key={index} style={styles.missionCard}>
-                                    <View style={[styles.missionStatus, { 
-                                        backgroundColor: mission.completed ? '#4CAF50' : '#FFC107' 
+                                    <View style={[styles.missionStatus, {
+                                        backgroundColor: mission.completed ? '#4CAF50' : '#FFC107'
                                     }]}>
                                         <Text style={styles.missionStatusText}>
                                             {mission.completed ? '✓' : '○'}
@@ -874,8 +885,8 @@ export default function ProfileScreen() {
                         </ScrollView>
 
                         <View style={styles.modalButtons}>
-                            <TouchableOpacity 
-                                style={[styles.modalBtn, styles.confirmBtn]} 
+                            <TouchableOpacity
+                                style={[styles.modalBtn, styles.confirmBtn]}
                                 onPress={() => setShowMissionsModal(false)}
                             >
                                 <Text style={styles.confirmBtnText}>Close</Text>
@@ -895,7 +906,7 @@ export default function ProfileScreen() {
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalContent, { maxHeight: '70%' }]}>
                         <Text style={styles.modalTitle}>My Items</Text>
-                        
+
                         <ScrollView style={{ flex: 1, maxHeight: 300 }}>
                             {userItems.length > 0 ? userItems.map((item: any, index: number) => (
                                 <View key={index} style={styles.itemCard}>
@@ -919,8 +930,8 @@ export default function ProfileScreen() {
                         </ScrollView>
 
                         <View style={styles.modalButtons}>
-                            <TouchableOpacity 
-                                style={[styles.modalBtn, styles.confirmBtn]} 
+                            <TouchableOpacity
+                                style={[styles.modalBtn, styles.confirmBtn]}
                                 onPress={() => setShowItemsModal(false)}
                             >
                                 <Text style={styles.confirmBtnText}>Close</Text>
@@ -940,7 +951,7 @@ export default function ProfileScreen() {
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <Text style={styles.modalTitle}>Change School</Text>
-                        
+
                         <View style={styles.inputContainer}>
                             <Text style={styles.inputLabel}>New School Name</Text>
                             <TextInput
@@ -965,8 +976,8 @@ export default function ProfileScreen() {
                         ) : null}
 
                         <View style={styles.modalButtons}>
-                            <TouchableOpacity 
-                                style={[styles.modalBtn, styles.cancelBtn]} 
+                            <TouchableOpacity
+                                style={[styles.modalBtn, styles.cancelBtn]}
                                 onPress={() => {
                                     setShowSchoolModal(false);
                                     setNewSchool('');
@@ -974,8 +985,8 @@ export default function ProfileScreen() {
                             >
                                 <Text style={styles.cancelBtnText}>Cancel</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity 
-                                style={[styles.modalBtn, styles.confirmBtn]} 
+                            <TouchableOpacity
+                                style={[styles.modalBtn, styles.confirmBtn]}
                                 onPress={handleChangeSchool}
                                 disabled={loading}
                             >
@@ -1003,7 +1014,7 @@ export default function ProfileScreen() {
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <Text style={styles.modalTitle}>Report Issue</Text>
-                        
+
                         <View style={styles.inputContainer}>
                             <Text style={styles.inputLabel}>What went wrong?</Text>
                             <Text style={styles.errorContextText}>{errorContext}</Text>
@@ -1022,8 +1033,8 @@ export default function ProfileScreen() {
                         </View>
 
                         <View style={styles.modalButtons}>
-                            <TouchableOpacity 
-                                style={[styles.modalBtn, styles.cancelBtn]} 
+                            <TouchableOpacity
+                                style={[styles.modalBtn, styles.cancelBtn]}
                                 onPress={() => {
                                     setShowErrorFeedbackModal(false);
                                     setUserFeedback('');
@@ -1032,8 +1043,8 @@ export default function ProfileScreen() {
                             >
                                 <Text style={styles.cancelBtnText}>Cancel</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity 
-                                style={[styles.modalBtn, styles.confirmBtn]} 
+                            <TouchableOpacity
+                                style={[styles.modalBtn, styles.confirmBtn]}
                                 onPress={handleSubmitFeedback}
                             >
                                 <Text style={styles.confirmBtnText}>Submit</Text>
@@ -1057,16 +1068,30 @@ const styles = StyleSheet.create({
         flexWrap: 'wrap',
         justifyContent: 'space-between',
         paddingHorizontal: 20,
-        marginTop: 20
+        marginTop: 10 // Reduced from 20 for tighter layout
+    },
+    statsAndSkillsContainer: {
+        flexDirection: 'row',
+        marginHorizontal: 20,
+        marginTop: 20,
+        justifyContent: 'space-between'
+    },
+    statsColumn: {
+        flex: 1,
+        marginRight: 10
+    },
+    skillsColumn: {
+        flex: 1,
+        marginLeft: 10
     },
     radarSection: {
         backgroundColor: '#FFF',
-        marginHorizontal: 20,
-        marginTop: 20,
+        marginTop: 10, // Reduced from 15
         borderRadius: 24,
-        padding: 20,
+        padding: 12, // Reduced from 15
         alignItems: 'center',
         elevation: 2,
+        flex: 1
     },
     sectionTitle: {
         fontSize: 16,
@@ -1076,12 +1101,12 @@ const styles = StyleSheet.create({
         marginBottom: 10,
     },
     statCard: {
-        width: '31%',
-        padding: 12,
+        width: '48%', // Adjusted from 31% to fit in column layout
+        padding: 12, // Reduced from default
         borderRadius: 20,
         alignItems: 'center',
         borderWidth: 1,
-        marginBottom: 10
+        marginBottom: 8 // Reduced from default
     },
     statNumber: {
         fontSize: 20,
@@ -1173,7 +1198,7 @@ const styles = StyleSheet.create({
     logoutBtn: { margin: 20, padding: 15, backgroundColor: '#FFF', borderRadius: 20, alignItems: 'center' },
     logoutText: { color: '#FF4757', fontWeight: '800' },
     emptyText: { textAlign: 'center', padding: 20, color: '#BDC3C7' },
-    
+
     // Settings styles
     settingsContainer: {
         backgroundColor: '#FFF',
@@ -1204,7 +1229,7 @@ const styles = StyleSheet.create({
         color: '#636E72',
         marginTop: 2,
     },
-    
+
     // Modal styles
     modalOverlay: {
         flex: 1,
@@ -1417,5 +1442,23 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#A0A0A0',
         marginTop: 5,
+    },
+    viewAllRecordsBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#F8F9FA',
+        padding: 18,
+        borderRadius: 12,
+        borderWidth: 2,
+        borderColor: '#4CAF50',
+        marginVertical: 15,
+    },
+    viewAllRecordsText: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#4CAF50',
+        flex: 1,
+        textAlign: 'center',
     }
 });
