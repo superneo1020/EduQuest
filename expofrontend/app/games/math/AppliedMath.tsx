@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity, StyleSheet,
     ScrollView, ActivityIndicator, SafeAreaView, Animated as RNAnimated, Button
@@ -9,13 +9,53 @@ import * as Haptics from 'expo-haptics';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming } from 'react-native-reanimated';
 import axios from 'axios';
 import { useAuth } from "@/src/auth/AuthContext";
-import { useRouter } from 'expo-router';
+import { useRouter, useNavigation } from 'expo-router';
 
 const MAX_STEPS = 5; // 假設 5 題為一場試煉
 
+// --- 難度選項配置 (完全複製自 CalculationGame) ---
+const difficultyOptions = [
+    {
+        id: 'easy',
+        level: 'easy' as const,
+        title: 'Easy',
+        badgeText: 'Gentle Start',
+        description: 'Basic addition & subtraction, numbers within 20, gentle pace',
+        icon: '☁️',
+        color: '#22C55E',
+        bgColor: '#F0FDF4',
+    },
+    {
+        id: 'medium',
+        level: 'medium' as const,
+        title: 'Medium',
+        badgeText: 'Challenge',
+        description: 'Mixed operations, numbers within 100, time pressure',
+        icon: '🌵',
+        color: '#F59E0B',
+        bgColor: '#FFFBEB',
+    },
+    {
+        id: 'hard',
+        level: 'hard' as const,
+        title: 'Hard',
+        badgeText: 'Master',
+        description: 'Complex equations, multiplication & division, fast-paced battle',
+        icon: '🌋',
+        color: '#EF4444',
+        bgColor: '#FEF2F2',
+    }
+];
+
 const AppliedMath = () => {
     const router = useRouter();
+    const navigation = useNavigation();
     const { token } = useAuth();
+
+    // 完全隐藏系统导航栏（包括返回按钮）
+    useLayoutEffect(() => {
+        navigation.setOptions({ headerShown: false });
+    }, [navigation]);
 
     // --- 保留原有狀態 ---
     const [loading, setLoading] = useState(false);
@@ -188,34 +228,83 @@ const AppliedMath = () => {
         );
     }
 
-    // --- 渲染：遊戲化 UI ---
-    if (!difficulty) {
+    // --- 加载状态显示 (与 CalculationGame 一致) ---
+    if (loading && !difficulty) {
         return (
-            <LinearGradient colors={['#F8FAFC', '#E2E8F0']} style={styles.menuContainer}>
-                <SafeAreaView style={{alignItems: 'center'}}>
-                    <Brain size={80} color="#475569" />
-                    <Text style={styles.mainTitle}>Sage's Trial</Text>
-                    <Text style={styles.subTitle}>Prove your logic to the AI Guardian</Text>
-
-                    <View style={styles.menuGrid}>
-                        {['easy', 'medium', 'hard'].map((d) => (
-                            <TouchableOpacity
-                                key={d}
-                                // 找到這一行：
-                                style={[styles.diffCard, (styles as any)[`card_${d}`]]}                                onPress={() => { setDifficulty(d); fetchQuestion(d); }}
-                            >
-                                <Text style={styles.diffLabel}>{d.toUpperCase()}</Text>
-                                <ChevronRight color="#fff" />
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                </SafeAreaView>
-            </LinearGradient>
+            <SafeAreaView style={styles.centerContainer}>
+                <ActivityIndicator size="large" color="#F59E0B" />
+                <Text style={styles.loadingText}>PREPARING TRIAL...</Text>
+            </SafeAreaView>
         );
     }
 
+    // --- 难度选择页面 (完全复制 CalculationGame 的 UI 风格) ---
+    if (!difficulty) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <ScrollView contentContainerStyle={styles.scrollContent}>
+                    {/* 頂部標題區域 */}
+                    <View style={styles.headerSection}>
+                        <Brain size={60} color="#F59E0B" style={{ marginBottom: 20 }} />
+                        <Text style={styles.mainTitle}>Sage's Trial</Text>
+                        <Text style={styles.subTitle}>
+                            Prove your logic to the AI Guardian
+                        </Text>
+                    </View>
 
+                    {/* 難度選擇卡片列表 */}
+                    <View style={styles.menuGrid}>
+                        {difficultyOptions.map((option) => (
+                            <TouchableOpacity
+                                key={option.id}
+                                style={[
+                                    styles.diffCard,
+                                    { backgroundColor: option.bgColor, borderColor: option.color }
+                                ]}
+                                onPress={() => {
+                                    setDifficulty(option.level);
+                                    fetchQuestion(option.level);
+                                }}
+                                activeOpacity={0.8}
+                            >
+                                <View style={styles.cardIconContainer}>
+                                    <Text style={styles.cardIcon}>{option.icon}</Text>
+                                </View>
 
+                                <View style={styles.cardContent}>
+                                    <View style={styles.cardHeader}>
+                                        <Text style={[styles.diffBtnText, { color: option.color }]}>
+                                            {option.title}
+                                        </Text>
+                                        <View style={[styles.levelBadge, { backgroundColor: option.color }]}>
+                                            <Text style={styles.levelBadgeText}>{option.badgeText}</Text>
+                                        </View>
+                                    </View>
+
+                                    <Text style={styles.diffDesc}>{option.description}</Text>
+
+                                    <View style={styles.startButtonContainer}>
+                                        <View style={[styles.startButton, { backgroundColor: option.color }]}>
+                                            <Text style={styles.startButtonText}>Start Trial →</Text>
+                                        </View>
+                                    </View>
+                                </View>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+
+                    <TouchableOpacity
+                        style={styles.backLink}
+                        onPress={() => router.back()}
+                    >
+                        <Text style={styles.backLinkText}>← Back to Game Library</Text>
+                    </TouchableOpacity>
+                </ScrollView>
+            </SafeAreaView>
+        );
+    }
+
+    // --- 游戏主界面 (完全保留原有逻辑和样式) ---
     return (
         <View style={{ flex: 1, backgroundColor: '#fff' }}>
             {/* 頂部進度條 */}
@@ -256,7 +345,7 @@ const AppliedMath = () => {
                 {/* 反饋與按鈕 */}
                 {aiFeedback.isCorrect === null ? (
                     <TouchableOpacity
-                        style={[styles.submitBtn, loading && {opacity: 0.7}]}
+                        style={[styles.submitBtn, loading && { opacity: 0.7 }]}
                         onPress={handleCheckAnswer} disabled={loading}
                     >
                         {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitBtnText}>Submit to Sage</Text>}
@@ -281,80 +370,319 @@ const AppliedMath = () => {
                 )}
             </ScrollView>
 
+            {/* 预备动画覆盖层 */}
+            {prepText && (
+                <Animated.View style={[styles.prepOverlay, prepAnimatedStyle]}>
+                    <Text style={styles.prepText}>{prepText}</Text>
+                </Animated.View>
+            )}
         </View>
     );
 };
 
 const styles = StyleSheet.create({
-    container: { padding: 20, backgroundColor: '#fff' },
-    menuContainer: { flex: 1, justifyContent: 'center', padding: 30 },
-    mainTitle: { fontSize: 32, fontWeight: '900', color: '#1E293B', marginTop: 20 },
-    subTitle: { fontSize: 16, color: '#64748B', marginBottom: 40 },
-    menuGrid: { width: '100%', gap: 15 },
-    diffCard: { flexDirection: 'row', justifyContent: 'space-between', padding: 25, borderRadius: 20, alignItems: 'center', elevation: 5 },
-    card_easy: { backgroundColor: '#22C55E' },
-    card_medium: { backgroundColor: '#F59E0B' },
-    card_hard: { backgroundColor: '#EF4444' },
-    diffLabel: { color: '#fff', fontSize: 20, fontWeight: '900' },
-    gameHeader: { backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-    progressInfo: { padding: 20 },
-    stepText: { fontSize: 14, fontWeight: '800', color: '#64748B', marginBottom: 8 },
-    barBg: { height: 10, backgroundColor: '#F1F5F9', borderRadius: 5 },
-    barFill: { height: '100%', backgroundColor: '#3B82F6', borderRadius: 5 },
-    scrollContent: { padding: 20 },
-    sageSection: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 30, gap: 15 },
-    sageEmoji: { fontSize: 40 },
-    bubble: { flex: 1, backgroundColor: '#F8FAFC', padding: 20, borderRadius: 20, borderTopLeftRadius: 0, borderWidth: 1, borderColor: '#E2E8F0' },
-    questionText: { fontSize: 18, lineHeight: 28, color: '#1E293B', fontWeight: '500' },
-    inputSection: { marginBottom: 20 },
-    inputLabel: { fontSize: 14, fontWeight: '700', color: '#64748B', marginBottom: 10, marginLeft: 5 },
-    textArea: { backgroundColor: '#fff', borderWidth: 2, borderColor: '#F1F5F9', borderRadius: 15, padding: 15, minHeight: 120, textAlignVertical: 'top', fontSize: 16, marginBottom: 20 },
-    input: { backgroundColor: '#fff', borderWidth: 2, borderColor: '#F1F5F9', borderRadius: 15, padding: 15, fontSize: 18, fontWeight: 'bold' },
-    submitBtn: { backgroundColor: '#1E293B', padding: 20, borderRadius: 15, alignItems: 'center' },
-    submitBtnText: { color: '#fff', fontWeight: '800', fontSize: 18 },
-    feedbackCard: { backgroundColor: '#F8FAFC', padding: 20, borderRadius: 20, borderLeftWidth: 8, marginTop: 10 },
-    feedbackTitle: { fontSize: 20, fontWeight: '900', marginBottom: 10 },
-    feedbackMsg: { fontSize: 16, color: '#475569', lineHeight: 24, marginBottom: 20 },
-    nextBtn: { backgroundColor: '#22C55E', padding: 15, borderRadius: 12, alignItems: 'center' },
-    nextBtnText: { color: '#fff', fontWeight: '700' },
-    prepOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,255,255,0.8)', justifyContent: 'center', alignItems: 'center', zIndex: 100 },
-    prepText: { fontSize: 80, fontWeight: '900', color: '#1E293B' },
+    // ========== 难度选择页面样式 (完全复制自 CalculationGame) ==========
+    container: {
+        flex: 1,
+        backgroundColor: '#F5F7FA',
+    },
+    scrollContent: {
+        padding: 20,
+    },
+    headerSection: {
+        alignItems: 'center',
+        paddingTop: 50,
+        paddingHorizontal: 20,
+        paddingBottom: 30,
+        backgroundColor: '#fff',
+        marginBottom: 20,
+        borderRadius: 24,
+    },
+    mainTitle: {
+        fontSize: 32,
+        fontWeight: '800',
+        color: '#1E293B',
+        textAlign: 'center',
+        marginBottom: 8,
+    },
+    subTitle: {
+        fontSize: 16,
+        color: '#64748B',
+        textAlign: 'center',
+        marginBottom: 10,
+    },
+    menuGrid: {
+        width: '100%',
+        gap: 20,
+    },
+    diffCard: {
+        flexDirection: 'row',
+        padding: 20,
+        borderRadius: 16,
+        borderWidth: 2,
+        gap: 15,
+        marginBottom: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 3,
+        backgroundColor: '#fff',
+    },
+    cardIconContainer: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 2,
+    },
+    cardIcon: {
+        fontSize: 32,
+    },
+    cardContent: {
+        flex: 1,
+    },
+    cardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 8,
+        flexWrap: 'wrap',
+    },
+    diffBtnText: {
+        fontSize: 20,
+        fontWeight: '700',
+    },
+    levelBadge: {
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    levelBadgeText: {
+        fontSize: 10,
+        color: '#fff',
+        fontWeight: '600',
+    },
+    diffDesc: {
+        fontSize: 14,
+        color: '#64748B',
+        marginBottom: 12,
+        lineHeight: 20,
+    },
+    startButtonContainer: {
+        alignItems: 'flex-end',
+        marginTop: 8,
+    },
+    startButton: {
+        paddingHorizontal: 20,
+        paddingVertical: 8,
+        borderRadius: 20,
+        minWidth: 120,
+        alignItems: 'center',
+    },
+    startButtonText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#fff',
+    },
+    backLink: {
+        marginTop: 30,
+        alignItems: 'center',
+        marginBottom: 40,
+    },
+    backLinkText: {
+        fontSize: 16,
+        color: '#F59E0B',
+        fontWeight: '600',
+    },
 
-
-    header: { marginBottom: 20 },
+    // ========== 通用样式 ==========
     centerContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
         padding: 20,
-        backgroundColor: '#fff'
+        backgroundColor: '#fff',
     },
-    buttonSpacing: {
-        marginVertical: 5,
+    loadingText: {
+        marginTop: 15,
+        fontWeight: '800',
+        color: '#64748B',
     },
-    buttonContainer: {
-        marginTop: 20,
-    },
-    difficultyButtonContainer: {
-        width: '80%',
-        marginVertical: 10,
-    },
-    progressText: { fontSize: 16, fontWeight: 'bold', marginBottom: 5 },
-    progressBarBg: { height: 8, backgroundColor: '#eee', borderRadius: 4 },
-    progressBar: { height: 8, backgroundColor: '#4CAF50', borderRadius: 4 },
-    questionBox: { backgroundColor: '#f0f4f8', padding: 20, borderRadius: 12, marginBottom: 20 },
 
-
-    feedbackBox: { padding: 15, borderRadius: 8, borderLeftWidth: 8, backgroundColor: '#f9f9f9' },
-    reportBox: { backgroundColor: '#fff9c4', padding: 20, borderRadius: 12, marginBottom: 30 },
-    accuracyText: { fontSize: 24, fontWeight: 'bold', color: '#f57f17', textAlign: 'center', marginBottom: 10 },
-    summaryText: { fontSize: 16, lineHeight: 24 },
-    title: { fontSize: 28, fontWeight: 'bold', textAlign: 'center', marginVertical: 20 },
-    loadingText: { marginTop: 15, fontSize: 14, color: '#666' },
-    diffBtnText: { fontSize: 18, fontWeight: '700', marginBottom: 4 },
-    diffDesc: { fontSize: 14, color: '#64748B' },
-    actionBtn: { padding: 16, borderRadius: 12, alignItems: 'center' },
-    actionBtnText: { fontSize: 16, fontWeight: '600', color: '#fff' }
+    // ========== 原有游戏主界面样式 (完全保留) ==========
+    gameHeader: {
+        backgroundColor: '#fff',
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+    },
+    progressInfo: {
+        padding: 20,
+    },
+    stepText: {
+        fontSize: 14,
+        fontWeight: '800',
+        color: '#64748B',
+        marginBottom: 8,
+    },
+    barBg: {
+        height: 10,
+        backgroundColor: '#F1F5F9',
+        borderRadius: 5,
+    },
+    barFill: {
+        height: '100%',
+        backgroundColor: '#3B82F6',
+        borderRadius: 5,
+    },
+    sageSection: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        marginBottom: 30,
+        gap: 15,
+    },
+    sageEmoji: {
+        fontSize: 40,
+    },
+    bubble: {
+        flex: 1,
+        backgroundColor: '#F8FAFC',
+        padding: 20,
+        borderRadius: 20,
+        borderTopLeftRadius: 0,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    questionText: {
+        fontSize: 18,
+        lineHeight: 28,
+        color: '#1E293B',
+        fontWeight: '500',
+    },
+    inputSection: {
+        marginBottom: 20,
+    },
+    inputLabel: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#64748B',
+        marginBottom: 10,
+        marginLeft: 5,
+    },
+    textArea: {
+        backgroundColor: '#fff',
+        borderWidth: 2,
+        borderColor: '#F1F5F9',
+        borderRadius: 15,
+        padding: 15,
+        minHeight: 120,
+        textAlignVertical: 'top',
+        fontSize: 16,
+        marginBottom: 20,
+    },
+    input: {
+        backgroundColor: '#fff',
+        borderWidth: 2,
+        borderColor: '#F1F5F9',
+        borderRadius: 15,
+        padding: 15,
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
+    submitBtn: {
+        backgroundColor: '#1E293B',
+        padding: 20,
+        borderRadius: 15,
+        alignItems: 'center',
+    },
+    submitBtnText: {
+        color: '#fff',
+        fontWeight: '800',
+        fontSize: 18,
+    },
+    feedbackCard: {
+        backgroundColor: '#F8FAFC',
+        padding: 20,
+        borderRadius: 20,
+        borderLeftWidth: 8,
+        marginTop: 10,
+    },
+    feedbackTitle: {
+        fontSize: 20,
+        fontWeight: '900',
+        marginBottom: 10,
+    },
+    feedbackMsg: {
+        fontSize: 16,
+        color: '#475569',
+        lineHeight: 24,
+        marginBottom: 20,
+    },
+    nextBtn: {
+        backgroundColor: '#22C55E',
+        padding: 15,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    nextBtnText: {
+        color: '#fff',
+        fontWeight: '700',
+    },
+    prepOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(255,255,255,0.9)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 100,
+    },
+    prepText: {
+        fontSize: 80,
+        fontWeight: '900',
+        color: '#1E293B',
+    },
+    reportBox: {
+        backgroundColor: '#fff9c4',
+        padding: 20,
+        borderRadius: 12,
+        marginBottom: 30,
+    },
+    accuracyText: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: '#f57f17',
+        textAlign: 'center',
+        marginBottom: 10,
+    },
+    summaryText: {
+        fontSize: 16,
+        lineHeight: 24,
+    },
+    title: {
+        fontSize: 28,
+        fontWeight: 'bold',
+        textAlign: 'center',
+        marginVertical: 20,
+    },
+    actionBtn: {
+        padding: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    actionBtnText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#fff',
+    },
 });
 
 export default AppliedMath;
