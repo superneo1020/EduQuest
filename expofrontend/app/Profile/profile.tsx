@@ -5,7 +5,8 @@ import {
 } from 'react-native';
 import {
     Trophy, Gamepad2, Mail, User as UserIcon, Settings, ChevronRight,
-    LogOut, Calculator, BookOpen, Brain, FlaskConical, Eye, EyeOff, Key, ShoppingCart, List
+    LogOut, Calculator, BookOpen, Brain, FlaskConical, Eye, EyeOff, Key, ShoppingCart, List,
+    Calendar, Clock, TrendingUp, Award, Target, Zap, Star, BarChart3, PieChart
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -13,6 +14,7 @@ import { useAuth } from '@/src/auth/AuthContext';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/src/api/client';
 import SkillBarsChart from "@/app/Profile/SkillRadarChart";
+import { LineChart, BarChart, PieChart as RNPieChart } from 'react-native-chart-kit';
 
 const { width } = Dimensions.get('window');
 
@@ -60,6 +62,13 @@ export default function ProfileScreen() {
     const [userFeedback, setUserFeedback] = useState('');
 
     const [modalMessage, setModalMessage] = useState({ text: '', type: '' }); // type: 'error' | 'success'
+
+    // Enhanced Profile states
+    const [showAccountDetails, setShowAccountDetails] = useState(false);
+    const [showLearningStats, setShowLearningStats] = useState(false);
+    const [showEquipment, setShowEquipment] = useState(false);
+    const [showTrends, setShowTrends] = useState(false);
+    const [showSuggestions, setShowSuggestions] = useState(false);
 
     // Function to show error with feedback option
     const showErrorWithFeedback = (errorMessage: string, context: string) => {
@@ -158,6 +167,192 @@ export default function ProfileScreen() {
     const displayUser = profileData ? { ...user, ...profileData } : user;
     const gameHistory = displayUser?.userGameScores || [];
 
+    // Move calculateImprovementRate before calculateLearningStats
+    const calculateImprovementRate = useCallback(() => {
+        if (gameHistory.length < 2) return 0;
+        const recent = gameHistory.slice(-5);
+        const earlier = gameHistory.slice(0, Math.min(5, gameHistory.length - 5));
+        
+        const recentAvg = recent.reduce((sum: number, game: any) => sum + (game.scores || 0), 0) / recent.length;
+        const earlierAvg = earlier.length > 0 ? earlier.reduce((sum: number, game: any) => sum + (game.scores || 0), 0) / earlier.length : recentAvg;
+        
+        return Math.round(((recentAvg - earlierAvg) / earlierAvg) * 100);
+    }, [gameHistory]);
+
+    // Enhanced Analytics Functions
+    const calculateLearningStats = useMemo(() => {
+        if (gameHistory.length === 0) return {
+            subjectAverages: {},
+            bestSubject: null,
+            difficultyPreference: {},
+            totalPlayTime: 0,
+            averageScore: 0,
+            improvementRate: 0
+        };
+
+        const subjectScores: { [key: string]: number[] } = {};
+        const difficultyCount: { [key: string]: number } = {};
+        let totalScore = 0;
+        
+        gameHistory.forEach((record: any) => {
+            const subject = record.gameType || 'UNKNOWN';
+            const difficulty = record.gameDifficulty || 'MEDIUM';
+            const score = record.scores || 0;
+            
+            if (!subjectScores[subject]) subjectScores[subject] = [];
+            subjectScores[subject].push(score);
+            
+            difficultyCount[difficulty] = (difficultyCount[difficulty] || 0) + 1;
+            totalScore += score;
+        });
+
+        const subjectAverages: { [key: string]: number } = {};
+        let bestSubject = null;
+        let bestAverage = 0;
+
+        Object.entries(subjectScores).forEach(([subject, scores]: [string, number[]]) => {
+            const average = scores.reduce((a: number, b: number) => a + b, 0) / scores.length;
+            subjectAverages[subject] = Math.round(average);
+            if (average > bestAverage) {
+                bestAverage = average;
+                bestSubject = subject;
+            }
+        });
+
+        return {
+            subjectAverages,
+            bestSubject,
+            difficultyPreference: difficultyCount,
+            totalPlayTime: gameHistory.length * 10, // 假設每個遊戲10分鐘
+            averageScore: Math.round(totalScore / gameHistory.length),
+            improvementRate: calculateImprovementRate()
+        };
+    }, [gameHistory, calculateImprovementRate]);
+
+    const getEquipmentStats = useMemo(() => {
+        const equipped = profileData?.equipped_items || {};
+        const totalItems = userItems.length;
+        const equippedCount = Object.values(equipped).filter(item => item !== null).length;
+        
+        return {
+            equipped,
+            totalItems,
+            equippedCount,
+            collectionProgress: Math.round((equippedCount / Math.max(totalItems, 1)) * 100),
+            rareItems: userItems.filter(item => {
+                const itemData = item;
+                return itemData.price > 100; // 假設價格超過100的為稀有物品
+            })
+        };
+    }, [profileData, userItems]);
+
+    const generateLearningSuggestions = useMemo(() => {
+        const stats = calculateLearningStats;
+        const suggestions = [];
+
+        // AI 分析 1: 弱項科目深度分析
+        const subjectEntries = Object.entries(stats.subjectAverages);
+        if (subjectEntries.length > 0) {
+            const sortedSubjects = subjectEntries.sort(([, a], [, b]) => a - b);
+            const weakestSubject = sortedSubjects[0];
+            const strongestSubject = sortedSubjects[sortedSubjects.length - 1];
+            
+            if (weakestSubject[1] < 70) {
+                const gap = strongestSubject[1] - weakestSubject[1];
+                suggestions.push({
+                    type: 'weakness',
+                    icon: <Target size={16} color="#FF6B6B" />,
+                    title: `重點加強${weakestSubject[0]}`,
+                    description: `你的${weakestSubject[0]}平均${weakestSubject[1]}分，與最強項${strongestSubject[0]}相差${gap}分。建議每天專注練習15-20分鐘。`
+                });
+            }
+        }
+
+        // AI 分析 2: 學習模式分析
+        const totalGames = Object.values(stats.difficultyPreference).reduce((a, b) => a + b, 0);
+        const easyRatio = (stats.difficultyPreference['EASY'] || 0) / totalGames;
+        const mediumRatio = (stats.difficultyPreference['MEDIUM'] || 0) / totalGames;
+        const hardRatio = (stats.difficultyPreference['HARD'] || 0) / totalGames;
+        
+        if (easyRatio > 0.6) {
+            suggestions.push({
+                type: 'challenge',
+                icon: <Zap size={16} color="#FFA500" />,
+                title: '突破舒適區',
+                description: `你${Math.round(easyRatio * 100)}%的時間都在簡單模式。AI分析顯示你已經掌握基礎，建議嘗試中等難度來刺激大腦發展。`
+            });
+        } else if (hardRatio > 0.4 && stats.averageScore < 80) {
+            suggestions.push({
+                type: 'balance',
+                icon: <BarChart3 size={16} color="#9C27B0" />,
+                title: '平衡難度選擇',
+                description: `你經常挑戰困難模式但平均分數較低。建議先在中等難度鞏固基礎，再挑戰高難度。`
+            });
+        }
+
+        // AI 分析 3: 學習一致性模式
+        if (gameHistory.length >= 5) {
+            const recentScores = gameHistory.slice(-5).map(g => g.scores || 0);
+            const scoreVariance = Math.sqrt(recentScores.reduce((sum, score) => {
+                const mean = recentScores.reduce((a, b) => a + b, 0) / recentScores.length;
+                return sum + Math.pow(score - mean, 2);
+            }, 0) / recentScores.length);
+            
+            if (scoreVariance > 20) {
+                suggestions.push({
+                    type: 'consistency',
+                    icon: <TrendingUp size={16} color="#4ECDC4" />,
+                    title: '提升學習穩定性',
+                    description: `AI分析顯示你的分數波動較大。建議建立固定的學習時間，保持規律的練習節奏。`
+                });
+            }
+        }
+
+        // AI 分析 4: 最佳學習時間建議
+        if (gameHistory.length >= 3) {
+            const recentGames = gameHistory.slice(-3);
+            const avgRecentScore = recentGames.reduce((sum, game) => sum + (game.scores || 0), 0) / recentGames.length;
+            
+            if (avgRecentScore > stats.averageScore * 1.1) {
+                suggestions.push({
+                    type: 'momentum',
+                    icon: <Star size={16} color="#FFD93D" />,
+                    title: '保持學習勢頭',
+                    description: `你最近的表現超出平均水平${Math.round(((avgRecentScore - stats.averageScore) / stats.averageScore) * 100)}%！這是學習的黃金時期，建議增加練習頻率。`
+                });
+            }
+        }
+
+        // AI 分析 5: 個人化學習路徑
+        if (stats.averageScore >= 85 && Object.keys(stats.subjectAverages).length >= 3) {
+            const balancedSubjects = Object.values(stats.subjectAverages).filter(score => score >= 80).length;
+            if (balancedSubjects >= 2) {
+                suggestions.push({
+                    type: 'advanced',
+                    icon: <Award size={16} color="#4CAF50" />,
+                    title: '進階學習建議',
+                    description: `你在多個科目都表現優秀！AI建議你可以開始嘗試跨科目綜合練習，或參與更具挑戰性的任務。`
+                });
+            }
+        }
+
+        // AI 分析 6: 學習習慣優化
+        const daysSinceFirstGame = gameHistory.length > 0 ? 
+            Math.ceil((Date.now() - new Date(gameHistory[0].created_at).getTime()) / (1000 * 60 * 60 * 24)) : 0;
+        const gamesPerDay = daysSinceFirstGame > 0 ? gameHistory.length / daysSinceFirstGame : 0;
+        
+        if (gamesPerDay < 0.5 && gameHistory.length < 10) {
+            suggestions.push({
+                type: 'habit',
+                icon: <Calendar size={16} color="#2196F3" />,
+                title: '建立學習習慣',
+                description: `AI分析建議每天至少完成1-2個遊戲，保持學習連續性。研究表明規律的學習比間歇學習效果更好。`
+            });
+        }
+
+        return suggestions;
+    }, [calculateLearningStats, gameHistory]);
+
     // 計算最高分邏輯
     const bestScores = useMemo(() => {
         if (gameHistory.length === 0) return [];
@@ -190,6 +385,45 @@ export default function ProfileScreen() {
     };
 
     const displayList = recordMode === 'recent' ? gameHistory.slice(0, 5) : bestScores;
+
+    // Chart data preparation
+    const prepareTrendData = useMemo(() => {
+        const last7Days = gameHistory.slice(-7);
+        return {
+            labels: last7Days.map((_: any, index: number) => `Day ${index + 1}`),
+            datasets: [{
+                data: last7Days.map((game: any) => game.scores || 0),
+                color: (opacity = 1) => `rgba(76, 175, 80, ${opacity})`,
+                strokeWidth: 2
+            }]
+        };
+    }, [gameHistory]);
+
+    const prepareSubjectData = useMemo(() => {
+        const stats = calculateLearningStats;
+        const subjects = Object.keys(stats.subjectAverages);
+        const scores = subjects.map((subject: string) => stats.subjectAverages[subject]);
+        
+        return {
+            labels: subjects,
+            datasets: [{
+                data: scores
+            }]
+        };
+    }, [calculateLearningStats]);
+
+    const prepareDifficultyData = useMemo(() => {
+        const stats = calculateLearningStats;
+        const difficulties = Object.keys(stats.difficultyPreference);
+        const counts = difficulties.map((diff: string) => stats.difficultyPreference[diff]);
+        
+        return {
+            labels: difficulties,
+            datasets: [{
+                data: counts
+            }]
+        };
+    }, [calculateLearningStats]);
 
     // Password change function
     const handleChangePassword = async () => {
@@ -527,6 +761,71 @@ export default function ProfileScreen() {
                     </TouchableOpacity>
                 </View>
 
+                {/* Enhanced Features Section */}
+                <View style={styles.enhancedFeaturesContainer}>
+                    <Text style={styles.sectionTitle}>Enhanced Analytics</Text>
+                    
+                    <TouchableOpacity
+                        style={styles.featureItem}
+                        onPress={() => setShowAccountDetails(true)}
+                    >
+                        <Calendar size={20} color="#2196F3" />
+                        <View style={styles.featureContent}>
+                            <Text style={styles.featureTitle}>Account Details</Text>
+                            <Text style={styles.featureDescription}>View detailed account information</Text>
+                        </View>
+                        <ChevronRight size={20} color="#BDC3C7" />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.featureItem}
+                        onPress={() => setShowLearningStats(true)}
+                    >
+                        <BarChart3 size={20} color="#FF9800" />
+                        <View style={styles.featureContent}>
+                            <Text style={styles.featureTitle}>Learning Statistics</Text>
+                            <Text style={styles.featureDescription}>Analyze your learning performance</Text>
+                        </View>
+                        <ChevronRight size={20} color="#BDC3C7" />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.featureItem}
+                        onPress={() => setShowEquipment(true)}
+                    >
+                        <Award size={20} color="#9C27B0" />
+                        <View style={styles.featureContent}>
+                            <Text style={styles.featureTitle}>Equipment & Collection</Text>
+                            <Text style={styles.featureDescription}>View your equipped items and collection</Text>
+                        </View>
+                        <ChevronRight size={20} color="#BDC3C7" />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.featureItem}
+                        onPress={() => setShowTrends(true)}
+                    >
+                        <TrendingUp size={20} color="#4CAF50" />
+                        <View style={styles.featureContent}>
+                            <Text style={styles.featureTitle}>Learning Trends</Text>
+                            <Text style={styles.featureDescription}>Track your progress over time</Text>
+                        </View>
+                        <ChevronRight size={20} color="#BDC3C7" />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.featureItem}
+                        onPress={() => setShowSuggestions(true)}
+                    >
+                        <Target size={20} color="#F44336" />
+                        <View style={styles.featureContent}>
+                            <Text style={styles.featureTitle}>Learning Suggestions</Text>
+                            <Text style={styles.featureDescription}>Personalized learning recommendations</Text>
+                        </View>
+                        <ChevronRight size={20} color="#BDC3C7" />
+                    </TouchableOpacity>
+                </View>
+
                 <View style={styles.statsAndSkillsContainer}>
                     {/* Stats Section - Left Side */}
                     <View style={styles.statsColumn}>
@@ -552,7 +851,7 @@ export default function ProfileScreen() {
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={[styles.statCard, { backgroundColor: '#FFF3E0', borderColor: '#FFE0B2' }]}
-                                onPress={() => setShowItemsModal(true)}
+                                onPress={() => router.push('/Inventory/inventory')}
                             >
                                 <Trophy size={24} color="#FF9800" />
                                 <Text style={styles.statNumber}>{userItems.length}</Text>
@@ -1052,6 +1351,380 @@ export default function ProfileScreen() {
                     </View>
                 </View>
             </Modal>
+
+            {/* Account Details Modal */}
+            <Modal
+                visible={showAccountDetails}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setShowAccountDetails(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { maxHeight: '80%' }]}>
+                        <Text style={styles.modalTitle}>Account Details</Text>
+                        
+                        <ScrollView style={{ flex: 1, maxHeight: 400 }}>
+                            <View style={styles.accountDetailRow}>
+                                <Text style={styles.accountDetailLabel}>User ID</Text>
+                                <Text style={styles.accountDetailValue}>#{displayUser?.id || 'N/A'}</Text>
+                            </View>
+                            <View style={styles.accountDetailRow}>
+                                <Text style={styles.accountDetailLabel}>Username</Text>
+                                <Text style={styles.accountDetailValue}>{displayUser?.username || 'N/A'}</Text>
+                            </View>
+                            <View style={styles.accountDetailRow}>
+                                <Text style={styles.accountDetailLabel}>Email</Text>
+                                <Text style={styles.accountDetailValue}>{displayUser?.email || 'N/A'}</Text>
+                            </View>
+                            <View style={styles.accountDetailRow}>
+                                <Text style={styles.accountDetailLabel}>Nickname</Text>
+                                <Text style={styles.accountDetailValue}>{displayUser?.nickname || 'Not set'}</Text>
+                            </View>
+                            <View style={styles.accountDetailRow}>
+                                <Text style={styles.accountDetailLabel}>School</Text>
+                                <Text style={styles.accountDetailValue}>{currentSchool || 'Not set'}</Text>
+                            </View>
+                            <View style={styles.accountDetailRow}>
+                                <Text style={styles.accountDetailLabel}>Member Since</Text>
+                                <Text style={styles.accountDetailValue}>
+                                    {displayUser?.created_at ? new Date(displayUser.created_at).toLocaleDateString() : 'N/A'}
+                                </Text>
+                            </View>
+                            <View style={styles.accountDetailRow}>
+                                <Text style={styles.accountDetailLabel}>Last Updated</Text>
+                                <Text style={styles.accountDetailValue}>
+                                    {displayUser?.updated_at ? new Date(displayUser.updated_at).toLocaleDateString() : 'N/A'}
+                                </Text>
+                            </View>
+                            <View style={styles.accountDetailRow}>
+                                <Text style={styles.accountDetailLabel}>Account Roles</Text>
+                                <Text style={styles.accountDetailValue}>{userRoles.join(', ') || 'USER'}</Text>
+                            </View>
+                            <View style={styles.accountDetailRow}>
+                                <Text style={styles.accountDetailLabel}>Current Points</Text>
+                                <Text style={styles.accountDetailValue}>{displayUser?.points || 0} XP</Text>
+                            </View>
+                        </ScrollView>
+
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity
+                                style={[styles.modalBtn, styles.confirmBtn]}
+                                onPress={() => setShowAccountDetails(false)}
+                            >
+                                <Text style={styles.confirmBtnText}>Close</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Learning Statistics Modal */}
+            <Modal
+                visible={showLearningStats}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setShowLearningStats(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { maxHeight: '80%' }]}>
+                        <Text style={styles.modalTitle}>Learning Statistics</Text>
+                        
+                        <ScrollView style={{ flex: 1, maxHeight: 400 }}>
+                            <View style={styles.statsCard}>
+                                <Text style={styles.statsCardTitle}>Performance Overview</Text>
+                                <View style={styles.statsRow}>
+                                    <Text style={styles.statsLabel}>Average Score</Text>
+                                    <Text style={styles.statsValue}>{calculateLearningStats.averageScore}</Text>
+                                </View>
+                                <View style={styles.statsRow}>
+                                    <Text style={styles.statsLabel}>Best Subject</Text>
+                                    <Text style={styles.statsValue}>{calculateLearningStats.bestSubject || 'N/A'}</Text>
+                                </View>
+                                <View style={styles.statsRow}>
+                                    <Text style={styles.statsLabel}>Total Play Time</Text>
+                                    <Text style={styles.statsValue}>{calculateLearningStats.totalPlayTime} min</Text>
+                                </View>
+                                <View style={styles.statsRow}>
+                                    <Text style={styles.statsLabel}>Improvement Rate</Text>
+                                    <Text style={[styles.statsValue, { color: calculateLearningStats.improvementRate >= 0 ? '#4CAF50' : '#FF4757' }]}>
+                                        {calculateLearningStats.improvementRate >= 0 ? '+' : ''}{calculateLearningStats.improvementRate}%
+                                    </Text>
+                                </View>
+                            </View>
+
+                            <View style={styles.statsCard}>
+                                <Text style={styles.statsCardTitle}>Subject Performance</Text>
+                                {Object.entries(calculateLearningStats.subjectAverages).map(([subject, avg]: [string, number]) => (
+                                    <View key={subject} style={styles.statsRow}>
+                                        <Text style={styles.statsLabel}>{subject}</Text>
+                                        <Text style={styles.statsValue}>{avg}</Text>
+                                    </View>
+                                ))}
+                            </View>
+
+                            <View style={styles.statsCard}>
+                                <Text style={styles.statsCardTitle}>Difficulty Preference</Text>
+                                {Object.entries(calculateLearningStats.difficultyPreference).map(([difficulty, count]: [string, number]) => (
+                                    <View key={difficulty} style={styles.statsRow}>
+                                        <Text style={styles.statsLabel}>{difficulty}</Text>
+                                        <Text style={styles.statsValue}>{count} games</Text>
+                                    </View>
+                                ))}
+                            </View>
+                        </ScrollView>
+
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity
+                                style={[styles.modalBtn, styles.confirmBtn]}
+                                onPress={() => setShowLearningStats(false)}
+                            >
+                                <Text style={styles.confirmBtnText}>Close</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Equipment & Collection Modal */}
+            <Modal
+                visible={showEquipment}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setShowEquipment(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { maxHeight: '80%' }]}>
+                        <Text style={styles.modalTitle}>Equipment & Collection</Text>
+                        
+                        <ScrollView style={{ flex: 1, maxHeight: 400 }}>
+                            <View style={styles.statsCard}>
+                                <Text style={styles.statsCardTitle}>Collection Stats</Text>
+                                <View style={styles.statsRow}>
+                                    <Text style={styles.statsLabel}>Total Items</Text>
+                                    <Text style={styles.statsValue}>{getEquipmentStats.totalItems}</Text>
+                                </View>
+                                <View style={styles.statsRow}>
+                                    <Text style={styles.statsLabel}>Equipped Items</Text>
+                                    <Text style={styles.statsValue}>{getEquipmentStats.equippedCount}</Text>
+                                </View>
+                                <View style={styles.statsRow}>
+                                    <Text style={styles.statsLabel}>Collection Progress</Text>
+                                    <Text style={styles.statsValue}>{getEquipmentStats.collectionProgress}%</Text>
+                                </View>
+                                <View style={styles.statsRow}>
+                                    <Text style={styles.statsLabel}>Rare Items</Text>
+                                    <Text style={styles.statsValue}>{getEquipmentStats.rareItems.length}</Text>
+                                </View>
+                            </View>
+
+                            <View style={styles.statsCard}>
+                                <Text style={styles.statsCardTitle}>Equipped Items</Text>
+                                <View style={styles.equipmentGrid}>
+                                    {Object.entries(getEquipmentStats.equipped).map(([type, itemId]: [string, any]) => (
+                                        <View key={type} style={styles.equipmentItem}>
+                                            <Text style={styles.equipmentIcon}>
+                                                {type === 'AVATAR' ? '👤' : type === 'BADGE' ? '🏆' : '🎨'}
+                                            </Text>
+                                            <Text style={styles.equipmentName}>{type}</Text>
+                                        </View>
+                                    ))}
+                                </View>
+                            </View>
+
+                            {getEquipmentStats.rareItems.length > 0 && (
+                                <View style={styles.statsCard}>
+                                    <Text style={styles.statsCardTitle}>Rare Items</Text>
+                                    {getEquipmentStats.rareItems.map((item: any, index: number) => (
+                                        <View key={index} style={styles.statsRow}>
+                                            <Text style={styles.statsLabel}>{item.name}</Text>
+                                            <Text style={styles.statsValue}>{item.price} pts</Text>
+                                        </View>
+                                    ))}
+                                </View>
+                            )}
+                        </ScrollView>
+
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity
+                                style={[styles.modalBtn, styles.confirmBtn]}
+                                onPress={() => setShowEquipment(false)}
+                            >
+                                <Text style={styles.confirmBtnText}>Close</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Learning Trends Modal */}
+            <Modal
+                visible={showTrends}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setShowTrends(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { maxHeight: '80%' }]}>
+                        <Text style={styles.modalTitle}>Learning Trends</Text>
+                        
+                        <ScrollView style={{ flex: 1, maxHeight: 400 }}>
+                            <View style={styles.chartContainer}>
+                                <Text style={styles.chartTitle}>Recent Performance (Last 7 Games)</Text>
+                                {prepareTrendData.labels.length > 0 ? (
+                                    <LineChart
+                                        data={prepareTrendData}
+                                        width={width * 0.7}
+                                        height={200}
+                                        chartConfig={{
+                                            backgroundColor: '#FFF',
+                                            backgroundGradientFrom: '#FFF',
+                                            backgroundGradientTo: '#FFF',
+                                            decimalPlaces: 0,
+                                            color: (opacity = 1) => `rgba(76, 175, 80, ${opacity})`,
+                                            labelColor: (opacity = 1) => `rgba(45, 52, 54, ${opacity})`,
+                                            style: {
+                                                borderRadius: 16
+                                            },
+                                            propsForDots: {
+                                                r: '4',
+                                                strokeWidth: '2',
+                                                stroke: '#4CAF50'
+                                            }
+                                        }}
+                                        bezier
+                                        style={{
+                                            marginVertical: 8,
+                                            borderRadius: 16,
+                                        }}
+                                    />
+                                ) : (
+                                    <Text style={styles.emptyText}>No data available</Text>
+                                )}
+                            </View>
+
+                            <View style={styles.chartContainer}>
+                                <Text style={styles.chartTitle}>Subject Performance</Text>
+                                {prepareSubjectData.labels.length > 0 ? (
+                                    <BarChart
+                                        data={prepareSubjectData}
+                                        width={width * 0.7}
+                                        height={200}
+                                        yAxisLabel="Score"
+                                        chartConfig={{
+                                            backgroundColor: '#FFF',
+                                            backgroundGradientFrom: '#FFF',
+                                            backgroundGradientTo: '#FFF',
+                                            decimalPlaces: 0,
+                                            color: (opacity = 1) => `rgba(33, 150, 243, ${opacity})`,
+                                            labelColor: (opacity = 1) => `rgba(45, 52, 54, ${opacity})`,
+                                            style: {
+                                                borderRadius: 16
+                                            }
+                                        }}
+                                        style={{
+                                            marginVertical: 8,
+                                            borderRadius: 16,
+                                        }}
+                                    />
+                                ) : (
+                                    <Text style={styles.emptyText}>No data available</Text>
+                                )}
+                            </View>
+
+                            <View style={styles.chartContainer}>
+                                <Text style={styles.chartTitle}>Difficulty Preference</Text>
+                                {prepareDifficultyData.labels.length > 0 ? (
+                                    <RNPieChart
+                                        data={prepareDifficultyData.labels.map((label: string, index: number) => ({
+                                            name: label,
+                                            population: prepareDifficultyData.datasets[0].data[index],
+                                            color: label === 'EASY' ? '#4CAF50' : label === 'MEDIUM' ? '#FF9800' : '#F44336',
+                                            legendFontColor: '#2D3436',
+                                            legendFontSize: 12
+                                        }))}
+                                        width={width * 0.7}
+                                        height={200}
+                                        chartConfig={{
+                                            color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                                        }}
+                                        accessor="population"
+                                        backgroundColor="transparent"
+                                        paddingLeft="15"
+                                        center={[10, 10]}
+                                        absolute
+                                    />
+                                ) : (
+                                    <Text style={styles.emptyText}>No data available</Text>
+                                )}
+                            </View>
+                        </ScrollView>
+
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity
+                                style={[styles.modalBtn, styles.confirmBtn]}
+                                onPress={() => setShowTrends(false)}
+                            >
+                                <Text style={styles.confirmBtnText}>Close</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Learning Suggestions Modal */}
+            <Modal
+                visible={showSuggestions}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setShowSuggestions(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { maxHeight: '80%' }]}>
+                        <Text style={styles.modalTitle}>Learning Suggestions</Text>
+                        
+                        <ScrollView style={{ flex: 1, maxHeight: 400 }}>
+                            {generateLearningSuggestions.length > 0 ? (
+                                generateLearningSuggestions.map((suggestion: any, index: number) => (
+                                    <View key={index} style={styles.suggestionCard}>
+                                        <View style={styles.suggestionIcon}>
+                                            {suggestion.icon}
+                                        </View>
+                                        <View style={styles.suggestionContent}>
+                                            <Text style={styles.suggestionTitle}>{suggestion.title}</Text>
+                                            <Text style={styles.suggestionDescription}>{suggestion.description}</Text>
+                                        </View>
+                                    </View>
+                                ))
+                            ) : (
+                                <View style={styles.statsCard}>
+                                    <Text style={styles.statsCardTitle}>Great Job! 🎉</Text>
+                                    <Text style={[styles.statsLabel, { textAlign: 'center', marginTop: 10 }]}>
+                                        You're doing excellently! Keep up the good work and continue challenging yourself.
+                                    </Text>
+                                </View>
+                            )}
+
+                            <View style={styles.statsCard}>
+                                <Text style={styles.statsCardTitle}>AI 學習策略建議</Text>
+                                <Text style={styles.statsLabel}>🧠 **認知科學原理**：間隔重複比集中學習更有效</Text>
+                                <Text style={styles.statsLabel}>⏰ **最佳學習時長**：每次25-30分鐘，之後休息5分鐘</Text>
+                                <Text style={styles.statsLabel}>🎯 **目標設定**：設定具體可衡量的學習目標</Text>
+                                <Text style={styles.statsLabel}>🔄 **多樣化學習**：結合不同難度和科目提升綜合能力</Text>
+                                <Text style={styles.statsLabel}>📊 **數據驅動**：定期檢查學習數據，調整學習策略</Text>
+                            </View>
+                        </ScrollView>
+
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity
+                                style={[styles.modalBtn, styles.confirmBtn]}
+                                onPress={() => setShowSuggestions(false)}
+                            >
+                                <Text style={styles.confirmBtnText}>Close</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -1457,6 +2130,149 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         color: '#4CAF50',
         flex: 1,
+        textAlign: 'center',
+    },
+    // Enhanced Features styles
+    enhancedFeaturesContainer: {
+        backgroundColor: '#FFF',
+        marginHorizontal: 20,
+        marginTop: 20,
+        borderRadius: 24,
+        padding: 20,
+        elevation: 2,
+    },
+    featureItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 15,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F2F6',
+    },
+    featureContent: {
+        flex: 1,
+        marginLeft: 15,
+    },
+    featureTitle: {
+        fontSize: 16,
+        fontWeight: '800',
+        color: '#2D3436',
+    },
+    featureDescription: {
+        fontSize: 12,
+        color: '#636E72',
+        marginTop: 2,
+    },
+    // Account Details Modal styles
+    accountDetailRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F2F6',
+    },
+    accountDetailLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#636E72',
+    },
+    accountDetailValue: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#2D3436',
+    },
+    // Learning Stats styles
+    statsCard: {
+        backgroundColor: '#F8F9FA',
+        borderRadius: 12,
+        padding: 15,
+        marginBottom: 10,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    statsCardTitle: {
+        fontSize: 16,
+        fontWeight: '800',
+        color: '#2D3436',
+        marginBottom: 10,
+    },
+    statsRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 8,
+    },
+    statsLabel: {
+        fontSize: 14,
+        color: '#636E72',
+    },
+    statsValue: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#2D3436',
+    },
+    // Equipment styles
+    equipmentGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        marginBottom: 20,
+    },
+    equipmentItem: {
+        width: '48%',
+        backgroundColor: '#F8F9FA',
+        borderRadius: 12,
+        padding: 15,
+        marginBottom: 10,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    equipmentIcon: {
+        fontSize: 24,
+        marginBottom: 5,
+    },
+    equipmentName: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#2D3436',
+        textAlign: 'center',
+    },
+    // Suggestions styles
+    suggestionCard: {
+        backgroundColor: '#FFF',
+        borderRadius: 12,
+        padding: 15,
+        marginBottom: 10,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    suggestionIcon: {
+        marginRight: 15,
+    },
+    suggestionContent: {
+        flex: 1,
+    },
+    suggestionTitle: {
+        fontSize: 14,
+        fontWeight: '800',
+        color: '#2D3436',
+        marginBottom: 2,
+    },
+    suggestionDescription: {
+        fontSize: 12,
+        color: '#636E72',
+    },
+    // Chart container styles
+    chartContainer: {
+        marginVertical: 10,
+        alignItems: 'center',
+    },
+    chartTitle: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#2D3436',
+        marginBottom: 5,
         textAlign: 'center',
     }
 });
