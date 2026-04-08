@@ -198,7 +198,7 @@ export default function ShopScreen() {
             <View style={styles.filterSection}>
                 <View style={styles.filterHeader}>
                     <Package size={20} color="#4CAF50" />
-                    <Text style={styles.filterTitle}>物品類型</Text>
+                    <Text style={styles.filterTitle}>Item type</Text>
                 </View>
 
                 <ScrollView
@@ -221,9 +221,9 @@ export default function ShopScreen() {
                                 styles.filterChipText,
                                 selectedType === type && styles.filterChipTextActive
                             ]}>
-                                {type === 'ALL' ? '全部' :
-                                    type === 'AVATAR' ? '頭像' :
-                                        type === 'BACKGROUND' ? '背景' : '徽章'}
+                                {type === 'ALL' ? 'All' :
+                                    type === 'AVATAR' ? 'Avatar' :
+                                        type === 'BACKGROUND' ? 'Background' : 'Badge'}
                             </Text>
                         </TouchableOpacity>
                     ))}
