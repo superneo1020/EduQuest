@@ -63,8 +63,11 @@ export default function ProfileScreen() {
 
     const [modalMessage, setModalMessage] = useState({ text: '', type: '' }); // type: 'error' | 'success'
 
+    // AI Learning suggestions state
+    const [aiSuggestions, setAiSuggestions] = useState<any[]>([]);
+    const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+
     // Enhanced Profile states
-    const [showAccountDetails, setShowAccountDetails] = useState(false);
     const [showLearningStats, setShowLearningStats] = useState(false);
     const [showEquipment, setShowEquipment] = useState(false);
     const [showTrends, setShowTrends] = useState(false);
@@ -680,6 +683,50 @@ export default function ProfileScreen() {
         }
     };
 
+    // Function to fetch AI learning suggestions
+    const fetchAiLearningSuggestions = async () => {
+        if (loadingSuggestions || gameHistory.length === 0) return;
+
+        try {
+            setLoadingSuggestions(true);
+            
+            // Prepare game score data for Python backend
+            const gameScoreData = {
+                user_id: displayUser?.id || 1,
+                game_scores: gameHistory.map((game: any) => ({
+                    game_type: game.gameType || 'UNKNOWN',
+                    game_name: game.name || 'Unknown Game',
+                    score: game.scores || 0,
+                    difficulty: game.gameDifficulty || 'MEDIUM',
+                    created_at: game.createdAt
+                }))
+            };
+
+            // Call Python backend API
+            const response = await axios.post('http://localhost:8000/api/learning/suggestions', gameScoreData, {
+                timeout: 30000, // 30 seconds timeout
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            setAiSuggestions(response.data.suggestions || []);
+        } catch (error: any) {
+            console.error('Failed to fetch AI suggestions:', error);
+            
+            // Fallback to local suggestions if AI fails
+            Alert.alert(
+                'AI Analysis Unavailable',
+                'Using local analysis instead. Make sure Python backend is running.',
+                [{ text: 'OK' }]
+            );
+            
+            // Keep existing local suggestions as fallback
+        } finally {
+            setLoadingSuggestions(false);
+        }
+    };
+
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="light-content" />
@@ -713,6 +760,28 @@ export default function ProfileScreen() {
                 {/* Settings Section */}
                 <View style={styles.settingsContainer}>
                     <Text style={styles.sectionTitle}>Account Settings</Text>
+
+                    {/* Account Information */}
+                    <View style={styles.accountInfoSection}>
+                        <View style={styles.accountInfoRow}>
+                            <Text style={styles.accountInfoLabel}>User ID</Text>
+                            <Text style={styles.accountInfoValue}>#{displayUser?.id || 'N/A'}</Text>
+                        </View>
+                        <View style={styles.accountInfoRow}>
+                            <Text style={styles.accountInfoLabel}>Username</Text>
+                            <Text style={styles.accountInfoValue}>{displayUser?.username || 'N/A'}</Text>
+                        </View>
+                        <View style={styles.accountInfoRow}>
+                            <Text style={styles.accountInfoLabel}>Current Points</Text>
+                            <Text style={styles.accountInfoValue}>{displayUser?.points || 0} XP</Text>
+                        </View>
+                        <View style={styles.accountInfoRow}>
+                            <Text style={styles.accountInfoLabel}>Member Since</Text>
+                            <Text style={styles.accountInfoValue}>
+                                {displayUser?.created_at ? new Date(displayUser.created_at).toLocaleDateString() : 'N/A'}
+                            </Text>
+                        </View>
+                    </View>
 
                     <TouchableOpacity
                         style={styles.settingItem}
@@ -765,18 +834,7 @@ export default function ProfileScreen() {
                 <View style={styles.enhancedFeaturesContainer}>
                     <Text style={styles.sectionTitle}>Enhanced Analytics</Text>
                     
-                    <TouchableOpacity
-                        style={styles.featureItem}
-                        onPress={() => setShowAccountDetails(true)}
-                    >
-                        <Calendar size={20} color="#2196F3" />
-                        <View style={styles.featureContent}>
-                            <Text style={styles.featureTitle}>Account Details</Text>
-                            <Text style={styles.featureDescription}>View detailed account information</Text>
-                        </View>
-                        <ChevronRight size={20} color="#BDC3C7" />
-                    </TouchableOpacity>
-
+                    
                     <TouchableOpacity
                         style={styles.featureItem}
                         onPress={() => setShowLearningStats(true)}
@@ -815,12 +873,15 @@ export default function ProfileScreen() {
 
                     <TouchableOpacity
                         style={styles.featureItem}
-                        onPress={() => setShowSuggestions(true)}
+                        onPress={() => {
+                            setShowSuggestions(true);
+                            fetchAiLearningSuggestions();
+                        }}
                     >
                         <Target size={20} color="#F44336" />
                         <View style={styles.featureContent}>
                             <Text style={styles.featureTitle}>Learning Suggestions</Text>
-                            <Text style={styles.featureDescription}>Personalized learning recommendations</Text>
+                            <Text style={styles.featureDescription}>AI-powered learning recommendations</Text>
                         </View>
                         <ChevronRight size={20} color="#BDC3C7" />
                     </TouchableOpacity>
@@ -1352,72 +1413,7 @@ export default function ProfileScreen() {
                 </View>
             </Modal>
 
-            {/* Account Details Modal */}
-            <Modal
-                visible={showAccountDetails}
-                transparent={true}
-                animationType="slide"
-                onRequestClose={() => setShowAccountDetails(false)}
-            >
-                <View style={styles.modalOverlay}>
-                    <View style={[styles.modalContent, { maxHeight: '80%' }]}>
-                        <Text style={styles.modalTitle}>Account Details</Text>
-                        
-                        <ScrollView style={{ flex: 1, maxHeight: 400 }}>
-                            <View style={styles.accountDetailRow}>
-                                <Text style={styles.accountDetailLabel}>User ID</Text>
-                                <Text style={styles.accountDetailValue}>#{displayUser?.id || 'N/A'}</Text>
-                            </View>
-                            <View style={styles.accountDetailRow}>
-                                <Text style={styles.accountDetailLabel}>Username</Text>
-                                <Text style={styles.accountDetailValue}>{displayUser?.username || 'N/A'}</Text>
-                            </View>
-                            <View style={styles.accountDetailRow}>
-                                <Text style={styles.accountDetailLabel}>Email</Text>
-                                <Text style={styles.accountDetailValue}>{displayUser?.email || 'N/A'}</Text>
-                            </View>
-                            <View style={styles.accountDetailRow}>
-                                <Text style={styles.accountDetailLabel}>Nickname</Text>
-                                <Text style={styles.accountDetailValue}>{displayUser?.nickname || 'Not set'}</Text>
-                            </View>
-                            <View style={styles.accountDetailRow}>
-                                <Text style={styles.accountDetailLabel}>School</Text>
-                                <Text style={styles.accountDetailValue}>{currentSchool || 'Not set'}</Text>
-                            </View>
-                            <View style={styles.accountDetailRow}>
-                                <Text style={styles.accountDetailLabel}>Member Since</Text>
-                                <Text style={styles.accountDetailValue}>
-                                    {displayUser?.created_at ? new Date(displayUser.created_at).toLocaleDateString() : 'N/A'}
-                                </Text>
-                            </View>
-                            <View style={styles.accountDetailRow}>
-                                <Text style={styles.accountDetailLabel}>Last Updated</Text>
-                                <Text style={styles.accountDetailValue}>
-                                    {displayUser?.updated_at ? new Date(displayUser.updated_at).toLocaleDateString() : 'N/A'}
-                                </Text>
-                            </View>
-                            <View style={styles.accountDetailRow}>
-                                <Text style={styles.accountDetailLabel}>Account Roles</Text>
-                                <Text style={styles.accountDetailValue}>{userRoles.join(', ') || 'USER'}</Text>
-                            </View>
-                            <View style={styles.accountDetailRow}>
-                                <Text style={styles.accountDetailLabel}>Current Points</Text>
-                                <Text style={styles.accountDetailValue}>{displayUser?.points || 0} XP</Text>
-                            </View>
-                        </ScrollView>
-
-                        <View style={styles.modalButtons}>
-                            <TouchableOpacity
-                                style={[styles.modalBtn, styles.confirmBtn]}
-                                onPress={() => setShowAccountDetails(false)}
-                            >
-                                <Text style={styles.confirmBtnText}>Close</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </View>
-            </Modal>
-
+            
             {/* Learning Statistics Modal */}
             <Modal
                 visible={showLearningStats}
@@ -1683,7 +1679,37 @@ export default function ProfileScreen() {
                         <Text style={styles.modalTitle}>Learning Suggestions</Text>
                         
                         <ScrollView style={{ flex: 1, maxHeight: 400 }}>
-                            {generateLearningSuggestions.length > 0 ? (
+                            {loadingSuggestions ? (
+                                <View style={{ alignItems: 'center', padding: 40 }}>
+                                    <ActivityIndicator size="large" color="#4CAF50" />
+                                    <Text style={{ marginTop: 10, color: '#636E72' }}>AI is analyzing your learning patterns...</Text>
+                                </View>
+                            ) : aiSuggestions.length > 0 ? (
+                                aiSuggestions.map((suggestion: any, index: number) => (
+                                    <View key={index} style={styles.suggestionCard}>
+                                        <View style={styles.suggestionIcon}>
+                                            {suggestion.type === 'strength' && <Trophy size={16} color="#4CAF50" />}
+                                            {suggestion.type === 'weakness' && <Target size={16} color="#FF6B6B" />}
+                                            {suggestion.type === 'recommendation' && <Zap size={16} color="#FFA500" />}
+                                        </View>
+                                        <View style={styles.suggestionContent}>
+                                            <Text style={styles.suggestionTitle}>{suggestion.title}</Text>
+                                            <Text style={styles.suggestionDescription}>{suggestion.description}</Text>
+                                            <View style={styles.suggestionPriority}>
+                                                <Text style={[
+                                                    styles.priorityText,
+                                                    {
+                                                        color: suggestion.priority === 'high' ? '#FF6B6B' :
+                                                               suggestion.priority === 'medium' ? '#FFA500' : '#4CAF50'
+                                                    }
+                                                ]}>
+                                                    {suggestion.priority?.toUpperCase() || 'MEDIUM'}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                    </View>
+                                ))
+                            ) : generateLearningSuggestions.length > 0 ? (
                                 generateLearningSuggestions.map((suggestion: any, index: number) => (
                                     <View key={index} style={styles.suggestionCard}>
                                         <View style={styles.suggestionIcon}>
@@ -2180,6 +2206,32 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         color: '#2D3436',
     },
+    // Account Info styles
+    accountInfoSection: {
+        backgroundColor: '#F8F9FA',
+        borderRadius: 12,
+        padding: 15,
+        marginBottom: 15,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    accountInfoRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingVertical: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F2F6',
+    },
+    accountInfoLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#636E72',
+    },
+    accountInfoValue: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#2D3436',
+    },
     // Learning Stats styles
     statsCard: {
         backgroundColor: '#F8F9FA',
@@ -2262,6 +2314,18 @@ const styles = StyleSheet.create({
     suggestionDescription: {
         fontSize: 12,
         color: '#636E72',
+        marginBottom: 5,
+    },
+    suggestionPriority: {
+        alignSelf: 'flex-start',
+    },
+    priorityText: {
+        fontSize: 10,
+        fontWeight: '700',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 8,
+        backgroundColor: '#F0F0F0',
     },
     // Chart container styles
     chartContainer: {
