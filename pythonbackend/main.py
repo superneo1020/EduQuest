@@ -108,6 +108,13 @@ class CheckRequest(BaseModel):
 
 class SessionRecord(BaseModel):
     history: list[dict]
+
+class GameScoreData(BaseModel):
+    user_id: int
+    game_scores: list[dict]  # [{"game_type": "MATH", "score": 85, "difficulty": "MEDIUM", "created_at": "2024-01-01"}]
+
+class LearningSuggestions(BaseModel):
+    suggestions: list[dict]  # [{"type": "weakness", "title": "...", "description": "..."}]
 # ---------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------
