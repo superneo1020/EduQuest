@@ -449,12 +449,11 @@ export default function ProfileScreen() {
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="light-content" />
-            <View style={styles.topBanner} />
-            <View style={styles.header}>
-                <Text style={styles.headerTitle}>Student Profile</Text>
-            </View>
-
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+                <View style={styles.topBanner} />
+                <View style={styles.header}>
+                    <Text style={styles.headerTitle}>Student Profile</Text>
+                </View>
                 <View style={styles.profileHeader}>
                     <View style={styles.avatarCircle}><UserIcon size={45} color="#4CAF50" /></View>
                     <Text style={styles.userName}>{displayUser?.nickname || displayUser?.username || 'Learner'}</Text>
@@ -1059,7 +1058,7 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#F8F9FA' },
-    topBanner: { position: 'absolute', top: 0, width: width, height: 180, backgroundColor: '#4CAF50', borderBottomLeftRadius: 40, borderBottomRightRadius: 40 },
+    topBanner: { width: width + 40, height: 180, backgroundColor: '#4CAF50', borderBottomLeftRadius: 40, borderBottomRightRadius: 40, marginBottom: -140, marginLeft: -20 },
     header: { height: 60, alignItems: 'center', justifyContent: 'center' },
     headerTitle: { fontSize: 18, fontWeight: '800', color: '#FFF' },
     profileHeader: { backgroundColor: '#FFF', marginHorizontal: 20, marginTop: 15, borderRadius: 24, padding: 25, alignItems: 'center', elevation: 4 },
@@ -1085,7 +1084,6 @@ const styles = StyleSheet.create({
         marginLeft: 10
     },
     radarSection: {
-        backgroundColor: '#FFF',
         marginTop: 10, // Reduced from 15
         borderRadius: 24,
         padding: 12, // Reduced from 15
