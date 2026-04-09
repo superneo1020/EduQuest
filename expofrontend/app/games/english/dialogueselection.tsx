@@ -31,14 +31,14 @@ const CHARACTERS = {
 };
 
 const DIFFICULTY_CONFIG = {
-    easy: { label: 'Easy', color: '#4CAF50', bgColor: '#E8F5E9', icon: '🌟' },
-    hard: { label: 'Hard', color: '#F44336', bgColor: '#FFEBEE', icon: '🔥' }
+    easy: { label: 'Easy', color: '#4CAF50', bgColor: '#E8F5E9', icon: '🌟', maxScore: 100 },
+    hard: { label: 'Hard', color: '#F44336', bgColor: '#FFEBEE', icon: '🔥', maxScore: 120 }
 };
 
-// 總題數
-const TOTAL_QUESTIONS = 8;
+// 總題數 - 改为4题
+const TOTAL_QUESTIONS = 4;
 
-// 子主題選項（以 Sports 為例）
+// 子主題選項
 const SUB_TOPICS: Record<string, string[]> = {
     sports: ['Basketball', 'Football', 'Tennis', 'Swimming'],
     lunch: ['Sandwich', 'Pizza', 'Salad', 'Pasta'],
@@ -57,7 +57,7 @@ export default function WritingScreen() {
     const { token } = useAuth();
     const [isSaving, setIsSaving] = useState(false);
 
-    // 完全隐藏系统导航栏（包括返回按钮和标题）
+    // 完全隐藏系统导航栏
     useLayoutEffect(() => {
         navigation.setOptions({
             headerShown: false,
@@ -68,26 +68,35 @@ export default function WritingScreen() {
     const [selectedDifficulty, setSelectedDifficulty] = useState<'easy' | 'hard' | null>(null);
     const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
 
-    // 修改：改为单题模式
     const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [conversation, setConversation] = useState<ConversationTurn[]>([]);
     const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
-    const [isLoadingNext, setIsLoadingNext] = useState(false);  // 加載下一題中
-    const [isGeneratingQuestion, setIsGeneratingQuestion] = useState(false); // AI 生成題目中
+    const [isLoadingNext, setIsLoadingNext] = useState(false);
+    const [isGeneratingQuestion, setIsGeneratingQuestion] = useState(false);
     const [summary, setSummary] = useState<ConversationAnalysis | null>(null);
     const [scoreAnimation] = useState(new Animated.Value(0));
 
-    // 子主題相關狀態
     const [subTopicState, setSubTopicState] = useState<SubTopicState>('selecting');
     const [selectedSubTopic, setSelectedSubTopic] = useState<string | null>(null);
 
-    // 統計數據
     const [correctCount, setCorrectCount] = useState(0);
     const [totalScore, setTotalScore] = useState(0);
 
     const scrollViewRef = useRef<ScrollView>(null);
+
+    // 获取当前难度的满分
+    const getMaxScore = () => {
+        return selectedDifficulty === 'easy' ? 100 : 120;
+    };
+
+    // 计算当前百分比分数（用于显示）
+    const getCurrentPercentage = () => {
+        const maxScore = getMaxScore();
+        if (maxScore === 0) return 0;
+        return Math.round((totalScore / maxScore) * 100);
+    };
 
     // ========== 💾 保存分數到伺服器 ==========
     const saveScore = async (finalScore: number) => {
@@ -95,14 +104,17 @@ export default function WritingScreen() {
 
         setIsSaving(true);
         try {
+            // 移除 Math.min(..., 100) 的限制，让 hard 难度的 120 分可以正常保存
+            const scoreToSave = Math.max(finalScore, 0);
+
             await axios.post('http://localhost:8080/api/user/game/score', {
                 gameName: "Dialogue Selection",
-                scores: finalScore,
+                scores: scoreToSave,
                 difficulty: selectedDifficulty === 'easy' ? 'EASY' : 'HARD'
             }, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            console.log("Score synced to server!");
+            console.log("Score saved successfully:", scoreToSave);
         } catch (e) {
             console.error("Failed to sync score:", e);
         } finally {
@@ -115,27 +127,6 @@ export default function WritingScreen() {
         setGameState('topic_select');
     };
 
-    // 生成單一題目
-    const generateSingleQuestion = async (topic: Topic, questionNumber: number): Promise<Question> => {
-        console.log(`Generating question ${questionNumber + 1} for topic: ${topic.name}`);
-
-        // 顯示 AI 生成中狀態
-        setIsGeneratingQuestion(true);
-
-        try {
-            const generatedQuestions = await writingAIService.generateQuestions(topic, 1, questionNumber);
-
-            if (generatedQuestions && generatedQuestions.length > 0) {
-                return generatedQuestions[0];
-            }
-
-            // 如果生成失敗，使用備用題目
-            return writingAIService.getFallbackQuestion(topic, questionNumber);
-        } finally {
-            setIsGeneratingQuestion(false);
-        }
-    };
-
     // 生成子主題選擇問題
     const generateSubTopicSelection = async (topic: Topic) => {
         setIsLoading(true);
@@ -145,7 +136,6 @@ export default function WritingScreen() {
         setCurrentQuestion(selectionQuestion);
         setSubTopicState('selecting');
 
-        // 添加 AI 的開場白
         const aiTurn: ConversationTurn = {
             role: 'assistant',
             content: selectionQuestion.context,
@@ -158,7 +148,6 @@ export default function WritingScreen() {
     const handleSubTopicSelection = async (answer: string) => {
         if (!selectedTopic || !currentQuestion) return;
 
-        // 提取用戶選擇的子主題
         let chosenSubTopic = '';
         const subTopics = SUB_TOPICS[selectedTopic.id] || ['Option 1', 'Option 2'];
 
@@ -170,13 +159,11 @@ export default function WritingScreen() {
         }
 
         if (!chosenSubTopic) {
-            // 如果無法匹配，使用第一個選項
             chosenSubTopic = subTopics[0];
         }
 
         setSelectedSubTopic(chosenSubTopic);
 
-        // 添加用戶的選擇
         const userTurn: ConversationTurn = {
             role: 'user',
             content: answer,
@@ -191,25 +178,21 @@ export default function WritingScreen() {
 
         setConversation(prev => [...prev, userTurn, aiResponse]);
 
-        // 切換到遊戲模式並生成第一題
         setSubTopicState('playing');
         setCurrentIndex(0);
         setCorrectCount(0);
         setTotalScore(0);
         setSelectedAnswer(null);
 
-        // 生成第一題（基於選擇的子主題）
         const firstQuestion = await writingAIService.generateSubTopicQuestionContent(selectedTopic, chosenSubTopic, 0);
         setCurrentQuestion(firstQuestion);
 
-        // 添加 AI 的下一題對話
         const nextAiTurn: ConversationTurn = {
             role: 'assistant',
             content: firstQuestion.context,
         };
         setConversation(prev => [...prev, nextAiTurn]);
 
-        // 滾動到底部
         setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
     };
 
@@ -217,7 +200,6 @@ export default function WritingScreen() {
         setSelectedTopic(topic);
         setGameState('playing');
 
-        // 重置狀態
         setCurrentIndex(0);
         setCorrectCount(0);
         setTotalScore(0);
@@ -226,19 +208,19 @@ export default function WritingScreen() {
         setSelectedSubTopic(null);
         setSubTopicState('selecting');
 
-        // 生成子主題選擇問題
         await generateSubTopicSelection(topic);
     };
 
     // 加載下一題
-    const loadNextQuestion = async () => {
+    const loadNextQuestion = async (updatedScore?: number, updatedCorrect?: number) => {
         if (!selectedTopic || !selectedSubTopic) return;
 
         const nextIdx = currentIndex + 1;
 
         // 檢查是否還有下一題
         if (nextIdx >= TOTAL_QUESTIONS) {
-            finishGame();
+            // 🔥 将最新值传递给 finishGame
+            finishGame(updatedScore, updatedCorrect);
             return;
         }
 
@@ -289,19 +271,28 @@ export default function WritingScreen() {
 
         const evaluation = writingAIService.evaluateAnswer(currentQuestion, answer);
 
+        // 获取每题的基础分数（满分100或120平均分配）
+        const maxScore = getMaxScore();
+        const scorePerQuestion = maxScore / TOTAL_QUESTIONS;
+        const earnedScore = evaluation.isCorrect ? Math.round(scorePerQuestion) : 0;
+
+        // 🔥 关键修复：立即计算最新值，避免闭包陷阱
+        const newTotalScore = totalScore + earnedScore;
+        const newCorrectCount = correctCount + (evaluation.isCorrect ? 1 : 0);
+
         setSelectedAnswer(answer);
 
-        // 更新統計
+        // 更新統計（用于UI显示）
         if (evaluation.isCorrect) {
             setCorrectCount(prev => prev + 1);
-            setTotalScore(prev => prev + evaluation.score);
+            setTotalScore(prev => prev + earnedScore);
         }
 
         // 添加用戶的回答
         const userTurn: ConversationTurn = {
             role: 'user',
             content: answer,
-            score: evaluation.score,
+            score: earnedScore,
             feedback: evaluation.feedback,
             isCorrect: evaluation.isCorrect
         };
@@ -314,19 +305,24 @@ export default function WritingScreen() {
 
         setConversation(prev => [...prev, userTurn, aiResponse]);
 
-        // 延遲後加載下一題
+        // 延遲後加載下一題 - 🔥 传递最新值
         setTimeout(() => {
-            loadNextQuestion();
+            loadNextQuestion(newTotalScore, newCorrectCount);
         }, 1500);
     };
 
-    const finishGame = async () => {
+    const finishGame = async (finalTotalScore?: number, finalCorrectCount?: number) => {
         if (!selectedTopic) return;
 
         setIsLoading(true);
 
-        // 計算最終分數（百分比）
-        const finalPercentage = TOTAL_QUESTIONS > 0 ? Math.round((correctCount / TOTAL_QUESTIONS) * 100) : 0;
+        // 🔥 优先使用传入的最终值，如果没有则回退到 state
+        const finalScore = finalTotalScore !== undefined ? finalTotalScore : totalScore;
+        const finalCorrect = finalCorrectCount !== undefined ? finalCorrectCount : correctCount;
+
+        // 計算最終分數（實際得分）
+        const maxScore = getMaxScore();
+        const finalPercentage = maxScore > 0 ? Math.round((finalScore / maxScore) * 100) : 0;
 
         // 生成總結
         const analysis = await writingAIService.generateConversationSummary(conversation, selectedTopic);
@@ -336,14 +332,14 @@ export default function WritingScreen() {
             ...analysis,
             totalScore: finalPercentage,
             averageScore: finalPercentage,
-            correctCount: correctCount,
+            correctCount: finalCorrect,  // 🔥 使用正确的最終值
             totalQuestions: TOTAL_QUESTIONS
         };
 
         setSummary(finalAnalysis);
 
-        // 保存分數到伺服器
-        await saveScore(finalPercentage);
+        // 🔥 保存正確的最終分數到伺服器（Easy: 100, Hard: 120）
+        await saveScore(finalScore);
 
         setGameState('summary');
         setIsLoading(false);
@@ -354,7 +350,6 @@ export default function WritingScreen() {
 
         setIsLoading(true);
 
-        // 重置所有狀態
         setCurrentIndex(0);
         setCorrectCount(0);
         setTotalScore(0);
@@ -363,9 +358,7 @@ export default function WritingScreen() {
         setSelectedSubTopic(null);
         setSubTopicState('selecting');
 
-        // 重新生成子主題選擇問題
         await generateSubTopicSelection(selectedTopic);
-
         setGameState('playing');
         setIsLoading(false);
     };
@@ -435,8 +428,8 @@ export default function WritingScreen() {
                     {(['easy', 'hard'] as const).map(level => {
                         const config = DIFFICULTY_CONFIG[level];
                         const features = level === 'easy'
-                            ? ['Daily conversations', '6 topics: sports, lunch, hobbies...', 'Fun and simple']
-                            : ['Real-world scenarios', '4 topics: directions, travel, culture...', 'More challenging'];
+                            ? ['Daily conversations', '6 topics: sports, lunch, hobbies...', 'Fun and simple', `Max Score: ${config.maxScore}`]
+                            : ['Real-world scenarios', '4 topics: directions, travel, culture...', 'More challenging', `Max Score: ${config.maxScore}`];
                         return (
                             <TouchableOpacity
                                 key={level}
@@ -524,7 +517,7 @@ export default function WritingScreen() {
         );
     };
 
-    // ========== AI 生成題目的加載提示（顯示在回答框區域） ==========
+    // ========== AI 生成題目的加載提示 ==========
     const renderAIGeneratingIndicator = () => {
         return (
             <View style={styles.optionsPanel}>
@@ -545,7 +538,7 @@ export default function WritingScreen() {
         );
     };
 
-    // ========== 加載下一題的提示（顯示在對話區域） ==========
+    // ========== 加載下一題的提示 ==========
     const renderLoadingNextIndicator = () => {
         return (
             <View style={styles.aiRow}>
@@ -563,7 +556,7 @@ export default function WritingScreen() {
     // ========== 游戏主界面 ==========
     const renderPlaying = () => {
         const progress = ((currentIndex) / TOTAL_QUESTIONS) * 100;
-        const currentScore = TOTAL_QUESTIONS > 0 ? Math.round((correctCount / TOTAL_QUESTIONS) * 100) : 0;
+        const currentScoreDisplay = `${totalScore}/${getMaxScore()}`;
 
         return (
             <View style={styles.container}>
@@ -577,7 +570,7 @@ export default function WritingScreen() {
                             <Text style={styles.scoreBadgeText}>⭐ {correctCount}/{currentIndex}</Text>
                         </View>
                         <View style={[styles.scoreBadge, { backgroundColor: '#FFD700' }]}>
-                            <Text style={styles.scoreBadgeText}>🏆 {currentScore}%</Text>
+                            <Text style={styles.scoreBadgeText}>🏆 {currentScoreDisplay}</Text>
                         </View>
                     </View>
                     <View style={styles.progressContainer}>
@@ -601,7 +594,6 @@ export default function WritingScreen() {
                         <MessageBubble key={idx} turn={turn} index={idx} />
                     ))}
 
-                    {/* 顯示加載下一題的提示 */}
                     {isLoadingNext && renderLoadingNextIndicator()}
 
                     {isLoading && !isLoadingNext && (
@@ -614,7 +606,6 @@ export default function WritingScreen() {
                     )}
                 </ScrollView>
 
-                {/* 回答框區域 - 顯示 AI 生成題目的加載狀態 */}
                 {isGeneratingQuestion ? (
                     renderAIGeneratingIndicator()
                 ) : (
@@ -654,76 +645,92 @@ export default function WritingScreen() {
     };
 
     // ========== 总结页面 ==========
-    const renderSummary = () => (
-        <View style={styles.summaryContainer}>
-            <LinearGradient colors={['#4b6cb7', '#182848']} style={styles.summaryHeader}>
-                <Text style={styles.summaryTitle}>🎉 Great Job! 🎉</Text>
-                <Text style={styles.summarySubtitle}>You completed {selectedTopic?.name}{selectedSubTopic && ` - ${selectedSubTopic}`}!</Text>
-            </LinearGradient>
-            <ScrollView contentContainerStyle={styles.summaryContent}>
-                <View style={styles.resultCard}>
-                    <View style={styles.scoreCircle}>
-                        <Text style={styles.scoreNumber}>{summary?.correctCount}/{summary?.totalQuestions}</Text>
-                        <Text style={styles.scoreLabel}>Correct Answers</Text>
-                    </View>
-                    <View style={styles.percentageCircle}>
-                        <Text style={styles.percentageText}>{summary?.totalScore}%</Text>
-                    </View>
-                </View>
+    const renderSummary = () => {
+        const maxScore = getMaxScore();
+        const earnedPercentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
 
-                {isSaving && (
-                    <View style={styles.savingIndicator}>
-                        <ActivityIndicator size="small" color="#4CAF50" />
-                        <Text style={styles.savingText}>Syncing score...</Text>
+        return (
+            <View style={styles.summaryContainer}>
+                <LinearGradient colors={['#4b6cb7', '#182848']} style={styles.summaryHeader}>
+                    <Text style={styles.summaryTitle}>🎉 Great Job! 🎉</Text>
+                    <Text style={styles.summarySubtitle}>You completed {selectedTopic?.name}{selectedSubTopic && ` - ${selectedSubTopic}`}!</Text>
+                </LinearGradient>
+                <ScrollView contentContainerStyle={styles.summaryContent}>
+                    <View style={styles.resultCard}>
+                        <View style={styles.scoreCircle}>
+                            <Text style={styles.scoreNumber}>{totalScore}/{maxScore}</Text>
+                            <Text style={styles.scoreLabel}>Your Score</Text>
+                        </View>
+                        <View style={styles.percentageCircle}>
+                            <Text style={styles.percentageText}>{earnedPercentage}%</Text>
+                        </View>
                     </View>
-                )}
 
-                <View style={styles.feedbackCard}>
-                    <Text style={styles.feedbackTitle}>🤗 {CHARACTERS.ai.name}'s Feedback</Text>
-                    <Text style={styles.feedbackText}>{summary?.feedback}</Text>
-                </View>
-
-                {summary?.strengths && summary.strengths.length > 0 && (
-                    <View style={styles.strengthsCard}>
-                        <Text style={styles.cardTitle}>🌟 Your Strengths</Text>
-                        {summary.strengths.map((s, i) => (
-                            <View key={i} style={styles.bulletItem}>
-                                <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
-                                <Text style={styles.bulletText}>{s}</Text>
-                            </View>
-                        ))}
+                    <View style={styles.statsRow}>
+                        <View style={styles.statCard}>
+                            <Text style={styles.statNumber}>{correctCount}</Text>
+                            <Text style={styles.statLabel}>Correct</Text>
+                        </View>
+                        <View style={styles.statCard}>
+                            <Text style={styles.statNumber}>{TOTAL_QUESTIONS - correctCount}</Text>
+                            <Text style={styles.statLabel}>Incorrect</Text>
+                        </View>
                     </View>
-                )}
 
-                {summary?.suggestions && summary.suggestions.length > 0 && (
-                    <View style={styles.suggestionsCard}>
-                        <Text style={styles.cardTitle}>💡 Tips to Improve</Text>
-                        {summary.suggestions.map((s, i) => (
-                            <View key={i} style={styles.bulletItem}>
-                                <Ionicons name="bulb-outline" size={20} color="#FFC107" />
-                                <Text style={styles.bulletText}>{s}</Text>
-                            </View>
-                        ))}
+                    {isSaving && (
+                        <View style={styles.savingIndicator}>
+                            <ActivityIndicator size="small" color="#4CAF50" />
+                            <Text style={styles.savingText}>Syncing score...</Text>
+                        </View>
+                    )}
+
+                    <View style={styles.feedbackCard}>
+                        <Text style={styles.feedbackTitle}>🤗 {CHARACTERS.ai.name}'s Feedback</Text>
+                        <Text style={styles.feedbackText}>{summary?.feedback}</Text>
                     </View>
-                )}
 
-                <View style={styles.summaryButtons}>
-                    <TouchableOpacity style={[styles.summaryBtn, styles.playAgainBtn]} onPress={restartCurrentTopic}>
-                        <Ionicons name="refresh" size={22} color="white" />
-                        <Text style={styles.summaryBtnText}>Play Again</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.summaryBtn, styles.difficultySelectBtn]} onPress={exitToDifficultySelect}>
-                        <Ionicons name="options" size={22} color="white" />
-                        <Text style={styles.summaryBtnText}>Difficulty Select</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.summaryBtn, styles.backBtn]} onPress={handleBackToGames}>
-                        <Ionicons name="home" size={22} color="white" />
-                        <Text style={styles.summaryBtnText}>Back to Games</Text>
-                    </TouchableOpacity>
-                </View>
-            </ScrollView>
-        </View>
-    );
+                    {summary?.strengths && summary.strengths.length > 0 && (
+                        <View style={styles.strengthsCard}>
+                            <Text style={styles.cardTitle}>🌟 Your Strengths</Text>
+                            {summary.strengths.map((s, i) => (
+                                <View key={i} style={styles.bulletItem}>
+                                    <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                                    <Text style={styles.bulletText}>{s}</Text>
+                                </View>
+                            ))}
+                        </View>
+                    )}
+
+                    {summary?.suggestions && summary.suggestions.length > 0 && (
+                        <View style={styles.suggestionsCard}>
+                            <Text style={styles.cardTitle}>💡 Tips to Improve</Text>
+                            {summary.suggestions.map((s, i) => (
+                                <View key={i} style={styles.bulletItem}>
+                                    <Ionicons name="bulb-outline" size={20} color="#FFC107" />
+                                    <Text style={styles.bulletText}>{s}</Text>
+                                </View>
+                            ))}
+                        </View>
+                    )}
+
+                    <View style={styles.summaryButtons}>
+                        <TouchableOpacity style={[styles.summaryBtn, styles.playAgainBtn]} onPress={restartCurrentTopic}>
+                            <Ionicons name="refresh" size={22} color="white" />
+                            <Text style={styles.summaryBtnText}>Play Again</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[styles.summaryBtn, styles.difficultySelectBtn]} onPress={exitToDifficultySelect}>
+                            <Ionicons name="options" size={22} color="white" />
+                            <Text style={styles.summaryBtnText}>Difficulty Select</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[styles.summaryBtn, styles.backBtn]} onPress={handleBackToGames}>
+                            <Ionicons name="home" size={22} color="white" />
+                            <Text style={styles.summaryBtnText}>Back to Games</Text>
+                        </TouchableOpacity>
+                    </View>
+                </ScrollView>
+            </View>
+        );
+    };
 
     if (gameState === 'difficulty_select') return renderDifficultySelect();
     if (gameState === 'topic_select') return renderTopicSelect();
@@ -1039,6 +1046,10 @@ const styles = StyleSheet.create({
     scoreLabel: { fontSize: 12, color: '#666', marginTop: 4 },
     percentageCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#4b6cb7', alignItems: 'center', justifyContent: 'center' },
     percentageText: { fontSize: 24, fontWeight: 'bold', color: 'white' },
+    statsRow: { flexDirection: 'row', justifyContent: 'space-around', width: '100%', marginBottom: 20, gap: 16 },
+    statCard: { backgroundColor: 'white', borderRadius: 16, padding: 16, flex: 1, alignItems: 'center', elevation: 2 },
+    statNumber: { fontSize: 28, fontWeight: 'bold', color: '#4b6cb7' },
+    statLabel: { fontSize: 12, color: '#666', marginTop: 4 },
     savingIndicator: {
         flexDirection: 'row',
         alignItems: 'center',

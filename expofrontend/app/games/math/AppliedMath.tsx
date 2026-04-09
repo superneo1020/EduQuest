@@ -193,6 +193,12 @@ const AppliedMath = () => {
         }
     };
 
+    const handleBackToGames = () => {
+        if (router.canGoBack()) {
+            router.back();
+        }
+    };
+
     if (isFinished) {
         return (
             <LinearGradient colors={['#F8FAFC', '#E2E8F0']} style={styles.centerContainer}>
@@ -222,6 +228,12 @@ const AppliedMath = () => {
                         }}
                     >
                         <Text style={styles.actionBtnText}>Restart Practice</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.actionBtn, { backgroundColor: '#2196F3' }]}
+                        onPress={handleBackToGames}
+                    >
+                        <Text style={styles.actionBtnText}>go back to game list</Text>
                     </TouchableOpacity>
                 </View>
             </LinearGradient>

@@ -11,6 +11,7 @@ import {
     Platform,
     ScrollView,
     ActivityIndicator,
+    Image,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
@@ -173,9 +174,10 @@ const ClawMachineGame: React.FC = () => {
     // 请求去重
     const refreshAIPromiseRef = useRef<Promise<void> | null>(null);
 
-    // 總動物數量（固定為 8）
-    const totalAnimalsCount = 8;
-    const pointsPerAnimal = 100 / totalAnimalsCount; // 12.5 分/隻
+    // ========== 🎯 新增：回答次数限制 ==========
+    const MAX_ANSWERS = 4;               // 最多回答4次
+    const [answerCount, setAnswerCount] = useState<number>(0);  // 已回答次数
+    const pointsPerAnimal = 100 / MAX_ANSWERS; // 每题满分25分
 
     // 計算正確捕獲數量
     const correctCatches = collectedAnimals.length;
@@ -268,9 +270,9 @@ const ClawMachineGame: React.FC = () => {
         }, 1600);
     };
 
-    // ========== 🧠 刷新 AI 題目（非同步，問題框內顯示 loading） ==========
+    // ========== 🧠 刷新 AI 題目 ==========
     const refreshAIQuestion = useCallback(async () => {
-        // 防止重复调用
+        if (gameComplete || showReport) return;
         if (refreshAIPromiseRef.current) {
             console.log("AI refresh already in progress, waiting...");
             return refreshAIPromiseRef.current;
@@ -311,14 +313,14 @@ const ClawMachineGame: React.FC = () => {
 
         refreshAIPromiseRef.current = promise;
         return promise;
-    }, [getAvailableAnimalNames]);
+    }, [getAvailableAnimalNames, gameComplete, showReport]);
 
-    // ========== 初始化物品（隨機選取 8 種動物 + 4 個干擾物） ==========
+    // ========== 初始化物品（隨機選取 8 種動物 + 4 個干擾物，總數 12） ==========
     const initializeItems = () => {
         const newItems: Item[] = [];
         const itemCount = 12;
-        const animalCount = 8;
-        const nonAnimalCount = itemCount - animalCount;
+        const animalCount = 8;      // 場上放置 8 隻動物
+        const nonAnimalCount = 4;   // 干擾物 4 個
 
         const shuffledAnimals = [...ALL_ANIMAL_TYPES].sort(() => 0.5 - Math.random());
         const selectedAnimals = shuffledAnimals.slice(0, animalCount);
@@ -352,6 +354,7 @@ const ClawMachineGame: React.FC = () => {
             });
         }
 
+        // 隨機排列
         setItems(newItems.sort(() => 0.5 - Math.random()));
         setScore(0);
         setCollectedAnimals([]);
@@ -359,8 +362,9 @@ const ClawMachineGame: React.FC = () => {
         setGameComplete(false);
         setShowReport(false);
         setClawX((GAME_WIDTH - 36) / 2);
+        setAnswerCount(0);          // 重置回答次数
         clawAIService.resetGame();
-        setCurrentQuestion(null);  // 重置题目，等待首次生成
+        setCurrentQuestion(null);
     };
 
     // ========== 初始化遊戲和倒數 ==========
@@ -371,10 +375,9 @@ const ClawMachineGame: React.FC = () => {
         }, 500);
     }, []);
 
-    // 當物品清單變化時（初始化或正確抓取後）重新生成 AI 題目
+    // 當物品清單變化時重新生成 AI 題目
     useEffect(() => {
         if (items.length > 0 && !gameOver && !gameComplete && !showReport && prepText === null) {
-            // 延迟一点点，避免与 processCatch 中的刷新冲突，但去重会处理
             const timer = setTimeout(() => {
                 refreshAIQuestion();
             }, 100);
@@ -492,6 +495,15 @@ const ClawMachineGame: React.FC = () => {
         return null;
     };
 
+    // 結束遊戲（顯示總結）
+    const endGameAndShowReport = async (finalScore: number) => {
+        if (gameComplete || showReport) return;
+        setGameComplete(true);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        await saveScore(finalScore);
+        setShowReport(true);
+    };
+
     // 處理抓取結果
     const processCatch = async (caughtItem: Item) => {
         setProcessing(true);
@@ -499,10 +511,9 @@ const ClawMachineGame: React.FC = () => {
 
         try {
             if (!caughtItem.isAnimal) {
-                isCorrect = false;
+                // 抓错非动物，不计数回答次数
                 showFeedback(`❌ ${caughtItem.type.name} It's not an animal! Try again.～`, 'wrong');
                 showHitFeedback(false);
-                // 抓错非动物后刷新题目
                 await refreshAIQuestion();
             } else {
                 if (!currentQuestion) {
@@ -517,6 +528,30 @@ const ClawMachineGame: React.FC = () => {
                 showHitFeedback(aiResult.isCorrect);
                 setTimeout(() => setAiFeedback(null), 4000);
 
+                // 回答次数增加（无论对错）
+                const newCount = answerCount + 1;
+                setAnswerCount(newCount);
+
+                // ✅ 关键修改：达到最大次数立即结束，不再进行任何刷新或后续操作
+                if (newCount >= MAX_ANSWERS) {
+                    // 如果是正确回答，先加分再结束
+                    let finalScore = score;
+                    if (isCorrect) {
+                        finalScore = Math.min(100, score + pointsPerAnimal);
+                        setScore(finalScore);
+                        animateScore();
+                        // 更新物品和收集列表
+                        setItems(prev => prev.map(i =>
+                            i.id === caughtItem.id ? { ...i, caught: true } : i
+                        ));
+                        setCollectedAnimals(prev => [...prev, caughtItem]);
+                    }
+                    await endGameAndShowReport(finalScore);
+                    setProcessing(false);
+                    return;  // ✅ 直接返回，不再刷新题目
+                }
+
+                // 未达到最大次数，正常处理
                 if (isCorrect) {
                     const newScore = Math.min(100, score + pointsPerAnimal);
                     setScore(newScore);
@@ -526,21 +561,8 @@ const ClawMachineGame: React.FC = () => {
                         i.id === caughtItem.id ? { ...i, caught: true } : i
                     ));
                     setCollectedAnimals(prev => [...prev, caughtItem]);
-
-                    const remainingAnimals = items.filter(i => i.isAnimal && !i.caught && i.id !== caughtItem.id).length;
-                    if (remainingAnimals === 0) {
-                        setGameComplete(true);
-                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                        await saveScore(newScore);
-                        setShowReport(true);
-                        setProcessing(false);
-                        return;
-                    }
-                    // 正确抓取后，让 useEffect 来刷新题目（避免重复刷新）
-                    // 注意：items 更新后会触发 useEffect 中的 refreshAIQuestion
                 } else {
-                    showFeedback(`❌ That's not right! The question asks for... ${currentQuestion.targetIcon} ${currentQuestion.targetAnimal}，Try again`, 'wrong');
-                    // 回答错误也刷新题目
+                    // 错误回答，刷新题目
                     await refreshAIQuestion();
                 }
             }
@@ -615,6 +637,7 @@ const ClawMachineGame: React.FC = () => {
         setCurrentQuestion(null);
         setScore(0);
         setCollectedAnimals([]);
+        setAnswerCount(0);
         dropAnim.setValue(0);
         clawAIService.resetGame();
         setProcessing(false);
@@ -682,14 +705,14 @@ const ClawMachineGame: React.FC = () => {
                         <View style={styles.reportStatsBox}>
                             <View style={styles.reportStatItem}>
                                 <Text style={styles.reportStatEmoji}>🐾</Text>
-                                <Text style={styles.reportStatLabel}>Correct capture</Text>
-                                <Text style={styles.reportStatValue}>{correctCatches}/{totalAnimalsCount}</Text>
+                                <Text style={styles.reportStatLabel}>Correct Answers</Text>
+                                <Text style={styles.reportStatValue}>{correctCatches}/{MAX_ANSWERS}</Text>
                             </View>
                             <View style={styles.reportStatItem}>
                                 <Text style={styles.reportStatEmoji}>🎯</Text>
-                                <Text style={styles.reportStatLabel}>Completeness</Text>
+                                <Text style={styles.reportStatLabel}>Accuracy</Text>
                                 <Text style={styles.reportStatValue}>
-                                    {Math.round((correctCatches / totalAnimalsCount) * 100)}%
+                                    {Math.round((correctCatches / MAX_ANSWERS) * 100)}%
                                 </Text>
                             </View>
                         </View>
@@ -744,7 +767,7 @@ const ClawMachineGame: React.FC = () => {
                 </Animated.View>
             </View>
 
-            {/* AI 問題面板：內部顯示 loading 或題目 */}
+            {/* AI 問題面板 */}
             <View style={styles.aiQuestionPanel}>
                 {isAiThinking ? (
                     <View style={styles.questionBoxLoading}>
@@ -778,7 +801,6 @@ const ClawMachineGame: React.FC = () => {
                         )}
                     </>
                 ) : (
-                    // 备用显示：没有题目时（例如初始状态）显示占位符
                     <View style={styles.questionBoxLoading}>
                         <Text style={styles.aiLoadingText}>🐣 Get ready...</Text>
                         <Text style={styles.aiLoadingSubtext}>AI will ask a question soon!</Text>
@@ -824,26 +846,25 @@ const ClawMachineGame: React.FC = () => {
                                 )}
                             </Animated.View>
                         ))}
+                        {/* 伸长柱（绳子）保持不变 */}
                         <Animated.View
-                            style={[styles.rope, { left: clawX + 16, height: dropHeight }]}
+                            style={[styles.rope, { left: clawX + 22, height: dropHeight }]}
                         />
+                        {/* 爪子改为图片 */}
                         <Animated.View
                             style={[
                                 styles.claw,
                                 { left: clawX, top: Animated.add(dropHeight, 15), transform: [{ scale: clawScale }] }
                             ]}
                         >
-                            <View style={styles.clawTop}>
-                                <Text style={styles.clawIcon}>🦾</Text>
-                            </View>
-                            <View style={styles.clawArms}>
-                                <View style={styles.clawArm} />
-                                <View style={styles.clawArm} />
-                                <View style={styles.clawArm} />
-                            </View>
+                            <Image
+                                source={require('@/assets/images/claw_arm.png')}
+                                style={styles.clawImage}
+                                resizeMode="contain"
+                            />
                             {isSuction && suctionItem && (
                                 <Animated.View style={[styles.suctionEffect, { transform: [{ scale: suctionScale }] }]}>
-                                    <Text style={styles.suctionText}>⚡</Text>
+                                    <Text style={styles.suctionText}></Text>
                                 </Animated.View>
                             )}
                         </Animated.View>
@@ -1135,40 +1156,19 @@ const styles = StyleSheet.create({
         width: 4,
         backgroundColor: '#8B4513',
         borderRadius: 2,
-        top: -45,
+        top: 15,
     },
     claw: {
         position: 'absolute',
-        width: 36,
+        width: 48,
         height: 48,
         zIndex: 10,
-    },
-    clawTop: {
-        width: 24,
-        height: 14,
-        backgroundColor: '#c0c0c0',
-        borderRadius: 6,
-        marginLeft: 6,
-        borderWidth: 1,
-        borderColor: '#8b6946',
         alignItems: 'center',
-    },
-    clawIcon: {
-        fontSize: 12,
-    },
-    clawArms: {
-        flexDirection: 'row',
         justifyContent: 'center',
-        marginTop: 2,
     },
-    clawArm: {
-        width: 10,
-        height: 28,
-        backgroundColor: '#a0a0a0',
-        borderRadius: 4,
-        marginHorizontal: 1,
-        borderWidth: 1,
-        borderColor: '#6b4c3b',
+    clawImage: {
+        width: '100%',
+        height: '100%',
     },
     suctionEffect: {
         position: 'absolute',

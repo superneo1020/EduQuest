@@ -45,7 +45,9 @@ const FloatingText = ({ text, color, onComplete }: { text: string, color: string
     );
 };
 
-// 難度級別配置
+// 難度級別配置 - 每題20分，Easy 4題共80分，Medium 4題共80分（但顯示為120滿分？）
+// 根據需求：Easy滿分100分，Medium滿分120分
+// 所以 Easy: 每題25分 (25*4=100)，Medium: 每題30分 (30*4=120)
 const DIFFICULTY_LEVELS = {
     easy: {
         label: 'Easy',
@@ -53,9 +55,11 @@ const DIFFICULTY_LEVELS = {
         color: '#4CAF50',
         bgColor: '#E8F5E9',
         icon: '🌱',
-        questionsPerGame: 5,
+        questionsPerGame: 4,
+        pointsPerQuestion: 25,  // 25 * 4 = 100
+        maxScore: 100,
         desc: 'Simple 3-4 word sentences. Focus on basic structure.',
-        features: ['Short sentences', 'Basic word order', '5 Questions']
+        features: ['Short sentences', 'Basic word order', '4 Questions']
     },
     medium: {
         label: 'Medium',
@@ -63,9 +67,11 @@ const DIFFICULTY_LEVELS = {
         color: '#FF9800',
         bgColor: '#FFF3E0',
         icon: '🌳',
-        questionsPerGame: 5,
+        questionsPerGame: 4,
+        pointsPerQuestion: 30,  // 30 * 4 = 120
+        maxScore: 120,
         desc: 'Common 4-5 word phrases. Natural daily expressions.',
-        features: ['Moderate length', 'Common phrases', '5 Questions']
+        features: ['Moderate length', 'Common phrases', '4 Questions']
     }
 };
 
@@ -113,7 +119,7 @@ export default function SentenceReorderScreen() {
     // 遊戲狀態
     const [gameState, setGameState] = useState<GameState>({
         currentQuestionIndex: 0,
-        totalQuestions: 5,
+        totalQuestions: 4,
         score: 0,
         words: [],
         feedback: '',
@@ -350,11 +356,13 @@ export default function SentenceReorderScreen() {
         const originalSentence = gameState.currentQuestion.sentence;
 
         if (isCorrect) {
-            // ✅ 正確
+            // ✅ 正確 - 根據難度獲取不同的每題分數
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
             setFloatingText({ id: Date.now(), text: 'HIT!', color: '#FFD700' });
 
-            const pointsEarned = 20;
+            const difficulty = gameState.difficulty!;
+            const pointsPerQuestion = DIFFICULTY_LEVELS[difficulty].pointsPerQuestion;
+            const pointsEarned = pointsPerQuestion;
             const newScore = gameState.score + pointsEarned;
             const newCorrectAnswers = gameState.correctAnswers + 1;
 
@@ -417,7 +425,7 @@ export default function SentenceReorderScreen() {
         } else {
             setGameState({
                 currentQuestionIndex: 0,
-                totalQuestions: 5,
+                totalQuestions: 4,
                 score: 0,
                 words: [],
                 feedback: '',
@@ -457,10 +465,17 @@ export default function SentenceReorderScreen() {
         return Math.round((gameState.correctAnswers / totalAnswered) * 100);
     };
 
-    // 計算滿分百分比
+    // 計算滿分百分比 - 根據難度使用不同的滿分
     const getScorePercentage = () => {
-        const maxScore = gameState.totalQuestions * 20;
+        if (!gameState.difficulty) return 0;
+        const maxScore = DIFFICULTY_LEVELS[gameState.difficulty].maxScore;
         return Math.round((gameState.score / maxScore) * 100);
+    };
+
+    // 獲取當前難度的滿分
+    const getMaxScore = () => {
+        if (!gameState.difficulty) return 100;
+        return DIFFICULTY_LEVELS[gameState.difficulty].maxScore;
     };
 
     // 獲取得分顏色
@@ -562,6 +577,11 @@ export default function SentenceReorderScreen() {
                                             </View>
                                         </View>
                                         <Text style={styles.diffDesc}>{config.desc}</Text>
+                                        <View style={styles.scoreInfoRow}>
+                                            <Text style={styles.scoreInfoText}>
+                                                🎯 {config.questionsPerGame} questions • Max score: {config.maxScore}
+                                            </Text>
+                                        </View>
                                     </View>
                                 </TouchableOpacity>
                             );
@@ -574,7 +594,7 @@ export default function SentenceReorderScreen() {
 
     // 遊戲完成頁面
     const renderCompletionScreen = () => {
-        const maxScore = gameState.totalQuestions * 20;
+        const maxScore = getMaxScore();
         const scorePercentage = getScorePercentage();
 
         let performanceMessage = '';
@@ -662,6 +682,8 @@ export default function SentenceReorderScreen() {
         if (gameState.isLoadingNext) {
             return renderLoadingNext();
         }
+
+        const maxScore = getMaxScore();
 
         return (
             <View style={styles.container}>
@@ -1012,8 +1034,16 @@ const styles = StyleSheet.create({
     diffDesc: {
         fontSize: 14,
         color: '#64748B',
-        marginBottom: 12,
+        marginBottom: 8,
         lineHeight: 20,
+    },
+    scoreInfoRow: {
+        marginTop: 4,
+    },
+    scoreInfoText: {
+        fontSize: 12,
+        color: '#4b6cb7',
+        fontWeight: '500',
     },
     // 遊戲主界面樣式
     header: {
