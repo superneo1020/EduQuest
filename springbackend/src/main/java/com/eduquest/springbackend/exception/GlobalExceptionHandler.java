@@ -46,10 +46,14 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ExceptionDto> handleIllegalArgument(IllegalArgumentException e) {
-        return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body(toException(HttpStatus.BAD_REQUEST, e.getMessage()));
+    public ProblemDetail handleIllegalArgument(IllegalArgumentException ex) {
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST,
+                ex.getMessage()
+        );
+        problemDetail.setTitle("Illegal Argument");
+        problemDetail.setProperty("timestamp", Instant.now());
+        return problemDetail;
     }
 
     @ExceptionHandler(InsufficientPointsException.class)
@@ -206,5 +210,27 @@ public class GlobalExceptionHandler {
         problem.setProperty("timestamp", Instant.now());
         problem.setProperty("log", e.getMessage());
         return ResponseEntity.status(status).body(problem);
+    }
+
+    @ExceptionHandler(NotActivatedException.class)
+    public ProblemDetail handleNotActivatedException(NotActivatedException ex) {
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+                HttpStatus.FORBIDDEN,
+                ex.getMessage()
+        );
+        problemDetail.setTitle("Account Not Activated");
+        problemDetail.setProperty("timestamp", Instant.now());
+        return problemDetail;
+    }
+
+    @ExceptionHandler(RuleViolationException.class)
+    public ProblemDetail handleRuleViolationException(RuleViolationException ex) {
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST,
+                ex.getMessage()
+        );
+        problemDetail.setTitle("Rule Violation");
+        problemDetail.setProperty("timestamp", Instant.now());
+        return problemDetail;
     }
 }

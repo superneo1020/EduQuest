@@ -47,13 +47,13 @@ ON CONFLICT (difficulty) DO UPDATE SET multiplier = EXCLUDED.multiplier;
 
 -- Insert sample users with school assignments
 -- Password for all these users is "password"
-INSERT INTO users (username, email, password, school_id)
+INSERT INTO users (username, email, password, school_id, educator_status)
 VALUES
-    ('student1', 'student1@eduquestacademy.edu', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha', (SELECT id FROM schools WHERE name = 'EduQuest Academy')),
-    ('student2', 'student2@eduquestacademy.edu', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha', (SELECT id FROM schools WHERE name = 'EduQuest Academy')),
-    ('student3', 'student3@eduquestacademy.edu', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha', (SELECT id FROM schools WHERE name = 'EduQuest Academy')),
-    ('teacher1', 'teacher1@techinstitute.edu', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha', (SELECT id FROM schools WHERE name = 'Tech Institute')),
-    ('admin', 'admin@sciencehigh.edu', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha', (SELECT id FROM schools WHERE name = 'Science High School'))
+    ('student1', 'student1@eduquestacademy.edu', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha', (SELECT id FROM schools WHERE name = 'EduQuest Academy'), 'NONE'),
+    ('student2', 'student2@eduquestacademy.edu', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha', (SELECT id FROM schools WHERE name = 'EduQuest Academy'), 'NONE'),
+    ('student3', 'student3@eduquestacademy.edu', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha', (SELECT id FROM schools WHERE name = 'EduQuest Academy'), 'NONE'),
+    ('teacher1', 'teacher1@techinstitute.edu', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha', (SELECT id FROM schools WHERE name = 'Tech Institute'), 'APPROVED'),
+    ('admin', 'admin@sciencehigh.edu', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha', (SELECT id FROM schools WHERE name = 'Science High School'), 'ADMIN')
 ON CONFLICT (username) DO NOTHING;
 ;;;
 

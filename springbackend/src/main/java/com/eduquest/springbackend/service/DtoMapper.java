@@ -22,8 +22,8 @@ public class DtoMapper {
         );
     }
 
-    public <T> PageResponse<T> toPageResponse(Page<T> page) {
-        return new PageResponse<>(
+    public <T> UtilPageResponse<T> toPageResponse(Page<T> page) {
+        return new UtilPageResponse<>(
                 page.getContent(),
                 page.getPageable().getPageNumber(),
                 page.getTotalPages(),
@@ -33,8 +33,8 @@ public class DtoMapper {
         );
     }
 
-    public <T> SliceResponse<T> toSliceResponse(Slice<T> slice) {
-        return new  SliceResponse<>(
+    public <T> UtilSliceResponse<T> toSliceResponse(Slice<T> slice) {
+        return new UtilSliceResponse<>(
                 slice.getContent(),
                 slice.getPageable().getPageNumber(),
                 slice.hasNext(),

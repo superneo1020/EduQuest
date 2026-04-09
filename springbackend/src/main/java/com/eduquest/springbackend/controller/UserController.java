@@ -64,6 +64,11 @@ public class UserController {
         return ResponseEntity.ok(userService.findRoleNamesByUsername(userDetails.getUsername()));
     }
 
+    @GetMapping("/educator-status")
+    public ResponseEntity<?> getMyEducatorStatus(@AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(userService.findEducatorStatusByUsername(userDetails.getUsername()));
+    }
+
     @PostMapping("/password")
     public ResponseEntity<?> updatePassword(
             @AuthenticationPrincipal UserDetails userDetails,

@@ -6,6 +6,7 @@ import com.eduquest.springbackend.dao.UserRepository;
 import com.eduquest.springbackend.dto.ResetEmailRequest;
 import com.eduquest.springbackend.dto.ResetSchoolRequest;
 import com.eduquest.springbackend.dto.UserDto;
+import com.eduquest.springbackend.enums.EducatorStatus;
 import com.eduquest.springbackend.exception.DuplicateResourceException;
 import com.eduquest.springbackend.model.AppUser;
 import com.eduquest.springbackend.model.Role;
@@ -122,6 +123,12 @@ public class UserService {
     @Transactional(readOnly = true)
     public Collection<String> findRoleNamesByUsername(String username) {
         return userRepo.findRoleNamesByUsernameOptional(username).orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found：　" + username));
+    }
+
+    @Transactional(readOnly = true)
+    public EducatorStatus findEducatorStatusByUsername(String username) {
+        return userRepo.findEducatorStatusByUsername(username).orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found：　" + username));
     }
 

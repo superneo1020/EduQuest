@@ -4,7 +4,6 @@
 -- Drop existing tables if they exist (handled by spring.jpa.hibernate.ddl-auto=create-drop)
 -- DROP TABLE IF EXISTS user_roles, refresh_tokens, users, roles CASCADE;
 
-
 CREATE TABLE IF NOT EXISTS schools (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(100) UNIQUE NOT NULL,
@@ -36,6 +35,8 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(255) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
     points INT NOT NULL DEFAULT 0 CHECK (points >= 0),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    educator_status VARCHAR(10) NOT NULL DEFAULT 'NONE' CHECK (educator_status IN ('NONE', 'PENDING', 'APPROVED', 'REJECTED', 'ADMIN')),
     school_id BIGINT,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
