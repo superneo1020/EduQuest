@@ -1,15 +1,19 @@
 package com.eduquest.springbackend.dao;
 
 import com.eduquest.springbackend.dto.UserAuthDto;
+import com.eduquest.springbackend.enums.EducatorStatus;
 import com.eduquest.springbackend.model.AppUser;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
 import java.util.Optional;
 
-public interface UserRepository extends JpaRepository<AppUser, Long> {
+public interface UserRepository extends JpaRepository<AppUser, Long>, JpaSpecificationExecutor<AppUser> {
     Optional<AppUser> findByUsername(String username);
     boolean existsByUsername(String username);
     boolean existsByEmail(String email);
@@ -35,4 +39,19 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
 
     @Query("SELECT r.name FROM AppUser u JOIN u.roles r WHERE u.username = :username")
     Optional<Collection<String>> findRoleNamesByUsernameOptional(@Param("username") String username);
+
+    @Query("SELECT u.educatorStatus FROM AppUser u WHERE u.username = :username")
+    Optional<EducatorStatus> findEducatorStatusByUsername(@Param("username") String username);
+
+    @Query("SELECT u.isActive FROM AppUser u WHERE u.username = :username")
+    Optional<Boolean> findIsActiveByUsername(@Param("username") String username);
+
+    @Query("SELECT u FROM AppUser u " +
+            "LEFT JOIN FETCH u.school s " +
+            "LEFT JOIN FETCH u.roles r " +
+            "WHERE (:schoolName IS NULL OR LOWER(s.name) LIKE LOWER(CONCAT('%', :schoolName, '%'))) " +
+            "AND (:roleId IS NULL OR r.id = :roleId)")
+    Page<AppUser> findBySchoolNameAndRoleId(@Param("schoolName") String schoolName,
+                                            @Param("roleId") Long roleId,
+                                            Pageable pageable);
 }

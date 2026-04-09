@@ -1,15 +1,42 @@
 package com.eduquest.springbackend.controller;
 
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import com.eduquest.springbackend.dto.AdminFilterForUserRequest;
+import com.eduquest.springbackend.dto.AdminFilterForUserResponse;
+import com.eduquest.springbackend.dto.UtilPageResponse;
+import com.eduquest.springbackend.service.AdminService;
+import jakarta.validation.Valid;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/admin")
 public class AdminController {
 
-    @GetMapping("/hello")
-    public String sayHello() {
-        return "Hello World from Spring Boot!";
+    private final AdminService adminService;
+
+    public AdminController(AdminService adminService) {
+        this.adminService = adminService;
+    }
+
+    @GetMapping("/filter/user")
+    public ResponseEntity<UtilPageResponse<AdminFilterForUserResponse>> findAllUserByFilter(
+            @Valid AdminFilterForUserRequest req,
+            @PageableDefault Pageable pageable
+    ) {
+        return ResponseEntity.ok(adminService.findAllUserByFilter(req, pageable));
+    }
+
+    @PatchMapping("/user/{id}/activate")
+    public ResponseEntity<Void> activateUser(@PathVariable Long id) {
+        adminService.activateUser(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/user/{id}/reject")
+    public ResponseEntity<Void> rejectEducator(@PathVariable Long id) {
+        adminService.rejectEducator(id);
+        return ResponseEntity.noContent().build();
     }
 }
