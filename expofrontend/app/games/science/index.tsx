@@ -2,15 +2,16 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 
 const ScienceGamesIndex: React.FC = () => {
     const navigation = useNavigation();
+    const router = useRouter();
 
-    // 隱藏返回按鈕，但保留標題
     React.useLayoutEffect(() => {
         navigation.setOptions({
-            headerLeft: () => null, // 隱藏返回按鈕
-            title: 'Science Games', // 保留標題
+            headerLeft: () => null,
+            title: 'Science Games',
         });
     }, [navigation]);
 
@@ -29,9 +30,12 @@ const ScienceGamesIndex: React.FC = () => {
         },
     ];
 
+    const handleBackToHome = () => {
+        router.push('/');
+    };
+
     return (
-        <ScrollView style={styles.container}>
-            {/* 页面内标题区域 */}
+        <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
             <View style={styles.header}>
                 <Text style={styles.title}>Science Games</Text>
                 <Text style={styles.subtitle}>Choose a game to start learning</Text>
@@ -60,6 +64,11 @@ const ScienceGamesIndex: React.FC = () => {
                     </TouchableOpacity>
                 ))}
             </View>
+
+            {/* 返回首页链接 - 新增 */}
+            <TouchableOpacity style={styles.backLink} onPress={handleBackToHome}>
+                <Text style={styles.backLinkText}>← Return to home page</Text>
+            </TouchableOpacity>
         </ScrollView>
     );
 };
@@ -68,6 +77,10 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#f5f5f5',
+    },
+    scrollContent: {
+        flexGrow: 1,
+        paddingBottom: 30,
     },
     header: {
         padding: 20,
@@ -111,6 +124,19 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#666',
         lineHeight: 24,
+    },
+    // 新增样式
+    backLink: {
+        alignSelf: 'center',
+        marginTop: 10,
+        marginBottom: 20,
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+    },
+    backLinkText: {
+        fontSize: 16,
+        color: '#4c669f',
+        fontWeight: '500',
     },
 });
 

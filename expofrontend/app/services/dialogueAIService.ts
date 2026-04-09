@@ -1067,7 +1067,7 @@ Now generate a unique question for topic "${topic.name}" about ${questionType}. 
 
     // ========== 批量生成（保留作為備用，但推薦使用單題模式） ==========
 
-    async generateQuestions(topic: Topic, count: number = 8, startIndex: number = 0): Promise<Question[]> {
+    async generateQuestions(topic: Topic, count: number = 4, startIndex: number = 0): Promise<Question[]> {
         // 如果只需要生成一題，使用單題方法
         if (count === 1) {
             const question = await this.generateSingleQuestion(topic, startIndex);

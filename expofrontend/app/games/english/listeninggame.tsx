@@ -112,7 +112,7 @@ export default function ListeningScreen() {
         streak: 0,
         maxStreak: 0,
         correctAnswers: 0,
-        totalQuestions: 6,
+        totalQuestions: 4,
         isAnswered: false,
         isPlaying: false,
         gameCompleted: false,
@@ -152,33 +152,53 @@ export default function ListeningScreen() {
             id: 'easy' as const,
             title: 'Easy',
             badgeText: 'Beginner',
-            description: 'Simple words and phrases. Catch the right fish!',
+            description: 'Simple words and phrases. Catch the right fish! Total 100 points.',
             icon: '🐟',
             color: '#4CAF50',
             bgColor: '#E8F5E9',
-            features: ['Slow speed', 'Basic vocabulary', '6 Questions', 'Colorful fish']
+            features: ['Slow speed', 'Basic vocabulary', '4 Questions', 'Colorful fish', '25 points per correct catch']
         },
         {
             id: 'medium' as const,
             title: 'Medium',
             badgeText: 'Intermediate',
-            description: 'Short everyday sentences. Watch them swim faster!',
+            description: 'Short everyday sentences. Watch them swim faster! Total 110 points.',
             icon: '🐠',
             color: '#FF9800',
             bgColor: '#FFF3E0',
-            features: ['Normal speed', 'Common phrases', '6 Questions', 'Faster fish']
+            features: ['Normal speed', 'Common phrases', '4 Questions', 'Faster fish', '27.5 points per correct catch']
         },
         {
             id: 'hard' as const,
             title: 'Hard',
             badgeText: 'Advanced',
-            description: 'Complex sentences. Can you catch the right one?',
+            description: 'Complex sentences. Can you catch the right one? Total 120 points.',
             icon: '🐡',
             color: '#F44336',
             bgColor: '#FFEBEE',
-            features: ['Fast speed', 'Idiomatic usage', '6 Questions', 'Very fast fish']
+            features: ['Fast speed', 'Idiomatic usage', '4 Questions', 'Very fast fish', '30 points per correct catch']
         }
     ];
+
+    // 获取每題滿分（根據難度）
+    const getMaxScorePerQuestion = (): number => {
+        switch (gameState.currentLevel) {
+            case 'easy': return 25;
+            case 'medium': return 27.5;
+            case 'hard': return 30;
+            default: return 25;
+        }
+    };
+
+    // 获取總滿分
+    const getTotalMaxScore = (): number => {
+        switch (gameState.currentLevel) {
+            case 'easy': return 100;
+            case 'medium': return 110;
+            case 'hard': return 120;
+            default: return 100;
+        }
+    };
 
     // 加载最高分
     useEffect(() => {
@@ -325,7 +345,7 @@ export default function ListeningScreen() {
                     ...prev,
                     isLoading: false,
                     questions: [firstQuestion],
-                    totalQuestions: 6,
+                    totalQuestions: 4,
                     currentQuestionIndex: 0,
                     gameCompleted: false,
                     score: 0,
@@ -441,7 +461,7 @@ export default function ListeningScreen() {
             streak: 0,
             maxStreak: 0,
             correctAnswers: 0,
-            totalQuestions: 6,
+            totalQuestions: 4,
             isAnswered: false,
             isPlaying: false,
             gameCompleted: false,
@@ -518,13 +538,16 @@ export default function ListeningScreen() {
         setGameState(prev => ({ ...prev, isPlaying: false }));
     };
 
-    // 釣魚！選擇選項
+    // 釣魚！選擇選項（無倍率，固定得分）
     const catchFish = (option: Option, index: number) => {
         if (gameState.isAnswered || gameState.gameCompleted || gameState.fishCaught || prepText !== null) return;
 
         stopAudio();
 
         const isCorrect = option.correct;
+        const maxPerQuestion = getMaxScorePerQuestion();
+        let pointsEarned = 0;
+
         setGameState(prev => ({ ...prev, isAnswered: true, selectedOptionId: option.id, fishCaught: true }));
 
         RNAnimated.sequence([
@@ -553,7 +576,9 @@ export default function ListeningScreen() {
         if (isCorrect) {
             Vibration.vibrate(100);
             const newStreak = gameState.streak + 1;
-            const newScore = gameState.score + 10 * newStreak;
+            // 正確答案獲得該題滿分（無倍率）
+            pointsEarned = maxPerQuestion;
+            const newScore = Math.min(gameState.score + pointsEarned, getTotalMaxScore());
             const newMaxStreak = Math.max(newStreak, gameState.maxStreak);
 
             setGameState(prev => ({
@@ -566,6 +591,7 @@ export default function ListeningScreen() {
         } else {
             Vibration.vibrate([0, 100, 100, 100]);
             setGameState(prev => ({ ...prev, streak: 0 }));
+            pointsEarned = 0;
         }
 
         RNAnimated.timing(progressAnim, {
@@ -573,6 +599,13 @@ export default function ListeningScreen() {
             duration: 500,
             useNativeDriver: false,
         }).start();
+
+        // 更新問題記錄的得分
+        const updatedQuestions = [...gameState.questions];
+        if (updatedQuestions[gameState.currentQuestionIndex]) {
+            (updatedQuestions[gameState.currentQuestionIndex] as any).earnedPoints = pointsEarned;
+            setGameState(prev => ({ ...prev, questions: updatedQuestions }));
+        }
     };
 
     // 下一题或结束游戏（动态生成）
@@ -632,8 +665,8 @@ export default function ListeningScreen() {
     const endGame = async () => {
         setGameState(prev => ({ ...prev, gameCompleted: true }));
         saveHighScore(gameState.score);
-        const percentageScore = calculatePercentageScore();
-        await saveScore(percentageScore);
+        // 修改：直接傳送原始分數，而不是百分比
+        await saveScore(gameState.score);  // 原本是 percentageScore
     };
 
     // 显示提示
@@ -652,10 +685,13 @@ export default function ListeningScreen() {
         return Math.round((gameState.correctAnswers / gameState.totalQuestions) * 100);
     };
 
-    // 计算分数
+    // 计算分数（百分比形式，用于保存）
     const calculatePercentageScore = (): number => {
-        const maxPossibleScore = gameState.totalQuestions * 10 * 6;
-        return Math.round((gameState.score / maxPossibleScore) * 100);
+        const maxTotal = getTotalMaxScore();
+        const currentScore = Math.min(gameState.score, maxTotal);
+        // 計算百分比：實際得分 / 該難度滿分 * 100
+        const percentage = (currentScore / maxTotal) * 100;
+        return Math.round(percentage);
     };
 
     // 获取结果消息
@@ -674,9 +710,14 @@ export default function ListeningScreen() {
     const saveScore = async (finalScore: number) => {
         setIsSaving(true);
         try {
+            // 修改：移除 100 的上限限制，只保留下限 0
+            const scoreToSave = Math.max(finalScore, 0);  // 原本是 Math.min(Math.max(finalScore, 0), 100)
+
+            console.log(`Saving: Level=${getLevelLabel(gameState.currentLevel!)}, RawScore=${gameState.score}, MaxScore=${getTotalMaxScore()}, ScoreToSave=${scoreToSave}`);
+
             await axios.post('http://localhost:8080/api/user/game/score', {
-                gameName: "Listening Game - Fishing Mode",
-                scores: finalScore,
+                gameName: "Listening Game",
+                scores: scoreToSave,  // 現在會是 110 或 120
                 difficulty: getLevelLabel(gameState.currentLevel!).toUpperCase()
             }, {
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -700,6 +741,8 @@ export default function ListeningScreen() {
     const accuracy = calculateAccuracy();
     const percentageScore = calculatePercentageScore();
     const stars = getStarRating(percentageScore);
+    const maxTotal = getTotalMaxScore();
+    const maxPerQuestion = getMaxScorePerQuestion();
 
     // 难度选择页面
     if (gameState.currentLevel === null) {
@@ -713,6 +756,11 @@ export default function ListeningScreen() {
                         <Text style={styles.subTitle}>
                             Listen carefully and catch the right fish! 🎣
                         </Text>
+                        <View style={styles.scoreInfoBox}>
+                            <Text style={styles.scoreInfoText}>🐟 Easy: 4 questions, total 100 points (25 per catch)</Text>
+                            <Text style={styles.scoreInfoText}>🐠 Medium: 4 questions, total 110 points (27.5 per catch)</Text>
+                            <Text style={styles.scoreInfoText}>🐡 Hard: 4 questions, total 120 points (30 per catch)</Text>
+                        </View>
                     </View>
 
                     <View style={styles.menuGrid}>
@@ -788,10 +836,10 @@ export default function ListeningScreen() {
                 <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color="#4b6cb7" />
                     <Text style={styles.loadingText}>
-                        🎣 Preparing fishing pond... (1/6)
+                        🎣 Preparing fishing pond... (1/4)
                     </Text>
                     <View style={styles.loadingProgressBar}>
-                        <View style={[styles.loadingProgressFill, { width: '16%' }]} />
+                        <View style={[styles.loadingProgressFill, { width: '25%' }]} />
                     </View>
                 </View>
             </View>
@@ -849,8 +897,8 @@ export default function ListeningScreen() {
 
                     <View style={styles.resultCard}>
                         <View style={styles.scoreCircle}>
-                            <Text style={styles.scoreCircleNumber}>{percentageScore}</Text>
-                            <Text style={styles.scoreCircleLabel}>points</Text>
+                            <Text style={styles.scoreCircleNumber}>{gameState.score}</Text>
+                            <Text style={styles.scoreCircleLabel}>/ {maxTotal} points</Text>
                         </View>
 
                         <View style={styles.resultStars}>
@@ -898,6 +946,25 @@ export default function ListeningScreen() {
                                     <Text style={styles.resultStatValue}>{gameState.maxStreak}</Text>
                                 </View>
                             </View>
+                        </View>
+
+                        {/* 每題得分詳情 */}
+                        <View style={styles.detailScoreContainer}>
+                            <Text style={styles.detailScoreTitle}>📊 Per Question Score:</Text>
+                            {gameState.questions.map((q, idx) => {
+                                const earned = (q as any).earnedPoints || 0;
+                                return (
+                                    <View key={idx} style={styles.detailScoreItem}>
+                                        <Text style={styles.detailScoreNumber}>{idx + 1}.</Text>
+                                        <Text style={styles.detailScoreAnswer} numberOfLines={1}>
+                                            {q.options.find(opt => opt.correct)?.text || '?'}
+                                        </Text>
+                                        <Text style={[styles.detailScoreValue, earned > 0 ? styles.correctScore : styles.incorrectScore]}>
+                                            {earned > 0 ? `${earned}/${maxPerQuestion}` : '0'}
+                                        </Text>
+                                    </View>
+                                );
+                            })}
                         </View>
 
                         <View style={styles.resultButtons}>
@@ -949,7 +1016,7 @@ export default function ListeningScreen() {
                         <View style={styles.fishingStatBox}>
                             <Fish size={24} color="#4b6cb7" />
                             <Text style={styles.fishingStatValue}>{gameState.score}</Text>
-                            <Text style={styles.fishingStatLabel}>Points</Text>
+                            <Text style={styles.fishingStatLabel}>/ {maxTotal}</Text>
                         </View>
                         <View style={styles.fishingStatBox}>
                             <Ionicons name="flag" size={24} color="#FF9800" />
@@ -1006,9 +1073,6 @@ export default function ListeningScreen() {
                             resizeMode="contain"
                         />
                     </View>
-
-                    {/* 岩石图片装饰 */}
-
 
                     {/* 浮标 */}
                     <RNAnimated.View
@@ -1156,7 +1220,7 @@ export default function ListeningScreen() {
                     ]}>
                         <Text style={styles.fishingFeedbackText}>
                             {gameState.streak > 0
-                                ? `🎣 Great catch! +${10 * gameState.streak} points! ${gameState.streak >= 3 ? '🔥 Hot streak!' : ''}`
+                                ? `🎣 Great catch! +${maxPerQuestion} points!`
                                 : "😢 Oops! That fish got away... Try again!"}
                         </Text>
                     </View>
@@ -1251,6 +1315,19 @@ const styles = StyleSheet.create({
         color: '#64748B',
         textAlign: 'center',
         marginBottom: 10,
+    },
+    scoreInfoBox: {
+        backgroundColor: '#FFF8E1',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
+        marginTop: 8,
+    },
+    scoreInfoText: {
+        fontSize: 12,
+        color: '#FF9F4A',
+        fontWeight: '500',
+        textAlign: 'center',
     },
     menuGrid: {
         width: '100%',
@@ -1798,6 +1875,47 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: '600',
         color: '#333',
+    },
+    detailScoreContainer: {
+        backgroundColor: '#f8f9fa',
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 24,
+    },
+    detailScoreTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#333',
+        marginBottom: 12,
+    },
+    detailScoreItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 6,
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee',
+    },
+    detailScoreNumber: {
+        width: 30,
+        fontSize: 12,
+        color: '#666',
+    },
+    detailScoreAnswer: {
+        flex: 1,
+        fontSize: 12,
+        color: '#333',
+    },
+    detailScoreValue: {
+        width: 50,
+        fontSize: 12,
+        fontWeight: '600',
+        textAlign: 'right',
+    },
+    correctScore: {
+        color: '#4CAF50',
+    },
+    incorrectScore: {
+        color: '#f44336',
     },
     resultButtons: {
         gap: 12,

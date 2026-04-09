@@ -221,6 +221,12 @@ export default function CalculationGame() {
         } catch (e) { router.push('/'); }
     };
 
+    const handleBackToGames = () => {
+        if (router.canGoBack()) {
+            router.back();
+        }
+    };
+
     // --- 難度選擇頁面渲染 ---
     const renderDifficultySelect = () => (
         <SafeAreaView style={styles.container}>
@@ -297,6 +303,9 @@ export default function CalculationGame() {
             </ScrollView>
             <TouchableOpacity style={styles.saveBtn} onPress={saveScore}>
                 <Text style={styles.saveBtnText}>BACK TO LOBBY</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.saveBtn} onPress={handleBackToGames}>
+                <Text style={styles.saveBtnText}>BACK TO GAME LIST</Text>
             </TouchableOpacity>
         </SafeAreaView>
     );

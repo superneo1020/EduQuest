@@ -21,13 +21,14 @@ type Question = {
     userAnswer: string;
     isCorrect: boolean;
     feedback?: string;
-    score?: number; // 0-10分
+    score?: number; // 0-10分 (原始AI分數/10)
 };
 
 type Difficulty = 'easy' | 'medium' | null;
 type GameState = 'difficulty_select' | 'playing' | 'result';
 
-const TOTAL_QUESTIONS = 10;
+// 修改：總題數改為 4 題
+const TOTAL_QUESTIONS = 4;
 
 // --- 💥 浮動文字元件 (HIT / OUCH) ---
 const FloatingText = ({ text, color, onComplete }: { text: string, color: string, onComplete: () => void }) => {
@@ -390,7 +391,17 @@ export default function ChineseSentenceGame() {
                 alternatives: currentQuestion.alternatives
             });
 
-            const score10 = Math.round(result.score / 10);
+            // 修改：根據難度計算每題得分
+            // Easy: 每題滿分 25 分 (總分 100)
+            // Medium: 每題滿分 30 分 (總分 120)
+            let questionScore = 0;
+            if (difficulty === 'easy') {
+                // Easy: 原始分數 0-100 轉換為 0-25
+                questionScore = Math.round((result.score / 100) * 25);
+            } else {
+                // Medium: 原始分數 0-100 轉換為 0-30
+                questionScore = Math.round((result.score / 100) * 30);
+            }
 
             setQuestions(prev => prev.map((q, idx) =>
                 idx === currentIndex
@@ -399,7 +410,7 @@ export default function ChineseSentenceGame() {
                         userAnswer: inputText.trim(),
                         isCorrect: result.isCorrect,
                         feedback: result.feedback,
-                        score: score10
+                        score: questionScore
                     }
                     : q
             ));
@@ -413,7 +424,7 @@ export default function ChineseSentenceGame() {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
                 setFloatingText({ id: Date.now(), text: 'HIT!', color: '#FFD700' });
                 playBounceAnimation();
-                if (score10 >= 9) {
+                if (result.score >= 90) {
                     updateCharacterState('perfect');
                     setEncouragementText(getRandomEncouragement('great'));
                 } else {
@@ -449,36 +460,40 @@ export default function ChineseSentenceGame() {
         loadNextQuestion();
     };
 
+    // 修改：計算總分（根據難度不同滿分不同）
     const calculateScore = () => {
         const totalScore = questions.reduce((acc, q) => acc + (q.score || 0), 0);
         const correctCount = questions.filter(q => q.isCorrect).length;
+        const maxScore = difficulty === 'easy' ? 100 : 120;
 
         return {
             correct: correctCount,
             total: TOTAL_QUESTIONS,
             percentage: Math.round((correctCount / TOTAL_QUESTIONS) * 100),
-            totalScore: totalScore
+            totalScore: totalScore,
+            maxScore: maxScore
         };
     };
 
     const generateFinalFeedback = async () => {
         const score = calculateScore();
         const percentage = score.percentage;
+        const maxScore = score.maxScore;
 
         // 保存分數到伺服器
         await saveScore(score.totalScore);
 
         let feedback = '';
         if (score.correct === TOTAL_QUESTIONS) {
-            feedback = `🎉 Perfect! You got them all right. ${score.correct} Question! You are a little Chinese genius! 🌟🌟🌟`;
+            feedback = `🎉 Perfect! You got them all right. ${score.correct} Question! You are a little Chinese genius! 🌟🌟🌟 (Score: ${score.totalScore}/${maxScore})`;
         } else if (percentage >= 90) {
-            feedback = `🌟 Awesome! You got it right. ${score.correct} Keep it up! 👍`;
+            feedback = `🌟 Awesome! You got it right. ${score.correct} Keep it up! 👍 (Score: ${score.totalScore}/${maxScore})`;
         } else if (percentage >= 70) {
-            feedback = `📚 Very good! You got it right. ${score.correct} Practice the problems a bit more and you'll get even better! 💪`;
+            feedback = `📚 Very good! You got it right. ${score.correct} Practice the problems a bit more and you'll get even better! 💪 (Score: ${score.totalScore}/${maxScore})`;
         } else if (percentage >= 50) {
-            feedback = `🌱 Improvement! You got it right. ${score.correct} Keep it up with the questions! 📖`;
+            feedback = `🌱 Improvement! You got it right. ${score.correct} Keep it up with the questions! 📖 (Score: ${score.totalScore}/${maxScore})`;
         } else {
-            feedback = `💪 Don't be discouraged! You got it right. ${score.correct} Try again, it will be better! Let's work hard together! ✨`;
+            feedback = `💪 Don't be discouraged! You got it right. ${score.correct} Try again, it will be better! Let's work hard together! ✨ (Score: ${score.totalScore}/${maxScore})`;
         }
 
         setAiFeedback(feedback);
@@ -578,6 +593,7 @@ export default function ChineseSentenceGame() {
 
         const currentQuestion = questions[currentIndex];
         const score = currentQuestion.score || 0;
+        const maxQuestionScore = difficulty === 'easy' ? 25 : 30;
 
         return (
             <Animated.View
@@ -596,8 +612,8 @@ export default function ChineseSentenceGame() {
             >
                 <View style={styles.feedbackRow}>
                     <Text style={styles.feedbackLabel}>Score：</Text>
-                    <Text style={[styles.scoreText, score >= 8 ? styles.highScore : score >= 6 ? styles.mediumScore : styles.lowScore]}>
-                        {score}/10
+                    <Text style={[styles.scoreText, score >= (maxQuestionScore * 0.8) ? styles.highScore : score >= (maxQuestionScore * 0.6) ? styles.mediumScore : styles.lowScore]}>
+                        {score}/{maxQuestionScore}
                     </Text>
                 </View>
 
@@ -749,6 +765,10 @@ export default function ChineseSentenceGame() {
                     <Text style={styles.subTitle}>
                         Learn Chinese together with the cute panda! Complete the fill-in-the-blank exercises to gain a sense of accomplishment!✨
                     </Text>
+                    <View style={styles.scoreInfoBox}>
+                        <Text style={styles.scoreInfoText}>🏆 Easy: 4 questions, total 100 points</Text>
+                        <Text style={styles.scoreInfoText}>⚡ Medium: 4 questions, total 120 points</Text>
+                    </View>
                 </View>
 
                 <View style={styles.menuGrid}>
@@ -778,6 +798,13 @@ export default function ChineseSentenceGame() {
                                 </View>
                                 <Text style={styles.diffDesc}>{option.description}</Text>
 
+                                {/* 修改：顯示計分方式 */}
+                                <View style={styles.scoreInfoRow}>
+                                    <Text style={[styles.scoreInfoDetail, { color: option.color }]}>
+                                        {option.id === 'easy' ? '🏆 25 points per question (Total 100)' : '⚡ 30 points per question (Total 120)'}
+                                    </Text>
+                                </View>
+
                                 <View style={styles.featuresList}>
                                     {option.features.map((feature, index) => (
                                         <View key={index} style={styles.featureItem}>
@@ -805,6 +832,7 @@ export default function ChineseSentenceGame() {
     // 結果頁面
     const renderResult = () => {
         const score = calculateScore();
+        const maxScore = score.maxScore;
 
         return (
             <ScrollView contentContainerStyle={styles.resultContainer}>
@@ -815,7 +843,7 @@ export default function ChineseSentenceGame() {
 
                     <View style={styles.scoreCircle}>
                         <Text style={styles.scorePercentage}>{score.totalScore}</Text>
-                        <Text style={styles.scorePercentSign}>/100</Text>
+                        <Text style={styles.scorePercentSign}>/{maxScore}</Text>
                         <Text style={styles.scoreLabel}>Total Score</Text>
                     </View>
 
@@ -844,20 +872,23 @@ export default function ChineseSentenceGame() {
 
                     <View style={styles.summaryContainer}>
                         <Text style={styles.summaryTitle}>📝 Answer Summary：</Text>
-                        {questions.map((q, index) => (
-                            <View key={index} style={styles.summaryItem}>
-                                <Text style={styles.summaryNumber}>{index + 1}.</Text>
-                                <Text style={styles.summaryAnswer} numberOfLines={1}>
-                                    {q.userAnswer || 'Not answered'}
-                                </Text>
-                                <Text style={[
-                                    styles.summaryScore,
-                                    q.isCorrect ? styles.correctScore : styles.incorrectScore
-                                ]}>
-                                    {q.score || 0}/10
-                                </Text>
-                            </View>
-                        ))}
+                        {questions.map((q, index) => {
+                            const maxQScore = difficulty === 'easy' ? 25 : 30;
+                            return (
+                                <View key={index} style={styles.summaryItem}>
+                                    <Text style={styles.summaryNumber}>{index + 1}.</Text>
+                                    <Text style={styles.summaryAnswer} numberOfLines={1}>
+                                        {q.userAnswer || 'Not answered'}
+                                    </Text>
+                                    <Text style={[
+                                        styles.summaryScore,
+                                        q.isCorrect ? styles.correctScore : styles.incorrectScore
+                                    ]}>
+                                        {q.score || 0}/{maxQScore}
+                                    </Text>
+                                </View>
+                            );
+                        })}
                     </View>
 
                     <View style={styles.resultButtonContainer}>
@@ -1282,6 +1313,19 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginBottom: 20,
     },
+    scoreInfoBox: {
+        backgroundColor: '#FFF8E1',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
+        marginTop: 8,
+    },
+    scoreInfoText: {
+        fontSize: 12,
+        color: '#FF9F4A',
+        fontWeight: '500',
+        textAlign: 'center',
+    },
     menuGrid: {
         width: '100%',
         paddingHorizontal: 20,
@@ -1341,6 +1385,13 @@ const styles = StyleSheet.create({
         color: '#666',
         marginBottom: 12,
         lineHeight: 20,
+    },
+    scoreInfoRow: {
+        marginBottom: 12,
+    },
+    scoreInfoDetail: {
+        fontSize: 12,
+        fontWeight: '600',
     },
     featuresList: {
         marginBottom: 15,
