@@ -54,6 +54,16 @@ public class AdminService {
     }
 
     @Transactional(readOnly = true)
+    public Long countAllUser() {
+        return userRepo.count();
+    }
+
+    @Transactional(readOnly = true)
+    public Long countAllSchool() {
+        return schoolRepo.count();
+    }
+
+    @Transactional(readOnly = true)
     public UtilPageResponse<AdminFilterForUserResponse> findAllUserByFilter(AdminFilterForUserRequest req, Pageable pageable) {
         // 1. Sanitize the pageable to prevent malicious sorting
         Pageable cleanPageable = PageableUtils.filterSort(pageable, USER_FILTER_REQUEST_DTO_FIELDS);
