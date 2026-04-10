@@ -5,10 +5,9 @@ import {
 } from 'react-native';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useAuth } from '@/src/auth/AuthContext'; // 假設你的路徑
+import { useAuth } from '@/src/auth/AuthContext';
 import { getApiBaseUrl } from '@/src/api/client';
 
-// 遊戲清單（建議未來可以從 API /api/game 獲取）
 const GAME_CATEGORIES = [
     "Speed Calculation",
     "AI Math Adventure",
@@ -62,7 +61,7 @@ const LeaderboardScreen = () => {
             setHasNext(nextExists);
             setPage(pageNum);
         } catch (error) {
-            console.error(`${targetGame} 排行榜抓取失敗:`, error);
+            console.error(`${targetGame} Ranking fetch failed:`, error);
         } finally {
             setLoading(false);
             setRefreshing(false);

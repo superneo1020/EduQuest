@@ -108,6 +108,13 @@ class CheckRequest(BaseModel):
 
 class SessionRecord(BaseModel):
     history: list[dict]
+
+class GameScoreData(BaseModel):
+    user_id: int
+    game_scores: list[dict]  # [{"game_type": "MATH", "score": 85, "difficulty": "MEDIUM", "created_at": "2024-01-01"}]
+
+class LearningSuggestions(BaseModel):
+    suggestions: list[dict]  # [{"type": "weakness", "title": "...", "description": "..."}]
 # ---------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------
@@ -323,6 +330,47 @@ def generate_final_report(req: SessionRecord):
         return {"summary": resp["message"]["content"].strip(), "accuracy": (correct_count/len(req.history))*100}
     except:
         return {"summary": "Great job! Keep practicing.", "accuracy": 0}
+@app.post("/api/learning/suggestions")
+def generate_learning_suggestions(req: GameScoreData):
+    logger.info("Generating learning suggestions for user %s...", req.user_id)
+    
+    # Analyze game scores to create learning suggestions
+    prompt = (
+        f"Analyze the following game scores for user {req.user_id} and provide personalized learning suggestions:\n"
+        f"Game Scores: {json.dumps(req.game_scores)}\n\n"
+        "Based on these scores, identify:\n"
+        "1. Strengths (subjects/games where user performs well)\n"
+        "2. Weaknesses (subjects/games where user struggles)\n"
+        "3. Learning patterns and trends\n"
+        "4. Specific recommendations for improvement\n\n"
+        "Return ONLY a JSON array of suggestion objects with this format:\n"
+        "[{\"type\": \"strength|weakness|recommendation\", \"title\": \"...\", \"description\": \"...\", \"priority\": \"high|medium|low\"}]\n"
+        "Keep descriptions concise and actionable. Focus on educational improvement."
+    )
+    
+    try:
+        resp = ollama.chat(model=settings.model, messages=[{"role": "user", "content": prompt}])
+        content = resp["message"]["content"].strip()
+        
+        # Extract JSON from response
+        match = re.search(r'(\[.*\])', content, re.DOTALL)
+        if match:
+            suggestions = json.loads(match.group(1))
+            return LearningSuggestions(suggestions=suggestions)
+        
+        # Fallback if parsing fails
+        fallback_suggestions = [
+            {"type": "recommendation", "title": "Continue Learning", "description": "Keep practicing to improve your skills", "priority": "medium"}
+        ]
+        return LearningSuggestions(suggestions=fallback_suggestions)
+        
+    except Exception as e:
+        logger.error(f"Learning suggestions generation failed: {e}")
+        fallback_suggestions = [
+            {"type": "recommendation", "title": "Try Different Games", "description": "Explore various game types to find your strengths", "priority": "low"}
+        ]
+        return LearningSuggestions(suggestions=fallback_suggestions)
+
 @app.post("/stt")
 def speech_to_text(file: UploadFile = File(...)):
     try:
