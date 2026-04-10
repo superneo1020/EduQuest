@@ -34,6 +34,13 @@ public class Course {
     @Generated(event = {EventType.INSERT})
     private Instant createdAt;
 
+    @Column(nullable = false,
+            insertable = false,
+            updatable = false,
+            columnDefinition = "TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP")
+    @Generated(event = {EventType.INSERT})
+    private Instant updatedAt;
+
     public Course() {}
 
     public Course(School school, String grade, String suffix, String academicYear) {
@@ -85,5 +92,9 @@ public class Course {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
     }
 }

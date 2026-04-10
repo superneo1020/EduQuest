@@ -7,6 +7,7 @@ public record CourseDto(
         String grade,
         String suffix,
         String academicYear,
-        Instant createdAt
+        Instant createdAt,
+        Instant updatedAt
 ) {
 }

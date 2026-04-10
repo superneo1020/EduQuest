@@ -3,9 +3,12 @@ package com.eduquest.springbackend.model;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Min;
 import org.hibernate.annotations.Generated;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.generator.EventType;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
+import java.util.Map;
 
 @Entity
 @Table(name = "user_game_scores")
@@ -26,6 +29,10 @@ public class UserGameScore {
     @Min(value = 0, message = "Game scores must be at least 0")
     private Integer scores = 0;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "jsonb")
+    private Map<String, Object> metadata;
+
     @Column(nullable = false,
             insertable = false,
             updatable = false,
@@ -35,10 +42,11 @@ public class UserGameScore {
 
     public UserGameScore() {}
 
-    public UserGameScore(AppUser user, Game game, Integer scores) {
+    public UserGameScore(AppUser user, Game game, Integer scores, Map<String, Object> metadata) {
         this.user = user;
         this.game = game;
         this.scores = scores;
+        this.metadata = metadata;
     }
 
     public Long getId() {
@@ -71,6 +79,14 @@ public class UserGameScore {
 
     public void setScores(Integer scores) {
         this.scores = scores;
+    }
+
+    public Map<String, Object> getMetadata() {
+        return metadata;
+    }
+
+    public void setMetadata(Map<String, Object> metadata) {
+        this.metadata = metadata;
     }
 
     public Instant getCreatedAt() {

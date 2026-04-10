@@ -59,7 +59,7 @@ public class UserGameScoreService {
         AppUser user = userRepo.getReferenceById(userId);
         Game game = gameRepo.getReferenceById(gameId);
 
-        UserGameScore userGameScore = new UserGameScore(user, game, req.scores());
+        UserGameScore userGameScore = new UserGameScore(user, game, req.scores(), req.metadata());
         UserGameScore savedScore = userGameScoreRepo.save(userGameScore);
 
         return new UserGameScoreResponse(
