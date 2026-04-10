@@ -3,14 +3,13 @@ package com.eduquest.springbackend.service;
 import com.eduquest.springbackend.dao.RoleRepository;
 import com.eduquest.springbackend.dao.SchoolRepository;
 import com.eduquest.springbackend.dao.UserRepository;
-import com.eduquest.springbackend.dto.ResetEmailRequest;
-import com.eduquest.springbackend.dto.ResetSchoolRequest;
-import com.eduquest.springbackend.dto.UserDto;
+import com.eduquest.springbackend.dto.*;
 import com.eduquest.springbackend.enums.EducatorStatus;
 import com.eduquest.springbackend.exception.DuplicateResourceException;
 import com.eduquest.springbackend.model.AppUser;
 import com.eduquest.springbackend.model.Role;
 import com.eduquest.springbackend.model.School;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
@@ -26,7 +25,10 @@ public class UserService {
     private final SchoolRepository schoolRepo;
     private final DtoMapper dtoMapper;
 
-    public UserService(UserRepository userRepo, RoleRepository roleRepo, SchoolRepository schoolRepo, DtoMapper dtoMapper) {
+    public UserService(UserRepository userRepo,
+                       RoleRepository roleRepo,
+                       SchoolRepository schoolRepo,
+                       DtoMapper dtoMapper) {
         this.userRepo = userRepo;
         this.roleRepo = roleRepo;
         this.schoolRepo = schoolRepo;
@@ -137,5 +139,11 @@ public class UserService {
         AppUser user = userRepo.findByUsername(username).orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found：　" + username));
         return dtoMapper.toUser(user);
+    }
+
+    @Transactional(readOnly = true)
+    public UtilPageResponse<UserMiniDto> findAllUsernameByUsername(String username, Pageable pageable) {
+        var page = userRepo.findAllUserRecordByUsernameWithSchool(username, pageable);
+        return dtoMapper.toPageResponse(page);
     }
 }

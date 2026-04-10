@@ -6,6 +6,8 @@ import com.eduquest.springbackend.dto.ResetSchoolRequest;
 import com.eduquest.springbackend.service.AuthService;
 import com.eduquest.springbackend.service.UserService;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -44,6 +46,14 @@ public class UserController {
             @RequestBody ResetSchoolRequest req
     ) {
         return ResponseEntity.ok(userService.saveSchoolId(userDetails.getUsername(), req));
+    }
+
+    @GetMapping("/school/users")
+    public ResponseEntity<?> getAllUsersByMySchoolId(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PageableDefault Pageable pageable
+    ) {
+        return ResponseEntity.ok(userService.findAllUsernameByUsername(userDetails.getUsername(), pageable));
     }
 
     @GetMapping("/email")

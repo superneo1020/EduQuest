@@ -29,7 +29,7 @@ public class CourseMemberService {
     @Transactional(readOnly = true)
     public List<CourseMemberDto> showAllCourseMemberByCourseId(String username, Long courseId) {
         Long userId = userService.checkIdByUsername(username);
-        return courseMemberRepo.findCourseMemberByCourseId(userId, courseId);
+        return courseMemberRepo.findUserByCourseId(userId, courseId);
     }
 
     @Transactional(readOnly = true)
