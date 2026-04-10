@@ -4,27 +4,27 @@ import jakarta.persistence.*;
 
 @Entity
 @Table(name = "class_members")
-public class ClassMember {
+public class CourseMember {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id", nullable = false)
+    @Column(nullable = false)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "class_id", nullable = false)
-    private SchoolClass schoolClass;
+    private Course course;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private AppUser user;
 
-    @Column(name = "role_in_class", length = 20, nullable = false)
+    @Column(length = 20, nullable = false)
     private String roleInClass;
 
-    public ClassMember() {}
+    public CourseMember() {}
 
-    public ClassMember(SchoolClass schoolClass, AppUser user, String roleInClass) {
-        this.schoolClass = schoolClass;
+    public CourseMember(Course course, AppUser user, String roleInClass) {
+        this.course = course;
         this.user = user;
         this.roleInClass = roleInClass;
     }
@@ -37,12 +37,12 @@ public class ClassMember {
         this.id = id;
     }
 
-    public SchoolClass getSchoolClass() {
-        return schoolClass;
+    public Course getCourse() {
+        return course;
     }
 
-    public void setSchoolClass(SchoolClass schoolClass) {
-        this.schoolClass = schoolClass;
+    public void setCourse(Course course) {
+        this.course = course;
     }
 
     public AppUser getUser() {

@@ -3,8 +3,6 @@ package com.eduquest.springbackend.dao;
 import com.eduquest.springbackend.dto.UserAuthDto;
 import com.eduquest.springbackend.enums.EducatorStatus;
 import com.eduquest.springbackend.model.AppUser;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -45,13 +43,4 @@ public interface UserRepository extends JpaRepository<AppUser, Long>, JpaSpecifi
 
     @Query("SELECT u.isActive FROM AppUser u WHERE u.username = :username")
     Optional<Boolean> findIsActiveByUsername(@Param("username") String username);
-
-    @Query("SELECT u FROM AppUser u " +
-            "LEFT JOIN FETCH u.school s " +
-            "LEFT JOIN FETCH u.roles r " +
-            "WHERE (:schoolName IS NULL OR LOWER(s.name) LIKE LOWER(CONCAT('%', :schoolName, '%'))) " +
-            "AND (:roleId IS NULL OR r.id = :roleId)")
-    Page<AppUser> findBySchoolNameAndRoleId(@Param("schoolName") String schoolName,
-                                            @Param("roleId") Long roleId,
-                                            Pageable pageable);
 }

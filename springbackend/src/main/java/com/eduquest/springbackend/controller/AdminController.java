@@ -2,6 +2,7 @@ package com.eduquest.springbackend.controller;
 
 import com.eduquest.springbackend.dto.AdminFilterForUserRequest;
 import com.eduquest.springbackend.dto.AdminFilterForUserResponse;
+import com.eduquest.springbackend.dto.OperationResult;
 import com.eduquest.springbackend.dto.UtilPageResponse;
 import com.eduquest.springbackend.service.AdminService;
 import jakarta.validation.Valid;
@@ -29,14 +30,12 @@ public class AdminController {
     }
 
     @PatchMapping("/user/{id}/activate")
-    public ResponseEntity<Void> activateUser(@PathVariable Long id) {
-        adminService.activateUser(id);
-        return ResponseEntity.noContent().build();
+    public ResponseEntity<OperationResult> activateUser(@PathVariable Long id) {
+        return ResponseEntity.ok(adminService.activateUser(id));
     }
 
     @PatchMapping("/user/{id}/reject")
-    public ResponseEntity<Void> rejectEducator(@PathVariable Long id) {
-        adminService.rejectEducator(id);
-        return ResponseEntity.noContent().build();
+    public ResponseEntity<OperationResult> rejectEducator(@PathVariable Long id) {
+        return ResponseEntity.ok(adminService.rejectEducator(id));
     }
 }

@@ -5,6 +5,7 @@ import com.eduquest.springbackend.dao.SchoolRepository;
 import com.eduquest.springbackend.dao.UserRepository;
 import com.eduquest.springbackend.dto.AdminFilterForUserRequest;
 import com.eduquest.springbackend.dto.AdminFilterForUserResponse;
+import com.eduquest.springbackend.dto.OperationResult;
 import com.eduquest.springbackend.dto.UtilPageResponse;
 import com.eduquest.springbackend.enums.EducatorStatus;
 import com.eduquest.springbackend.exception.RuleViolationException;
@@ -38,7 +39,7 @@ public class AdminService {
     private final DtoMapper dtoMapper;
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
-    private final Set<String> EDUCATOR_REQUEST_DTO_FIELDS = Set.of(
+    private final Set<String> USER_FILTER_REQUEST_DTO_FIELDS = Set.of(
             "username", "email", "schoolName", "educatorStatus"
     );
 
@@ -55,7 +56,7 @@ public class AdminService {
     @Transactional(readOnly = true)
     public UtilPageResponse<AdminFilterForUserResponse> findAllUserByFilter(AdminFilterForUserRequest req, Pageable pageable) {
         // 1. Sanitize the pageable to prevent malicious sorting
-        Pageable cleanPageable = PageableUtils.filterSort(pageable, EDUCATOR_REQUEST_DTO_FIELDS);
+        Pageable cleanPageable = PageableUtils.filterSort(pageable, USER_FILTER_REQUEST_DTO_FIELDS);
 
         // 2. Define the Specification using a single lambda (No 'where' needed)
         Specification<AppUser> spec = (root, query, cb) -> {
@@ -116,7 +117,9 @@ public class AdminService {
                     isAdmin,    // Send as a boolean only
                     isEducator, // Send as a boolean only
                     user.getActive(),
-                    user.getEducatorStatus()
+                    user.getEducatorStatus(),
+                    user.getCreatedAt(),
+                    user.getUpdatedAt()
             );
         }));
     }
@@ -129,26 +132,56 @@ public class AdminService {
     }
 
     @Transactional
-    public void activateUser(Long id) {
+    public OperationResult activateUser(Long id) {
         AppUser user = userRepo.findById(id)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+
         user.setActive(true);
-        if (!EnumSet.of(EducatorStatus.NONE, EducatorStatus.APPROVED, EducatorStatus.ADMIN).contains(user.getEducatorStatus())) {
+
+        String message = "Educator activated successfully.";
+        boolean warning = false;
+
+        if (!EnumSet.of(EducatorStatus.NONE, EducatorStatus.ADMIN).contains(user.getEducatorStatus())) {
             user.setEducatorStatus(EducatorStatus.APPROVED);
+
+            Role educatorRole = roleRepo.findByName("ROLE_EDUCATOR")
+                    .orElseThrow(() -> new IllegalStateException("ROLE_EDUCATOR must be pre-configured"));
+            if (!user.getRoles().contains(educatorRole)) {
+                user.getRoles().add(educatorRole);
+            } else {
+                logger.warn("Educator role already exists");
+                warning = true;
+                message += " [Note] Educator role already exists";
+            }
         }
         userRepo.save(user);
+        return new OperationResult(message, warning);
     }
 
     @Transactional
-    public void rejectEducator(Long id) {
+    public OperationResult rejectEducator(Long id) {
         AppUser user = userRepo.findById(id)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+
+        String message = "Educator rejected successfully.";
+        boolean warning = false;
+
         if (EnumSet.of(EducatorStatus.PENDING, EducatorStatus.APPROVED).contains(user.getEducatorStatus())) {
             user.setEducatorStatus(EducatorStatus.REJECTED);
             user.setActive(false);
+            boolean roleRemoved = user.getRoles().removeIf(r -> r.getName().equals("ROLE_EDUCATOR"));
+            // In production, we should invalidate the user's current JWT.
+            // Since this is a demo without Redis, we rely on JWT expiration.
+            if (!roleRemoved) {
+                logger.warn("Educator rejected successfully but no educator role found");
+                warning = true;
+                message += " [Note] No educator role found";
+            }
         } else {
             throw new RuleViolationException("User is not in a pending or approved state");
         }
+
         userRepo.save(user);
+        return new OperationResult(message, warning);
     }
 }

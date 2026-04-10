@@ -8,10 +8,10 @@ import java.time.Instant;
 
 @Entity
 @Table(name = "classes")
-public class SchoolClass {
+public class Course {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id", nullable = false)
+    @Column(nullable = false)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -34,9 +34,9 @@ public class SchoolClass {
     @Generated(event = {EventType.INSERT})
     private Instant createdAt;
 
-    public SchoolClass() {}
+    public Course() {}
 
-    public SchoolClass(School school, String grade, String suffix, String academicYear) {
+    public Course(School school, String grade, String suffix, String academicYear) {
         this.school = school;
         this.grade = grade;
         this.suffix = suffix;
