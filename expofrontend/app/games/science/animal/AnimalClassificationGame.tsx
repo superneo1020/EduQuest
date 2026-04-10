@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
 import {
     View,
     Text,
@@ -116,6 +116,34 @@ const AnimalClassificationGame: React.FC = () => {
     const categoryScale = useRef(new Animated.Value(1)).current;
     const scoreAnim = useRef(new Animated.Value(1)).current;
 
+    // ========== 🕒 新增：計時器相關狀態 ==========
+    const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+    const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+    // 格式化時間 (MM:SS)
+    const formatTime = (totalSeconds: number): string => {
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    };
+
+    // 停止計時器
+    const stopTimer = useCallback(() => {
+        if (timerIntervalRef.current) {
+            clearInterval(timerIntervalRef.current);
+            timerIntervalRef.current = null;
+        }
+    }, []);
+
+    // 開始計時器
+    const startTimer = useCallback(() => {
+        stopTimer();
+        setElapsedSeconds(0);
+        timerIntervalRef.current = setInterval(() => {
+            setElapsedSeconds(prev => prev + 1);
+        }, 1000);
+    }, [stopTimer]);
+
     // ========== 💾 保存分數到伺服器 ==========
     const saveScore = async (finalScore: number) => {
         if (!token) return;
@@ -178,13 +206,20 @@ const AnimalClassificationGame: React.FC = () => {
             prepScale.setValue(0);
             Animated.spring(prepScale, { toValue: 1.5, friction: 2, tension: 120, useNativeDriver: true }).start();
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            // 倒數結束後開始計時
+            startTimer();
         }, 1000);
         setTimeout(() => {
             Animated.timing(prepScale, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => setPrepText(null));
         }, 1600);
     };
 
-    useEffect(() => { startPrepSequence(); }, []);
+    useEffect(() => {
+        startPrepSequence();
+        return () => {
+            stopTimer(); // 清理計時器
+        };
+    }, []);
 
     const handleAnimalPress = (animal: Animal) => {
         if (!categoryAssignments[animal.id]) {
@@ -269,6 +304,7 @@ const AnimalClassificationGame: React.FC = () => {
     };
 
     const showFinalReport = async () => {
+        stopTimer(); // 結束遊戲時停止計時器
         const result = calculateScore();
         // 保存分數到伺服器
         await saveScore(result.score);
@@ -306,6 +342,7 @@ const AnimalClassificationGame: React.FC = () => {
     };
 
     const resetGame = () => {
+        stopTimer(); // 重置時停止舊計時器
         setCategoryAssignments({});
         setAvailableAnimals(allAnimals);
         setScore(0);
@@ -382,16 +419,19 @@ const AnimalClassificationGame: React.FC = () => {
     };
 
     const handleGoBack = () => {
+        stopTimer();
         navigation.goBack();
     };
 
     // 返回遊戲列表頁面
     const handleGoToGameList = () => {
+        stopTimer();
         navigation.navigate('science/index' as never);
     };
 
     // 完成页面 - 同样隐藏系统导航栏
     if (isFinished) {
+        const totalTimeFormatted = formatTime(elapsedSeconds);
         return (
             <ScrollView style={styles.container}>
                 <View style={styles.headerBarSimplified}>
@@ -402,6 +442,12 @@ const AnimalClassificationGame: React.FC = () => {
                     <View style={styles.scoreCircle}>
                         <Text style={styles.scoreCircleNumber}>{finalReport.accuracy}</Text>
                         <Text style={styles.scoreCircleLabel}>/ 100</Text>
+                    </View>
+
+                    {/* 新增：顯示總花費時間 */}
+                    <View style={styles.reportTimeBox}>
+                        <Text style={styles.reportScoreLabel}>⏱️ Total Time</Text>
+                        <Text style={styles.reportTimeValue}>{totalTimeFormatted}</Text>
                     </View>
 
                     {/* 保存中指示器 */}
@@ -454,8 +500,13 @@ const AnimalClassificationGame: React.FC = () => {
             )}
             {floatingText && <FloatingText key={floatingText.id} text={floatingText.text} color={floatingText.color} onComplete={() => setFloatingText(null)} />}
 
-            <View style={styles.headerBarSimplified}>
+            <View style={styles.headerBar}>
                 <Text style={styles.headerTitle}>Animal Classification</Text>
+                {/* 新增：右上角計時器 */}
+                <View style={styles.timerContainer}>
+                    <Text style={styles.timerIcon}>⏱️</Text>
+                    <Text style={styles.timerText}>{formatTime(elapsedSeconds)}</Text>
+                </View>
             </View>
 
             <ScrollView contentContainerStyle={styles.scrollContainer}>
@@ -521,7 +572,40 @@ const AnimalClassificationGame: React.FC = () => {
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#f5f5f5' },
     headerBarSimplified: { alignItems: 'center', paddingHorizontal: 16, paddingTop: 48, paddingBottom: 12, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e0e0e0' },
+    // 修改 Header Bar 以支援計時器並排
+    headerBar: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingTop: 48,
+        paddingBottom: 12,
+        backgroundColor: '#fff',
+        borderBottomWidth: 1,
+        borderBottomColor: '#e0e0e0'
+    },
     headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#333' },
+    // 計時器樣式
+    timerContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#f0f0f0',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: '#ddd',
+    },
+    timerIcon: {
+        fontSize: 14,
+        marginRight: 4,
+    },
+    timerText: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#333',
+        fontFamily: Platform.OS === 'web' ? 'monospace' : 'Courier',
+    },
     scrollContainer: { padding: 20, paddingBottom: 40 },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap' },
     title: { fontSize: 22, fontWeight: 'bold', color: '#333', flex: 1 },
@@ -580,6 +664,20 @@ const styles = StyleSheet.create({
     scoreCircle: { alignItems: 'center', justifyContent: 'center', marginBottom: 25 },
     scoreCircleNumber: { fontSize: 64, fontWeight: 'bold', color: '#4CAF50' },
     scoreCircleLabel: { fontSize: 20, color: '#666', marginTop: -5 },
+    // 新增：總結頁面的時間顯示樣式
+    reportTimeBox: {
+        backgroundColor: '#fff',
+        padding: 16,
+        borderRadius: 16,
+        width: '90%',
+        alignItems: 'center',
+        marginBottom: 20,
+        borderWidth: 1,
+        borderColor: '#ddd',
+        alignSelf: 'center',
+    },
+    reportScoreLabel: { fontSize: 14, color: '#666', marginBottom: 8 },
+    reportTimeValue: { fontSize: 32, fontWeight: 'bold', color: '#4CAF50' },
     savingIndicator: {
         flexDirection: 'row',
         alignItems: 'center',

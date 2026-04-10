@@ -1,6 +1,6 @@
 // app/games/chinese/chinesesentence.tsx
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, ActivityIndicator, Alert, StatusBar, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, ActivityIndicator, Alert, StatusBar, Animated, Easing, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, Stack } from 'expo-router';
 import { Languages, Star } from 'lucide-react-native';
@@ -143,6 +143,36 @@ export default function ChineseSentenceGame() {
     const prepScale = useRef(new Animated.Value(0)).current;
     const [gameActive, setGameActive] = useState(false);
 
+    // ========== 🕒 新增：計時器相關狀態 ==========
+    const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+    const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const timerStartedRef = useRef<boolean>(false); // 確保計時器只啟動一次
+
+    // 格式化時間 (MM:SS)
+    const formatTime = (totalSeconds: number): string => {
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    };
+
+    // 停止計時器
+    const stopTimer = () => {
+        if (timerIntervalRef.current) {
+            clearInterval(timerIntervalRef.current);
+            timerIntervalRef.current = null;
+        }
+    };
+
+    // 開始計時器（只在第一次調用時生效）
+    const startTimerOnce = () => {
+        if (timerStartedRef.current) return; // 已經啟動過，不再重複啟動
+        timerStartedRef.current = true;
+        setElapsedSeconds(0);
+        timerIntervalRef.current = setInterval(() => {
+            setElapsedSeconds(prev => prev + 1);
+        }, 1000);
+    };
+
     // 特效狀態
     const [floatingText, setFloatingText] = useState<{ id: number, text: string, color: string } | null>(null);
     const screenShake = useRef(new Animated.Value(0)).current;
@@ -184,8 +214,8 @@ export default function ChineseSentenceGame() {
         }
     };
 
-    // 倒數準備序列
-    const startPrepSequence = () => {
+    // 倒數準備序列 - 只在第一次開始計時器
+    const startPrepSequence = (isFirstTime: boolean = true) => {
         setGameActive(false);
 
         setTimeout(() => {
@@ -198,6 +228,11 @@ export default function ChineseSentenceGame() {
                 useNativeDriver: true,
             }).start();
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+            // 只在第一次倒數時啟動計時器
+            if (isFirstTime) {
+                startTimerOnce();
+            }
         }, 100);
 
         setTimeout(() => {
@@ -275,6 +310,11 @@ export default function ChineseSentenceGame() {
 
     // 初始化遊戲（當難度選擇後）
     const startGame = (selectedDifficulty: Difficulty) => {
+        // 重置計時器狀態
+        timerStartedRef.current = false;
+        setElapsedSeconds(0);
+        stopTimer();
+
         setDifficulty(selectedDifficulty);
         setGameState('playing');
         setLoading(true);
@@ -308,8 +348,8 @@ export default function ChineseSentenceGame() {
                 isCorrect: false
             }]);
             updateCharacterState('idle');
-            // 開始倒數
-            startPrepSequence();
+            // 開始倒數 - 第一次，啟動計時器
+            startPrepSequence(true);
         } catch (error) {
             console.error('Failed to load first question:', error);
             Alert.alert('錯誤', '無法加載題目，請稍後再試');
@@ -320,6 +360,7 @@ export default function ChineseSentenceGame() {
 
     const loadNextQuestion = async () => {
         if (currentIndex + 1 >= TOTAL_QUESTIONS) {
+            stopTimer(); // 遊戲完成時停止計時器
             await generateFinalFeedback();
             setGameState('result');
             updateCharacterState('celebrate');
@@ -358,8 +399,8 @@ export default function ChineseSentenceGame() {
             setShowHint(false);
             setShowFeedback(false);
             updateCharacterState('idle');
-            // 每題之間重新倒數
-            startPrepSequence();
+            // 每題之間重新倒數 - 不是第一次，不啟動計時器
+            startPrepSequence(false);
         } catch (error) {
             console.error('Failed to load next question:', error);
             Alert.alert('錯誤', '無法加載下一題，請稍後再試');
@@ -501,6 +542,10 @@ export default function ChineseSentenceGame() {
 
     // 返回難度選擇頁面
     const handleNewDifficulty = async () => {
+        stopTimer();
+        timerStartedRef.current = false;
+        setElapsedSeconds(0);
+
         // 如果有進行中的遊戲且已有分數，保存當前分數
         if (gameState === 'playing' && questions.length > 0) {
             const currentScore = calculateScore();
@@ -526,10 +571,12 @@ export default function ChineseSentenceGame() {
     };
 
     const handleBackToGames = () => {
+        stopTimer();
         router.back();
     };
 
     const handleBackToHome = () => {
+        stopTimer();
         router.push('/');
     };
 
@@ -550,6 +597,7 @@ export default function ChineseSentenceGame() {
                         text: '退出',
                         style: 'destructive',
                         onPress: async () => {
+                            stopTimer();
                             // 如果有分數，保存當前分數
                             const currentScore = calculateScore();
                             if (currentScore.totalScore > 0) {
@@ -833,6 +881,7 @@ export default function ChineseSentenceGame() {
     const renderResult = () => {
         const score = calculateScore();
         const maxScore = score.maxScore;
+        const totalTimeFormatted = formatTime(elapsedSeconds);
 
         return (
             <ScrollView contentContainerStyle={styles.resultContainer}>
@@ -845,6 +894,12 @@ export default function ChineseSentenceGame() {
                         <Text style={styles.scorePercentage}>{score.totalScore}</Text>
                         <Text style={styles.scorePercentSign}>/{maxScore}</Text>
                         <Text style={styles.scoreLabel}>Total Score</Text>
+                    </View>
+
+                    {/* 新增：顯示總花費時間 */}
+                    <View style={styles.reportTimeBox}>
+                        <Text style={styles.reportScoreLabel}>⏱️ Total Time</Text>
+                        <Text style={styles.reportTimeValue}>{totalTimeFormatted}</Text>
                     </View>
 
                     {isSaving && (
@@ -945,17 +1000,24 @@ export default function ChineseSentenceGame() {
                 <Stack.Screen options={{ headerShown: false }} />
                 <SafeAreaView style={[styles.container, { backgroundColor: '#f5f5f5' }]} edges={['top']}>
                     <StatusBar barStyle="dark-content" />
-                    <View style={[styles.header, { backgroundColor: currentTheme.primary }]}>
+                    {/* 修改：頂部欄帶計時器 */}
+                    <View style={[styles.headerWithTimer, { backgroundColor: currentTheme.primary }]}>
                         <TouchableOpacity onPress={handleBack} style={styles.headerButton}>
                             <Ionicons name="arrow-back" size={24} color="#fff" />
                         </TouchableOpacity>
                         <Text style={styles.headerTitle}>
                             🐼 Chinese fill-in-the-blank - {difficulty === 'easy' ? 'Simple mode' : 'Medium mode'}
                         </Text>
-                        <View style={[styles.scoreBadge, { backgroundColor: '#fff' }]}>
-                            <Text style={[styles.scoreBadgeText, { color: currentTheme.primary }]}>
-                                {questions.filter(q => q.isCorrect).length}/{TOTAL_QUESTIONS}
-                            </Text>
+                        <View style={styles.rightHeaderGroup}>
+                            <View style={styles.timerContainer}>
+                                <Text style={styles.timerIcon}>⏱️</Text>
+                                <Text style={styles.timerText}>{formatTime(elapsedSeconds)}</Text>
+                            </View>
+                            <View style={[styles.scoreBadge, { backgroundColor: '#fff' }]}>
+                                <Text style={[styles.scoreBadgeText, { color: currentTheme.primary }]}>
+                                    {questions.filter(q => q.isCorrect).length}/{TOTAL_QUESTIONS}
+                                </Text>
+                            </View>
                         </View>
                     </View>
                     {renderQuestion()}
@@ -1051,10 +1113,44 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 12,
     },
+    // 新增：帶計時器的頂部欄樣式
+    headerWithTimer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+    },
+    rightHeaderGroup: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    timerContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.25)',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 20,
+    },
+    timerIcon: {
+        fontSize: 14,
+        marginRight: 4,
+        color: '#fff',
+    },
+    timerText: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#fff',
+        fontFamily: Platform.OS === 'web' ? 'monospace' : 'Courier',
+    },
     headerTitle: {
         fontSize: 18,
         fontWeight: '600',
         color: '#fff',
+        flex: 1,
+        textAlign: 'center',
     },
     headerButton: {
         width: 40,
@@ -1474,6 +1570,27 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#666',
         marginLeft: 10,
+    },
+    // 新增：總結頁面的時間顯示樣式
+    reportTimeBox: {
+        backgroundColor: '#FFF8E1',
+        padding: 16,
+        borderRadius: 16,
+        width: '90%',
+        alignItems: 'center',
+        marginBottom: 20,
+        borderWidth: 1,
+        borderColor: '#FF9F4A',
+    },
+    reportScoreLabel: {
+        fontSize: 14,
+        color: '#666',
+        marginBottom: 8,
+    },
+    reportTimeValue: {
+        fontSize: 32,
+        fontWeight: 'bold',
+        color: '#FF9F4A',
     },
     savingIndicator: {
         flexDirection: 'row',

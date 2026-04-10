@@ -1,5 +1,5 @@
 // science/BodyPartsMatchingGame.tsx
-import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
 import {
     View,
     Text,
@@ -19,13 +19,13 @@ const isWeb = Platform.OS === 'web';
 
 // 身體部位數據（名稱 + Emoji）
 const BODY_PARTS = [
-    { id: 'hand', name: '手', emoji: '🖐️' },
-    { id: 'head', name: '頭', emoji: '👤' },
-    { id: 'mouth', name: '口', emoji: '👄' },
-    { id: 'eye', name: '眼', emoji: '👁️' },
-    { id: 'ear', name: '耳', emoji: '👂' },
-    { id: 'nose', name: '鼻', emoji: '👃' },
-    { id: 'foot', name: '腳', emoji: '🦶' },
+    { id: 'hand', name: 'hand', emoji: '🖐️' },
+    { id: 'head', name: 'head', emoji: '👤' },
+    { id: 'mouth', name: 'mouth', emoji: '👄' },
+    { id: 'eye', name: 'eye', emoji: '👁️' },
+    { id: 'ear', name: 'ear', emoji: '👂' },
+    { id: 'nose', name: 'nose', emoji: '👃' },
+    { id: 'foot', name: 'foot', emoji: '🦶' },
 ];
 
 // 生成卡片數組（每種部位兩張，並隨機打亂）
@@ -74,6 +74,34 @@ const BodyPartsMatchingGame = () => {
     const [isPortrait, setIsPortrait] = useState(screenHeight > screenWidth);
     const startTimeRef = useRef<number>(Date.now());
 
+    // ========== 🕒 新增：計時器相關狀態 ==========
+    const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+    const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+    // 格式化時間 (MM:SS)
+    const formatTime = (totalSeconds: number): string => {
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    };
+
+    // 停止計時器
+    const stopTimer = useCallback(() => {
+        if (timerIntervalRef.current) {
+            clearInterval(timerIntervalRef.current);
+            timerIntervalRef.current = null;
+        }
+    }, []);
+
+    // 開始計時器
+    const startTimer = useCallback(() => {
+        stopTimer();
+        setElapsedSeconds(0);
+        timerIntervalRef.current = setInterval(() => {
+            setElapsedSeconds(prev => prev + 1);
+        }, 1000);
+    }, [stopTimer]);
+
     // ⭐ 完全隐藏系统导航栏（包括返回按钮和标题）
     useLayoutEffect(() => {
         navigation.setOptions({
@@ -103,6 +131,14 @@ const BodyPartsMatchingGame = () => {
     // 計算總對數
     const totalPairs = BODY_PARTS.length;
 
+    // 開始遊戲時啟動計時器
+    useEffect(() => {
+        startTimer();
+        return () => {
+            stopTimer();
+        };
+    }, []);
+
     // ========== 💾 保存分數到伺服器 ==========
     const saveScore = async (finalScore: number) => {
         if (!token) return;
@@ -126,6 +162,7 @@ const BodyPartsMatchingGame = () => {
 
     // 計算完成時間並生成分數
     const calculateScoreAndReport = async () => {
+        stopTimer(); // 遊戲結束時停止計時器
         const endTime = Date.now();
         const timeSpent = (endTime - startTimeRef.current) / 1000; // 秒數
         let finalScore = 0;
@@ -133,15 +170,15 @@ const BodyPartsMatchingGame = () => {
 
         if (timeSpent <= 50) {
             finalScore = 100;
-            summary = `🎉 太棒了！你在 ${Math.round(timeSpent)} 秒內完成了遊戲，獲得滿分100分！配對速度超快，記憶力驚人！`;
+            summary = `🎉 Awesome! You are in ${Math.round(timeSpent)} Finished the game in seconds and got a perfect score of 100! Super fast matching speed, amazing memory!`;
         } else if (timeSpent <= 60) {
             finalScore = 90;
-            summary = `😊 不錯喔！你在 ${Math.round(timeSpent)} 秒內完成了遊戲，獲得90分！如果能再快一點就能拿到滿分了！`;
+            summary = `😊 Not bad! You are at ${Math.round(timeSpent)} Finished the game in seconds and scored 90 points! If I could be a little faster, I could get a perfect score!`;
         } else {
             const extraTime = Math.floor((timeSpent - 60) / 15);
             const deduction = Math.min(extraTime * 10, 80);
             finalScore = Math.max(0, 100 - deduction);
-            summary = `⏱️ 你花了 ${Math.round(timeSpent)} 秒完成遊戲，超過1分鐘後每15秒扣10分，最終得分為 ${finalScore} 分。下次可以試著加快配對速度喔！`;
+            summary = `⏱️ You spent ${Math.round(timeSpent)} Complete the game in seconds. After more than 1 minute, 10 points are deducted every 15 seconds. The final score is ${finalScore} Points. Next time, you can try to speed up the matching!`;
         }
 
         // 保存分數到伺服器
@@ -160,6 +197,7 @@ const BodyPartsMatchingGame = () => {
 
     // 重置遊戲
     const resetGame = () => {
+        stopTimer(); // 重置時停止舊計時器
         setCards(generateCards());
         setSelectedIndex(null);
         setLockBoard(false);
@@ -167,15 +205,18 @@ const BodyPartsMatchingGame = () => {
         setMatches(0);
         setIsFinished(false);
         startTimeRef.current = Date.now();
+        startTimer(); // 重新開始計時
     };
 
     // ⭐ 返回上一頁函數
     const handleGoBack = () => {
+        stopTimer();
         navigation.goBack();
     };
 
     // 返回遊戲列表頁面
     const handleGoToGameList = () => {
+        stopTimer();
         navigation.navigate('science/index' as never);
     };
 
@@ -296,8 +337,9 @@ const BodyPartsMatchingGame = () => {
         return rows;
     };
 
-    // 總結頁面 - 简化顶部栏，移除返回按钮
+    // 總結頁面 - 显示总时间
     if (isFinished) {
+        const totalTimeFormatted = formatTime(Math.round(finalReport.timeSpent));
         return (
             <ScrollView style={styles.container}>
                 {/* 簡化頂部欄 - 只保留標題 */}
@@ -313,31 +355,37 @@ const BodyPartsMatchingGame = () => {
                         <Text style={styles.scoreCircleLabel}>/ 100</Text>
                     </View>
 
+                    {/* 新增：顯示總花費時間 */}
+                    <View style={styles.reportTimeBox}>
+                        <Text style={styles.reportScoreLabel}>⏱️ Total Time</Text>
+                        <Text style={styles.reportTimeValue}>{totalTimeFormatted}</Text>
+                    </View>
+
                     {/* 保存中指示器 */}
                     {isSaving && (
                         <View style={styles.savingIndicator}>
                             <ActivityIndicator size="small" color="#4CAF50" />
-                            <Text style={styles.savingText}>同步分數中...</Text>
+                            <Text style={styles.savingText}>Synchronizing scores...</Text>
                         </View>
                     )}
 
                     <View style={styles.resultsContainer}>
                         <View style={styles.resultRow}>
-                            <Text style={styles.resultLabel}>完成時間:</Text>
+                            <Text style={styles.resultLabel}>Completion time:</Text>
                             <Text style={styles.resultValue}>
-                                {Math.round(finalReport.timeSpent)} 秒
+                                {Math.round(finalReport.timeSpent)} second
                             </Text>
                         </View>
                         <View style={styles.resultRow}>
-                            <Text style={styles.resultLabel}>配對成功:</Text>
+                            <Text style={styles.resultLabel}>Match successful:</Text>
                             <Text style={[styles.resultValue, styles.correctText]}>
                                 {matches} / {totalPairs}
                             </Text>
                         </View>
                         <View style={styles.resultRow}>
-                            <Text style={styles.resultLabel}>遊戲得分:</Text>
+                            <Text style={styles.resultLabel}>Game Score:</Text>
                             <Text style={styles.resultValue}>
-                                {score} 分
+                                {score} points
                             </Text>
                         </View>
                     </View>
@@ -373,18 +421,22 @@ const BodyPartsMatchingGame = () => {
         );
     }
 
-    // 遊戲主頁面 - 简化顶部栏，移除返回按钮
+    // 遊戲主頁面 - 右上角增加计时器
     const renderContent = () => (
         <>
-            {/* 簡化頂部欄 - 只保留標題 */}
-            <View style={styles.headerBarSimplified}>
+            {/* 修改頂部欄 - 標題在左，計時器在右 */}
+            <View style={styles.headerBarWithTimer}>
                 <Text style={styles.headerTitle}>Body Parts Matching</Text>
+                <View style={styles.timerContainer}>
+                    <Text style={styles.timerIcon}>⏱️</Text>
+                    <Text style={styles.timerText}>{formatTime(elapsedSeconds)}</Text>
+                </View>
             </View>
 
             <ScrollView contentContainerStyle={styles.scrollContent}>
                 {/* 遊戲標題和計分板 */}
                 <View style={styles.header}>
-                    <Text style={styles.title}>🧩 身體部位配對遊戲</Text>
+                    <Text style={styles.title}>🧩 Body Parts Matching Game</Text>
                     <View style={styles.scoreContainer}>
                         <Text style={styles.scoreLabel}>Score:</Text>
                         <Text style={styles.scoreValue}>{score}</Text>
@@ -397,8 +449,8 @@ const BodyPartsMatchingGame = () => {
                 {/* 遊戲說明 */}
                 <View style={styles.instructions}>
                     <Text style={styles.instructionsText}>
-                        點擊卡片翻開，找到兩個相同的部位即可配對。配對成功加10分，失敗扣2分。
-                        完成時間越短分數越高！50秒內滿分100分，1分鐘內90分，超過後每15秒扣10分。
+                        Click on a card to flip it over, and find two matching parts to make a pair. Successfully matching gives 10 points, failing deducts 2 points.
+                        The shorter the completion time, the higher the score! A full score of 100 points if completed within 50 seconds, 90 points if within 1 minute, and 10 points are deducted for every 15 seconds thereafter.
                     </Text>
                 </View>
 
@@ -454,10 +506,43 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: '#e0e0e0',
     },
+    // 新增：帶計時器的頂部欄樣式
+    headerBarWithTimer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingTop: 48,
+        paddingBottom: 12,
+        backgroundColor: '#fff',
+        borderBottomWidth: 1,
+        borderBottomColor: '#e0e0e0',
+    },
     headerTitle: {
         fontSize: 18,
         fontWeight: 'bold',
         color: '#333',
+    },
+    // 計時器樣式
+    timerContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#f0f0f0',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: '#ddd',
+    },
+    timerIcon: {
+        fontSize: 14,
+        marginRight: 4,
+    },
+    timerText: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#333',
+        fontFamily: Platform.OS === 'web' ? 'monospace' : 'Courier',
     },
     // 遊戲主頁面樣式
     header: {
@@ -618,6 +703,28 @@ const styles = StyleSheet.create({
         fontSize: 20,
         color: '#666',
         marginTop: -5,
+    },
+    // 新增：總結頁面的時間顯示樣式
+    reportTimeBox: {
+        backgroundColor: '#fff',
+        padding: 16,
+        borderRadius: 16,
+        width: '90%',
+        alignItems: 'center',
+        marginBottom: 20,
+        borderWidth: 1,
+        borderColor: '#ddd',
+        alignSelf: 'center',
+    },
+    reportScoreLabel: {
+        fontSize: 14,
+        color: '#666',
+        marginBottom: 8,
+    },
+    reportTimeValue: {
+        fontSize: 32,
+        fontWeight: 'bold',
+        color: '#4CAF50',
     },
     savingIndicator: {
         flexDirection: 'row',

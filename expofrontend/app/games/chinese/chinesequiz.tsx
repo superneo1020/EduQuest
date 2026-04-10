@@ -258,6 +258,36 @@ const ChineseRestaurantGame = () => {
     const prepScale = useRef(new Animated.Value(0)).current;
     const [gameActive, setGameActive] = useState(false);
 
+    // ========== 🕒 新增：計時器相關狀態 ==========
+    const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+    const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const timerStartedRef = useRef<boolean>(false); // 確保計時器只啟動一次
+
+    // 格式化時間 (MM:SS)
+    const formatTime = (totalSeconds: number): string => {
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    };
+
+    // 停止計時器
+    const stopTimer = () => {
+        if (timerIntervalRef.current) {
+            clearInterval(timerIntervalRef.current);
+            timerIntervalRef.current = null;
+        }
+    };
+
+    // 開始計時器（只在第一次調用時生效）
+    const startTimerOnce = () => {
+        if (timerStartedRef.current) return; // 已經啟動過，不再重複啟動
+        timerStartedRef.current = true;
+        setElapsedSeconds(0);
+        timerIntervalRef.current = setInterval(() => {
+            setElapsedSeconds(prev => prev + 1);
+        }, 1000);
+    };
+
     // 特效狀態
     const [floatingText, setFloatingText] = useState<{ id: number; text: string; color: string } | null>(null);
     const screenShake = useRef(new Animated.Value(0)).current;
@@ -304,8 +334,8 @@ const ChineseRestaurantGame = () => {
         }
     };
 
-    // 倒數準備序列
-    const startPrepSequence = () => {
+    // 倒數準備序列 - 只在第一次開始計時器
+    const startPrepSequence = (isFirstTime: boolean = true) => {
         setGameActive(false);
         setTimeout(() => {
             setPrepText('READY');
@@ -328,6 +358,11 @@ const ChineseRestaurantGame = () => {
                 useNativeDriver: true,
             }).start();
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+
+            // 只在第一次倒數時啟動計時器
+            if (isFirstTime) {
+                startTimerOnce();
+            }
         }, 1000);
         setTimeout(() => {
             setPrepText(null);
@@ -502,6 +537,7 @@ const ChineseRestaurantGame = () => {
     // 修改：接受最終分數參數，避免閉包問題
     const handleGameComplete = async (scoreOverride?: number) => {
         const finalScore = scoreOverride !== undefined ? scoreOverride : score;
+        stopTimer(); // 遊戲完成時停止計時器
         setIsGameActive(false);
         setGameActive(false);
         setGameComplete(true);
@@ -589,7 +625,7 @@ const ChineseRestaurantGame = () => {
                 setItems([]);
                 setCustomerState('waiting');
                 setNextQuestionDelay(false);
-                startPrepSequence();
+                startPrepSequence(false); // 不是第一次，不啟動計時器
             } else {
                 // 傳遞剛剛計算好的最新分數，避免閉包抓到舊的 score
                 handleGameComplete(updatedScore);
@@ -619,7 +655,7 @@ const ChineseRestaurantGame = () => {
             resetGame();
             setGameState('playing');
             setIsGameActive(true);
-            startPrepSequence();
+            startPrepSequence(true); // 第一次倒數，啟動計時器
         } catch (error) {
             console.error('Failed to load questions:', error);
             Alert.alert('錯誤', '無法載入菜單，請稍後再試');
@@ -646,11 +682,18 @@ const ChineseRestaurantGame = () => {
     };
 
     const handleSelectDifficulty = (level: 'beginner' | 'advanced') => {
+        // 重置計時器狀態
+        timerStartedRef.current = false;
+        setElapsedSeconds(0);
+        stopTimer();
         setDifficulty(level);
         loadQuestions(level);
     };
 
     const handleRestart = async () => {
+        stopTimer();
+        timerStartedRef.current = false;
+        setElapsedSeconds(0);
         if (gameState === 'playing' && score > 0 && difficulty) {
             await saveScore(score);
         }
@@ -667,11 +710,16 @@ const ChineseRestaurantGame = () => {
             setScore(0);
             setCombo(0);
             setMaxCombo(0);
+            // 重置計時器狀態
+            timerStartedRef.current = false;
+            setElapsedSeconds(0);
+            stopTimer();
             loadQuestions(difficulty);
         }
     };
 
     const handleBackToGames = () => {
+        stopTimer();
         if (router.canGoBack()) {
             router.back();
         }
@@ -705,10 +753,15 @@ const ChineseRestaurantGame = () => {
         <View style={styles.gameContainer}>
             <StatusBar barStyle="dark-content" />
             <Animated.View style={{ flex: 1, transform: [{ translateX: screenShake }] }}>
-                <View style={styles.gameHeader}>
+                {/* 修改：頂部欄帶計時器 */}
+                <View style={styles.gameHeaderWithTimer}>
                     <TouchableOpacity onPress={handleRestart} style={styles.exitButton}>
                         <Text style={styles.exitButtonText}>← Leave</Text>
                     </TouchableOpacity>
+                    <View style={styles.timerContainer}>
+                        <Text style={styles.timerIcon}>⏱️</Text>
+                        <Text style={styles.timerText}>{formatTime(elapsedSeconds)}</Text>
+                    </View>
                     <View style={styles.statsRow}>
                         <View style={styles.statBox}>
                             <Star size={18} color="#FFD966" />
@@ -924,6 +977,7 @@ const ChineseRestaurantGame = () => {
     // 渲染结果界面
     const renderResult = () => {
         const { totalQuestions, correctCount, accuracy } = calculateScoreStats();
+        const totalTimeFormatted = formatTime(elapsedSeconds);
         return (
             <View style={styles.container}>
                 <StatusBar barStyle="dark-content" />
@@ -941,6 +995,13 @@ const ChineseRestaurantGame = () => {
                             <Text style={styles.scorePercentage}>{score}</Text>
                             <Text style={styles.scoreLabel}>Total Score (Full Score {maxScore})</Text>
                         </View>
+
+                        {/* 新增：顯示總花費時間 */}
+                        <View style={styles.reportTimeBox}>
+                            <Text style={styles.reportScoreLabel}>⏱️ Total Time</Text>
+                            <Text style={styles.reportTimeValue}>{totalTimeFormatted}</Text>
+                        </View>
+
                         {isSaving && (
                             <View style={styles.savingIndicator}>
                                 <ActivityIndicator size="small" color="#4CAF50" />
@@ -1138,6 +1199,38 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#FCE4B2',
     },
+    // 新增：帶計時器的頂部欄樣式
+    gameHeaderWithTimer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 15,
+        paddingVertical: 12,
+        backgroundColor: '#FFB347',
+        borderBottomWidth: 2,
+        borderBottomColor: '#FFD966',
+    },
+    // 計時器樣式
+    timerContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.3)',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 20,
+    },
+    timerIcon: {
+        fontSize: 14,
+        marginRight: 4,
+        color: '#fff',
+    },
+    timerText: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#fff',
+        fontFamily: Platform.OS === 'web' ? 'monospace' : 'Courier',
+    },
+    // 保留原有樣式作為備用
     gameHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -1484,6 +1577,27 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#666',
         marginTop: 5,
+    },
+    // 新增：總結頁面的時間顯示樣式
+    reportTimeBox: {
+        backgroundColor: '#FFF3E0',
+        padding: 16,
+        borderRadius: 16,
+        width: '90%',
+        alignItems: 'center',
+        marginBottom: 20,
+        borderWidth: 1,
+        borderColor: '#FFA07A',
+    },
+    reportScoreLabel: {
+        fontSize: 14,
+        color: '#666',
+        marginBottom: 8,
+    },
+    reportTimeValue: {
+        fontSize: 32,
+        fontWeight: 'bold',
+        color: '#FFA07A',
     },
     savingIndicator: {
         flexDirection: 'row',

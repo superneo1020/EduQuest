@@ -179,6 +179,36 @@ const ClawMachineGame: React.FC = () => {
     const [answerCount, setAnswerCount] = useState<number>(0);  // 已回答次数
     const pointsPerAnimal = 100 / MAX_ANSWERS; // 每题满分25分
 
+    // ========== 🕒 新增：計時器相關狀態 ==========
+    const [startTime, setStartTime] = useState<number | null>(null);
+    const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+    const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+    // 格式化時間 (MM:SS)
+    const formatTime = (totalSeconds: number): string => {
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    };
+
+    // 停止計時器
+    const stopTimer = useCallback(() => {
+        if (timerIntervalRef.current) {
+            clearInterval(timerIntervalRef.current);
+            timerIntervalRef.current = null;
+        }
+    }, []);
+
+    // 開始計時器
+    const startTimer = useCallback(() => {
+        stopTimer();
+        setStartTime(Date.now());
+        setElapsedSeconds(0);
+        timerIntervalRef.current = setInterval(() => {
+            setElapsedSeconds(prev => prev + 1);
+        }, 1000);
+    }, [stopTimer]);
+
     // 計算正確捕獲數量
     const correctCatches = collectedAnimals.length;
 
@@ -260,6 +290,8 @@ const ClawMachineGame: React.FC = () => {
                 useNativeDriver: true,
             }).start();
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            // 倒數結束後開始計時
+            startTimer();
         }, 1000);
         setTimeout(() => {
             Animated.timing(prepScale, {
@@ -363,6 +395,10 @@ const ClawMachineGame: React.FC = () => {
         setShowReport(false);
         setClawX((GAME_WIDTH - 36) / 2);
         setAnswerCount(0);          // 重置回答次数
+        // 重置計時器狀態
+        stopTimer();
+        setElapsedSeconds(0);
+        setStartTime(null);
         clawAIService.resetGame();
         setCurrentQuestion(null);
     };
@@ -373,6 +409,10 @@ const ClawMachineGame: React.FC = () => {
         setTimeout(() => {
             startPrepSequence();
         }, 500);
+
+        return () => {
+            stopTimer();
+        };
     }, []);
 
     // 當物品清單變化時重新生成 AI 題目
@@ -498,6 +538,7 @@ const ClawMachineGame: React.FC = () => {
     // 結束遊戲（顯示總結）
     const endGameAndShowReport = async (finalScore: number) => {
         if (gameComplete || showReport) return;
+        stopTimer(); // 停止計時器
         setGameComplete(true);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         await saveScore(finalScore);
@@ -624,6 +665,7 @@ const ClawMachineGame: React.FC = () => {
     };
 
     const resetGame = () => {
+        stopTimer(); // 停止舊計時器
         initializeItems();
         setClawX((GAME_WIDTH - 36) / 2);
         setIsDropping(false);
@@ -647,15 +689,20 @@ const ClawMachineGame: React.FC = () => {
     };
 
     const showReportPage = async () => {
+        stopTimer(); // 手動結束時停止計時器
         await saveScore(Math.round(score));
         setShowReport(true);
     };
 
     const handleGoBack = () => {
+        stopTimer();
         navigation.goBack();
     };
 
-    const goHome = () => navigation.navigate('science/index' as never);
+    const goHome = () => {
+        stopTimer();
+        navigation.navigate('science/index' as never);
+    };
 
     const dropHeight = dropAnim.interpolate({
         inputRange: [0, 1],
@@ -684,6 +731,7 @@ const ClawMachineGame: React.FC = () => {
     };
 
     if (showReport) {
+        const totalTimeFormatted = formatTime(elapsedSeconds);
         return (
             <SafeAreaView style={styles.reportContainer}>
                 <ScrollView contentContainerStyle={styles.reportScrollContent}>
@@ -695,6 +743,11 @@ const ClawMachineGame: React.FC = () => {
                         <View style={styles.reportScoreBox}>
                             <Text style={styles.reportScoreLabel}>Final score</Text>
                             <Text style={styles.reportScoreValue}>{Math.round(score)}/100</Text>
+                        </View>
+                        {/* 新增：顯示總花費時間 */}
+                        <View style={styles.reportTimeBox}>
+                            <Text style={styles.reportScoreLabel}>⏱️ Total Time</Text>
+                            <Text style={styles.reportTimeValue}>{totalTimeFormatted}</Text>
                         </View>
                         {isSaving && (
                             <View style={styles.savingIndicator}>
@@ -761,10 +814,17 @@ const ClawMachineGame: React.FC = () => {
             <View style={styles.header}>
                 <View style={styles.headerPlaceholder} />
                 <Text style={styles.title}>🐾 Animal Scratch Fun 🐾</Text>
-                <Animated.View style={[styles.scoreContainer, { transform: [{ scale: scoreScale }] }]}>
-                    <Text style={styles.scoreValue}>{Math.round(score)}</Text>
-                    <Text style={styles.scoreMax}>/100</Text>
-                </Animated.View>
+                {/* 修改右上角：將計時器與分數並排 */}
+                <View style={styles.rightHeader}>
+                    <View style={styles.timerContainer}>
+                        <Text style={styles.timerIcon}>⏱️</Text>
+                        <Text style={styles.timerText}>{formatTime(elapsedSeconds)}</Text>
+                    </View>
+                    <Animated.View style={[styles.scoreContainer, { transform: [{ scale: scoreScale }] }]}>
+                        <Text style={styles.scoreValue}>{Math.round(score)}</Text>
+                        <Text style={styles.scoreMax}>/100</Text>
+                    </Animated.View>
+                </View>
             </View>
 
             {/* AI 問題面板 */}
@@ -961,6 +1021,32 @@ const styles = StyleSheet.create({
         paddingHorizontal: 10,
         paddingVertical: 6,
         borderRadius: 20,
+        fontFamily: Platform.OS === 'web' ? 'monospace' : 'Courier',
+    },
+    // 新增：右上角容器，讓計時器和分數並排
+    rightHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    timerContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#2d2b1f',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: '#ffaa44',
+    },
+    timerIcon: {
+        fontSize: 14,
+        marginRight: 4,
+    },
+    timerText: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#ffdd88',
         fontFamily: Platform.OS === 'web' ? 'monospace' : 'Courier',
     },
     scoreContainer: {
@@ -1346,10 +1432,22 @@ const styles = StyleSheet.create({
         borderRadius: 16,
         width: '100%',
         alignItems: 'center',
-        marginBottom: 24,
+        marginBottom: 16,
     },
     reportScoreLabel: { fontSize: 14, color: '#c9a87b', marginBottom: 8 },
     reportScoreValue: { fontSize: 48, fontWeight: 'bold', color: '#ffdd88' },
+    // 新增：總結頁面的時間顯示樣式
+    reportTimeBox: {
+        backgroundColor: '#3a2a1f',
+        padding: 12,
+        borderRadius: 16,
+        width: '100%',
+        alignItems: 'center',
+        marginBottom: 24,
+        borderWidth: 1,
+        borderColor: '#ffaa44',
+    },
+    reportTimeValue: { fontSize: 32, fontWeight: 'bold', color: '#4caf50' },
     savingIndicator: {
         flexDirection: 'row',
         alignItems: 'center',

@@ -1,5 +1,5 @@
 // science/HumanBodyGame.tsx
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback, useLayoutEffect } from 'react';
 import {
     View,
     Text,
@@ -27,6 +27,51 @@ const HumanBodyGame = () => {
     const [isSaving, setIsSaving] = useState(false);
     const { width, height } = useWindowDimensions();
     const [isPortrait, setIsPortrait] = useState(height > width);
+
+    // ========== 🕒 新增：計時器相關狀態 ==========
+    const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+    const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const startTimeRef = useRef<number>(Date.now());
+
+    // 格式化時間 (MM:SS)
+    const formatTime = (totalSeconds: number): string => {
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    };
+
+    // 停止計時器
+    const stopTimer = useCallback(() => {
+        if (timerIntervalRef.current) {
+            clearInterval(timerIntervalRef.current);
+            timerIntervalRef.current = null;
+        }
+    }, []);
+
+    // 開始計時器
+    const startTimer = useCallback(() => {
+        stopTimer();
+        setElapsedSeconds(0);
+        startTimeRef.current = Date.now();
+        timerIntervalRef.current = setInterval(() => {
+            setElapsedSeconds(prev => prev + 1);
+        }, 1000);
+    }, [stopTimer]);
+
+    // ⭐ 完全隐藏系统导航栏（包括返回按钮和标题）
+    useLayoutEffect(() => {
+        navigation.setOptions({
+            headerShown: false,
+        });
+    }, [navigation]);
+
+    // 開始遊戲時啟動計時器
+    useEffect(() => {
+        startTimer();
+        return () => {
+            stopTimer();
+        };
+    }, []);
 
     // 器官圖片引用
     const organImages = {
@@ -407,6 +452,7 @@ const HumanBodyGame = () => {
 
         const newPlacedCount = Object.keys(placedOrgans).length + 1;
         if (newPlacedCount === organs.length) {
+            stopTimer(); // 遊戲完成時停止計時器
             setGameCompleted(true);
         }
     };
@@ -418,6 +464,7 @@ const HumanBodyGame = () => {
 
     // 重來按鈕功能
     const resetGame = () => {
+        stopTimer(); // 重置時停止舊計時器
         setSelectedOrgan(null);
         setPlacedOrgans({});
         setCorrectCount(0);
@@ -430,25 +477,42 @@ const HumanBodyGame = () => {
         Object.values(organAnimations).forEach(anim => {
             anim.setValue(0);
         });
+        startTimer(); // 重新開始計時
     };
 
     // 返回上一頁
     const handleGoBack = () => {
+        stopTimer();
         navigation.goBack();
     };
 
     // 返回主頁
     const handleGoHome = () => {
+        stopTimer();
         navigation.navigate('science/index' as never);
     };
 
     // 如果遊戲完成，顯示報告頁面
     if (gameCompleted) {
+        const totalTimeFormatted = formatTime(elapsedSeconds);
         return (
             <ScrollView style={styles.container}>
-                <Text style={styles.title}>Session Report 🎓</Text>
+                <View style={styles.headerBarSimplified}>
+                    <Text style={styles.headerTitle}>Human Organs</Text>
+                </View>
+                <Text style={styles.reportTitle}>Session Report 🎓</Text>
+                <View style={styles.scoreCircle}>
+                    <Text style={styles.scoreCircleNumber}>{finalScore}</Text>
+                    <Text style={styles.scoreCircleLabel}>/ 100</Text>
+                </View>
+
+                {/* 新增：顯示總花費時間 */}
+                <View style={styles.reportTimeBox}>
+                    <Text style={styles.reportScoreLabel}>⏱️ Total Time</Text>
+                    <Text style={styles.reportTimeValue}>{totalTimeFormatted}</Text>
+                </View>
+
                 <View style={styles.reportBox}>
-                    <Text style={styles.accuracyText}>Score: {finalScore} / 100</Text>
                     <Text style={styles.summaryText}>
                         You correctly placed {correctCount} out of {organs.length} organs.
                         {wrongCount > 0 && ` ${wrongCount} organs were placed incorrectly.`}
@@ -576,7 +640,14 @@ const HumanBodyGame = () => {
     // 渲染主要內容
     const renderContent = () => (
         <>
-            <Text style={styles.title}>Understanding Human Organs</Text>
+            {/* 修改：頂部欄帶計時器 */}
+            <View style={styles.headerBarWithTimer}>
+                <Text style={styles.headerTitle}>Understanding Human Organs</Text>
+                <View style={styles.timerContainer}>
+                    <Text style={styles.timerIcon}>⏱️</Text>
+                    <Text style={styles.timerText}>{formatTime(elapsedSeconds)}</Text>
+                </View>
+            </View>
 
             <View style={styles.controlBar}>
                 <View style={styles.scoreBoard}>
@@ -820,14 +891,100 @@ const styles = StyleSheet.create({
         backgroundColor: '#f0f7ff',
         padding: 12,
     },
-    title: {
-        fontSize: isWeb ? 28 : 26,
-        fontWeight: 'bold',
-        color: '#1a5276',
-        textAlign: 'center',
-        marginBottom: 15,
-        marginTop: 8,
+    // 簡化頂部欄（用於報告頁面）
+    headerBarSimplified: {
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingTop: 12,
+        paddingBottom: 12,
+        backgroundColor: '#fff',
+        borderBottomWidth: 1,
+        borderBottomColor: '#e0e0e0',
     },
+    headerTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#333',
+    },
+    // 帶計時器的頂部欄
+    headerBarWithTimer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingTop: 12,
+        paddingBottom: 12,
+        backgroundColor: '#fff',
+        borderBottomWidth: 1,
+        borderBottomColor: '#e0e0e0',
+        marginBottom: 15,
+    },
+    // 計時器樣式
+    timerContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#f0f0f0',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: '#ddd',
+    },
+    timerIcon: {
+        fontSize: 14,
+        marginRight: 4,
+    },
+    timerText: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#333',
+        fontFamily: Platform.OS === 'web' ? 'monospace' : 'Courier',
+    },
+    reportTitle: {
+        fontSize: 28,
+        fontWeight: 'bold',
+        textAlign: 'center',
+        marginVertical: 20,
+        color: '#333',
+    },
+    scoreCircle: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 25,
+    },
+    scoreCircleNumber: {
+        fontSize: 64,
+        fontWeight: 'bold',
+        color: '#4CAF50',
+    },
+    scoreCircleLabel: {
+        fontSize: 20,
+        color: '#666',
+        marginTop: -5,
+    },
+    // 新增：總結頁面的時間顯示樣式
+    reportTimeBox: {
+        backgroundColor: '#fff',
+        padding: 16,
+        borderRadius: 16,
+        width: '90%',
+        alignItems: 'center',
+        marginBottom: 20,
+        borderWidth: 1,
+        borderColor: '#ddd',
+        alignSelf: 'center',
+    },
+    reportScoreLabel: {
+        fontSize: 14,
+        color: '#666',
+        marginBottom: 8,
+    },
+    reportTimeValue: {
+        fontSize: 32,
+        fontWeight: 'bold',
+        color: '#4CAF50',
+    },
+    // 原有樣式繼續...
     controlBar: {
         flexDirection: isWeb ? 'row' : 'column',
         justifyContent: 'space-between',
@@ -1165,13 +1322,6 @@ const styles = StyleSheet.create({
         padding: 20,
         borderRadius: 12,
         marginBottom: 30,
-    },
-    accuracyText: {
-        fontSize: 32,
-        fontWeight: 'bold',
-        color: '#f57f17',
-        textAlign: 'center',
-        marginBottom: 15,
     },
     summaryText: {
         fontSize: 16,

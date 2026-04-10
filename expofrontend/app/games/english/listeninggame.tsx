@@ -66,6 +66,7 @@ type GameState = {
     isLoading: boolean;
     questions: Question[];
     fishCaught: boolean;
+    totalTime: number;
 };
 
 // 难度配置
@@ -103,6 +104,13 @@ const FISH_COLORS = {
 // 魚的表情
 const FISH_EMOJIS = ['🐟', '🐠', '🐡', '🎏', '🐋'];
 
+// 格式化時間為 mm:ss
+const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+};
+
 export default function ListeningScreen() {
     // 游戏状态
     const [gameState, setGameState] = useState<GameState>({
@@ -121,7 +129,12 @@ export default function ListeningScreen() {
         isLoading: false,
         questions: [],
         fishCaught: false,
+        totalTime: 0,
     });
+
+    // 计时器状态
+    const [elapsedTime, setElapsedTime] = useState(0);
+    const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
     // 准备动画相关
     const [prepText, setPrepText] = useState<string | null>(null);
@@ -198,6 +211,33 @@ export default function ListeningScreen() {
             case 'hard': return 120;
             default: return 100;
         }
+    };
+
+    // 啟動計時器
+    const startTimer = () => {
+        if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+        setElapsedTime(0);
+        timerIntervalRef.current = setInterval(() => {
+            setElapsedTime(prev => prev + 1);
+        }, 1000);
+    };
+
+    // 停止計時器並記錄時間
+    const stopTimerAndRecord = () => {
+        if (timerIntervalRef.current) {
+            clearInterval(timerIntervalRef.current);
+            timerIntervalRef.current = null;
+        }
+        setGameState(prev => ({ ...prev, totalTime: elapsedTime }));
+    };
+
+    // 重置計時器
+    const resetTimer = () => {
+        if (timerIntervalRef.current) {
+            clearInterval(timerIntervalRef.current);
+            timerIntervalRef.current = null;
+        }
+        setElapsedTime(0);
     };
 
     // 加载最高分
@@ -376,6 +416,7 @@ export default function ListeningScreen() {
             prepScale.value = withSpring(1.5);
             setTimeout(() => {
                 setPrepText(null);
+                startTimer();
             }, 600);
         }, 1000);
     };
@@ -391,6 +432,7 @@ export default function ListeningScreen() {
     // 选择难度并开始游戏
     const selectDifficulty = async (level: Difficulty) => {
         prepTriggered.current = false;
+        resetTimer();
         AIService.resetGameSession(level);
 
         setGameState(prev => ({
@@ -409,6 +451,7 @@ export default function ListeningScreen() {
             showHint: false,
             selectedOptionId: null,
             fishCaught: false,
+            totalTime: 0,
         }));
 
         progressAnim.setValue(0);
@@ -420,6 +463,7 @@ export default function ListeningScreen() {
         if (!gameState.currentLevel) return;
         stopAudio();
         prepTriggered.current = false;
+        resetTimer();
         AIService.resetGameSession(gameState.currentLevel);
 
         setGameState(prev => ({
@@ -437,6 +481,7 @@ export default function ListeningScreen() {
             showHint: false,
             selectedOptionId: null,
             fishCaught: false,
+            totalTime: 0,
         }));
 
         progressAnim.setValue(0);
@@ -454,6 +499,7 @@ export default function ListeningScreen() {
     const backToDifficultySelect = () => {
         prepTriggered.current = false;
         stopAudio();
+        resetTimer();
         setGameState({
             currentLevel: null,
             currentQuestionIndex: 0,
@@ -470,12 +516,14 @@ export default function ListeningScreen() {
             isLoading: false,
             questions: [],
             fishCaught: false,
+            totalTime: 0,
         });
         setFishPositions([]);
     };
 
     // 返回主页面
     const goBackToGames = () => {
+        resetTimer();
         router.back();
     };
 
@@ -538,7 +586,7 @@ export default function ListeningScreen() {
         setGameState(prev => ({ ...prev, isPlaying: false }));
     };
 
-    // 釣魚！選擇選項（無倍率，固定得分）
+    // 釣魚！選擇選項
     const catchFish = (option: Option, index: number) => {
         if (gameState.isAnswered || gameState.gameCompleted || gameState.fishCaught || prepText !== null) return;
 
@@ -576,7 +624,6 @@ export default function ListeningScreen() {
         if (isCorrect) {
             Vibration.vibrate(100);
             const newStreak = gameState.streak + 1;
-            // 正確答案獲得該題滿分（無倍率）
             pointsEarned = maxPerQuestion;
             const newScore = Math.min(gameState.score + pointsEarned, getTotalMaxScore());
             const newMaxStreak = Math.max(newStreak, gameState.maxStreak);
@@ -600,7 +647,6 @@ export default function ListeningScreen() {
             useNativeDriver: false,
         }).start();
 
-        // 更新問題記錄的得分
         const updatedQuestions = [...gameState.questions];
         if (updatedQuestions[gameState.currentQuestionIndex]) {
             (updatedQuestions[gameState.currentQuestionIndex] as any).earnedPoints = pointsEarned;
@@ -608,7 +654,7 @@ export default function ListeningScreen() {
         }
     };
 
-    // 下一题或结束游戏（动态生成）
+    // 下一题或结束游戏
     const nextQuestion = async () => {
         if (prepText !== null) return;
         if (gameState.isLoading) return;
@@ -663,10 +709,10 @@ export default function ListeningScreen() {
 
     // 结束游戏
     const endGame = async () => {
+        stopTimerAndRecord();
         setGameState(prev => ({ ...prev, gameCompleted: true }));
         saveHighScore(gameState.score);
-        // 修改：直接傳送原始分數，而不是百分比
-        await saveScore(gameState.score);  // 原本是 percentageScore
+        await saveScore(gameState.score);
     };
 
     // 显示提示
@@ -685,11 +731,10 @@ export default function ListeningScreen() {
         return Math.round((gameState.correctAnswers / gameState.totalQuestions) * 100);
     };
 
-    // 计算分数（百分比形式，用于保存）
+    // 计算分数百分比
     const calculatePercentageScore = (): number => {
         const maxTotal = getTotalMaxScore();
         const currentScore = Math.min(gameState.score, maxTotal);
-        // 計算百分比：實際得分 / 該難度滿分 * 100
         const percentage = (currentScore / maxTotal) * 100;
         return Math.round(percentage);
     };
@@ -710,14 +755,10 @@ export default function ListeningScreen() {
     const saveScore = async (finalScore: number) => {
         setIsSaving(true);
         try {
-            // 修改：移除 100 的上限限制，只保留下限 0
-            const scoreToSave = Math.max(finalScore, 0);  // 原本是 Math.min(Math.max(finalScore, 0), 100)
-
-            console.log(`Saving: Level=${getLevelLabel(gameState.currentLevel!)}, RawScore=${gameState.score}, MaxScore=${getTotalMaxScore()}, ScoreToSave=${scoreToSave}`);
-
+            const scoreToSave = Math.max(finalScore, 0);
             await axios.post('http://localhost:8080/api/user/game/score', {
                 gameName: "Listening Game",
-                scores: scoreToSave,  // 現在會是 110 或 120
+                scores: scoreToSave,
                 difficulty: getLevelLabel(gameState.currentLevel!).toUpperCase()
             }, {
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -838,9 +879,6 @@ export default function ListeningScreen() {
                     <Text style={styles.loadingText}>
                         🎣 Preparing fishing pond... (1/4)
                     </Text>
-                    <View style={styles.loadingProgressBar}>
-                        <View style={[styles.loadingProgressFill, { width: '25%' }]} />
-                    </View>
                 </View>
             </View>
         );
@@ -946,6 +984,17 @@ export default function ListeningScreen() {
                                     <Text style={styles.resultStatValue}>{gameState.maxStreak}</Text>
                                 </View>
                             </View>
+
+                            {/* 顯示總花費時間 */}
+                            <View style={styles.resultStatItem}>
+                                <View style={styles.resultStatIcon}>
+                                    <Ionicons name="time" size={24} color="#4b6cb7" />
+                                </View>
+                                <View style={styles.resultStatInfo}>
+                                    <Text style={styles.resultStatLabel}>Total Time</Text>
+                                    <Text style={styles.resultStatValue}>{formatTime(gameState.totalTime)}</Text>
+                                </View>
+                            </View>
                         </View>
 
                         {/* 每題得分詳情 */}
@@ -989,7 +1038,7 @@ export default function ListeningScreen() {
         );
     }
 
-    // 游戏主界面 - 釣魚模式
+    // 游戏主界面 - 計時器放在遊戲資訊區右側
     return (
         <View style={styles.container}>
             <Stack.Screen
@@ -1010,7 +1059,7 @@ export default function ListeningScreen() {
                 contentContainerStyle={styles.fishingScrollContent}
                 showsVerticalScrollIndicator={false}
             >
-                {/* 游戏信息 */}
+                {/* 游戏信息 - 包含計時器 */}
                 <View style={styles.fishingGameInfo}>
                     <View style={styles.fishingStats}>
                         <View style={styles.fishingStatBox}>
@@ -1029,6 +1078,12 @@ export default function ListeningScreen() {
                             <Ionicons name="flame" size={24} color="#F44336" />
                             <Text style={styles.fishingStatValue}>{gameState.streak}</Text>
                             <Text style={styles.fishingStatLabel}>Streak</Text>
+                        </View>
+                        {/* 計時器放在最右邊 */}
+                        <View style={styles.fishingStatBox}>
+                            <Ionicons name="time-outline" size={24} color="#4b6cb7" />
+                            <Text style={styles.fishingStatValue}>{formatTime(elapsedTime)}</Text>
+                            <Text style={styles.fishingStatLabel}>Time</Text>
                         </View>
                     </View>
                 </View>
@@ -1441,19 +1496,6 @@ const styles = StyleSheet.create({
         color: '#4b6cb7',
         textAlign: 'center',
     },
-    loadingProgressBar: {
-        width: '80%',
-        height: 8,
-        backgroundColor: '#e0e0e0',
-        borderRadius: 4,
-        marginTop: 20,
-        overflow: 'hidden',
-    },
-    loadingProgressFill: {
-        height: '100%',
-        backgroundColor: '#4CAF50',
-        borderRadius: 4,
-    },
     errorText: {
         fontSize: 18,
         color: '#F44336',
@@ -1501,6 +1543,7 @@ const styles = StyleSheet.create({
     fishingStatBox: {
         alignItems: 'center',
         gap: 5,
+        flex: 1,
     },
     fishingStatValue: {
         fontSize: 20,
@@ -1531,7 +1574,6 @@ const styles = StyleSheet.create({
         backgroundColor: '#6BB5FF',
         zIndex: 0,
     },
-    // 海草图片样式
     seaweedContainer: {
         position: 'absolute',
         bottom: 0,
