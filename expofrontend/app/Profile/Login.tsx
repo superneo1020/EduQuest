@@ -39,7 +39,7 @@ export default function Login() {
             // 檢查 roles 陣列中是否包含 ADMIN 權限
             // 這裡要對應你後端回傳的字串，通常是 'ROLE_ADMIN' 或 'ADMIN'
             const isAdmin = user.roles?.some((role: string) =>
-                role === 'ROLE_ADMIN' || role === 'ADMIN' || role === 'ROLE_EDUCATOR'
+                role === 'ROLE_ADMIN' || role === 'ADMIN'
             );
             const isEducator = user.roles?.some((role: string) =>
                 role === 'ROLE_EDUCATOR'
