@@ -93,7 +93,7 @@ export default function LandscapeOptimizedHome() {
                     {/* 新增的教师页面按钮 */}
                     <TouchableOpacity
                         style={styles.teacherBtn}
-                        onPress={() => router.push('/Profile/teacher' as any)}
+                        onPress={() => router.push('/teacher/teacher')}
                     >
                         <GraduationCap size={22} color="#6C5CE7" />
                         <Text style={styles.teacherText}>Teacher</Text>

@@ -95,6 +95,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             await AsyncStorage.setItem('auth_user', JSON.stringify(userData));
 
             console.log('Login success, saved data:', userData);
+            return userData;
         } catch (error: any) {
             console.error("login fail:", error.response?.data || error.message);
             throw error;
