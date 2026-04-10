@@ -17,7 +17,7 @@ public class UserMissionService {
     }
 
     @Transactional(readOnly = true)
-    public List<UserMissionDto> showMission(String username, Boolean completed) {
-        return userMissionRepo.findAllByUsernameAndCompleted(username, completed);
+    public List<UserMissionDto> showMission(Long userId, Boolean completed) {
+        return userMissionRepo.findAllByUserIdAndCompleted(userId, completed);
     }
 }

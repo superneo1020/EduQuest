@@ -16,6 +16,6 @@ public interface UserItemRepository extends JpaRepository<UserItem,Long> {
             ") " +
             "FROM UserItem ui " +
             "JOIN ui.item i " +
-            "WHERE ui.user.username = :username ")
-    List<UserItemDto> findAllByUsername(@Param("username") String username);
+            "WHERE ui.user.id = :userId ")
+    List<UserItemDto> findAllByUserId(@Param("userId") Long userId);
 }

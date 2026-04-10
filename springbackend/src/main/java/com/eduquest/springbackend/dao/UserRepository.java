@@ -19,27 +19,27 @@ public interface UserRepository extends JpaRepository<AppUser, Long>, JpaSpecifi
     boolean existsByUsername(String username);
     boolean existsByEmail(String email);
 
-    @Query("SELECT u.id FROM AppUser u WHERE u.username = :username")
-    Optional<Long> findIdByUsername(@Param("username") String username);
+    @Query("SELECT u.points FROM AppUser u WHERE u.id = :id")
+    Optional<Integer> findPointsById(@Param("id") Long userId);
 
-    @Query("SELECT u.points FROM AppUser u WHERE u.username = :username")
-    Optional<Integer> findPointsByUsername(@Param("username") String username);
+    @Query("SELECT s.name FROM AppUser u JOIN u.school s WHERE u.id = :id")
+    Optional<String> findSchoolNameById(@Param("id") Long userId);
 
-    @Query("SELECT s.name FROM AppUser u JOIN u.school s WHERE u.username = :username")
-    Optional<String> findSchoolNameByUsername(@Param("username") String username);
+    @Query("SELECT u.email FROM AppUser u WHERE u.id = :id")
+    Optional<String> findEmailById(@Param("id") Long userId);
 
-    @Query("SELECT u.email FROM AppUser u WHERE u.username = :username")
-    Optional<String> findEmailByUsername(@Param("username") String username);
-
-    @Query("SELECT new com.eduquest.springbackend.dto.UserAuthDto(u.username, u.password) " +
+    @Query("SELECT new com.eduquest.springbackend.dto.UserAuthDto(u.id, u.username, u.password) " +
             "FROM AppUser u WHERE u.username = :username")
     Optional<UserAuthDto> findAuthInfoByUsername(@Param("username") String username);
 
     @Query("SELECT r.name FROM AppUser u JOIN u.roles r WHERE u.username = :username")
     Collection<String> findRoleNamesByUsername(@Param("username") String username);
 
-    @Query("SELECT r.name FROM AppUser u JOIN u.roles r WHERE u.username = :username")
-    Optional<Collection<String>> findRoleNamesByUsernameOptional(@Param("username") String username);
+    @Query("SELECT r.name FROM AppUser u JOIN u.roles r WHERE u.id = :id")
+    Optional<Collection<String>> findRoleNamesByIdOptional(@Param("id") Long userId);
+
+    @Query("SELECT u.educatorStatus FROM AppUser u WHERE u.id = :id")
+    Optional<EducatorStatus> findEducatorStatusById(@Param("id") Long userId);
 
     @Query("SELECT u.educatorStatus FROM AppUser u WHERE u.username = :username")
     Optional<EducatorStatus> findEducatorStatusByUsername(@Param("username") String username);
@@ -49,6 +49,6 @@ public interface UserRepository extends JpaRepository<AppUser, Long>, JpaSpecifi
 
     @Query("SELECT new com.eduquest.springbackend.dto.UserMiniDto(u.id, u.username, u.email) " +
             "FROM AppUser u " +
-            "WHERE u.school.id = (SELECT u.school.id FROM AppUser u WHERE u.username = :username)")
-    Page<UserMiniDto> findAllUserRecordByUsernameWithSchool(String username, Pageable pageable);
+            "WHERE u.school.id = (SELECT u.school.id FROM AppUser u WHERE u.id = :id)")
+    Page<UserMiniDto> findAllUserRecordByIdWithSchool(Long userId, Pageable pageable);
 }
