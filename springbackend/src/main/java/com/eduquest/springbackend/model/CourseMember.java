@@ -7,24 +7,23 @@ import org.hibernate.generator.EventType;
 import java.time.Instant;
 
 @Entity
-@Table(name = "schools")
-public class School {
+@Table(name = "class_members")
+public class CourseMember {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(nullable = false)
     private Long id;
 
-    @Column(length = 100, nullable = false)
-    private String name;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "class_id", nullable = false)
+    private Course course;
 
-    @Column(nullable = false)
-    private String address;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private AppUser user;
 
     @Column(length = 20, nullable = false)
-    private String phone;
-
-    @Column(nullable = false)
-    private String email;
+    private String roleInClass;
 
     @Column(nullable = false,
             insertable = false,
@@ -40,6 +39,14 @@ public class School {
     @Generated(event = {EventType.INSERT})
     private Instant updatedAt;
 
+    public CourseMember() {}
+
+    public CourseMember(Course course, AppUser user, String roleInClass) {
+        this.course = course;
+        this.user = user;
+        this.roleInClass = roleInClass;
+    }
+
     public Long getId() {
         return id;
     }
@@ -48,43 +55,35 @@ public class School {
         this.id = id;
     }
 
-    public String getName() {
-        return name;
+    public Course getCourse() {
+        return course;
     }
 
-    public void setName(String name) {
-        this.name = name;
+    public void setCourse(Course course) {
+        this.course = course;
     }
 
-    public String getAddress() {
-        return address;
+    public AppUser getUser() {
+        return user;
     }
 
-    public void setAddress(String address) {
-        this.address = address;
+    public void setUser(AppUser user) {
+        this.user = user;
     }
 
-    public String getPhone() {
-        return phone;
+    public String getRoleInClass() {
+        return roleInClass;
     }
 
-    public void setPhone(String phone) {
-        this.phone = phone;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public void setEmail(String email) {
-        this.email = email;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
+    public void setRoleInClass(String roleInClass) {
+        this.roleInClass = roleInClass;
     }
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
     }
 }

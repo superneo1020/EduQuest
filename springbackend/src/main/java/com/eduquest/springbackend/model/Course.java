@@ -8,10 +8,10 @@ import java.time.Instant;
 
 @Entity
 @Table(name = "classes")
-public class SchoolClass {
+public class Course {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id", nullable = false)
+    @Column(nullable = false)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -34,9 +34,16 @@ public class SchoolClass {
     @Generated(event = {EventType.INSERT})
     private Instant createdAt;
 
-    public SchoolClass() {}
+    @Column(nullable = false,
+            insertable = false,
+            updatable = false,
+            columnDefinition = "TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP")
+    @Generated(event = {EventType.INSERT})
+    private Instant updatedAt;
 
-    public SchoolClass(School school, String grade, String suffix, String academicYear) {
+    public Course() {}
+
+    public Course(School school, String grade, String suffix, String academicYear) {
         this.school = school;
         this.grade = grade;
         this.suffix = suffix;
@@ -85,5 +92,9 @@ public class SchoolClass {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
     }
 }

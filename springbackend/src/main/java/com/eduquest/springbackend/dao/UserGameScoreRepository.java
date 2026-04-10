@@ -15,7 +15,7 @@ import java.util.List;
 public interface UserGameScoreRepository extends JpaRepository<UserGameScore,Long> {
 
     @Query(value = "SELECT g.name, g.type, g.difficulty, g.icon, g.description, " +
-            "ugs.scores, ugs.created_at AS createdAt " +
+            "ugs.scores, ugs.metadata, ugs.created_at AS createdAt " +
             "FROM user_game_scores ugs " +
             "JOIN games g ON ugs.game_id = g.id " +
             "WHERE ugs.user_id = :userId " +
@@ -28,7 +28,7 @@ public interface UserGameScoreRepository extends JpaRepository<UserGameScore,Lon
     );
 
     @Query(value = "SELECT g.name, g.type, g.difficulty, g.icon, g.description, " +
-            "ugs.scores, ugs.created_at AS createdAt " +
+            "ugs.scores, ugs.metadata, ugs.created_at AS createdAt " +
             "FROM user_game_scores ugs " +
             "JOIN games g ON ugs.game_id = g.id " +
             "WHERE ugs.user_id = :userId ",
@@ -36,7 +36,7 @@ public interface UserGameScoreRepository extends JpaRepository<UserGameScore,Lon
     Page<UserGameScoreDto> findUserGameScoresByUserId(@Param("userId") Long userId, Pageable pageable);
 
     @Query(value = "SELECT DISTINCT ON (g.id) g.name, g.type, g.difficulty, g.icon, g.description, " +
-            "ugs.scores, ugs.created_at AS createdAt " +
+            "ugs.scores, ugs.metadata, ugs.created_at AS createdAt " +
             "FROM user_game_scores ugs " +
             "JOIN games g ON ugs.game_id = g.id " +
             "WHERE ugs.user_id = :userId " +
@@ -45,7 +45,7 @@ public interface UserGameScoreRepository extends JpaRepository<UserGameScore,Lon
     List<UserGameScoreDto> findAllHighestScoresByUserId(@Param("userId") Long userId);
 
     @Query(value = "SELECT DISTINCT ON (g.id) g.name, g.type, g.difficulty, g.icon, g.description, " +
-            "ugs.scores, ugs.created_at AS createdAt " +
+            "ugs.scores, ugs.metadata, ugs.created_at AS createdAt " +
             "FROM user_game_scores ugs " +
             "JOIN games g ON ugs.game_id = g.id " +
             "WHERE ugs.user_id = :userId " +
