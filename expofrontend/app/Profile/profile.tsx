@@ -6,7 +6,7 @@ import {
 import {
     Trophy, Gamepad2, Mail, User as UserIcon, Settings, ChevronRight,
     LogOut, Calculator, BookOpen, Brain, FlaskConical, Eye, EyeOff, Key, ShoppingCart, List,
-    Calendar, Clock, TrendingUp, Award, Target, Zap, Star, BarChart3, PieChart
+    Calendar, Clock, TrendingUp, Award, Target, Zap, Star, BarChart3, PieChart, Package
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -72,6 +72,20 @@ export default function ProfileScreen() {
     const [showEquipment, setShowEquipment] = useState(false);
     const [showTrends, setShowTrends] = useState(false);
     const [showSuggestions, setShowSuggestions] = useState(false);
+
+    // Edit Profile states
+    const [showEditProfileModal, setShowEditProfileModal] = useState(false);
+    const [editFormData, setEditFormData] = useState({
+        nickname: '',
+        email: '',
+        school: '',
+        password: '',
+        confirmPassword: ''
+    });
+
+
+
+
 
     // Function to show error with feedback option
     const showErrorWithFeedback = (errorMessage: string, context: string) => {
@@ -172,14 +186,49 @@ export default function ProfileScreen() {
 
     // Move calculateImprovementRate before calculateLearningStats
     const calculateImprovementRate = useCallback(() => {
-        if (gameHistory.length < 2) return 0;
-        const recent = gameHistory.slice(-5);
-        const earlier = gameHistory.slice(0, Math.min(5, gameHistory.length - 5));
+        if (gameHistory.length < 3) return 0;
         
-        const recentAvg = recent.reduce((sum: number, game: any) => sum + (game.scores || 0), 0) / recent.length;
-        const earlierAvg = earlier.length > 0 ? earlier.reduce((sum: number, game: any) => sum + (game.scores || 0), 0) / earlier.length : recentAvg;
+        // 按時間排序遊戲記錄
+        const sortedHistory = [...gameHistory].sort((a, b) => 
+            new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()
+        );
         
-        return Math.round(((recentAvg - earlierAvg) / earlierAvg) * 100);
+        // 使用加權平均：最近的遊戲權重更高
+        const totalGames = sortedHistory.length;
+        const recentCount = Math.min(10, totalGames); // 最近10個遊戲
+        const earlierCount = Math.min(10, totalGames - recentCount); // 早期10個遊戲
+        
+        const recentGames = sortedHistory.slice(-recentCount);
+        const earlierGames = sortedHistory.slice(0, earlierCount);
+        
+        // 計算加權平均（越近權重越高）
+        const calculateWeightedAverage = (games: any[], baseWeight: number) => {
+            if (games.length === 0) return 0;
+            
+            let weightedSum = 0;
+            let totalWeight = 0;
+            
+            games.forEach((game, index) => {
+                // 權重：baseWeight + index (越新的遊戲權重越高)
+                const weight = baseWeight + index;
+                const score = game.scores || 0;
+                
+                weightedSum += score * weight;
+                totalWeight += weight;
+            });
+            
+            return weightedSum / totalWeight;
+        };
+        
+        const recentWeightedAvg = calculateWeightedAverage(recentGames, 1);
+        const earlierWeightedAvg = earlierGames.length > 0 ? 
+            calculateWeightedAverage(earlierGames, 1) : recentWeightedAvg;
+        
+        // 計算改善率，使用加權平均
+        const improvementRate = earlierWeightedAvg > 0 ? 
+            ((recentWeightedAvg - earlierWeightedAvg) / earlierWeightedAvg) * 100 : 0;
+        
+        return Math.round(improvementRate);
     }, [gameHistory]);
 
     // Enhanced Analytics Functions
@@ -222,11 +271,32 @@ export default function ProfileScreen() {
             }
         });
 
+        // 計算更真實的學習時間
+        const calculateRealisticPlayTime = () => {
+            if (gameHistory.length === 0) return 0;
+            
+            // 基於難度估算時間
+            const difficultyTimeMap: { [key: string]: number } = {
+                'EASY': 5,    // 簡單題目約5分鐘
+                'MEDIUM': 10,  // 中等題目約10分鐘
+                'HARD': 15     // 困難題目約15分鐘
+            };
+            
+            let totalTime = 0;
+            gameHistory.forEach((record: any) => {
+                const difficulty = record.gameDifficulty || 'MEDIUM';
+                const estimatedTime = difficultyTimeMap[difficulty] || 10;
+                totalTime += estimatedTime;
+            });
+            
+            return totalTime;
+        };
+        
         return {
             subjectAverages,
             bestSubject,
             difficultyPreference: difficultyCount,
-            totalPlayTime: gameHistory.length * 10, // 假設每個遊戲10分鐘
+            totalPlayTime: calculateRealisticPlayTime(),
             averageScore: Math.round(totalScore / gameHistory.length),
             improvementRate: calculateImprovementRate()
         };
@@ -731,104 +801,123 @@ export default function ProfileScreen() {
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="light-content" />
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-                <View style={styles.topBanner} />
-                <View style={styles.header}>
-                    <Text style={styles.headerTitle}>Student Profile</Text>
-                </View>
-                <View style={styles.profileHeader}>
-                    <View style={styles.avatarCircle}><UserIcon size={45} color="#4CAF50" /></View>
-                    <Text style={styles.userName}>{displayUser?.nickname || displayUser?.username || 'Learner'}</Text>
-                    <View style={styles.emailBadge}>
-                        <Mail size={12} color="#636E72" />
-                        <Text style={styles.emailText}>{displayUser?.email || 'N/A'}</Text>
+                {/* Unified User Profile Section */}
+                <View style={styles.unifiedProfileContainer}>
+                    <View style={styles.profileCover}>
+                        <View style={styles.profileCoverGradient} />
+                        <View style={styles.profileContent}>
+                            <View style={styles.avatarContainer}>
+                                <View style={styles.avatarCircle}>
+                                    <UserIcon size={50} color="#FFF" />
+                                </View>
+                            </View>
+                            <View style={styles.profileInfo}>
+                                <Text style={styles.userName}>{displayUser?.nickname || displayUser?.username || 'Learner'}</Text>
+                                <Text style={styles.userTitle}>🎓 Learning Explorer</Text>
+                                <View style={styles.profileStats}>
+                                    <View style={styles.statItem}>
+                                        <Trophy size={16} color="#FFD700" />
+                                        <Text style={styles.statValue}>{displayUser?.points || 0}</Text>
+                                        <Text style={styles.statLabel}>Points</Text>
+                                    </View>
+                                    <View style={styles.statDivider} />
+                                    <View style={styles.statItem}>
+                                        <Gamepad2 size={16} color="#FF6B6B" />
+                                        <Text style={styles.statValue}>{gameHistory.length}</Text>
+                                        <Text style={styles.statLabel}>Games</Text>
+                                    </View>
+                                    <View style={styles.statDivider} />
+                                    <View style={styles.statItem}>
+                                        <Calendar size={16} color="#4ECDC4" />
+                                        <Text style={styles.statValue}>{calculateLearningStats.improvementRate > 0 ? '+' : ''}{calculateLearningStats.improvementRate}%</Text>
+                                        <Text style={styles.statLabel}>Progress</Text>
+                                    </View>
+                                </View>
+                            </View>
+                            <View style={styles.profileActions}>
+                                <TouchableOpacity
+                                    style={styles.inventoryBtn}
+                                    onPress={() => router.push('/Inventory/inventory')}
+                                >
+                                    <Package size={20} color="#FFF" />
+                                    <View style={styles.inventoryBadge}>
+                                        <Text style={styles.inventoryBadgeText}>{userItems.length}</Text>
+                                    </View>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={styles.editProfileBtn}
+                                    onPress={() => setShowEditProfileModal(true)}
+                                >
+                                    <Settings size={20} color="#FFF" />
+                                </TouchableOpacity>
+                            </View>
+                        </View>
                     </View>
-                    {currentSchool && (
-                        <View style={styles.schoolBadge}>
-                            <BookOpen size={12} color="#636E72" />
-                            <Text style={styles.schoolText}>{currentSchool}</Text>
-                        </View>
-                    )}
-                    {userRoles.length > 0 && (
-                        <View style={styles.rolesBadge}>
-                            <Settings size={12} color="#636E72" />
-                            <Text style={styles.rolesText}>{userRoles.join(', ')}</Text>
-                        </View>
-                    )}
-                </View>
-
-
-                {/* Settings Section */}
-                <View style={styles.settingsContainer}>
-                    <Text style={styles.sectionTitle}>Account Settings</Text>
-
-                    {/* Account Information */}
-                    <View style={styles.accountInfoSection}>
-                        <View style={styles.accountInfoRow}>
-                            <Text style={styles.accountInfoLabel}>User ID</Text>
-                            <Text style={styles.accountInfoValue}>#{displayUser?.id || 'N/A'}</Text>
-                        </View>
-                        <View style={styles.accountInfoRow}>
-                            <Text style={styles.accountInfoLabel}>Username</Text>
-                            <Text style={styles.accountInfoValue}>{displayUser?.username || 'N/A'}</Text>
-                        </View>
-                        <View style={styles.accountInfoRow}>
-                            <Text style={styles.accountInfoLabel}>Current Points</Text>
-                            <Text style={styles.accountInfoValue}>{displayUser?.points || 0} XP</Text>
-                        </View>
-                        <View style={styles.accountInfoRow}>
-                            <Text style={styles.accountInfoLabel}>Member Since</Text>
-                            <Text style={styles.accountInfoValue}>
-                                {displayUser?.created_at ? new Date(displayUser.created_at).toLocaleDateString() : 'N/A'}
-                            </Text>
+                    
+                    {/* Unified User Information */}
+                    <View style={styles.unifiedInfoSection}>
+                        <Text style={styles.infoSectionTitle}>📋 User Information</Text>
+                        <View style={styles.infoList}>
+                            <View style={styles.infoItem}>
+                                <UserIcon size={16} color="#636E72" />
+                                <View style={styles.infoContent}>
+                                    <Text style={styles.infoLabel}>Username</Text>
+                                    <Text style={styles.infoValue}>{displayUser?.username || 'N/A'}</Text>
+                                </View>
+                            </View>
+                            <View style={styles.infoItem}>
+                                <Mail size={16} color="#636E72" />
+                                <View style={styles.infoContent}>
+                                    <Text style={styles.infoLabel}>Email</Text>
+                                    <Text style={styles.infoValue}>{displayUser?.email || 'N/A'}</Text>
+                                </View>
+                            </View>
+                            {currentSchool && (
+                                <View style={styles.infoItem}>
+                                    <BookOpen size={16} color="#636E72" />
+                                    <View style={styles.infoContent}>
+                                        <Text style={styles.infoLabel}>School</Text>
+                                        <Text style={styles.infoValue}>{currentSchool}</Text>
+                                    </View>
+                                </View>
+                            )}
+                            {userRoles.length > 0 && (
+                                <View style={styles.infoItem}>
+                                    <Award size={16} color="#636E72" />
+                                    <View style={styles.infoContent}>
+                                        <Text style={styles.infoLabel}>Role</Text>
+                                        <Text style={styles.infoValue}>{userRoles.join(', ')}</Text>
+                                    </View>
+                                </View>
+                            )}
+                            <View style={styles.infoItem}>
+                                <Trophy size={16} color="#636E72" />
+                                <View style={styles.infoContent}>
+                                    <Text style={styles.infoLabel}>User ID</Text>
+                                    <Text style={styles.infoValue}>#{displayUser?.id || 'N/A'}</Text>
+                                </View>
+                            </View>
+                            <View style={styles.infoItem}>
+                                <Calendar size={16} color="#636E72" />
+                                <View style={styles.infoContent}>
+                                    <Text style={styles.infoLabel}>Member Since</Text>
+                                    <Text style={styles.infoValue}>
+                                        {displayUser?.created_at ? new Date(displayUser.created_at).toLocaleDateString() : 'N/A'}
+                                    </Text>
+                                </View>
+                            </View>
+                            <View style={styles.infoItem}>
+                                <Trophy size={16} color="#636E72" />
+                                <View style={styles.infoContent}>
+                                    <Text style={styles.infoLabel}>Current Points</Text>
+                                    <Text style={styles.infoValue}>{displayUser?.points || 0} XP</Text>
+                                </View>
+                            </View>
                         </View>
                     </View>
-
-                    <TouchableOpacity
-                        style={styles.settingItem}
-                        onPress={() => setShowPasswordModal(true)}
-                    >
-                        <Key size={20} color="#4CAF50" />
-                        <View style={styles.settingContent}>
-                            <Text style={styles.settingTitle}>Change Password</Text>
-                            <Text style={styles.settingDescription}>Update your account password</Text>
-                        </View>
-                        <ChevronRight size={20} color="#BDC3C7" />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={styles.settingItem}
-                        onPress={() => setShowEmailModal(true)}
-                    >
-                        <Mail size={20} color="#2196F3" />
-                        <View style={styles.settingContent}>
-                            <Text style={styles.settingTitle}>Change Email</Text>
-                            <Text style={styles.settingDescription}>Update your email address</Text>
-                        </View>
-                        <ChevronRight size={20} color="#BDC3C7" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={styles.settingItem}
-                        onPress={() => setShowSchoolModal(true)}
-                    >
-                        <BookOpen size={20} color="#FF9800" />
-                        <View style={styles.settingContent}>
-                            <Text style={styles.settingTitle}>Change School</Text>
-                            <Text style={styles.settingDescription}>Update your school information</Text>
-                        </View>
-                        <ChevronRight size={20} color="#BDC3C7" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={styles.settingItem}
-                        onPress={() => setShowNicknameModal(true)}
-                    >
-                        <UserIcon size={20} color="#9C27B0" />
-                        <View style={styles.settingContent}>
-                            <Text style={styles.settingTitle}>Change Nickname</Text>
-                            <Text style={styles.settingDescription}>Update your display nickname</Text>
-                        </View>
-                        <ChevronRight size={20} color="#BDC3C7" />
-                    </TouchableOpacity>
                 </View>
+
+
 
                 {/* Enhanced Features Section */}
                 <View style={styles.enhancedFeaturesContainer}>
@@ -885,47 +974,89 @@ export default function ProfileScreen() {
                         </View>
                         <ChevronRight size={20} color="#BDC3C7" />
                     </TouchableOpacity>
+
+
                 </View>
 
-                <View style={styles.statsAndSkillsContainer}>
-                    {/* Stats Section - Left Side */}
-                    <View style={styles.statsColumn}>
-                        <Text style={styles.sectionTitle}>Statistics</Text>
-                        <View style={styles.statsContainer}>
-                            <View style={[styles.statCard, { backgroundColor: '#FFF9E6', borderColor: '#FFEAA7' }]}>
-                                <Trophy size={24} color="#F1C40F" />
-                                <Text style={styles.statNumber}>{displayUser?.points || 0}</Text>
-                                <Text style={styles.statTitle}>Total Points</Text>
+                {/* Personal Achievements Section */}
+                <View style={styles.achievementsContainer}>
+                    <Text style={styles.sectionTitle}>🏆 My Achievements</Text>
+                    <View style={styles.achievementsGrid}>
+                        <View style={styles.achievementCard}>
+                            <View style={styles.achievementIcon}>
+                                <Trophy size={28} color="#FFD700" />
                             </View>
-                            <View style={[styles.statCard, { backgroundColor: '#E8F5E9', borderColor: '#C8E6C9' }]}>
-                                <Gamepad2 size={24} color="#4CAF50" />
-                                <Text style={styles.statNumber}>{gameHistory.length}</Text>
-                                <Text style={styles.statTitle}>Games Played</Text>
-                            </View>
-                            <TouchableOpacity
-                                style={[styles.statCard, { backgroundColor: '#F3E5F5', borderColor: '#E1BEE7' }]}
-                                onPress={() => setShowMissionsModal(true)}
-                            >
-                                <Trophy size={24} color="#9C27B0" />
-                                <Text style={styles.statNumber}>{userMissions.filter(m => m.completed).length}</Text>
-                                <Text style={styles.statTitle}>Missions Done</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[styles.statCard, { backgroundColor: '#FFF3E0', borderColor: '#FFE0B2' }]}
-                                onPress={() => router.push('/Inventory/inventory')}
-                            >
-                                <Trophy size={24} color="#FF9800" />
-                                <Text style={styles.statNumber}>{userItems.length}</Text>
-                                <Text style={styles.statTitle}>My Items</Text>
-                            </TouchableOpacity>
+                            <Text style={styles.achievementNumber}>{displayUser?.points || 0}</Text>
+                            <Text style={styles.achievementLabel}>Total Points</Text>
+                            <Text style={styles.achievementSubLabel}>Proof of hard work</Text>
                         </View>
+                        <View style={styles.achievementCard}>
+                            <View style={styles.achievementIcon}>
+                                <Gamepad2 size={28} color="#FF6B6B" />
+                            </View>
+                            <Text style={styles.achievementNumber}>{gameHistory.length}</Text>
+                            <Text style={styles.achievementLabel}>Games Played</Text>
+                            <Text style={styles.achievementSubLabel}>Result of continuous learning</Text>
+                        </View>
+                        <TouchableOpacity
+                            style={styles.achievementCard}
+                            onPress={() => setShowMissionsModal(true)}
+                        >
+                            <View style={styles.achievementIcon}>
+                                <Target size={28} color="#9C27B0" />
+                            </View>
+                            <Text style={styles.achievementNumber}>{userMissions.filter(m => m.completed).length}</Text>
+                            <Text style={styles.achievementLabel}>Missions Done</Text>
+                            <Text style={styles.achievementSubLabel}>Achievement of challenging yourself</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.achievementCard}
+                            onPress={() => router.push('/Inventory/inventory')}
+                        >
+                            <View style={styles.achievementIcon}>
+                                <Star size={28} color="#FF9800" />
+                            </View>
+                            <Text style={styles.achievementNumber}>{userItems.length}</Text>
+                            <Text style={styles.achievementLabel}>Items Collected</Text>
+                            <Text style={styles.achievementSubLabel}>Rewards on the learning journey</Text>
+                        </TouchableOpacity>
                     </View>
+                </View>
 
-                    {/* Skill Analysis - Right Side */}
-                    <View style={styles.skillsColumn}>
-                        <Text style={styles.sectionTitle}>Skill Analysis</Text>
-                        <View style={styles.radarSection}>
-                            <SkillBarsChart gameHistory={gameHistory} />
+
+
+                {/* Learning Progress Section */}
+                <View style={styles.learningProgressContainer}>
+                    <Text style={styles.sectionTitle}>📊 Learning Progress</Text>
+                    <View style={styles.progressCards}>
+                        <View style={styles.progressCard}>
+                            <Text style={styles.progressTitle}>Skill Analysis</Text>
+                            <View style={styles.radarSection}>
+                                <SkillBarsChart gameHistory={gameHistory} />
+                            </View>
+                        </View>
+                        <View style={styles.progressCard}>
+                            <Text style={styles.progressTitle}>Learning Statistics</Text>
+                            <View style={styles.learningStatsList}>
+                                <View style={styles.learningStatItem}>
+                                    <Text style={styles.learningStatLabel}>Average Score</Text>
+                                    <Text style={styles.learningStatValue}>{calculateLearningStats.averageScore}</Text>
+                                </View>
+                                <View style={styles.learningStatItem}>
+                                    <Text style={styles.learningStatLabel}>Best Subject</Text>
+                                    <Text style={styles.learningStatValue}>{calculateLearningStats.bestSubject || 'N/A'}</Text>
+                                </View>
+                                <View style={styles.learningStatItem}>
+                                    <Text style={styles.learningStatLabel}>Study Time</Text>
+                                    <Text style={styles.learningStatValue}>{calculateLearningStats.totalPlayTime} minutes</Text>
+                                </View>
+                                <View style={styles.learningStatItem}>
+                                    <Text style={styles.learningStatLabel}>Improvement Rate</Text>
+                                    <Text style={[styles.learningStatValue, { color: calculateLearningStats.improvementRate >= 0 ? '#4CAF50' : '#FF4757' }]}>
+                                        {calculateLearningStats.improvementRate >= 0 ? '+' : ''}{calculateLearningStats.improvementRate}%
+                                    </Text>
+                                </View>
+                            </View>
                         </View>
                     </View>
                 </View>
@@ -1590,7 +1721,7 @@ export default function ProfileScreen() {
                                         bezier
                                         style={{
                                             marginVertical: 8,
-                                            borderRadius: 16,
+                                            borderRadius: 16
                                         }}
                                     />
                                 ) : (
@@ -1619,7 +1750,7 @@ export default function ProfileScreen() {
                                         }}
                                         style={{
                                             marginVertical: 8,
-                                            borderRadius: 16,
+                                            borderRadius: 16
                                         }}
                                     />
                                 ) : (
@@ -1641,7 +1772,7 @@ export default function ProfileScreen() {
                                         width={width * 0.7}
                                         height={200}
                                         chartConfig={{
-                                            color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                                            color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`
                                         }}
                                         accessor="population"
                                         backgroundColor="transparent"
@@ -1751,16 +1882,347 @@ export default function ProfileScreen() {
                     </View>
                 </View>
             </Modal>
+
+            {/* Edit Profile Modal */}
+            <Modal
+                visible={showEditProfileModal}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setShowEditProfileModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>⚙️ Edit Profile</Text>
+                        
+                        <ScrollView style={{ flex: 1, maxHeight: 400 }}>
+                            <View style={styles.editSection}>
+                                <Text style={styles.editSectionTitle}>👤 Personal Information</Text>
+                                
+                                <View style={styles.inputGroup}>
+                                    <Text style={styles.inputLabel}>Nickname</Text>
+                                    <TextInput
+                                        style={styles.textInput}
+                                        value={editFormData.nickname || displayUser?.nickname || ''}
+                                        onChangeText={(text) => setEditFormData(prev => ({ ...prev, nickname: text }))}
+                                        placeholder="Enter your nickname"
+                                    />
+                                </View>
+                                
+                                <View style={styles.inputGroup}>
+                                    <Text style={styles.inputLabel}>Email</Text>
+                                    <TextInput
+                                        style={styles.textInput}
+                                        value={editFormData.email || displayUser?.email || ''}
+                                        onChangeText={(text) => setEditFormData(prev => ({ ...prev, email: text }))}
+                                        placeholder="Enter your email"
+                                        keyboardType="email-address"
+                                    />
+                                </View>
+                                
+                                <View style={styles.inputGroup}>
+                                    <Text style={styles.inputLabel}>School</Text>
+                                    <TextInput
+                                        style={styles.textInput}
+                                        value={editFormData.school || currentSchool || ''}
+                                        onChangeText={(text) => setEditFormData(prev => ({ ...prev, school: text }))}
+                                        placeholder="Enter your school"
+                                    />
+                                </View>
+                            </View>
+                            
+                            <View style={styles.editSection}>
+                                <Text style={styles.editSectionTitle}>🔒 Security</Text>
+                                
+                                <View style={styles.inputGroup}>
+                                    <Text style={styles.inputLabel}>New Password</Text>
+                                    <TextInput
+                                        style={styles.textInput}
+                                        value={editFormData.password}
+                                        onChangeText={(text) => setEditFormData(prev => ({ ...prev, password: text }))}
+                                        placeholder="Enter new password (optional)"
+                                        secureTextEntry
+                                    />
+                                </View>
+                                
+                                <View style={styles.inputGroup}>
+                                    <Text style={styles.inputLabel}>Confirm Password</Text>
+                                    <TextInput
+                                        style={styles.textInput}
+                                        value={editFormData.confirmPassword}
+                                        onChangeText={(text) => setEditFormData(prev => ({ ...prev, confirmPassword: text }))}
+                                        placeholder="Confirm new password"
+                                        secureTextEntry
+                                    />
+                                </View>
+                            </View>
+                        </ScrollView>
+
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity
+                                style={[styles.modalBtn, styles.cancelBtn]}
+                                onPress={() => {
+                                    setShowEditProfileModal(false);
+                                    setEditFormData({ nickname: '', email: '', school: '', password: '', confirmPassword: '' });
+                                }}
+                            >
+                                <Text style={styles.cancelBtnText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.modalBtn, styles.confirmBtn]}
+                                onPress={() => {
+                                    // Handle profile update logic here
+                                    Alert.alert('Success', 'Profile updated successfully!');
+                                    setShowEditProfileModal(false);
+                                    setEditFormData({ nickname: '', email: '', school: '', password: '', confirmPassword: '' });
+                                }}
+                            >
+                                <Text style={styles.confirmBtnText}>Save Changes</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
         </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#F8F9FA' },
-    topBanner: { width: width + 40, height: 180, backgroundColor: '#4CAF50', borderBottomLeftRadius: 40, borderBottomRightRadius: 40, marginBottom: -140, marginLeft: -20 },
-    header: { height: 60, alignItems: 'center', justifyContent: 'center' },
-    headerTitle: { fontSize: 18, fontWeight: '800', color: '#FFF' },
-    profileHeader: { backgroundColor: '#FFF', marginHorizontal: 20, marginTop: 15, borderRadius: 24, padding: 25, alignItems: 'center', elevation: 4 },
+    
+    // Unified Profile Container
+    unifiedProfileContainer: {
+        marginHorizontal: 20,
+        marginTop: 20,
+    },
+    profileCover: {
+        height: 200,
+        borderRadius: 24,
+        overflow: 'hidden',
+        position: 'relative',
+        elevation: 8,
+        marginBottom: 20,
+    },
+    profileCoverGradient: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: '#4CAF50',
+    },
+    profileContent: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 25,
+        paddingTop: 30,
+    },
+    avatarContainer: {
+        position: 'relative',
+        marginRight: 20,
+    },
+    avatarCircle: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 3,
+        borderColor: 'rgba(255, 255, 255, 0.3)',
+    },
+    profileInfo: {
+        flex: 1,
+    },
+    userName: {
+        fontSize: 24,
+        fontWeight: '900',
+        color: '#FFF',
+        marginBottom: 4,
+    },
+    profileActions: {
+        flexDirection: 'row',
+        gap: 10,
+    },
+    inventoryBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: 'rgba(255, 255, 255, 0.3)',
+        position: 'relative',
+    },
+    inventoryBadge: {
+        position: 'absolute',
+        top: -5,
+        right: -5,
+        backgroundColor: '#FF6B6B',
+        borderRadius: 10,
+        minWidth: 18,
+        height: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: '#FFF',
+    },
+    inventoryBadgeText: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#FFF',
+    },
+    editProfileBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: 'rgba(255, 255, 255, 0.3)',
+    },
+    
+    // Unified User Information Section
+    unifiedInfoSection: {
+        backgroundColor: '#FFF',
+        borderRadius: 12,
+        padding: 15,
+        marginTop: 20,
+        elevation: 2,
+    },
+    infoSectionTitle: {
+        fontSize: 16,
+        fontWeight: '800',
+        color: '#2D3436',
+        marginBottom: 12,
+    },
+    infoList: {
+        gap: 10,
+    },
+    infoItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F8F9FA',
+        borderRadius: 8,
+        padding: 10,
+    },
+    infoContent: {
+        marginLeft: 12,
+        flex: 1,
+    },
+    infoLabel: {
+        fontSize: 12,
+        color: '#636E72',
+        marginBottom: 2,
+    },
+    infoValue: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#2D3436',
+    },
+    
+    // Edit Profile Modal Styles
+    editSection: {
+        marginBottom: 20,
+    },
+    editSectionTitle: {
+        fontSize: 16,
+        fontWeight: '800',
+        color: '#2D3436',
+        marginBottom: 12,
+    },
+    inputGroup: {
+        marginBottom: 15,
+    },
+    inputLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#2D3436',
+        marginBottom: 5,
+    },
+    textInput: {
+        backgroundColor: '#F8F9FA',
+        borderRadius: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        fontSize: 14,
+        color: '#2D3436',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    userTitle: {
+        fontSize: 14,
+        color: 'rgba(255, 255, 255, 0.8)',
+        marginBottom: 15,
+    },
+    profileStats: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255, 255, 255, 0.15)',
+        borderRadius: 16,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+    },
+    statItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+    },
+    statDivider: {
+        width: 1,
+        height: 20,
+        backgroundColor: 'rgba(255, 255, 255, 0.3)',
+        marginHorizontal: 8,
+    },
+    statValue: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#FFF',
+        marginLeft: 4,
+    },
+    statLabel: {
+        fontSize: 10,
+        color: 'rgba(255, 255, 255, 0.7)',
+        marginLeft: 4,
+    },
+    
+    // Info Cards
+    infoCardsContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 10,
+    },
+    infoCard: {
+        flex: 1,
+        minWidth: '45%',
+        backgroundColor: '#FFF',
+        borderRadius: 16,
+        padding: 15,
+        flexDirection: 'row',
+        alignItems: 'center',
+        elevation: 3,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+    },
+    infoCardContent: {
+        marginLeft: 12,
+        flex: 1,
+    },
+    infoCardLabel: {
+        fontSize: 12,
+        color: '#636E72',
+        marginBottom: 2,
+    },
+    infoCardValue: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#2D3436',
+    },
     statsContainer: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -1768,6 +2230,194 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         marginTop: 10 // Reduced from 20 for tighter layout
     },
+    
+    // Achievements Section
+    achievementsContainer: {
+        backgroundColor: '#FFF',
+        marginHorizontal: 20,
+        marginTop: 20,
+        borderRadius: 24,
+        padding: 20,
+        elevation: 2,
+    },
+    achievementsGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 15,
+        marginTop: 15,
+    },
+    achievementCard: {
+        width: '48%',
+        backgroundColor: '#FFF',
+        borderRadius: 12,
+        padding: 15,
+        alignItems: 'center',
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    achievementIcon: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        backgroundColor: '#FFF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 12,
+        elevation: 2,
+    },
+    achievementNumber: {
+        fontSize: 22,
+        fontWeight: '900',
+        color: '#2D3436',
+        marginBottom: 4,
+    },
+    achievementLabel: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#636E72',
+        marginBottom: 2,
+    },
+    achievementSubLabel: {
+        fontSize: 10,
+        color: '#A0A0A0',
+        textAlign: 'center',
+    },
+    
+    // Learning Progress Section
+    learningProgressContainer: {
+        backgroundColor: '#FFF',
+        marginHorizontal: 20,
+        marginTop: 20,
+        borderRadius: 24,
+        padding: 20,
+        elevation: 2,
+    },
+    progressCards: {
+        flexDirection: 'row',
+        gap: 15,
+        marginTop: 15,
+    },
+    progressCard: {
+        flex: 1,
+        backgroundColor: '#F8F9FA',
+        borderRadius: 12,
+        padding: 15,
+        elevation: 2,
+    },
+    progressTitle: {
+        fontSize: 16,
+        fontWeight: '800',
+        color: '#2D3436',
+        marginBottom: 15,
+        textAlign: 'center',
+    },
+    learningStatsList: {
+        gap: 12,
+    },
+    learningStatItem: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        backgroundColor: '#FFF',
+        borderRadius: 12,
+        paddingHorizontal: 15,
+        paddingVertical: 10,
+    },
+    learningStatLabel: {
+        fontSize: 13,
+        color: '#636E72',
+        fontWeight: '600',
+    },
+    learningStatValue: {
+        fontSize: 14,
+        fontWeight: '800',
+        color: '#2D3436',
+    },
+    
+    // Profile Settings Section
+    profileSettingsContainer: {
+        backgroundColor: '#FFF',
+        marginHorizontal: 20,
+        marginTop: 20,
+        borderRadius: 24,
+        padding: 20,
+        elevation: 2,
+    },
+    settingsGrid: {
+        gap: 12,
+        marginBottom: 20,
+    },
+    profileSettingCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F8F9FA',
+        borderRadius: 12,
+        padding: 15,
+        elevation: 2,
+    },
+    settingIconContainer: {
+        width: 45,
+        height: 45,
+        borderRadius: 12,
+        backgroundColor: '#FFF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 15,
+        elevation: 2,
+    },
+    settingCardContent: {
+        flex: 1,
+    },
+    settingCardTitle: {
+        fontSize: 16,
+        fontWeight: '800',
+        color: '#2D3436',
+        marginBottom: 2,
+    },
+    settingCardValue: {
+        fontSize: 13,
+        color: '#636E72',
+    },
+    accountDetailsCard: {
+        backgroundColor: '#F8F9FA',
+        borderRadius: 12,
+        padding: 15,
+    },
+    accountDetailsTitle: {
+        fontSize: 16,
+        fontWeight: '800',
+        color: '#2D3436',
+        marginBottom: 12,
+    },
+    accountDetailsList: {
+        gap: 8,
+    },
+    accountDetailItem: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        backgroundColor: '#FFF',
+        borderRadius: 12,
+        paddingHorizontal: 15,
+        paddingVertical: 10,
+    },
+    accountDetailLabel: {
+        fontSize: 13,
+        color: '#636E72',
+        fontWeight: '600',
+    },
+    accountDetailValue: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#2D3436',
+    },
+    
+    // Legacy styles for compatibility
     statsAndSkillsContainer: {
         flexDirection: 'row',
         marginHorizontal: 20,
@@ -1783,9 +2433,9 @@ const styles = StyleSheet.create({
         marginLeft: 10
     },
     radarSection: {
-        marginTop: 10, // Reduced from 15
+        marginTop: 10,
         borderRadius: 24,
-        padding: 12, // Reduced from 15
+        padding: 12,
         alignItems: 'center',
         elevation: 2,
         flex: 1
@@ -2338,5 +2988,6 @@ const styles = StyleSheet.create({
         color: '#2D3436',
         marginBottom: 5,
         textAlign: 'center',
-    }
+    },
+    
 });
