@@ -1,6 +1,10 @@
 package com.eduquest.springbackend.model;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.Generated;
+import org.hibernate.generator.EventType;
+
+import java.time.Instant;
 
 @Entity
 @Table(name = "class_members")
@@ -20,6 +24,20 @@ public class CourseMember {
 
     @Column(length = 20, nullable = false)
     private String roleInClass;
+
+    @Column(nullable = false,
+            insertable = false,
+            updatable = false,
+            columnDefinition = "TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP")
+    @Generated(event = {EventType.INSERT})
+    private Instant createdAt;
+
+    @Column(nullable = false,
+            insertable = false,
+            updatable = false,
+            columnDefinition = "TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP")
+    @Generated(event = {EventType.INSERT})
+    private Instant updatedAt;
 
     public CourseMember() {}
 
@@ -59,5 +77,13 @@ public class CourseMember {
 
     public void setRoleInClass(String roleInClass) {
         this.roleInClass = roleInClass;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
     }
 }

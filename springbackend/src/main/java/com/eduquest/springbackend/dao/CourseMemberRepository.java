@@ -12,7 +12,7 @@ import java.util.Optional;
 
 public interface CourseMemberRepository extends JpaRepository<CourseMember, Long> {
     @Query("SELECT new com.eduquest.springbackend.dto.CourseDto(" +
-            "c.id, c.grade, c.suffix, c.academicYear, c.createdAt" +
+            "c.id, c.grade, c.suffix, c.academicYear, c.createdAt, c.updatedAt" +
             ") " +
             "FROM CourseMember cm " +
             "JOIN cm.course c " +
@@ -20,13 +20,13 @@ public interface CourseMemberRepository extends JpaRepository<CourseMember, Long
     List<CourseDto> findCourseByUserId(Long id);
 
     @Query("SELECT new com.eduquest.springbackend.dto.CourseMemberDto(" +
-            "cm.id, cm.roleInClass, u.id, u.username, u.email" +
+            "u.id, u.username, u.email, u.createdAt, u.updatedAt, cm.roleInClass" +
             ") " +
             "FROM CourseMember cm " +
             "JOIN cm.user u " +
             "WHERE cm.course.id = :courseId " +
-            "AND cm.user.id = :userId")
-    List<CourseMemberDto> findCourseByCourseId(@Param("userId")Long userId, @Param("courseId")Long courseId);
+            "AND EXISTS (SELECT 1 FROM CourseMember cm2 WHERE cm2.course.id = :courseId AND cm2.user.id = :userId)")
+    List<CourseMemberDto> findCourseMemberByCourseId(@Param("userId")Long userId, @Param("courseId")Long courseId);
 
     List<CourseMember> findUserByCourseId(Long id);
 

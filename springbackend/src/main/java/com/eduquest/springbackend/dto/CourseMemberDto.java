@@ -1,10 +1,13 @@
 package com.eduquest.springbackend.dto;
 
+import java.time.Instant;
+
 public record CourseMemberDto(
-        Long id,
-        String roleInClass,
         Long userId,
         String username,
-        String email
+        String email,
+        Instant createdAt,
+        Instant updatedAt,
+        String roleInClass
 ) {
 }
