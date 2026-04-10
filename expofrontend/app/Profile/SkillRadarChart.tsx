@@ -3,7 +3,7 @@ import { View, Dimensions } from 'react-native';
 import Svg, { Polygon, Line, Text as SvgText, Circle, G } from 'react-native-svg';
 
 const { width } = Dimensions.get('window');
-const CHART_SIZE = width * 0.8;
+const CHART_SIZE = width * 0.5; // Reduced from 0.8 to 0.5
 const CENTER = CHART_SIZE / 2;
 const RADIUS = CENTER * 0.7;
 

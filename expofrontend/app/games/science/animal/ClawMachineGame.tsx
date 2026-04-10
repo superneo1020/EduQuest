@@ -145,6 +145,7 @@ const ClawMachineGame: React.FC = () => {
     const [rightPressed, setRightPressed] = useState<boolean>(false);
     const [isSuction, setIsSuction] = useState<boolean>(false);
     const [suctionItem, setSuctionItem] = useState<Item | null>(null);
+    const [wobbleAnimations, setWobbleAnimations] = useState<{ wobbleLoop: any; rotationLoop: any } | null>(null);
     const [gameOver, setGameOver] = useState<boolean>(false);
     const [gameComplete, setGameComplete] = useState<boolean>(false);
     const [showReport, setShowReport] = useState<boolean>(false);
@@ -162,6 +163,20 @@ const ClawMachineGame: React.FC = () => {
     const screenShake = useRef(new Animated.Value(0)).current;
     const [prepText, setPrepText] = useState<string | null>(null);
     const prepScale = useRef(new Animated.Value(0)).current;
+    const itemWobbleAnim = useRef(new Animated.Value(0)).current;
+    
+    // 粒子效果系統
+    const [particles, setParticles] = useState<Array<{
+        id: number;
+        x: number;
+        y: number;
+        vx: number;
+        vy: number;
+        life: number;
+        color: string;
+        size: number;
+        emoji?: string;
+    }>>([]);
 
     // 動畫值
     const dropAnim = useRef(new Animated.Value(0)).current;
@@ -170,6 +185,10 @@ const ClawMachineGame: React.FC = () => {
     const pulseAnim = useRef(new Animated.Value(1)).current;
     const scoreAnim = useRef(new Animated.Value(1)).current;
     const feedbackAnim = useRef(new Animated.Value(0)).current;
+    const clawPositionAnim = useRef(new Animated.Value(0)).current;
+    const glowAnim = useRef(new Animated.Value(0)).current;
+    const wobbleAnim = useRef(new Animated.Value(0)).current;
+    const itemWobbleRotation = useRef(new Animated.Value(0)).current;
 
     // 请求去重
     const refreshAIPromiseRef = useRef<Promise<void> | null>(null);
@@ -251,7 +270,7 @@ const ClawMachineGame: React.FC = () => {
     };
 
     // ========== 🎯 打擊回饋（HIT! / OUCH! + 震動 + 觸覺） ==========
-    const showHitFeedback = (isCorrect: boolean) => {
+    const showHitFeedback = (isCorrect: boolean, itemX?: number, itemY?: number, itemEmoji?: string) => {
         if (isCorrect) {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -265,6 +284,104 @@ const ClawMachineGame: React.FC = () => {
             text: isCorrect ? 'HIT!' : 'OUCH!',
             color: isCorrect ? '#FFD700' : '#FF4757',
         });
+    };
+
+    // ========== 🎆 粒子效果系統 ==========
+    const generateParticles = (x: number, y: number, count: number, color: string, emoji?: string) => {
+        const newParticles = [];
+        for (let i = 0; i < count; i++) {
+            const angle = (Math.PI * 2 * i) / count + Math.random() * 0.5;
+            const velocity = 2 + Math.random() * 3;
+            newParticles.push({
+                id: Date.now() + i,
+                x,
+                y,
+                vx: Math.cos(angle) * velocity,
+                vy: Math.sin(angle) * velocity - 2,
+                life: 1,
+                color,
+                size: 4 + Math.random() * 4,
+                emoji: emoji && Math.random() > 0.5 ? emoji : undefined,
+            });
+        }
+        setParticles(prev => [...prev, ...newParticles]);
+    };
+
+    const updateParticles = () => {
+        setParticles(prev => prev
+            .map(p => ({
+                ...p,
+                x: p.x + p.vx,
+                y: p.y + p.vy,
+                vy: p.vy + 0.2,
+                life: p.life - 0.02,
+            }))
+            .filter(p => p.life > 0));
+    };
+
+    useEffect(() => {
+        const interval = setInterval(updateParticles, 16);
+        return () => clearInterval(interval);
+    }, []);
+
+    // ========== 🎭 萬向節晃動動畫 ==========
+    const startWobbleAnimation = () => {
+        // 重置動畫值
+        wobbleAnim.setValue(0);
+        itemWobbleRotation.setValue(0);
+        
+        // 創建持續的左右晃動效果
+        const wobbleLoop = Animated.loop(
+            Animated.sequence([
+                // 向左晃動
+                Animated.timing(wobbleAnim, {
+                    toValue: 1,
+                    duration: 400,
+                    useNativeDriver: true,
+                }),
+                // 向右晃動
+                Animated.timing(wobbleAnim, {
+                    toValue: -1,
+                    duration: 400,
+                    useNativeDriver: true,
+                }),
+                // 回到中心
+                Animated.timing(wobbleAnim, {
+                    toValue: 0,
+                    duration: 300,
+                    useNativeDriver: true,
+                }),
+            ])
+        );
+        
+        wobbleLoop.start();
+        
+        // 物品旋轉效果
+        const rotationLoop = Animated.loop(
+            Animated.sequence([
+                Animated.timing(itemWobbleRotation, {
+                    toValue: 0.1,
+                    duration: 600,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(itemWobbleRotation, {
+                    toValue: -0.1,
+                    duration: 600,
+                    useNativeDriver: true,
+                }),
+            ])
+        );
+        
+        rotationLoop.start();
+        
+        return { wobbleLoop, rotationLoop };
+    };
+
+    const stopWobbleAnimation = (wobbleLoop: any, rotationLoop: any) => {
+        wobbleLoop?.stop();
+        rotationLoop?.stop();
+        wobbleAnim.setValue(0);
+        itemWobbleRotation.setValue(0);
     };
 
     // ========== 🎪 倒數準備動畫 ==========
@@ -402,6 +519,8 @@ const ClawMachineGame: React.FC = () => {
         clawAIService.resetGame();
         setCurrentQuestion(null);
     };
+
+    
 
     // ========== 初始化遊戲和倒數 ==========
     useEffect(() => {
