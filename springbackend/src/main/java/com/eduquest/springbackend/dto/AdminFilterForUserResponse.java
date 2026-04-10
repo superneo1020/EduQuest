@@ -2,6 +2,8 @@ package com.eduquest.springbackend.dto;
 
 import com.eduquest.springbackend.enums.EducatorStatus;
 
+import java.time.Instant;
+
 public record AdminFilterForUserResponse(
         Long userId,
         String username,
@@ -11,6 +13,8 @@ public record AdminFilterForUserResponse(
         boolean isAdmin,
         boolean isEducator,
         Boolean isActive,
-        EducatorStatus educatorStatus
+        EducatorStatus educatorStatus,
+        Instant createdAt,
+        Instant updatedAt
 ) {
 }

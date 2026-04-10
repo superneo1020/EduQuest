@@ -75,7 +75,7 @@ public class AppUser {
     private List<UserItem> userItems = new ArrayList<>();
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<ClassMember> classMemberships = new ArrayList<>();
+    private List<CourseMember> courseMemberships = new ArrayList<>();
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<UserActivity> userActivities = new ArrayList<>();
@@ -195,12 +195,12 @@ public class AppUser {
         this.userItems = userItems;
     }
 
-    public List<ClassMember> getClassMemberships() {
-        return classMemberships;
+    public List<CourseMember> getCourseMemberships() {
+        return courseMemberships;
     }
 
-    public void setClassMemberships(List<ClassMember> classMemberships) {
-        this.classMemberships = classMemberships;
+    public void setCourseMemberships(List<CourseMember> courseMemberships) {
+        this.courseMemberships = courseMemberships;
     }
 
     public List<UserActivity> getUserActivities() {

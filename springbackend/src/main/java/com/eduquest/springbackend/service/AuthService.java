@@ -23,6 +23,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.EnumSet;
+
 @Service
 public class AuthService {
 
@@ -111,11 +113,17 @@ public class AuthService {
         );
 
         // 2. Check activation status
+        boolean isPendingOrRejectedEducator = EnumSet.of(EducatorStatus.PENDING, EducatorStatus.REJECTED)
+                .contains(userRepo.findEducatorStatusByUsername(username).orElse(null));
         boolean isActive = userRepo.findIsActiveByUsername(username).orElse(false);
 
+        if (isPendingOrRejectedEducator) {
+            logger.warn("Login blocked: User {} is authenticated but educator status is pending/rejected", username);
+            throw new NotActivatedException("Educator status is pending/rejected.");
+        }
         if (!isActive) {
             logger.warn("Login blocked: User {} is authenticated but not active", username);
-            throw new NotActivatedException("Account has not been activated yet, or educator status is pending/rejected.");
+            throw new NotActivatedException("Account has not been activated yet");
         }
 
         logger.info("Authentication successful for user {}", username);
