@@ -12,7 +12,8 @@ import {
 import React, { useState } from "react";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/src/auth/AuthContext";
-import { User, Lock } from "lucide-react-native"; // 建議加上圖標
+import { User, Lock } from "lucide-react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage"; // 建議加上圖標
 
 export default function Login() {
     const router = useRouter();
@@ -27,15 +28,44 @@ export default function Login() {
         setError(null);
         try {
             await signIn(username, password);
-            router.replace("/");
+
+            // 注意：因為 setUser 是異步的，直接拿剛剛 signIn 存入的數據最保險
+            // 或者在 AuthContext 的 signIn 裡 return userData
+
+            // 獲取存儲在 AsyncStorage 的用戶資訊來判斷
+            const storedUser = await AsyncStorage.getItem('auth_user');
+            const user = JSON.parse(storedUser || '{}');
+
+            // 檢查 roles 陣列中是否包含 ADMIN 權限
+            // 這裡要對應你後端回傳的字串，通常是 'ROLE_ADMIN' 或 'ADMIN'
+            const isAdmin = user.roles?.some((role: string) =>
+                role === 'ROLE_ADMIN' || role === 'ADMIN' || role === 'ROLE_EDUCATOR'
+            );
+            const isEducator = user.roles?.some((role: string) =>
+                role === 'ROLE_EDUCATOR'
+            );
+
+            if (isAdmin) {
+                console.log("Welcome Admin!");
+                router.replace("/admin"); // 導向你的 Admin 面板路徑
+            }
+            else if (isEducator) {
+                console.log("Welcome Educator!");
+                router.replace("/teacher/teacher"); // 導向你的 Admin 面板路徑
+            }
+            else {
+                console.log("Welcome Student!");
+                router.replace("/"); // 導向一般學生首頁
+            }
+
+
         } catch (err: any) {
-            setError(err.response?.status === 401 ? "Account or password incorrect" : "Login failed, try again later");
+            setError(err.response?.status === 401 ? "Account or password incorrect" : "Login failed");
             setPassword("");
         } finally {
             setLoading(false);
         }
     };
-
     return (
         <SafeAreaView style={styles.container}>
             <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{flex: 1}}>
