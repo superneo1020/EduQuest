@@ -1,8 +1,9 @@
-import { View, Text, StyleSheet, Pressable } from 'react-native';
-import { Stack } from 'expo-router';
+import { View, Text, StyleSheet, Pressable, TouchableOpacity, ScrollView } from 'react-native';
+import { Stack, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 
 export default function ChineseGamesIndex() {
+    const router = useRouter();
     const games = [
         {
             id: 'chinesequiz',
@@ -18,13 +19,17 @@ export default function ChineseGamesIndex() {
         },
     ];
 
+    const handleBackToHome = () => {
+        router.push('/');
+    };
+
     return (
-        <View style={styles.container}>
+        <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
             <Stack.Screen
                 options={{
                     title: 'Chinese Games',
-                    headerBackVisible: false, // 隐藏返回按钮
-                    headerLeft: () => null,   // 确保左侧没有返回按钮
+                    headerBackVisible: false,
+                    headerLeft: () => null,
                     headerStyle: { backgroundColor: '#4c669f' },
                     headerTintColor: '#fff',
                     headerTitleStyle: {
@@ -44,11 +49,7 @@ export default function ChineseGamesIndex() {
                     <Pressable
                         key={game.id}
                         style={styles.gameCard}
-                        onPress={() => {
-                            // 使用 router 进行导航
-                            const router = require('expo-router').router;
-                            router.push(game.route);
-                        }}
+                        onPress={() => router.push(game.route)}
                     >
                         <View style={styles.gameInfo}>
                             <Text style={styles.gameTitle}>{game.title}</Text>
@@ -58,7 +59,12 @@ export default function ChineseGamesIndex() {
                     </Pressable>
                 ))}
             </View>
-        </View>
+
+            {/* 返回首页链接 - 新增 */}
+            <TouchableOpacity style={styles.backLink} onPress={handleBackToHome}>
+                <Text style={styles.backLinkText}>← Return to home page</Text>
+            </TouchableOpacity>
+        </ScrollView>
     );
 }
 
@@ -67,11 +73,14 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#f5f5f5',
     },
+    scrollContent: {
+        flexGrow: 1,
+        paddingBottom: 30,
+    },
     gradientHeader: {
-        height: 0, // 完全隐藏渐变装饰
+        height: 0,
     },
     gamesList: {
-        flex: 1,
         paddingTop: 20,
         paddingHorizontal: 20,
     },
@@ -106,5 +115,18 @@ const styles = StyleSheet.create({
         color: '#4c669f',
         fontWeight: '300',
         marginLeft: 8,
+    },
+    // 新增样式
+    backLink: {
+        alignSelf: 'center',
+        marginTop: 20,
+        marginBottom: 10,
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+    },
+    backLinkText: {
+        fontSize: 16,
+        color: '#4c669f',
+        fontWeight: '500',
     },
 });

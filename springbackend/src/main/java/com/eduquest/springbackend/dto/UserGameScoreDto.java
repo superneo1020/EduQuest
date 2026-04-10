@@ -1,6 +1,7 @@
 package com.eduquest.springbackend.dto;
 
 import java.time.Instant;
+import java.util.Map;
 
 public record UserGameScoreDto(
         String name,
@@ -9,6 +10,7 @@ public record UserGameScoreDto(
         String icon,
         String description,
         Integer scores,
+        Map<String, Object> metadata,
         Instant createdAt
 ) {
 }

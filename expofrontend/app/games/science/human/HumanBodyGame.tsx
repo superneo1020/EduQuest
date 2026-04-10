@@ -272,7 +272,7 @@ const HumanBodyGame = () => {
     const [currentHint, setCurrentHint] = useState<string>('');
     const [currentOrganInfo, setCurrentOrganInfo] = useState<{ name: string; description: string; hint: string } | null>(null);
 
-    // ========== 💾 保存分數到伺服器 ==========
+    // ========== 💾 保存分數到伺服器（满分120） ==========
     const saveScore = async (finalScore: number) => {
         if (!token) return;
 
@@ -295,18 +295,18 @@ const HumanBodyGame = () => {
 
     useEffect(() => {
         if (gameCompleted) {
-            // 遊戲完成時保存分數
+            // 遊戲完成時保存分數（满分120）
             const totalOrgans = organs.length;
-            const finalScoreValue = Math.round((correctCount / totalOrgans) * 100);
+            const finalScoreValue = Math.round((correctCount / totalOrgans) * 120);
             saveScore(finalScoreValue);
         }
     }, [gameCompleted, correctCount, organs.length]);
 
-    // 計算最終分數 (滿分100)
+    // 計算最終分數 (滿分120)
     const finalScore = useMemo(() => {
         const totalOrgans = organs.length;
         if (totalOrgans === 0) return 0;
-        const score = (correctCount / totalOrgans) * 100;
+        const score = (correctCount / totalOrgans) * 120;
         return Math.round(score);
     }, [correctCount, organs.length]);
 
@@ -448,7 +448,7 @@ const HumanBodyGame = () => {
             <ScrollView style={styles.container}>
                 <Text style={styles.title}>Session Report 🎓</Text>
                 <View style={styles.reportBox}>
-                    <Text style={styles.accuracyText}>Score: {finalScore} / 100</Text>
+                    <Text style={styles.accuracyText}>Score: {finalScore} / 120</Text>
                     <Text style={styles.summaryText}>
                         You correctly placed {correctCount} out of {organs.length} organs.
                         {wrongCount > 0 && ` ${wrongCount} organs were placed incorrectly.`}

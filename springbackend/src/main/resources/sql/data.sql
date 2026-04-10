@@ -47,13 +47,13 @@ ON CONFLICT (difficulty) DO UPDATE SET multiplier = EXCLUDED.multiplier;
 
 -- Insert sample users with school assignments
 -- Password for all these users is "password"
-INSERT INTO users (username, email, password, school_id)
+INSERT INTO users (username, email, password, school_id, educator_status)
 VALUES
-    ('student1', 'student1@eduquestacademy.edu', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha', (SELECT id FROM schools WHERE name = 'EduQuest Academy')),
-    ('student2', 'student2@eduquestacademy.edu', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha', (SELECT id FROM schools WHERE name = 'EduQuest Academy')),
-    ('student3', 'student3@eduquestacademy.edu', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha', (SELECT id FROM schools WHERE name = 'EduQuest Academy')),
-    ('teacher1', 'teacher1@techinstitute.edu', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha', (SELECT id FROM schools WHERE name = 'Tech Institute')),
-    ('admin', 'admin@sciencehigh.edu', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha', (SELECT id FROM schools WHERE name = 'Science High School'))
+    ('student1', 'student1@eduquestacademy.edu', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha', (SELECT id FROM schools WHERE name = 'EduQuest Academy'), 'NONE'),
+    ('student2', 'student2@eduquestacademy.edu', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha', (SELECT id FROM schools WHERE name = 'EduQuest Academy'), 'NONE'),
+    ('student3', 'student3@eduquestacademy.edu', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha', (SELECT id FROM schools WHERE name = 'EduQuest Academy'), 'NONE'),
+    ('teacher1', 'teacher1@techinstitute.edu', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha', (SELECT id FROM schools WHERE name = 'Tech Institute'), 'APPROVED'),
+    ('admin', 'admin@sciencehigh.edu', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha', (SELECT id FROM schools WHERE name = 'Science High School'), 'ADMIN')
 ON CONFLICT (username) DO NOTHING;
 ;;;
 
@@ -107,7 +107,7 @@ VALUES
 
     -- English Games
     ('ENGLISH', 'Listening Game', 'MEDIUM', 'Headphones', '聽力多選題測試，增強英文聽解能力。'),
-    ('ENGLISH', 'Dialogue Selection', 'EASY', 'ABC', '經典單字配對，幫助記住基礎字彙。'),
+    ('ENGLISH', 'Writing Game', 'EASY', 'ABC', '經典單字配對，幫助記住基礎字彙。'),
     ('ENGLISH', 'Sentence Reorder', 'HARD', 'Book', '句子重組挑戰，強化英文語法結構。'),
 
     -- Science Games
@@ -208,9 +208,9 @@ VALUES
     ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM games WHERE name = 'AI Math Adventure'), 75),
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM games WHERE name = 'AI Math Adventure'), 92),
 
-    -- 修正：'Word matching game' 改為 'Dialogue Selection'
-    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM games WHERE name = 'Dialogue Selection'), 98),
-    ((SELECT id FROM users WHERE username = 'student3'), (SELECT id FROM games WHERE name = 'Dialogue Selection'), 70),
+    -- 修正：'Word matching game' 改為 'Writing Game'
+    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM games WHERE name = 'Writing Game'), 98),
+    ((SELECT id FROM users WHERE username = 'student3'), (SELECT id FROM games WHERE name = 'Writing Game'), 70),
 
     -- 修正：'Sentence Reordering Game' 改為 'Sentence Reorder'
     ((SELECT id FROM users WHERE username = 'teacher1'), (SELECT id FROM games WHERE name = 'Sentence Reorder'), 95),

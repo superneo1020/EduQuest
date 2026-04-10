@@ -1,6 +1,6 @@
 // app/games/chinese/chinesesentence.tsx
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, ActivityIndicator, Alert, StatusBar, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, ActivityIndicator, Alert, StatusBar, Animated, Easing, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, Stack } from 'expo-router';
 import { Languages, Star } from 'lucide-react-native';
@@ -21,13 +21,14 @@ type Question = {
     userAnswer: string;
     isCorrect: boolean;
     feedback?: string;
-    score?: number; // 0-10分
+    score?: number; // 0-10分 (原始AI分數/10)
 };
 
 type Difficulty = 'easy' | 'medium' | null;
 type GameState = 'difficulty_select' | 'playing' | 'result';
 
-const TOTAL_QUESTIONS = 10;
+// 修改：總題數改為 4 題
+const TOTAL_QUESTIONS = 4;
 
 // --- 💥 浮動文字元件 (HIT / OUCH) ---
 const FloatingText = ({ text, color, onComplete }: { text: string, color: string, onComplete: () => void }) => {
@@ -142,6 +143,36 @@ export default function ChineseSentenceGame() {
     const prepScale = useRef(new Animated.Value(0)).current;
     const [gameActive, setGameActive] = useState(false);
 
+    // ========== 🕒 新增：計時器相關狀態 ==========
+    const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+    const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const timerStartedRef = useRef<boolean>(false); // 確保計時器只啟動一次
+
+    // 格式化時間 (MM:SS)
+    const formatTime = (totalSeconds: number): string => {
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    };
+
+    // 停止計時器
+    const stopTimer = () => {
+        if (timerIntervalRef.current) {
+            clearInterval(timerIntervalRef.current);
+            timerIntervalRef.current = null;
+        }
+    };
+
+    // 開始計時器（只在第一次調用時生效）
+    const startTimerOnce = () => {
+        if (timerStartedRef.current) return; // 已經啟動過，不再重複啟動
+        timerStartedRef.current = true;
+        setElapsedSeconds(0);
+        timerIntervalRef.current = setInterval(() => {
+            setElapsedSeconds(prev => prev + 1);
+        }, 1000);
+    };
+
     // 特效狀態
     const [floatingText, setFloatingText] = useState<{ id: number, text: string, color: string } | null>(null);
     const screenShake = useRef(new Animated.Value(0)).current;
@@ -183,8 +214,8 @@ export default function ChineseSentenceGame() {
         }
     };
 
-    // 倒數準備序列
-    const startPrepSequence = () => {
+    // 倒數準備序列 - 只在第一次開始計時器
+    const startPrepSequence = (isFirstTime: boolean = true) => {
         setGameActive(false);
 
         setTimeout(() => {
@@ -197,6 +228,11 @@ export default function ChineseSentenceGame() {
                 useNativeDriver: true,
             }).start();
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+            // 只在第一次倒數時啟動計時器
+            if (isFirstTime) {
+                startTimerOnce();
+            }
         }, 100);
 
         setTimeout(() => {
@@ -274,6 +310,11 @@ export default function ChineseSentenceGame() {
 
     // 初始化遊戲（當難度選擇後）
     const startGame = (selectedDifficulty: Difficulty) => {
+        // 重置計時器狀態
+        timerStartedRef.current = false;
+        setElapsedSeconds(0);
+        stopTimer();
+
         setDifficulty(selectedDifficulty);
         setGameState('playing');
         setLoading(true);
@@ -307,8 +348,8 @@ export default function ChineseSentenceGame() {
                 isCorrect: false
             }]);
             updateCharacterState('idle');
-            // 開始倒數
-            startPrepSequence();
+            // 開始倒數 - 第一次，啟動計時器
+            startPrepSequence(true);
         } catch (error) {
             console.error('Failed to load first question:', error);
             Alert.alert('錯誤', '無法加載題目，請稍後再試');
@@ -319,6 +360,7 @@ export default function ChineseSentenceGame() {
 
     const loadNextQuestion = async () => {
         if (currentIndex + 1 >= TOTAL_QUESTIONS) {
+            stopTimer(); // 遊戲完成時停止計時器
             await generateFinalFeedback();
             setGameState('result');
             updateCharacterState('celebrate');
@@ -357,8 +399,8 @@ export default function ChineseSentenceGame() {
             setShowHint(false);
             setShowFeedback(false);
             updateCharacterState('idle');
-            // 每題之間重新倒數
-            startPrepSequence();
+            // 每題之間重新倒數 - 不是第一次，不啟動計時器
+            startPrepSequence(false);
         } catch (error) {
             console.error('Failed to load next question:', error);
             Alert.alert('錯誤', '無法加載下一題，請稍後再試');
@@ -390,7 +432,17 @@ export default function ChineseSentenceGame() {
                 alternatives: currentQuestion.alternatives
             });
 
-            const score10 = Math.round(result.score / 10);
+            // 修改：根據難度計算每題得分
+            // Easy: 每題滿分 25 分 (總分 100)
+            // Medium: 每題滿分 30 分 (總分 120)
+            let questionScore = 0;
+            if (difficulty === 'easy') {
+                // Easy: 原始分數 0-100 轉換為 0-25
+                questionScore = Math.round((result.score / 100) * 25);
+            } else {
+                // Medium: 原始分數 0-100 轉換為 0-30
+                questionScore = Math.round((result.score / 100) * 30);
+            }
 
             setQuestions(prev => prev.map((q, idx) =>
                 idx === currentIndex
@@ -399,7 +451,7 @@ export default function ChineseSentenceGame() {
                         userAnswer: inputText.trim(),
                         isCorrect: result.isCorrect,
                         feedback: result.feedback,
-                        score: score10
+                        score: questionScore
                     }
                     : q
             ));
@@ -413,7 +465,7 @@ export default function ChineseSentenceGame() {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
                 setFloatingText({ id: Date.now(), text: 'HIT!', color: '#FFD700' });
                 playBounceAnimation();
-                if (score10 >= 9) {
+                if (result.score >= 90) {
                     updateCharacterState('perfect');
                     setEncouragementText(getRandomEncouragement('great'));
                 } else {
@@ -449,36 +501,40 @@ export default function ChineseSentenceGame() {
         loadNextQuestion();
     };
 
+    // 修改：計算總分（根據難度不同滿分不同）
     const calculateScore = () => {
         const totalScore = questions.reduce((acc, q) => acc + (q.score || 0), 0);
         const correctCount = questions.filter(q => q.isCorrect).length;
+        const maxScore = difficulty === 'easy' ? 100 : 120;
 
         return {
             correct: correctCount,
             total: TOTAL_QUESTIONS,
             percentage: Math.round((correctCount / TOTAL_QUESTIONS) * 100),
-            totalScore: totalScore
+            totalScore: totalScore,
+            maxScore: maxScore
         };
     };
 
     const generateFinalFeedback = async () => {
         const score = calculateScore();
         const percentage = score.percentage;
+        const maxScore = score.maxScore;
 
         // 保存分數到伺服器
         await saveScore(score.totalScore);
 
         let feedback = '';
         if (score.correct === TOTAL_QUESTIONS) {
-            feedback = `🎉 Perfect! You got them all right. ${score.correct} Question! You are a little Chinese genius! 🌟🌟🌟`;
+            feedback = `🎉 Perfect! You got them all right. ${score.correct} Question! You are a little Chinese genius! 🌟🌟🌟 (Score: ${score.totalScore}/${maxScore})`;
         } else if (percentage >= 90) {
-            feedback = `🌟 Awesome! You got it right. ${score.correct} Keep it up! 👍`;
+            feedback = `🌟 Awesome! You got it right. ${score.correct} Keep it up! 👍 (Score: ${score.totalScore}/${maxScore})`;
         } else if (percentage >= 70) {
-            feedback = `📚 Very good! You got it right. ${score.correct} Practice the problems a bit more and you'll get even better! 💪`;
+            feedback = `📚 Very good! You got it right. ${score.correct} Practice the problems a bit more and you'll get even better! 💪 (Score: ${score.totalScore}/${maxScore})`;
         } else if (percentage >= 50) {
-            feedback = `🌱 Improvement! You got it right. ${score.correct} Keep it up with the questions! 📖`;
+            feedback = `🌱 Improvement! You got it right. ${score.correct} Keep it up with the questions! 📖 (Score: ${score.totalScore}/${maxScore})`;
         } else {
-            feedback = `💪 Don't be discouraged! You got it right. ${score.correct} Try again, it will be better! Let's work hard together! ✨`;
+            feedback = `💪 Don't be discouraged! You got it right. ${score.correct} Try again, it will be better! Let's work hard together! ✨ (Score: ${score.totalScore}/${maxScore})`;
         }
 
         setAiFeedback(feedback);
@@ -486,6 +542,10 @@ export default function ChineseSentenceGame() {
 
     // 返回難度選擇頁面
     const handleNewDifficulty = async () => {
+        stopTimer();
+        timerStartedRef.current = false;
+        setElapsedSeconds(0);
+
         // 如果有進行中的遊戲且已有分數，保存當前分數
         if (gameState === 'playing' && questions.length > 0) {
             const currentScore = calculateScore();
@@ -511,10 +571,12 @@ export default function ChineseSentenceGame() {
     };
 
     const handleBackToGames = () => {
+        stopTimer();
         router.back();
     };
 
     const handleBackToHome = () => {
+        stopTimer();
         router.push('/');
     };
 
@@ -535,6 +597,7 @@ export default function ChineseSentenceGame() {
                         text: '退出',
                         style: 'destructive',
                         onPress: async () => {
+                            stopTimer();
                             // 如果有分數，保存當前分數
                             const currentScore = calculateScore();
                             if (currentScore.totalScore > 0) {
@@ -578,6 +641,7 @@ export default function ChineseSentenceGame() {
 
         const currentQuestion = questions[currentIndex];
         const score = currentQuestion.score || 0;
+        const maxQuestionScore = difficulty === 'easy' ? 25 : 30;
 
         return (
             <Animated.View
@@ -596,8 +660,8 @@ export default function ChineseSentenceGame() {
             >
                 <View style={styles.feedbackRow}>
                     <Text style={styles.feedbackLabel}>Score：</Text>
-                    <Text style={[styles.scoreText, score >= 8 ? styles.highScore : score >= 6 ? styles.mediumScore : styles.lowScore]}>
-                        {score}/10
+                    <Text style={[styles.scoreText, score >= (maxQuestionScore * 0.8) ? styles.highScore : score >= (maxQuestionScore * 0.6) ? styles.mediumScore : styles.lowScore]}>
+                        {score}/{maxQuestionScore}
                     </Text>
                 </View>
 
@@ -749,6 +813,10 @@ export default function ChineseSentenceGame() {
                     <Text style={styles.subTitle}>
                         Learn Chinese together with the cute panda! Complete the fill-in-the-blank exercises to gain a sense of accomplishment!✨
                     </Text>
+                    <View style={styles.scoreInfoBox}>
+                        <Text style={styles.scoreInfoText}>🏆 Easy: 4 questions, total 100 points</Text>
+                        <Text style={styles.scoreInfoText}>⚡ Medium: 4 questions, total 120 points</Text>
+                    </View>
                 </View>
 
                 <View style={styles.menuGrid}>
@@ -778,6 +846,13 @@ export default function ChineseSentenceGame() {
                                 </View>
                                 <Text style={styles.diffDesc}>{option.description}</Text>
 
+                                {/* 修改：顯示計分方式 */}
+                                <View style={styles.scoreInfoRow}>
+                                    <Text style={[styles.scoreInfoDetail, { color: option.color }]}>
+                                        {option.id === 'easy' ? '🏆 25 points per question (Total 100)' : '⚡ 30 points per question (Total 120)'}
+                                    </Text>
+                                </View>
+
                                 <View style={styles.featuresList}>
                                     {option.features.map((feature, index) => (
                                         <View key={index} style={styles.featureItem}>
@@ -805,6 +880,8 @@ export default function ChineseSentenceGame() {
     // 結果頁面
     const renderResult = () => {
         const score = calculateScore();
+        const maxScore = score.maxScore;
+        const totalTimeFormatted = formatTime(elapsedSeconds);
 
         return (
             <ScrollView contentContainerStyle={styles.resultContainer}>
@@ -815,8 +892,14 @@ export default function ChineseSentenceGame() {
 
                     <View style={styles.scoreCircle}>
                         <Text style={styles.scorePercentage}>{score.totalScore}</Text>
-                        <Text style={styles.scorePercentSign}>/100</Text>
+                        <Text style={styles.scorePercentSign}>/{maxScore}</Text>
                         <Text style={styles.scoreLabel}>Total Score</Text>
+                    </View>
+
+                    {/* 新增：顯示總花費時間 */}
+                    <View style={styles.reportTimeBox}>
+                        <Text style={styles.reportScoreLabel}>⏱️ Total Time</Text>
+                        <Text style={styles.reportTimeValue}>{totalTimeFormatted}</Text>
                     </View>
 
                     {isSaving && (
@@ -844,20 +927,23 @@ export default function ChineseSentenceGame() {
 
                     <View style={styles.summaryContainer}>
                         <Text style={styles.summaryTitle}>📝 Answer Summary：</Text>
-                        {questions.map((q, index) => (
-                            <View key={index} style={styles.summaryItem}>
-                                <Text style={styles.summaryNumber}>{index + 1}.</Text>
-                                <Text style={styles.summaryAnswer} numberOfLines={1}>
-                                    {q.userAnswer || 'Not answered'}
-                                </Text>
-                                <Text style={[
-                                    styles.summaryScore,
-                                    q.isCorrect ? styles.correctScore : styles.incorrectScore
-                                ]}>
-                                    {q.score || 0}/10
-                                </Text>
-                            </View>
-                        ))}
+                        {questions.map((q, index) => {
+                            const maxQScore = difficulty === 'easy' ? 25 : 30;
+                            return (
+                                <View key={index} style={styles.summaryItem}>
+                                    <Text style={styles.summaryNumber}>{index + 1}.</Text>
+                                    <Text style={styles.summaryAnswer} numberOfLines={1}>
+                                        {q.userAnswer || 'Not answered'}
+                                    </Text>
+                                    <Text style={[
+                                        styles.summaryScore,
+                                        q.isCorrect ? styles.correctScore : styles.incorrectScore
+                                    ]}>
+                                        {q.score || 0}/{maxQScore}
+                                    </Text>
+                                </View>
+                            );
+                        })}
                     </View>
 
                     <View style={styles.resultButtonContainer}>
@@ -914,17 +1000,24 @@ export default function ChineseSentenceGame() {
                 <Stack.Screen options={{ headerShown: false }} />
                 <SafeAreaView style={[styles.container, { backgroundColor: '#f5f5f5' }]} edges={['top']}>
                     <StatusBar barStyle="dark-content" />
-                    <View style={[styles.header, { backgroundColor: currentTheme.primary }]}>
+                    {/* 修改：頂部欄帶計時器 */}
+                    <View style={[styles.headerWithTimer, { backgroundColor: currentTheme.primary }]}>
                         <TouchableOpacity onPress={handleBack} style={styles.headerButton}>
                             <Ionicons name="arrow-back" size={24} color="#fff" />
                         </TouchableOpacity>
                         <Text style={styles.headerTitle}>
                             🐼 Chinese fill-in-the-blank - {difficulty === 'easy' ? 'Simple mode' : 'Medium mode'}
                         </Text>
-                        <View style={[styles.scoreBadge, { backgroundColor: '#fff' }]}>
-                            <Text style={[styles.scoreBadgeText, { color: currentTheme.primary }]}>
-                                {questions.filter(q => q.isCorrect).length}/{TOTAL_QUESTIONS}
-                            </Text>
+                        <View style={styles.rightHeaderGroup}>
+                            <View style={styles.timerContainer}>
+                                <Text style={styles.timerIcon}>⏱️</Text>
+                                <Text style={styles.timerText}>{formatTime(elapsedSeconds)}</Text>
+                            </View>
+                            <View style={[styles.scoreBadge, { backgroundColor: '#fff' }]}>
+                                <Text style={[styles.scoreBadgeText, { color: currentTheme.primary }]}>
+                                    {questions.filter(q => q.isCorrect).length}/{TOTAL_QUESTIONS}
+                                </Text>
+                            </View>
                         </View>
                     </View>
                     {renderQuestion()}
@@ -1020,10 +1113,44 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 12,
     },
+    // 新增：帶計時器的頂部欄樣式
+    headerWithTimer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+    },
+    rightHeaderGroup: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    timerContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.25)',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 20,
+    },
+    timerIcon: {
+        fontSize: 14,
+        marginRight: 4,
+        color: '#fff',
+    },
+    timerText: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#fff',
+        fontFamily: Platform.OS === 'web' ? 'monospace' : 'Courier',
+    },
     headerTitle: {
         fontSize: 18,
         fontWeight: '600',
         color: '#fff',
+        flex: 1,
+        textAlign: 'center',
     },
     headerButton: {
         width: 40,
@@ -1282,6 +1409,19 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginBottom: 20,
     },
+    scoreInfoBox: {
+        backgroundColor: '#FFF8E1',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
+        marginTop: 8,
+    },
+    scoreInfoText: {
+        fontSize: 12,
+        color: '#FF9F4A',
+        fontWeight: '500',
+        textAlign: 'center',
+    },
     menuGrid: {
         width: '100%',
         paddingHorizontal: 20,
@@ -1341,6 +1481,13 @@ const styles = StyleSheet.create({
         color: '#666',
         marginBottom: 12,
         lineHeight: 20,
+    },
+    scoreInfoRow: {
+        marginBottom: 12,
+    },
+    scoreInfoDetail: {
+        fontSize: 12,
+        fontWeight: '600',
     },
     featuresList: {
         marginBottom: 15,
@@ -1423,6 +1570,27 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#666',
         marginLeft: 10,
+    },
+    // 新增：總結頁面的時間顯示樣式
+    reportTimeBox: {
+        backgroundColor: '#FFF8E1',
+        padding: 16,
+        borderRadius: 16,
+        width: '90%',
+        alignItems: 'center',
+        marginBottom: 20,
+        borderWidth: 1,
+        borderColor: '#FF9F4A',
+    },
+    reportScoreLabel: {
+        fontSize: 14,
+        color: '#666',
+        marginBottom: 8,
+    },
+    reportTimeValue: {
+        fontSize: 32,
+        fontWeight: 'bold',
+        color: '#FF9F4A',
     },
     savingIndicator: {
         flexDirection: 'row',
