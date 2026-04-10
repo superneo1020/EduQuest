@@ -27,7 +27,7 @@ public class CourseMemberController {
         return ResponseEntity.ok(courseMemberService.showAllCourse(userDetails.getUsername()));
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/{id}/members")
     public ResponseEntity<List<CourseMemberDto>> showAllCourseMemberByCourseId(
             @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable Long id
