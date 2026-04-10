@@ -203,10 +203,10 @@ const AnimalClassificationGame: React.FC = () => {
             const isCorrect = selectedAnimal.type === categoryId;
             showHitFeedback(isCorrect);
 
-            // 更新分數（即時更新）
+            // 更新分數（即時更新，满分120）
             const newCorrectCount = isCorrect ? gameResult.correct + 1 : gameResult.correct;
             const newWrongCount = !isCorrect ? gameResult.wrong + 1 : gameResult.wrong;
-            const newScore = Math.round((newCorrectCount / allAnimals.length) * 100);
+            const newScore = Math.round((newCorrectCount / allAnimals.length) * 120);
             setScore(newScore);
             setGameResult(prev => ({
                 ...prev,
@@ -226,11 +226,11 @@ const AnimalClassificationGame: React.FC = () => {
     const handleRemoveFromCategory = (animalId: number) => {
         const animal = allAnimals.find(a => a.id === animalId);
         if (animal) {
-            // 移除時重新計算分數
+            // 移除時重新計算分數（满分120）
             const wasCorrect = categoryAssignments[animalId] === animal.type;
             const newCorrectCount = wasCorrect ? gameResult.correct - 1 : gameResult.correct;
             const newWrongCount = !wasCorrect ? gameResult.wrong - 1 : gameResult.wrong;
-            const newScore = Math.round((newCorrectCount / allAnimals.length) * 100);
+            const newScore = Math.round((newCorrectCount / allAnimals.length) * 120);
             setScore(newScore);
             setGameResult(prev => ({
                 ...prev,
@@ -253,7 +253,7 @@ const AnimalClassificationGame: React.FC = () => {
             if (assigned) assigned === animal.type ? correct++ : wrong++;
         });
         const total = allAnimals.length;
-        const calculatedScore = Math.round((correct / total) * 100);
+        const calculatedScore = Math.round((correct / total) * 120);
         setGameResult({ correct, wrong, total, score: calculatedScore });
         setScore(calculatedScore);
         return { correct, wrong, total, score: calculatedScore };
@@ -278,8 +278,9 @@ const AnimalClassificationGame: React.FC = () => {
 
     const generateSummary = (result: GameResult): string => {
         let summary = '';
-        if (result.score === 100) summary = '🌟 EXCELLENT! You classified all animals correctly! 🌟';
-        else if (result.score >= 70) summary = `🎉 Good job! You got ${result.correct} out of ${result.total} correct. Keep practicing! 🎉`;
+        // 满分120分，阈值调整：满分120 → 优秀；≥84分（相当于原70%正确率）→ 良好
+        if (result.score === 120) summary = '🌟 EXCELLENT! You classified all animals correctly! 🌟';
+        else if (result.score >= 84) summary = `🎉 Good job! You got ${result.correct} out of ${result.total} correct. Keep practicing! 🎉`;
         else summary = `📚 You got ${result.correct} out of ${result.total} correct. Let's review and try again! 💪`;
 
         const wrongAnimals = allAnimals.filter(animal => {
@@ -401,7 +402,7 @@ const AnimalClassificationGame: React.FC = () => {
                     <Text style={styles.reportTitle}>📊 Session Report 📊</Text>
                     <View style={styles.scoreCircle}>
                         <Text style={styles.scoreCircleNumber}>{finalReport.accuracy}</Text>
-                        <Text style={styles.scoreCircleLabel}>/ 100</Text>
+                        <Text style={styles.scoreCircleLabel}>/ 120</Text>
                     </View>
 
                     {/* 保存中指示器 */}
@@ -464,7 +465,7 @@ const AnimalClassificationGame: React.FC = () => {
                     <Animated.View style={[styles.scoreContainer, scoreAnimatedStyle]}>
                         <Text style={styles.scoreLabel}>⭐ Score:</Text>
                         <Text style={styles.scoreValue}>{score}</Text>
-                        <Text style={styles.scoreMax}>/100</Text>
+                        <Text style={styles.scoreMax}>/120</Text>
                         <Text style={styles.progressText}>({Object.keys(categoryAssignments).length}/{allAnimals.length})</Text>
                     </Animated.View>
                 </View>

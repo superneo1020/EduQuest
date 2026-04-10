@@ -9,7 +9,8 @@ import {
     SafeAreaView,
     Dimensions,
     ActivityIndicator,
-    Alert
+    Alert,
+    Platform,  // ← 添加這一行
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LayoutList } from 'lucide-react-native';
@@ -45,7 +46,9 @@ const FloatingText = ({ text, color, onComplete }: { text: string, color: string
     );
 };
 
-// 難度級別配置
+// 難度級別配置 - 每題20分，Easy 4題共80分，Medium 4題共80分（但顯示為120滿分？）
+// 根據需求：Easy滿分100分，Medium滿分120分
+// 所以 Easy: 每題25分 (25*4=100)，Medium: 每題30分 (30*4=120)
 const DIFFICULTY_LEVELS = {
     easy: {
         label: 'Easy',
@@ -53,9 +56,11 @@ const DIFFICULTY_LEVELS = {
         color: '#4CAF50',
         bgColor: '#E8F5E9',
         icon: '🌱',
-        questionsPerGame: 5,
+        questionsPerGame: 4,
+        pointsPerQuestion: 25,  // 25 * 4 = 100
+        maxScore: 100,
         desc: 'Simple 3-4 word sentences. Focus on basic structure.',
-        features: ['Short sentences', 'Basic word order', '5 Questions']
+        features: ['Short sentences', 'Basic word order', '4 Questions']
     },
     medium: {
         label: 'Medium',
@@ -63,9 +68,11 @@ const DIFFICULTY_LEVELS = {
         color: '#FF9800',
         bgColor: '#FFF3E0',
         icon: '🌳',
-        questionsPerGame: 5,
+        questionsPerGame: 4,
+        pointsPerQuestion: 30,  // 30 * 4 = 120
+        maxScore: 120,
         desc: 'Common 4-5 word phrases. Natural daily expressions.',
-        features: ['Moderate length', 'Common phrases', '5 Questions']
+        features: ['Moderate length', 'Common phrases', '4 Questions']
     }
 };
 
@@ -110,10 +117,40 @@ export default function SentenceReorderScreen() {
     const [floatingText, setFloatingText] = useState<{ id: number, text: string, color: string } | null>(null);
     const screenShake = useSharedValue(0);
 
+    // ========== 🕒 新增：計時器相關狀態 ==========
+    const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+    const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const timerStartedRef = useRef<boolean>(false); // 確保計時器只啟動一次
+
+    // 格式化時間 (MM:SS)
+    const formatTime = (totalSeconds: number): string => {
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    };
+
+    // 停止計時器
+    const stopTimer = useCallback(() => {
+        if (timerIntervalRef.current) {
+            clearInterval(timerIntervalRef.current);
+            timerIntervalRef.current = null;
+        }
+    }, []);
+
+    // 開始計時器（只在第一次調用時生效）
+    const startTimerOnce = useCallback(() => {
+        if (timerStartedRef.current) return; // 已經啟動過，不再重複啟動
+        timerStartedRef.current = true;
+        setElapsedSeconds(0);
+        timerIntervalRef.current = setInterval(() => {
+            setElapsedSeconds(prev => prev + 1);
+        }, 1000);
+    }, []);
+
     // 遊戲狀態
     const [gameState, setGameState] = useState<GameState>({
         currentQuestionIndex: 0,
-        totalQuestions: 5,
+        totalQuestions: 4,
         score: 0,
         words: [],
         feedback: '',
@@ -138,8 +175,8 @@ export default function SentenceReorderScreen() {
         opacity: withTiming(prepText ? 1 : 0)
     }));
 
-    // 倒數準備序列
-    const startPrepSequence = useCallback(() => {
+    // 倒數準備序列 - 只在第一次開始計時器
+    const startPrepSequence = useCallback((isFirstTime: boolean = true) => {
         setGameActive(false);
 
         setTimeout(() => {
@@ -154,13 +191,18 @@ export default function SentenceReorderScreen() {
             prepScale.value = 0;
             prepScale.value = withSpring(1.5);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+            // 只在第一次倒數時啟動計時器
+            if (isFirstTime) {
+                startTimerOnce();
+            }
         }, 1000);
 
         setTimeout(() => {
             setPrepText(null);
             setGameActive(true);
         }, 1600);
-    }, []);
+    }, [startTimerOnce]);
 
     // 生成單一題目（使用AI或備用）
     const generateQuestion = useCallback(async (difficulty: Difficulty, questionNumber: number): Promise<ReorderQuestion> => {
@@ -220,7 +262,7 @@ export default function SentenceReorderScreen() {
             }));
 
             initializeQuestionWords(firstQuestion);
-            startPrepSequence();
+            startPrepSequence(true); // 第一次倒數，啟動計時器
 
         } catch (error) {
             console.error('Failed to generate first question:', error);
@@ -232,13 +274,18 @@ export default function SentenceReorderScreen() {
                 isLoading: false
             }));
             initializeQuestionWords(fallbackQuestion);
-            startPrepSequence();
+            startPrepSequence(true); // 第一次倒數，啟動計時器
         }
     }, [generateQuestion, startPrepSequence]);
 
     // 初始化遊戲（選擇難度後調用）
     const initializeGame = useCallback(async (difficulty: Difficulty) => {
         const questionsCount = DIFFICULTY_LEVELS[difficulty].questionsPerGame;
+
+        // 重置計時器狀態
+        timerStartedRef.current = false;
+        setElapsedSeconds(0);
+        stopTimer();
 
         setGameState(prev => ({
             ...prev,
@@ -255,9 +302,9 @@ export default function SentenceReorderScreen() {
         }));
 
         await loadFirstQuestion(difficulty);
-    }, [loadFirstQuestion]);
+    }, [loadFirstQuestion, stopTimer]);
 
-    // 加載下一題
+    // 加載下一題（不重新啟動計時器）
     const loadNextQuestion = useCallback(async () => {
         const nextIndex = gameState.currentQuestionIndex + 1;
         const difficulty = gameState.difficulty!;
@@ -280,7 +327,7 @@ export default function SentenceReorderScreen() {
             }));
 
             initializeQuestionWords(nextQuestion);
-            startPrepSequence();
+            startPrepSequence(false); // 不是第一次，不啟動計時器
 
         } catch (error) {
             console.error('Failed to generate next question:', error);
@@ -295,7 +342,7 @@ export default function SentenceReorderScreen() {
                 isChecking: false
             }));
             initializeQuestionWords(fallbackQuestion);
-            startPrepSequence();
+            startPrepSequence(false); // 不是第一次，不啟動計時器
         }
     }, [gameState.currentQuestionIndex, gameState.difficulty, generateQuestion, startPrepSequence]);
 
@@ -350,11 +397,13 @@ export default function SentenceReorderScreen() {
         const originalSentence = gameState.currentQuestion.sentence;
 
         if (isCorrect) {
-            // ✅ 正確
+            // ✅ 正確 - 根據難度獲取不同的每題分數
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
             setFloatingText({ id: Date.now(), text: 'HIT!', color: '#FFD700' });
 
-            const pointsEarned = 20;
+            const difficulty = gameState.difficulty!;
+            const pointsPerQuestion = DIFFICULTY_LEVELS[difficulty].pointsPerQuestion;
+            const pointsEarned = pointsPerQuestion;
             const newScore = gameState.score + pointsEarned;
             const newCorrectAnswers = gameState.correctAnswers + 1;
 
@@ -395,6 +444,7 @@ export default function SentenceReorderScreen() {
         } else {
             // 遊戲完成
             setGameActive(false);
+            stopTimer(); // 停止計時器
             setGameState(prev => ({
                 ...prev,
                 gameFinished: true
@@ -407,7 +457,7 @@ export default function SentenceReorderScreen() {
     const retryQuestion = () => {
         if (!gameActive || !gameState.currentQuestion) return;
         initializeQuestionWords(gameState.currentQuestion);
-        startPrepSequence();
+        startPrepSequence(false); // 重試不啟動計時器
     };
 
     // 重新開始遊戲
@@ -417,7 +467,7 @@ export default function SentenceReorderScreen() {
         } else {
             setGameState({
                 currentQuestionIndex: 0,
-                totalQuestions: 5,
+                totalQuestions: 4,
                 score: 0,
                 words: [],
                 feedback: '',
@@ -436,6 +486,9 @@ export default function SentenceReorderScreen() {
 
     // 返回上一頁
     const backToDifficulty = () => {
+        stopTimer();
+        timerStartedRef.current = false;
+        setElapsedSeconds(0);
         setGameState(prev => ({
             ...prev,
             gameStarted: false,
@@ -447,6 +500,8 @@ export default function SentenceReorderScreen() {
 
     // 返回主頁
     const goToHome = () => {
+        stopTimer();
+        timerStartedRef.current = false;
         router.back();
     };
 
@@ -457,10 +512,17 @@ export default function SentenceReorderScreen() {
         return Math.round((gameState.correctAnswers / totalAnswered) * 100);
     };
 
-    // 計算滿分百分比
+    // 計算滿分百分比 - 根據難度使用不同的滿分
     const getScorePercentage = () => {
-        const maxScore = gameState.totalQuestions * 20;
+        if (!gameState.difficulty) return 0;
+        const maxScore = DIFFICULTY_LEVELS[gameState.difficulty].maxScore;
         return Math.round((gameState.score / maxScore) * 100);
+    };
+
+    // 獲取當前難度的滿分
+    const getMaxScore = () => {
+        if (!gameState.difficulty) return 100;
+        return DIFFICULTY_LEVELS[gameState.difficulty].maxScore;
     };
 
     // 獲取得分顏色
@@ -562,6 +624,11 @@ export default function SentenceReorderScreen() {
                                             </View>
                                         </View>
                                         <Text style={styles.diffDesc}>{config.desc}</Text>
+                                        <View style={styles.scoreInfoRow}>
+                                            <Text style={styles.scoreInfoText}>
+                                                🎯 {config.questionsPerGame} questions • Max score: {config.maxScore}
+                                            </Text>
+                                        </View>
                                     </View>
                                 </TouchableOpacity>
                             );
@@ -574,8 +641,9 @@ export default function SentenceReorderScreen() {
 
     // 遊戲完成頁面
     const renderCompletionScreen = () => {
-        const maxScore = gameState.totalQuestions * 20;
+        const maxScore = getMaxScore();
         const scorePercentage = getScorePercentage();
+        const totalTimeFormatted = formatTime(elapsedSeconds);
 
         let performanceMessage = '';
         if (scorePercentage >= 80) performanceMessage = 'Excellent! 🎉';
@@ -600,6 +668,19 @@ export default function SentenceReorderScreen() {
                     <Text style={styles.scoreMax}>/ {maxScore}</Text>
                     <Text style={styles.scoreLabel}>Final Score</Text>
                 </View>
+
+                {/* 新增：顯示總花費時間 */}
+                <View style={styles.reportTimeBox}>
+                    <Text style={styles.reportScoreLabel}>⏱️ Total Time</Text>
+                    <Text style={styles.reportTimeValue}>{totalTimeFormatted}</Text>
+                </View>
+
+                {isSaving && (
+                    <View style={styles.savingIndicator}>
+                        <ActivityIndicator size="small" color="#4CAF50" />
+                        <Text style={styles.savingText}>Synchronizing scores...</Text>
+                    </View>
+                )}
 
                 <View style={styles.statsCard}>
                     <View style={styles.statRow}>
@@ -663,6 +744,8 @@ export default function SentenceReorderScreen() {
             return renderLoadingNext();
         }
 
+        const maxScore = getMaxScore();
+
         return (
             <View style={styles.container}>
                 <Stack.Screen
@@ -673,14 +756,19 @@ export default function SentenceReorderScreen() {
 
                 <Animated.View style={[{ flex: 1 }, animatedScreenStyle]}>
                     <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-                        {/* 遊戲標題 */}
+                        {/* 遊戲標題 - 修改為帶計時器的頂部欄 */}
                         <LinearGradient
                             colors={['#4b6cb7', '#182848']}
-                            style={styles.header}
+                            style={styles.headerWithTimer}
                         >
                             <Text style={styles.headerTitle}>🔤 Sentence Reorder</Text>
-                            <Text style={styles.headerSubtitle}>Arrange the words to form correct sentences</Text>
+                            <View style={styles.timerContainer}>
+                                <Text style={styles.timerIcon}>⏱️</Text>
+                                <Text style={styles.timerText}>{formatTime(elapsedSeconds)}</Text>
+                            </View>
                         </LinearGradient>
+
+                        <Text style={styles.headerSubtitle}>Arrange the words to form correct sentences</Text>
 
                         {/* 倒數覆蓋層 */}
                         {prepText && (
@@ -1012,28 +1100,59 @@ const styles = StyleSheet.create({
     diffDesc: {
         fontSize: 14,
         color: '#64748B',
-        marginBottom: 12,
+        marginBottom: 8,
         lineHeight: 20,
     },
-    // 遊戲主界面樣式
-    header: {
+    scoreInfoRow: {
+        marginTop: 4,
+    },
+    scoreInfoText: {
+        fontSize: 12,
+        color: '#4b6cb7',
+        fontWeight: '500',
+    },
+    // 遊戲主界面樣式 - 新增帶計時器的標題欄
+    headerWithTimer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
         paddingTop: 40,
-        paddingBottom: 30,
+        paddingBottom: 20,
         paddingHorizontal: 20,
         borderBottomLeftRadius: 30,
         borderBottomRightRadius: 30,
-        marginBottom: 20,
-    },
-    headerTitle: {
-        fontSize: 32,
-        fontWeight: 'bold',
-        color: '#fff',
         marginBottom: 8,
     },
-    headerSubtitle: {
-        fontSize: 16,
+    headerTitle: {
+        fontSize: 24,
+        fontWeight: 'bold',
         color: '#fff',
-        opacity: 0.9,
+    },
+    headerSubtitle: {
+        fontSize: 14,
+        color: '#666',
+        marginBottom: 16,
+        paddingHorizontal: 20,
+    },
+    // 計時器樣式
+    timerContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.25)',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+    },
+    timerIcon: {
+        fontSize: 16,
+        marginRight: 6,
+        color: '#fff',
+    },
+    timerText: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#fff',
+        fontFamily: Platform.OS === 'web' ? 'monospace' : 'Courier',
     },
     progressBar: {
         height: 4,
@@ -1252,6 +1371,50 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#666',
         marginTop: 8,
+    },
+    // 新增：總結頁面的時間顯示樣式
+    reportTimeBox: {
+        backgroundColor: 'white',
+        padding: 16,
+        borderRadius: 16,
+        width: '90%',
+        alignItems: 'center',
+        marginBottom: 20,
+        borderWidth: 1,
+        borderColor: '#ddd',
+        alignSelf: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    reportScoreLabel: {
+        fontSize: 14,
+        color: '#666',
+        marginBottom: 8,
+    },
+    reportTimeValue: {
+        fontSize: 32,
+        fontWeight: 'bold',
+        color: '#4b6cb7',
+    },
+    savingIndicator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        marginBottom: 16,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        backgroundColor: '#E8F5E9',
+        borderRadius: 20,
+        alignSelf: 'center',
+    },
+    savingText: {
+        fontSize: 12,
+        color: '#4CAF50',
+        fontWeight: '500',
     },
     statsCard: {
         backgroundColor: 'white',

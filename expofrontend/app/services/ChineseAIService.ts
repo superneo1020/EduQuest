@@ -8,11 +8,10 @@ export type ChineseQuestion = {
     options: string[];
     correctAnswer: number; // 0-based index
     explanation?: string;
-    pinyin?: string;
 };
 
 export type ChineseQuestionRequest = {
-    difficulty: 'beginner' | 'advanced'; // 只有 beginner 和 advanced
+    difficulty: 'beginner' | 'advanced';
     topic?: string;
     count?: number;
 };
@@ -36,7 +35,7 @@ class ChineseAIService {
         try {
             const prompt = this.createQuestionPrompt({
                 ...request,
-                count: 15
+                count: request.count || 4   // 改為 4 題
             });
 
             const response = await fetch(`${this.baseURL}/chat`, {
@@ -63,14 +62,14 @@ class ChineseAIService {
             const allQuestions = this.parseQuestions(aiResponseText, request.difficulty);
             const uniqueQuestions = this.deduplicateQuestions(allQuestions);
 
-            if (uniqueQuestions.length < 8) {
+            if (uniqueQuestions.length < 4) {
                 console.log('Not enough unique questions, adding defaults');
                 const defaults = this.getDefaultQuestions(request.difficulty);
-                return [...uniqueQuestions, ...defaults].slice(0, 8);
+                return [...uniqueQuestions, ...defaults].slice(0, 4);
             }
 
             const shuffled = uniqueQuestions.sort(() => 0.5 - Math.random());
-            const selected = shuffled.slice(0, 8);
+            const selected = shuffled.slice(0, 4);
 
             return selected.map((q, index) => ({
                 ...q,
@@ -84,26 +83,24 @@ class ChineseAIService {
     }
 
     private createQuestionPrompt(request: ChineseQuestionRequest): string {
-        const count = request.count || 15;
+        const count = request.count || 4;
         const topic = request.topic || 'daily life, greetings, family, food, animals, colors, numbers, occupations';
 
-        // Beginner: 題目是中文，答案是英文
-        // Advanced: 題目是英文，答案是中文
         const difficultyGuidelines = {
             beginner: `
 FORMAT: Questions in CHINESE, Options in ENGLISH
 - Question: Ask about the meaning of a Chinese word/phrase
 - Options: All options must be in ENGLISH
 - Example: "What does "爸爸"  mean in English?"   //"..."must be Chinese!!!!!
-- Options: ["Father", "Mother", "Brother", "Sister"]
+- Options: ["Father", "Mother", "Brother", "Sister"] //because "爸爸" means father,so "father is answer
 - Focus on basic vocabulary (HSK 1-3)`,
 
             advanced: `
 FORMAT: Questions in ENGLISH, Options in CHINESE
 - Question: Ask for the Chinese translation of an English word/phrase
 - Options: All options must be in CHINESE characters
-- Example: "What is the Chinese word for 'father'?"
-- Options: ["爸爸", "妈妈", "哥哥", "姐姐"]
+- Example: "What is the Chinese word for 'father'?"   //sentence must be English!!!!!
+- Options: ["爸爸", "妈妈", "哥哥", "姐姐"] //because father means "爸爸",so "爸爸" is answer
 - Focus on intermediate vocabulary (HSK 4-6) and common phrases`
         };
 
@@ -120,9 +117,8 @@ IMPORTANT RULES:
 2. Each question must test a DIFFERENT vocabulary word or concept
 3. ONE clear correct answer per question
 4. Incorrect options should be plausible but wrong
-5. Include pinyin for the correct answer
-6. NEVER include the answer in the question itself
-7. Make every question unique and creative
+5. NEVER include the answer in the question itself
+6. Make every question unique and creative
 
 Format your response as a JSON array with EXACTLY ${count} objects:
 [
@@ -130,53 +126,47 @@ Format your response as a JSON array with EXACTLY ${count} objects:
         "question": "${request.difficulty === 'beginner' ? 'Chinese question (e.g., "What does 爸爸 mean?")' : 'English question (e.g., "What is the Chinese word for father?")'}",
         "options": ["${request.difficulty === 'beginner' ? 'English option 1' : 'Chinese option 1'}", "${request.difficulty === 'beginner' ? 'English option 2' : 'Chinese option 2'}", "${request.difficulty === 'beginner' ? 'English option 3' : 'Chinese option 3'}", "${request.difficulty === 'beginner' ? 'English option 4' : 'Chinese option 4'}"],
         "correctAnswer": 0,
-        "explanation": "English explanation why this is correct",
-        "pinyin": "pinyin for the correct answer"
+        "explanation": "English explanation why this is correct"
     }
 ]
 
-// EXAMPLES for BEGINNER level (題目中文，選項英文): "..."must be Chinese
-// [
-//     {
-//         "question": "What does "爸爸"  mean?",
-//         "options": ["Father", "Mother", "Brother", "Sister"],
-//         "correctAnswer": 0,
-//         "explanation": "爸爸 (bàba) means father in Chinese.",
-//         "pinyin": "bàba"
-//     },
-//     {
-//         "question": "What does "老师"  mean?",
-//         "options": ["Teacher", "Doctor", "Student", "Lawyer"],
-//         "correctAnswer": 0,
-//         "explanation": "老师 (lǎoshī) means teacher.",
-//         "pinyin": "lǎoshī"
-//     }
-// ]
-//
-// EXAMPLES for ADVANCED level (題目英文，選項中文):
-// [
-//     {
-//         "question": "What is the Chinese word for 'father'?",
-//         "options": ["爸爸", "妈妈", "哥哥", "姐姐"],
-//         "correctAnswer": 0,
-//         "explanation": "爸爸 (bàba) means father.",
-//         "pinyin": "bàba"
-//     },
-//     {
-//         "question": "How do you say 'teacher' in Chinese?",
-//         "options": ["老师", "医生", "学生", "律师"],
-//         "correctAnswer": 0,
-//         "explanation": "老师 (lǎoshī) means teacher.",
-//         "pinyin": "lǎoshī"
-//     },
-//     {
-//         "question": "What is the Chinese word for 'delicious'?",
-//         "options": ["好吃", "好看", "好听", "好玩"],
-//         "correctAnswer": 0,
-//         "explanation": "好吃 (hǎochī) means delicious.",
-//         "pinyin": "hǎochī"
-//     }
-// ]
+EXAMPLES for BEGINNER level (題目中文，選項英文): "..."must be Chinese
+[
+    {
+       "question": "What does "校長" mean?",
+        "options": ["Principal", "Teacher", "Student", "Parent"],
+        "correctAnswer": 0,
+        "explanation": "「校長」 refers to the head of a school.",
+    },
+    {
+        "question": "What does "新鮮" mean?",
+        "options": ["Fresh", "Delicious", "Expensive", "Old"],
+        "correctAnswer": 0,
+        "explanation": "「新鮮」 is often used for food (like fruit) or air.",
+    }
+]
+
+EXAMPLES for ADVANCED level (題目英文，選項中文):
+[
+    {
+        "question": "What is the Chinese word for 'father'?",
+        "options": ["爸爸", "妈妈", "哥哥", "姐姐"],
+        "correctAnswer": 0,
+        "explanation": "爸爸 (bàba) means father."
+    },
+    {
+        "question": "How do you say 'teacher' in Chinese?",
+        "options": ["老师", "医生", "学生", "律师"],
+        "correctAnswer": 0,
+        "explanation": "老师 (lǎoshī) means teacher."
+    },
+    {
+        "question": "What is the Chinese word for 'delicious'?",
+        "options": ["好吃", "好看", "好听", "好玩"],
+        "correctAnswer": 0,
+        "explanation": "好吃  means delicious."
+    }
+]
 
 Make sure ALL ${count} questions cover DIFFERENT topics and vocabulary words.
 Return ONLY the JSON array, no other text.`;
@@ -213,7 +203,6 @@ Return ONLY the JSON array, no other text.`;
                 options: Array.isArray(q.options) ? q.options : [],
                 correctAnswer: typeof q.correctAnswer === 'number' ? q.correctAnswer : 0,
                 explanation: q.explanation || '',
-                pinyin: q.pinyin || ''
             }));
 
         } catch (error) {
@@ -226,134 +215,62 @@ Return ONLY the JSON array, no other text.`;
         const beginnerQuestions: ChineseQuestion[] = [
             {
                 id: 1,
-                question: "What does 爸爸 (bàba) mean?",
-                options: ["Father", "Mother", "Brother", "Sister"],
+                question: "已經 (yǐjīng) 的意思是什麼？",
+                options: ["已經／已經發生", "還沒有／仍然", "可能／也許", "將要／即將"],
                 correctAnswer: 0,
-                explanation: "爸爸 (bàba) means father in Chinese.",
-                pinyin: "bàba"
+                explanation: "已經 表示某事在過去或之前已發生，意思是 'already'。",
             },
             {
                 id: 2,
-                question: "What does 妈妈 (māma) mean?",
-                options: ["Mother", "Father", "Grandma", "Aunt"],
+                question: "決定 (juédìng) 的意思是什麼？",
+                options: ["決定；作出選擇", "建議；提議", "討論；商量", "拒絕；不接受"],
                 correctAnswer: 0,
-                explanation: "妈妈 (māma) means mother.",
-                pinyin: "māma"
+                explanation: "決定 表示做出選擇或判斷，意思是 'decide' 或 'decision'，為 HSK3 常用詞。",
             },
             {
                 id: 3,
-                question: "What does 老师 (lǎoshī) mean?",
-                options: ["Teacher", "Doctor", "Student", "Lawyer"],
+                question: "影響 (yǐngxiǎng) 的意思是什麼？",
+                options: ["影響；對...有作用", "休息；放鬆", "改變；轉變", "修理；修補"],
                 correctAnswer: 0,
-                explanation: "老师 (lǎoshī) means teacher.",
-                pinyin: "lǎoshī"
+                explanation: "影響 表示對人或事物產生作用或改變，意思是 'influence; affect'。",
             },
             {
                 id: 4,
-                question: "What does 你好 (nǐ hǎo) mean?",
-                options: ["Hello", "Goodbye", "Thank you", "Sorry"],
+                question: "雖然...但是... 用來表示什麼？",
+                options: ["讓步關係（前後對比或相反）", "因果關係（原因和結果）", "並列關係（並列兩件事）", "條件關係（在某種條件下）"],
                 correctAnswer: 0,
-                explanation: "你好 (nǐ hǎo) is the standard greeting meaning 'hello'.",
-                pinyin: "nǐ hǎo"
-            },
-            {
-                id: 5,
-                question: "What does 苹果 (píngguǒ) mean?",
-                options: ["Apple", "Banana", "Orange", "Strawberry"],
-                correctAnswer: 0,
-                explanation: "苹果 (píngguǒ) means apple.",
-                pinyin: "píngguǒ"
-            },
-            {
-                id: 6,
-                question: "What does 蓝色 (lán sè) mean?",
-                options: ["Blue", "Red", "Green", "Yellow"],
-                correctAnswer: 0,
-                explanation: "蓝色 (lán sè) means blue.",
-                pinyin: "lán sè"
-            },
-            {
-                id: 7,
-                question: "What does 谢谢 (xièxie) mean?",
-                options: ["Thank you", "You're welcome", "Sorry", "Please"],
-                correctAnswer: 0,
-                explanation: "谢谢 (xièxie) means thank you.",
-                pinyin: "xièxie"
-            },
-            {
-                id: 8,
-                question: "What does 水 (shuǐ) mean?",
-                options: ["Water", "Fire", "Earth", "Air"],
-                correctAnswer: 0,
-                explanation: "水 (shuǐ) means water.",
-                pinyin: "shuǐ"
+                explanation: "『雖然...但是...』表示讓步或轉折，相當於英文的 'although ... but ...'，為 HSK3 常見句型。",
             }
         ];
 
         const advancedQuestions: ChineseQuestion[] = [
             {
-                id: 1,
-                question: "What is the Chinese word for 'father'?",
-                options: ["爸爸", "妈妈", "哥哥", "弟弟"],
-                correctAnswer: 0,
-                explanation: "爸爸 (bàba) means father.",
-                pinyin: "bàba"
+                "id": 1,
+                "question": "在家庭關係中，「父親」的正式稱呼通常是什麼？",
+                "options": ["父親", "母親", "兄弟", "姊妹"],
+                "correctAnswer": 0,
+                "explanation": "「父親」是較為正式的書面語，對應口語中的「爸爸」。",
             },
             {
-                id: 2,
-                question: "How do you say 'teacher' in Chinese?",
-                options: ["老师", "医生", "律师", "工程师"],
-                correctAnswer: 0,
-                explanation: "老师 (lǎoshī) means teacher.",
-                pinyin: "lǎoshī"
+                "id": 2,
+                "question": "下列哪一個詞彙常用於形容教書育人的專業人士？",
+                "options": ["教師", "醫師", "律師", "工程師"],
+                "correctAnswer": 0,
+                "explanation": "「教師」比「老師」更具職業色彩，常用於正式場合。",
             },
             {
-                id: 3,
-                question: "What is the Chinese word for 'delicious'?",
-                options: ["好吃", "好看", "好听", "好玩"],
-                correctAnswer: 0,
-                explanation: "好吃 (hǎochī) means delicious.",
-                pinyin: "hǎochī"
+                "id": 3,
+                "question": "當你覺得食物味道極佳，除了「好吃」，還可以用哪個詞形容？",
+                "options": ["美味", "美觀", "美妙", "美感"],
+                "correctAnswer": 0,
+                "explanation": "「美味」常用於形容食物味道鮮美，層次高於「好吃」。",
             },
             {
-                id: 4,
-                question: "How do you say 'I love you' in Chinese?",
-                options: ["我爱你", "我喜欢你", "我恨你", "我想你"],
-                correctAnswer: 0,
-                explanation: "我爱你 (wǒ ài nǐ) means I love you.",
-                pinyin: "wǒ ài nǐ"
-            },
-            {
-                id: 5,
-                question: "What is the Chinese word for 'yesterday'?",
-                options: ["昨天", "今天", "明天", "后天"],
-                correctAnswer: 0,
-                explanation: "昨天 (zuótiān) means yesterday.",
-                pinyin: "zuótiān"
-            },
-            {
-                id: 6,
-                question: "How do you say 'expensive' in Chinese?",
-                options: ["贵", "便宜", "多", "少"],
-                correctAnswer: 0,
-                explanation: "贵 (guì) means expensive.",
-                pinyin: "guì"
-            },
-            {
-                id: 7,
-                question: "What is the Chinese word for 'tired'?",
-                options: ["累", "高兴", "难过", "兴奋"],
-                correctAnswer: 0,
-                explanation: "累 (lèi) means tired.",
-                pinyin: "lèi"
-            },
-            {
-                id: 8,
-                question: "How do you say 'water' in Chinese?",
-                options: ["水", "火", "土", "木"],
-                correctAnswer: 0,
-                explanation: "水 (shuǐ) means water.",
-                pinyin: "shuǐ"
+                "id": 4,
+                "question": "「傾訴衷腸」通常與下列哪種情感表達最為接近？",
+                "options": ["表白愛意", "表達不滿", "表示懷疑", "表述計畫"],
+                "correctAnswer": 0,
+                "explanation": "「表白」指對人說明內心的愛慕之情，是 HSK 5 常見的情感詞彙。",
             }
         ];
 

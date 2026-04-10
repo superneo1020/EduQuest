@@ -1,6 +1,6 @@
 // app/games/chinese/chinesequiz.tsx
 // 餐廳大作戰 - 傳送帶版本（加入打擊回饋與倒數特效版）
-// 修改：總分滿分為100分，传送带条纹使用 Skia 实现持续向左移动（仅原生平台）
+// 修正：動態每題分數、避免異步分數遺失、Advanced 模式 4 題滿分 120
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -18,7 +18,7 @@ import {
     Easing,
     Platform,
 } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Star, Sparkles, Heart, Utensils } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -26,7 +26,7 @@ import axios from 'axios';
 import { useAuth } from '@/src/auth/AuthContext';
 import ChineseAIService, { ChineseQuestion } from '../../services/ChineseAIService';
 
-// 只在非 Web 环境导入 Skia
+// 只在非 Web 環境導入 Skia
 const isWeb = Platform.OS === 'web';
 let Canvas: any = null;
 let Rect: any = null;
@@ -52,7 +52,6 @@ interface ConveyorItem {
     isCorrect: boolean;
     x: Animated.Value;
     y: number;
-    pinyin?: string;
     explanation?: string;
     scale: Animated.Value;
     opacity: Animated.Value;
@@ -230,6 +229,7 @@ const WebStripes: React.FC<{ beltWidth: number; beltHeight: number; isActive: bo
 
 // 主游戏组件
 const ChineseRestaurantGame = () => {
+    const router = useRouter();
     const { token } = useAuth();
     const [isSaving, setIsSaving] = useState(false);
     const [questions, setQuestions] = useState<ExtendedQuestion[]>([]);
@@ -239,6 +239,7 @@ const ChineseRestaurantGame = () => {
     const [loading, setLoading] = useState(false);
     const [difficulty, setDifficulty] = useState<'beginner' | 'advanced' | null>(null);
     const [aiFeedback, setAiFeedback] = useState<string>('');
+    const [maxScore, setMaxScore] = useState(100); // 依難度變動
 
     const [items, setItems] = useState<ConveyorItem[]>([]);
     const [combo, setCombo] = useState(0);
@@ -256,6 +257,36 @@ const ChineseRestaurantGame = () => {
     const [prepText, setPrepText] = useState<string | null>(null);
     const prepScale = useRef(new Animated.Value(0)).current;
     const [gameActive, setGameActive] = useState(false);
+
+    // ========== 🕒 新增：計時器相關狀態 ==========
+    const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+    const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const timerStartedRef = useRef<boolean>(false); // 確保計時器只啟動一次
+
+    // 格式化時間 (MM:SS)
+    const formatTime = (totalSeconds: number): string => {
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    };
+
+    // 停止計時器
+    const stopTimer = () => {
+        if (timerIntervalRef.current) {
+            clearInterval(timerIntervalRef.current);
+            timerIntervalRef.current = null;
+        }
+    };
+
+    // 開始計時器（只在第一次調用時生效）
+    const startTimerOnce = () => {
+        if (timerStartedRef.current) return; // 已經啟動過，不再重複啟動
+        timerStartedRef.current = true;
+        setElapsedSeconds(0);
+        timerIntervalRef.current = setInterval(() => {
+            setElapsedSeconds(prev => prev + 1);
+        }, 1000);
+    };
 
     // 特效狀態
     const [floatingText, setFloatingText] = useState<{ id: number; text: string; color: string } | null>(null);
@@ -283,14 +314,7 @@ const ChineseRestaurantGame = () => {
         return foodIcons[Math.floor(Math.random() * foodIcons.length)];
     };
 
-    // 倍率調整
-    const getMultiplier = (currentCombo: number) => {
-        if (currentCombo >= 5) return 1.5;
-        if (currentCombo >= 3) return 1.2;
-        return 1;
-    };
-
-    // 保存分數到伺服器
+    // 儲存分數到伺服器（原始分數，滿分分別為100 / 120）
     const saveScore = async (finalScore: number) => {
         if (!token || !difficulty) return;
         setIsSaving(true);
@@ -298,10 +322,11 @@ const ChineseRestaurantGame = () => {
             await axios.post('http://localhost:8080/api/user/game/score', {
                 gameName: "ChineseGame",
                 scores: finalScore,
-                difficulty: difficulty === 'beginner' ? 'BEGINNER' : 'ADVANCED'
+                difficulty: difficulty === 'beginner' ? 'EASY' : 'MEDIUM'
             }, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
+            console.log("Score synced to server!");
         } catch (e) {
             console.error("Failed to sync score:", e);
         } finally {
@@ -309,8 +334,8 @@ const ChineseRestaurantGame = () => {
         }
     };
 
-    // 倒數準備序列
-    const startPrepSequence = () => {
+    // 倒數準備序列 - 只在第一次開始計時器
+    const startPrepSequence = (isFirstTime: boolean = true) => {
         setGameActive(false);
         setTimeout(() => {
             setPrepText('READY');
@@ -333,6 +358,11 @@ const ChineseRestaurantGame = () => {
                 useNativeDriver: true,
             }).start();
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+
+            // 只在第一次倒數時啟動計時器
+            if (isFirstTime) {
+                startTimerOnce();
+            }
         }, 1000);
         setTimeout(() => {
             setPrepText(null);
@@ -423,14 +453,12 @@ const ChineseRestaurantGame = () => {
         const isCorrectItem = Math.random() < 0.4;
         let itemText = '';
         let isCorrect = false;
-        let pinyin = '';
         let explanation = '';
 
         if (isCorrectItem) {
             const correctAnswerText = currentQuestion.options[currentQuestion.correctAnswer];
             itemText = correctAnswerText;
             isCorrect = true;
-            pinyin = currentQuestion.pinyin || '';
             explanation = currentQuestion.explanation || '';
         } else {
             const wrongOptions = currentQuestion.options.filter((_, idx) => idx !== currentQuestion.correctAnswer);
@@ -452,7 +480,6 @@ const ChineseRestaurantGame = () => {
             isCorrect,
             x: new Animated.Value(startX),
             y: randomY,
-            pinyin,
             explanation,
             scale: new Animated.Value(1),
             opacity: new Animated.Value(1),
@@ -500,6 +527,44 @@ const ChineseRestaurantGame = () => {
         });
     };
 
+    const showTemporaryHint = (message: string, color: string) => {
+        setHintText(message);
+        setHintColor(color);
+        setHintVisible(true);
+        setTimeout(() => setHintVisible(false), 1500);
+    };
+
+    // 修改：接受最終分數參數，避免閉包問題
+    const handleGameComplete = async (scoreOverride?: number) => {
+        const finalScore = scoreOverride !== undefined ? scoreOverride : score;
+        stopTimer(); // 遊戲完成時停止計時器
+        setIsGameActive(false);
+        setGameActive(false);
+        setGameComplete(true);
+        setNextQuestionDelay(false);
+        await saveScore(finalScore);
+
+        const totalQuestions = questions.length;
+        const correctCount = questions.filter(q => q.isAnsweredCorrectly).length;
+        const accuracy = totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0;
+
+        let feedback = '';
+        const percent = (finalScore / maxScore) * 100;
+        if (percent >= 90) {
+            feedback = `🍽️ Five-star chef! You did it ${correctCount}/${totalQuestions} Dish!\n🔥 Highest Combo: ${maxCombo} | 🎯 準確率: ${Math.round(accuracy)}%\n Amazing! Welcome to visit again next time!🌟`;
+        } else if (percent >= 70) {
+            feedback = `🍲 Excellent chef! You did it ${correctCount}/${totalQuestions} Dish!\n🔥 Highest Combo: ${maxCombo} | 🎯 準確率: ${Math.round(accuracy)}%\n With a bit more practice, you can become a master！💪`;
+        } else if (percent >= 50) {
+            feedback = `🥗 Keep it up! You did it ${correctCount}/${totalQuestions} Dish\n🔥 Highest Combo: ${maxCombo}\n More correct ingredients will make customers happier！✨`;
+        } else {
+            feedback = `🍜 Go for it, little chef! You did it. ${correctCount}/${totalQuestions} Dish\n Try clicking on the ingredients that the customer wants to eat！\n It will be better next time！🎈`;
+        }
+
+        setAiFeedback(feedback);
+        setGameState('result');
+    };
+
+    // 修改：動態每題分數，並傳遞最新分數給完成函式
     const handleItemClick = async (item: ConveyorItem) => {
         if (!isGameActive || gameComplete || nextQuestionDelay || !gameActive) return;
 
@@ -516,15 +581,16 @@ const ChineseRestaurantGame = () => {
         };
         setQuestions(updatedQuestions);
 
+        // 動態計算每一題的分數（確保能達到該難度的滿分）
+        const pointsPerQuestion = maxScore / questions.length;
+        let updatedScore = score;
+
         if (item.isCorrect) {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
             setFloatingText({ id: Date.now(), text: 'HIT!', color: '#FFD700' });
             const newCombo = combo + 1;
-            const multiplier = getMultiplier(newCombo);
-            const pointsEarned = Math.round(10 * multiplier);
-            let newScore = score + pointsEarned;
-            if (newScore > 100) newScore = 100;
-            setScore(newScore);
+            updatedScore = Math.min(score + pointsPerQuestion, maxScore);
+            setScore(updatedScore);
             setCombo(newCombo);
             setMaxCombo(prev => Math.max(prev, newCombo));
             Animated.sequence([
@@ -537,14 +603,13 @@ const ChineseRestaurantGame = () => {
             ]).start();
             setCustomerState('happy');
             await animateCustomerReaction(true);
-            showTemporaryHint(`🎉 So delicious! +${pointsEarned}`, '#4CAF50');
+            showTemporaryHint(`🎉 So delicious! +${pointsPerQuestion}`, '#4CAF50');
         } else {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
             triggerScreenShake();
             setFloatingText({ id: Date.now(), text: 'OUCH!', color: '#FF4757' });
-            let newScore = score - 5;
-            if (newScore < 0) newScore = 0;
-            setScore(newScore);
+            updatedScore = Math.max(score - 5, 0);
+            setScore(updatedScore);
             setCombo(0);
             setCustomerState('angry');
             await animateCustomerReaction(false);
@@ -560,52 +625,26 @@ const ChineseRestaurantGame = () => {
                 setItems([]);
                 setCustomerState('waiting');
                 setNextQuestionDelay(false);
-                startPrepSequence();
+                startPrepSequence(false); // 不是第一次，不啟動計時器
             } else {
-                handleGameComplete();
+                // 傳遞剛剛計算好的最新分數，避免閉包抓到舊的 score
+                handleGameComplete(updatedScore);
             }
         }, 800);
     };
 
-    const showTemporaryHint = (message: string, color: string) => {
-        setHintText(message);
-        setHintColor(color);
-        setHintVisible(true);
-        setTimeout(() => setHintVisible(false), 1500);
-    };
-
-    const handleGameComplete = async () => {
-        setIsGameActive(false);
-        setGameActive(false);
-        setGameComplete(true);
-        setNextQuestionDelay(false);
-        await saveScore(score);
-
-        const totalQuestions = questions.length;
-        const correctCount = questions.filter(q => q.isAnsweredCorrectly).length;
-        const accuracy = totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0;
-
-        let feedback = '';
-        if (score >= 90) {
-            feedback = `🍽️ Five-star chef! You did it ${correctCount}/${totalQuestions} Dish!\n🔥 Highest Combo: ${maxCombo} | 🎯 準確率: ${Math.round(accuracy)}%\n Amazing! Welcome to visit again next time!🌟`;
-        } else if (score >= 70) {
-            feedback = `🍲 Excellent chef! You did it ${correctCount}/${totalQuestions} Dish!\n🔥 Highest Combo: ${maxCombo} | 🎯 準確率: ${Math.round(accuracy)}%\n With a bit more practice, you can become a master！💪`;
-        } else if (score >= 50) {
-            feedback = `🥗 Keep it up! You did it ${correctCount}/${totalQuestions} Dish\n🔥 Highest Combo: ${maxCombo}\n More correct ingredients will make customers happier！✨`;
-        } else {
-            feedback = `🍜 Go for it, little chef! You did it. ${correctCount}/${totalQuestions} Dish\n Try clicking on the ingredients that the customer wants to eat！\n It will be better next time！🎈`;
-        }
-
-        setAiFeedback(feedback);
-        setGameState('result');
-    };
-
     const loadQuestions = async (selectedDifficulty: 'beginner' | 'advanced') => {
         setLoading(true);
+        // 設定滿分
+        if (selectedDifficulty === 'beginner') {
+            setMaxScore(100);
+        } else {
+            setMaxScore(120);
+        }
         try {
             const newQuestions = await ChineseAIService.generateQuestions({
                 difficulty: selectedDifficulty,
-                count: 8
+                count: 4   // 改為4題
             });
             const extendedQuestions: ExtendedQuestion[] = newQuestions.map(q => ({
                 ...q,
@@ -616,7 +655,7 @@ const ChineseRestaurantGame = () => {
             resetGame();
             setGameState('playing');
             setIsGameActive(true);
-            startPrepSequence();
+            startPrepSequence(true); // 第一次倒數，啟動計時器
         } catch (error) {
             console.error('Failed to load questions:', error);
             Alert.alert('錯誤', '無法載入菜單，請稍後再試');
@@ -643,11 +682,18 @@ const ChineseRestaurantGame = () => {
     };
 
     const handleSelectDifficulty = (level: 'beginner' | 'advanced') => {
+        // 重置計時器狀態
+        timerStartedRef.current = false;
+        setElapsedSeconds(0);
+        stopTimer();
         setDifficulty(level);
         loadQuestions(level);
     };
 
     const handleRestart = async () => {
+        stopTimer();
+        timerStartedRef.current = false;
+        setElapsedSeconds(0);
         if (gameState === 'playing' && score > 0 && difficulty) {
             await saveScore(score);
         }
@@ -664,11 +710,16 @@ const ChineseRestaurantGame = () => {
             setScore(0);
             setCombo(0);
             setMaxCombo(0);
+            // 重置計時器狀態
+            timerStartedRef.current = false;
+            setElapsedSeconds(0);
+            stopTimer();
             loadQuestions(difficulty);
         }
     };
 
     const handleBackToGames = () => {
+        stopTimer();
         if (router.canGoBack()) {
             router.back();
         }
@@ -693,7 +744,7 @@ const ChineseRestaurantGame = () => {
         switch (customerState) {
             case 'happy': return 'It\'s so delicious!';
             case 'angry': return 'This is not what I want...';
-            default: return 'I want to eat...';
+            default: return 'Please answer the following questions to indicate what I want to eat.';
         }
     };
 
@@ -702,15 +753,20 @@ const ChineseRestaurantGame = () => {
         <View style={styles.gameContainer}>
             <StatusBar barStyle="dark-content" />
             <Animated.View style={{ flex: 1, transform: [{ translateX: screenShake }] }}>
-                <View style={styles.gameHeader}>
+                {/* 修改：頂部欄帶計時器 */}
+                <View style={styles.gameHeaderWithTimer}>
                     <TouchableOpacity onPress={handleRestart} style={styles.exitButton}>
                         <Text style={styles.exitButtonText}>← Leave</Text>
                     </TouchableOpacity>
+                    <View style={styles.timerContainer}>
+                        <Text style={styles.timerIcon}>⏱️</Text>
+                        <Text style={styles.timerText}>{formatTime(elapsedSeconds)}</Text>
+                    </View>
                     <View style={styles.statsRow}>
                         <View style={styles.statBox}>
                             <Star size={18} color="#FFD966" />
                             <Animated.Text style={[styles.statValue, { transform: [{ scale: scoreAnim }] }]}>
-                                {score}/100
+                                {score}/{maxScore}
                             </Animated.Text>
                         </View>
                         <View style={styles.statBox}>
@@ -738,9 +794,6 @@ const ChineseRestaurantGame = () => {
                                 <Text style={styles.speechText}>{getCustomerMessage()}</Text>
                                 {currentQuestion && (
                                     <Text style={styles.dishName}>{currentQuestion.question}</Text>
-                                )}
-                                {currentQuestion?.pinyin && (
-                                    <Text style={styles.dishPinyin}>{currentQuestion.pinyin}</Text>
                                 )}
                             </View>
                         </View>
@@ -807,9 +860,6 @@ const ChineseRestaurantGame = () => {
                                         <Text style={[styles.foodText, item.isCorrect ? styles.correctText : styles.wrongText]}>
                                             {item.text}
                                         </Text>
-                                        {item.isCorrect && item.pinyin && (
-                                            <Text style={styles.foodPinyin}>{item.pinyin}</Text>
-                                        )}
                                     </TouchableOpacity>
                                 </Animated.View>
                             ))}
@@ -829,9 +879,6 @@ const ChineseRestaurantGame = () => {
                         <View style={styles.progressBar}>
                             <View style={[styles.progressFill, { width: `${((currentIndex + 1) / questions.length) * 100}%` }]} />
                         </View>
-                        <Text style={styles.multiplierText}>
-                            {combo >= 3 && `🔥 ${combo} Combo! ${getMultiplier(combo)}x score`}
-                        </Text>
                     </View>
                 </View>
 
@@ -839,7 +886,7 @@ const ChineseRestaurantGame = () => {
                     <TouchableOpacity style={styles.resetGameBtn} onPress={resetGame}>
                         <Text style={styles.resetGameBtnText}>⟳ Start over</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.completeGameBtn} onPress={handleGameComplete}>
+                    <TouchableOpacity style={styles.completeGameBtn} onPress={() => handleGameComplete(score)}>
                         <Text style={styles.completeGameBtnText}>✓ Closed for business</Text>
                     </TouchableOpacity>
                 </View>
@@ -861,7 +908,7 @@ const ChineseRestaurantGame = () => {
                 level: 'beginner' as const,
                 title: 'Intern chef',
                 badgeText: 'Easy to serve',
-                description: 'The conveyor belt is slower, with simple dishes, suitable for beginner little chefs.',
+                description: 'The conveyor belt is slower, with simple dishes, suitable for beginner little chefs. (Full Score: 100)',
                 icon: '👨‍🍳',
                 color: '#FFA07A',
                 bgColor: '#FFF3E0',
@@ -871,7 +918,7 @@ const ChineseRestaurantGame = () => {
                 level: 'advanced' as const,
                 title: 'Master Chef',
                 badgeText: 'Expert Challenge',
-                description: 'The conveyor belt is faster, with complex dishes, testing your reaction speed.',
+                description: 'The conveyor belt is faster, with complex dishes, testing your reaction speed. (Full Score: 120)',
                 icon: '👩‍🍳',
                 color: '#E67E22',
                 bgColor: '#FFE4C4',
@@ -886,7 +933,7 @@ const ChineseRestaurantGame = () => {
                         <Utensils size={60} color="#FFA07A" style={{ marginBottom: 20 }} />
                         <Text style={styles.mainTitle}>🍜 Restaurant Battle</Text>
                         <Text style={styles.subTitle}>
-                            What does the customer want to eat? Quickly take the correct ingredients from the conveyor belt to them! Total score: 100 points!
+                            What does the customer want to eat? Quickly take the correct ingredients from the conveyor belt to them! Total score: easy 100, advanced 120!
                         </Text>
                     </View>
                     <View style={styles.menuGrid}>
@@ -930,6 +977,7 @@ const ChineseRestaurantGame = () => {
     // 渲染结果界面
     const renderResult = () => {
         const { totalQuestions, correctCount, accuracy } = calculateScoreStats();
+        const totalTimeFormatted = formatTime(elapsedSeconds);
         return (
             <View style={styles.container}>
                 <StatusBar barStyle="dark-content" />
@@ -945,8 +993,15 @@ const ChineseRestaurantGame = () => {
                         <Text style={styles.resultTitle}>🍽️ Today's performance 🍽️</Text>
                         <View style={styles.scoreCircle}>
                             <Text style={styles.scorePercentage}>{score}</Text>
-                            <Text style={styles.scoreLabel}>Total Score (Full Score 100)</Text>
+                            <Text style={styles.scoreLabel}>Total Score (Full Score {maxScore})</Text>
                         </View>
+
+                        {/* 新增：顯示總花費時間 */}
+                        <View style={styles.reportTimeBox}>
+                            <Text style={styles.reportScoreLabel}>⏱️ Total Time</Text>
+                            <Text style={styles.reportTimeValue}>{totalTimeFormatted}</Text>
+                        </View>
+
                         {isSaving && (
                             <View style={styles.savingIndicator}>
                                 <ActivityIndicator size="small" color="#4CAF50" />
@@ -1144,6 +1199,38 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#FCE4B2',
     },
+    // 新增：帶計時器的頂部欄樣式
+    gameHeaderWithTimer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 15,
+        paddingVertical: 12,
+        backgroundColor: '#FFB347',
+        borderBottomWidth: 2,
+        borderBottomColor: '#FFD966',
+    },
+    // 計時器樣式
+    timerContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.3)',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 20,
+    },
+    timerIcon: {
+        fontSize: 14,
+        marginRight: 4,
+        color: '#fff',
+    },
+    timerText: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#fff',
+        fontFamily: Platform.OS === 'web' ? 'monospace' : 'Courier',
+    },
+    // 保留原有樣式作為備用
     gameHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -1235,11 +1322,6 @@ const styles = StyleSheet.create({
         color: '#333',
         marginTop: 4,
     },
-    dishPinyin: {
-        fontSize: 12,
-        color: '#888',
-        marginTop: 2,
-    },
     conveyorArea: {
         height: CONVEYOR_HEIGHT,
         position: 'relative',
@@ -1292,11 +1374,6 @@ const styles = StyleSheet.create({
     },
     wrongText: {
         color: '#F44336',
-    },
-    foodPinyin: {
-        fontSize: 9,
-        color: '#666',
-        marginTop: 2,
     },
     conveyorHint: {
         position: 'absolute',
@@ -1351,12 +1428,6 @@ const styles = StyleSheet.create({
     progressFill: {
         height: '100%',
         backgroundColor: '#4CAF50',
-    },
-    multiplierText: {
-        fontSize: 12,
-        color: '#FF6B6B',
-        marginTop: 8,
-        fontWeight: 'bold',
     },
     controlPanel: {
         backgroundColor: '#FFB347',
@@ -1506,6 +1577,27 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#666',
         marginTop: 5,
+    },
+    // 新增：總結頁面的時間顯示樣式
+    reportTimeBox: {
+        backgroundColor: '#FFF3E0',
+        padding: 16,
+        borderRadius: 16,
+        width: '90%',
+        alignItems: 'center',
+        marginBottom: 20,
+        borderWidth: 1,
+        borderColor: '#FFA07A',
+    },
+    reportScoreLabel: {
+        fontSize: 14,
+        color: '#666',
+        marginBottom: 8,
+    },
+    reportTimeValue: {
+        fontSize: 32,
+        fontWeight: 'bold',
+        color: '#FFA07A',
     },
     savingIndicator: {
         flexDirection: 'row',

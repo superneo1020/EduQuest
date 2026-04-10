@@ -2,7 +2,7 @@ package com.eduquest.springbackend.dto;
 
 import java.util.List;
 
-public record PageResponse<T>(
+public record UtilPageResponse<T>(
         List<T> content,
         int currentPage,
         int totalPages,

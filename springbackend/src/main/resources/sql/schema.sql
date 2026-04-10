@@ -4,14 +4,14 @@
 -- Drop existing tables if they exist (handled by spring.jpa.hibernate.ddl-auto=create-drop)
 -- DROP TABLE IF EXISTS user_roles, refresh_tokens, users, roles CASCADE;
 
-
 CREATE TABLE IF NOT EXISTS schools (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(100) UNIQUE NOT NULL,
     address VARCHAR(255) NOT NULL,
     phone VARCHAR(20) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 ;;;
 
@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS classes (
     suffix VARCHAR(10) NOT NULL,
     academic_year VARCHAR(10) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (school_id, grade, suffix, academic_year),
     FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE CASCADE
 );
@@ -36,6 +37,8 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(255) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
     points INT NOT NULL DEFAULT 0 CHECK (points >= 0),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    educator_status VARCHAR(10) NOT NULL DEFAULT 'NONE' CHECK (educator_status IN ('NONE', 'PENDING', 'APPROVED', 'REJECTED', 'ADMIN')),
     school_id BIGINT,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -51,6 +54,8 @@ CREATE TABLE IF NOT EXISTS class_members (
     class_id BIGINT NOT NULL,
     user_id BIGINT NOT NULL,
     role_in_class VARCHAR(20) DEFAULT 'student' CHECK (role_in_class IN ('student', 'teacher', 'assistant')),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (class_id, user_id),
     FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -162,8 +167,8 @@ CREATE TABLE IF NOT EXISTS user_game_scores (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL,
     game_id BIGINT NOT NULL,
-    difficulty VARCHAR(20),
     scores INT NOT NULL DEFAULT 0 CHECK (scores >= 0),
+    metadata JSONB,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
@@ -461,7 +466,7 @@ END;
 $$ LANGUAGE plpgsql;
 ;;;
 
-DROP TRIGGER IF EXISTS  trg_users_updated_at ON users;
+DROP TRIGGER IF EXISTS trg_users_updated_at ON users;
 ;;;
 CREATE TRIGGER trg_users_updated_at
     BEFORE UPDATE ON users
@@ -469,7 +474,7 @@ CREATE TRIGGER trg_users_updated_at
     EXECUTE FUNCTION update_timestamp();
 ;;;
 
-DROP TRIGGER IF EXISTS  trg_user_profiles_updated_at ON user_profiles;
+DROP TRIGGER IF EXISTS trg_user_profiles_updated_at ON user_profiles;
 ;;;
 CREATE TRIGGER trg_user_profiles_updated_at
     BEFORE UPDATE ON user_profiles
@@ -477,7 +482,7 @@ CREATE TRIGGER trg_user_profiles_updated_at
     EXECUTE FUNCTION update_timestamp();
 ;;;
 
-DROP TRIGGER IF EXISTS  trg_user_missions_updated_at ON user_missions;
+DROP TRIGGER IF EXISTS trg_user_missions_updated_at ON user_missions;
 ;;;
 CREATE TRIGGER trg_user_missions_updated_at
     BEFORE UPDATE ON user_missions
@@ -485,10 +490,34 @@ CREATE TRIGGER trg_user_missions_updated_at
     EXECUTE FUNCTION update_timestamp();
 ;;;
 
-DROP TRIGGER IF EXISTS  trg_user_activities_updated_at ON user_activities;
+DROP TRIGGER IF EXISTS trg_user_activities_updated_at ON user_activities;
 ;;;
 CREATE TRIGGER trg_user_activities_updated_at
     BEFORE UPDATE ON user_activities
+    FOR EACH ROW
+EXECUTE FUNCTION update_timestamp();
+;;;
+
+DROP TRIGGER IF EXISTS trg_schools_updated_at ON schools;
+;;;
+CREATE TRIGGER trg_schools_updated_at
+    BEFORE UPDATE ON schools
+    FOR EACH ROW
+    EXECUTE FUNCTION update_timestamp();
+;;;
+
+DROP TRIGGER IF EXISTS trg_classes_updated_at ON classes;
+;;;
+CREATE TRIGGER trg_classes_updated_at
+    BEFORE UPDATE ON classes
+    FOR EACH ROW
+EXECUTE FUNCTION update_timestamp();
+;;;
+
+DROP TRIGGER IF EXISTS trg_class_members_updated_at ON class_members;
+;;;
+CREATE TRIGGER trg_class_members_updated_at
+    BEFORE UPDATE ON class_members
     FOR EACH ROW
 EXECUTE FUNCTION update_timestamp();
 ;;;

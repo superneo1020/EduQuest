@@ -185,7 +185,7 @@ class ChineseSentenceAIService {
 - 請生成內容快點
 
 ${difficultyPrompt}
-這是第 ${request.currentQuestionIndex + 1} 題，總共 10 題
+這是第 ${request.currentQuestionIndex + 1} 題，總共 4 題
 句子要自然、實用、有教育意義
 答案應該是常用詞彙，但要有一定的挑戰性
 
@@ -224,9 +224,9 @@ ${previousContext}
    - 名詞：主語 + 是 + __（例：他是我的 __ → 正確答案：哥哥、朋友）
    - 形容詞：主語 + 很 + __（例：今天天氣很 __ → 正確答案：好、熱）
 3. 絕對禁止的填空範例（太難）：
-   - 他 __ 找到一本書（❌ 需要填副詞，太難）
-   - 他跑得 __（❌ 需要填補語，太難）
-   - 他 __ 喜歡吃蘋果（❌ 需要填「很、非常」，太難）
+   - 他 __ 找到一本書（ 需要填副詞，想）
+   - 他跑得 __（ 需要填補語，很快）
+   - 他 __ 喜歡吃蘋果（ 需要填「很、非常」，）
 4. 句子結構應簡單明瞭，填空後不改變句子基本語法。
 5. 可選句型：敘事句（主+動+賓）、有無句（主+有+賓）、表態句（主+形）、判斷句（主+是+賓）。
 
@@ -367,6 +367,7 @@ ${alternatives}
         }
     }
 
+    // 修改：默認句子數量改為 4 題
     private getDefaultSentence(index: number, difficulty?: string): ChineseSentenceResponse {
         // 根據難度分類的默認句子（全部只有一個空位）
         const easySentences = [
@@ -401,54 +402,6 @@ ${alternatives}
                 hint: "eat",
                 translation: "Let's go eat together.",
                 explanation: "表示進食的動詞"
-            },
-            {
-                sentence: "你叫__名字？",
-                correctAnswer: "什麼",
-                alternatives: ["啥", "何"],
-                hint: "what",
-                translation: "What is your name?",
-                explanation: "疑問詞"
-            },
-            {
-                sentence: "我__台灣人。",
-                correctAnswer: "是",
-                alternatives: ["係"],
-                hint: "am",
-                translation: "I am from Taiwan.",
-                explanation: "表示狀態的動詞"
-            },
-            {
-                sentence: "這本書很__。",
-                correctAnswer: "好看",
-                alternatives: ["有趣", "精彩"],
-                hint: "interesting",
-                translation: "This book is very interesting.",
-                explanation: "形容詞，表示令人感興趣"
-            },
-            {
-                sentence: "明天我要__學校。",
-                correctAnswer: "去",
-                alternatives: ["到", "前往"],
-                hint: "go",
-                translation: "I will go to school tomorrow.",
-                explanation: "表示移動的動詞"
-            },
-            {
-                sentence: "他__一個蘋果。",
-                correctAnswer: "吃",
-                alternatives: ["咬", "品嚐"],
-                hint: "eat",
-                translation: "He eats an apple.",
-                explanation: "表示進食的動詞"
-            },
-            {
-                sentence: "這隻狗很__。",
-                correctAnswer: "可愛",
-                alternatives: ["乖", "聽話"],
-                hint: "cute",
-                translation: "This dog is very cute.",
-                explanation: "形容詞，表示討人喜歡"
             }
         ];
 
@@ -484,54 +437,6 @@ ${alternatives}
                 hint: "touch",
                 translation: "His speech touched all the audience.",
                 explanation: "使人心有共鳴"
-            },
-            {
-                sentence: "我們應該__傳統文化。",
-                correctAnswer: "傳承",
-                alternatives: ["繼承", "發揚"],
-                hint: "inherit",
-                translation: "We should inherit traditional culture.",
-                explanation: "傳遞和繼承"
-            },
-            {
-                sentence: "這個城市__很多歷史遺跡。",
-                correctAnswer: "擁有",
-                alternatives: ["具有", "保存"],
-                hint: "have",
-                translation: "This city has many historical sites.",
-                explanation: "表示具備或持有"
-            },
-            {
-                sentence: "他的意見__了大家的認同。",
-                correctAnswer: "獲得",
-                alternatives: ["得到", "取得"],
-                hint: "obtain",
-                translation: "His opinion gained everyone's approval.",
-                explanation: "表示得到某種結果"
-            },
-            {
-                sentence: "我們要__時間，不要浪費。",
-                correctAnswer: "珍惜",
-                alternatives: ["愛惜", "寶貴"],
-                hint: "cherish",
-                translation: "We should cherish time and not waste it.",
-                explanation: "重視並愛護"
-            },
-            {
-                sentence: "這個計畫__很大的風險。",
-                correctAnswer: "存在",
-                alternatives: ["有", "面臨"],
-                hint: "exist",
-                translation: "This plan has great risks.",
-                explanation: "實際上有"
-            },
-            {
-                sentence: "他__了自己的夢想。",
-                correctAnswer: "實現",
-                alternatives: ["達成", "完成"],
-                hint: "realize",
-                translation: "He realized his dream.",
-                explanation: "使成為現實"
             }
         ];
 
