@@ -3,6 +3,7 @@ package com.eduquest.springbackend.controller;
 import com.eduquest.springbackend.dto.ResetEmailRequest;
 import com.eduquest.springbackend.dto.ResetPasswordRequest;
 import com.eduquest.springbackend.dto.ResetSchoolRequest;
+import com.eduquest.springbackend.service.AppUserDetails;
 import com.eduquest.springbackend.service.AuthService;
 import com.eduquest.springbackend.service.UserService;
 import jakarta.validation.Valid;
@@ -10,7 +11,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -26,64 +26,64 @@ public class UserController {
     }
 
     @GetMapping("/")
-    public ResponseEntity<?> getMyBasicInfo(@AuthenticationPrincipal UserDetails userDetails) {
-        return ResponseEntity.ok(userService.findBasicInfoByUsername(userDetails.getUsername()));
+    public ResponseEntity<?> getMyBasicInfo(@AuthenticationPrincipal AppUserDetails userDetails) {
+        return ResponseEntity.ok(userService.findBasicInfoById(userDetails.getId()));
     }
 
     @GetMapping("/point")
-    public ResponseEntity<?> getMyPoints(@AuthenticationPrincipal UserDetails userDetails) {
-        return ResponseEntity.ok(userService.findPointsByUsername(userDetails.getUsername()));
+    public ResponseEntity<?> getMyPoints(@AuthenticationPrincipal AppUserDetails userDetails) {
+        return ResponseEntity.ok(userService.findPointsById(userDetails.getId()));
     }
 
     @GetMapping("/school")
-    public ResponseEntity<?> getMySchool(@AuthenticationPrincipal UserDetails userDetails) {
-        return ResponseEntity.ok(userService.findSchoolNameByUsername(userDetails.getUsername()));
+    public ResponseEntity<?> getMySchool(@AuthenticationPrincipal AppUserDetails userDetails) {
+        return ResponseEntity.ok(userService.findSchoolNameById(userDetails.getId()));
     }
 
     @PostMapping("/school")
     public ResponseEntity<?> updateMySchool(
-            @AuthenticationPrincipal UserDetails userDetails,
+            @AuthenticationPrincipal AppUserDetails userDetails,
             @RequestBody ResetSchoolRequest req
     ) {
-        return ResponseEntity.ok(userService.saveSchoolId(userDetails.getUsername(), req));
+        return ResponseEntity.ok(userService.saveSchoolId(userDetails.getId(), req));
     }
 
     @GetMapping("/school/users")
     public ResponseEntity<?> getAllUsersByMySchoolId(
-            @AuthenticationPrincipal UserDetails userDetails,
+            @AuthenticationPrincipal AppUserDetails userDetails,
             @PageableDefault Pageable pageable
     ) {
-        return ResponseEntity.ok(userService.findAllUsernameByUsername(userDetails.getUsername(), pageable));
+        return ResponseEntity.ok(userService.findAllUsernameById(userDetails.getId(), pageable));
     }
 
     @GetMapping("/email")
-    public ResponseEntity<?> getMyEmail(@AuthenticationPrincipal UserDetails userDetails) {
-        return ResponseEntity.ok(userService.findEmailByUsername(userDetails.getUsername()));
+    public ResponseEntity<?> getMyEmail(@AuthenticationPrincipal AppUserDetails userDetails) {
+        return ResponseEntity.ok(userService.findEmailById(userDetails.getId()));
     }
 
     @PostMapping("/email")
     public  ResponseEntity<?> updateMyEmail(
-            @AuthenticationPrincipal UserDetails userDetails,
+            @AuthenticationPrincipal AppUserDetails userDetails,
             @RequestBody ResetEmailRequest req
     ) {
-        return  ResponseEntity.ok(userService.saveEmail(userDetails.getUsername(), req));
+        return  ResponseEntity.ok(userService.saveEmail(userDetails.getId(), req));
     }
 
     @GetMapping("/roles")
-    public ResponseEntity<?> getMyRoles(@AuthenticationPrincipal UserDetails userDetails) {
-        return ResponseEntity.ok(userService.findRoleNamesByUsername(userDetails.getUsername()));
+    public ResponseEntity<?> getMyRoles(@AuthenticationPrincipal AppUserDetails userDetails) {
+        return ResponseEntity.ok(userService.findRoleNamesById(userDetails.getId()));
     }
 
     @GetMapping("/educator-status")
-    public ResponseEntity<?> getMyEducatorStatus(@AuthenticationPrincipal UserDetails userDetails) {
-        return ResponseEntity.ok(userService.findEducatorStatusByUsername(userDetails.getUsername()));
+    public ResponseEntity<?> getMyEducatorStatus(@AuthenticationPrincipal AppUserDetails userDetails) {
+        return ResponseEntity.ok(userService.findEducatorStatusById(userDetails.getId()));
     }
 
     @PostMapping("/password")
     public ResponseEntity<?> updatePassword(
-            @AuthenticationPrincipal UserDetails userDetails,
+            @AuthenticationPrincipal AppUserDetails userDetails,
             @Valid @RequestBody ResetPasswordRequest req
     ) {
-        return ResponseEntity.ok(authService.savePassword(userDetails.getUsername(), req));
+        return ResponseEntity.ok(authService.savePassword(userDetails.getId(), req));
     }
 }

@@ -6,7 +6,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -35,6 +34,6 @@ public class AppUserDetailsService implements UserDetailsService {
         Collection<String> roles = userRepository.findRoleNamesByUsername(username);
         Collection<GrantedAuthority> authorities = new ArrayList<>();
         roles.forEach(role -> authorities.add(new SimpleGrantedAuthority(role)));
-        return new User(userInfo.username(), userInfo.password(), authorities);
+        return new AppUserDetails(userInfo.id(), userInfo.username(), userInfo.password(), authorities);
     }
 }

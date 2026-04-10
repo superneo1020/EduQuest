@@ -118,11 +118,11 @@ public class AuthService {
         boolean isActive = userRepo.findIsActiveByUsername(username).orElse(false);
 
         if (isPendingOrRejectedEducator) {
-            logger.warn("Login blocked: User {} is authenticated but educator status is pending/rejected", username);
+            logger.warn("[Login Blocked] User {} is authenticated but educator status is pending/rejected", username);
             throw new NotActivatedException("Educator status is pending/rejected.");
         }
         if (!isActive) {
-            logger.warn("Login blocked: User {} is authenticated but not active", username);
+            logger.warn("[Login Blocked] User {} is authenticated but not active", username);
             throw new NotActivatedException("Account has not been activated yet");
         }
 
@@ -140,9 +140,9 @@ public class AuthService {
     }
 
     @Transactional
-    public boolean savePassword(String username, ResetPasswordRequest req) {
+    public boolean savePassword(Long userId, ResetPasswordRequest req) {
         // 1. find user
-        AppUser user = userRepo.findByUsername(username)
+        AppUser user = userRepo.findById(userId)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
         // 2. check old password
@@ -157,8 +157,8 @@ public class AuthService {
 
         // 4. encode new password and set it to user
         user.setPassword(passwordEncoder.encode(req.newPassword()));
+        logger.info("Successful for changing password for user {}", user.getUsername());
         userRepo.save(user);
-        logger.info("Successful for changing password for user {}", username);
         return true;
     }
 

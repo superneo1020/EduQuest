@@ -21,25 +21,22 @@ public class UserItemService {
     private final UserItemRepository userItemRepo;
     private final UserRepository userRepo;
     private final ItemRepository itemRepo;
-    private final UserService userService;
+
     private final ItemService itemService;
 
     public UserItemService(UserItemRepository userItemRepo,
                            UserRepository userRepo,
                            ItemRepository itemRepo,
-                           UserService userService,
                            ItemService itemService) {
         this.userItemRepo = userItemRepo;
         this.userRepo = userRepo;
         this.itemRepo = itemRepo;
-        this.userService = userService;
         this.itemService = itemService;
     }
 
     @Transactional
-    public UserItemResponse createUserItem(String username, UserItemRequest req) {
+    public UserItemResponse createUserItem(Long userId, UserItemRequest req) {
 
-        Long userId = userService.checkIdByUsername(username);
         Long itemId = itemService.checkIdByName(req.itemName());
 
         AppUser user = userRepo.findById(userId)
@@ -65,21 +62,18 @@ public class UserItemService {
     }
 
     @Transactional(readOnly = true)
-    public List<UserItemDto> showItem(String username) {
-        return userItemRepo.findAllByUsername(username);
+    public List<UserItemDto> showItem(Long userId) {
+        return userItemRepo.findAllByUserId(userId);
     }
 
     @Transactional(readOnly = true)
-    public Boolean checkUserItemAndItemExists(String username, Long itemId, String itemType) {
-        return checkUserItemExists(username, itemId) && checkItemExists(itemId, itemType);
+    public Boolean checkUserItemAndItemExists(Long userId, Long itemId, String itemType) {
+        return checkUserItemExists(userId, itemId) && checkItemExists(itemId, itemType);
     }
 
     @Transactional(readOnly = true)
-    public Boolean checkUserItemExists(String username, Long itemId) {
-        return userItemRepo.existsByUserIdAndItemId(
-                userService.checkIdByUsername(username),
-                itemId
-        );
+    public Boolean checkUserItemExists(Long userId, Long itemId) {
+        return userItemRepo.existsByUserIdAndItemId(userId, itemId);
     }
 
     @Transactional(readOnly = true)

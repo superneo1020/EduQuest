@@ -13,28 +13,22 @@ public class CourseMemberService {
 
     private final CourseMemberRepository courseMemberRepo;
 
-    private final UserService userService;
-
-    public CourseMemberService(CourseMemberRepository courseMemberRepo, UserService userService) {
+    public CourseMemberService(CourseMemberRepository courseMemberRepo) {
         this.courseMemberRepo = courseMemberRepo;
-        this.userService = userService;
     }
 
     @Transactional(readOnly = true)
-    public List<CourseDto> showAllCourse(String username) {
-        Long id = userService.checkIdByUsername(username);
-        return courseMemberRepo.findCourseByUserId(id);
+    public List<CourseDto> showAllCourse(Long userId) {
+        return courseMemberRepo.findCourseByUserId(userId);
     }
 
     @Transactional(readOnly = true)
-    public List<CourseMemberDto> showAllCourseMemberByCourseId(String username, Long courseId) {
-        Long userId = userService.checkIdByUsername(username);
+    public List<CourseMemberDto> showAllCourseMemberByCourseId(Long userId, Long courseId) {
         return courseMemberRepo.findUserByCourseId(userId, courseId);
     }
 
     @Transactional(readOnly = true)
-    public String showRoleInClassByUserIdAndCourseId(String username, Long courseId) {
-        Long userId = userService.checkIdByUsername(username);
+    public String showRoleInClassByUserIdAndCourseId(Long userId, Long courseId) {
         return courseMemberRepo.findRoleInClassByUserIdAndCourseId(userId, courseId).orElse(null);
     }
 }

@@ -36,12 +36,6 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
-    public Long checkIdByUsername(String username) {
-        return userRepo.findIdByUsername(username).orElseThrow(
-                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found: " + username));
-    }
-
-    @Transactional(readOnly = true)
     public void validateUsernameExists(String username, String message) {
         if (userRepo.existsByUsername(username)) {
             throw new DuplicateResourceException(message);
@@ -56,9 +50,9 @@ public class UserService {
     }
 
     @Transactional
-    public boolean saveEmail(String username, ResetEmailRequest req) {
+    public boolean saveEmail(Long userId, ResetEmailRequest req) {
         // 1. find user
-        AppUser user = userRepo.findByUsername(username)
+        AppUser user = userRepo.findById(userId)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
         // 2. confirm that the new email is not same as old email
@@ -76,9 +70,9 @@ public class UserService {
     }
 
     @Transactional
-    public boolean saveSchoolId(String username, ResetSchoolRequest req) {
+    public boolean saveSchoolId(Long userId, ResetSchoolRequest req) {
         // 1. find user
-        AppUser user = userRepo.findByUsername(username)
+        AppUser user = userRepo.findById(userId)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
         // 2. find new school
@@ -106,44 +100,44 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
-    public Integer findPointsByUsername(String username) {
-        return userRepo.findPointsByUsername(username).orElseThrow(
-                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found：　" + username));
+    public Integer findPointsById(Long userId) {
+        return userRepo.findPointsById(userId).orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found：　" + userId));
     }
 
     @Transactional(readOnly = true)
-    public String findSchoolNameByUsername(String username) {
-        return userRepo.findSchoolNameByUsername(username).orElse(null);
+    public String findSchoolNameById(Long userId) {
+        return userRepo.findSchoolNameById(userId).orElse(null);
     }
 
     @Transactional(readOnly = true)
-    public String findEmailByUsername(String username) {
-        return userRepo.findEmailByUsername(username).orElseThrow(
-                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found：　" + username));
+    public String findEmailById(Long userId) {
+        return userRepo.findEmailById(userId).orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found：　" + userId));
     }
 
     @Transactional(readOnly = true)
-    public Collection<String> findRoleNamesByUsername(String username) {
-        return userRepo.findRoleNamesByUsernameOptional(username).orElseThrow(
-                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found：　" + username));
+    public Collection<String> findRoleNamesById(Long userId) {
+        return userRepo.findRoleNamesByIdOptional(userId).orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found：　" + userId));
     }
 
     @Transactional(readOnly = true)
-    public EducatorStatus findEducatorStatusByUsername(String username) {
-        return userRepo.findEducatorStatusByUsername(username).orElseThrow(
-                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found：　" + username));
+    public EducatorStatus findEducatorStatusById(Long userId) {
+        return userRepo.findEducatorStatusById(userId).orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found：　" + userId));
     }
 
     @Transactional(readOnly = true)
-    public UserDto findBasicInfoByUsername(String username) {
-        AppUser user = userRepo.findByUsername(username).orElseThrow(
-                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found：　" + username));
+    public UserDto findBasicInfoById(Long userId) {
+        AppUser user = userRepo.findById(userId).orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found：　" + userId));
         return dtoMapper.toUser(user);
     }
 
     @Transactional(readOnly = true)
-    public UtilPageResponse<UserMiniDto> findAllUsernameByUsername(String username, Pageable pageable) {
-        var page = userRepo.findAllUserRecordByUsernameWithSchool(username, pageable);
+    public UtilPageResponse<UserMiniDto> findAllUsernameById(Long userId, Pageable pageable) {
+        var page = userRepo.findAllUserRecordByIdWithSchool(userId, pageable);
         return dtoMapper.toPageResponse(page);
     }
 }
