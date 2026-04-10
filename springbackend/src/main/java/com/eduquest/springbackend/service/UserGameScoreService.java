@@ -59,7 +59,7 @@ public class UserGameScoreService {
         AppUser user = userRepo.getReferenceById(userId);
         Game game = gameRepo.getReferenceById(gameId);
 
-        UserGameScore userGameScore = new UserGameScore(user, game, req.scores());
+        UserGameScore userGameScore = new UserGameScore(user, game, req.scores(), req.metadata());
         UserGameScore savedScore = userGameScoreRepo.save(userGameScore);
 
         return new UserGameScoreResponse(
@@ -70,7 +70,7 @@ public class UserGameScoreService {
     }
 
     @Transactional(readOnly = true)
-    public SliceResponse<LeaderboardScoreDto> showLeaderboard(String gameName, Pageable pageable) {
+    public UtilSliceResponse<LeaderboardScoreDto> showLeaderboard(String gameName, Pageable pageable) {
         Pageable cleanPageable = PageableUtils.filterSort(pageable, LEADERBOARD_SCORE_DTO_FIELD);
         Long gameId = gameService.checkIdByName(gameName);
         var slice = userGameScoreRepo.findAllHighestScoresByGameId(gameId, cleanPageable);
@@ -78,7 +78,7 @@ public class UserGameScoreService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<UserGameScoreDto> showGameRecord(String username, Pageable pageable) {
+    public UtilPageResponse<UserGameScoreDto> showGameRecord(String username, Pageable pageable) {
         Pageable cleanPageable = PageableUtils.filterSort(pageable, USER_PROFILE_DTO_FIELD);
         Long userId = userService.checkIdByUsername(username);
         var page = userGameScoreRepo.findUserGameScoresByUserId(userId, cleanPageable);
@@ -86,7 +86,7 @@ public class UserGameScoreService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<UserGameScoreDto> showGameRecord(String username, Pageable pageable, String gameName) {
+    public UtilPageResponse<UserGameScoreDto> showGameRecord(String username, Pageable pageable, String gameName) {
         Pageable cleanPageable = PageableUtils.filterSort(pageable, USER_PROFILE_DTO_FIELD);
         Long userId = userService.checkIdByUsername(username);
         Long gameId = gameService.checkIdByName(gameName);

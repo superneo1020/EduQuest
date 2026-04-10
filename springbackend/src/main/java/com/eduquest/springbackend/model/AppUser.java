@@ -1,5 +1,6 @@
 package com.eduquest.springbackend.model;
 
+import com.eduquest.springbackend.enums.EducatorStatus;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Min;
 import org.hibernate.annotations.Generated;
@@ -30,6 +31,13 @@ public class AppUser {
     @Generated(event = {EventType.INSERT, EventType.UPDATE})
     @Min(value = 0, message = "User points must be at least 0")
     private Integer points = 0;
+
+    @Column(nullable = false)
+    private Boolean isActive = true;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 10)
+    private EducatorStatus educatorStatus = EducatorStatus.NONE;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "school_id")
@@ -67,7 +75,7 @@ public class AppUser {
     private List<UserItem> userItems = new ArrayList<>();
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<ClassMember> classMemberships = new ArrayList<>();
+    private List<CourseMember> courseMemberships = new ArrayList<>();
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<UserActivity> userActivities = new ArrayList<>();
@@ -77,11 +85,10 @@ public class AppUser {
 
     public AppUser() {}
 
-    public AppUser(String username, String email, String password, School school) {
+    public AppUser(String username, String email, String password) {
         this.username = username;
         this.email = email;
         this.password = password;
-        this.school = school;
     }
 
     public Long getId() {
@@ -122,6 +129,22 @@ public class AppUser {
 
     public void setPoints(Integer points) {
         this.points = points;
+    }
+
+    public Boolean getActive() {
+        return isActive;
+    }
+
+    public void setActive(Boolean active) {
+        isActive = active;
+    }
+
+    public EducatorStatus getEducatorStatus() {
+        return educatorStatus;
+    }
+
+    public void setEducatorStatus(EducatorStatus educatorStatus) {
+        this.educatorStatus = educatorStatus;
     }
 
     public School getSchool() {
@@ -172,12 +195,12 @@ public class AppUser {
         this.userItems = userItems;
     }
 
-    public List<ClassMember> getClassMemberships() {
-        return classMemberships;
+    public List<CourseMember> getCourseMemberships() {
+        return courseMemberships;
     }
 
-    public void setClassMemberships(List<ClassMember> classMemberships) {
-        this.classMemberships = classMemberships;
+    public void setCourseMemberships(List<CourseMember> courseMemberships) {
+        this.courseMemberships = courseMemberships;
     }
 
     public List<UserActivity> getUserActivities() {

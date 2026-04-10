@@ -2,7 +2,7 @@ package com.eduquest.springbackend.dto;
 
 import java.util.List;
 
-public record SliceResponse<T>(
+public record UtilSliceResponse<T>(
         List<T> slice,
         int currentPage,
         boolean hasNext,

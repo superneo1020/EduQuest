@@ -3,7 +3,7 @@ package com.eduquest.springbackend.service;
 import com.eduquest.springbackend.dao.ItemRepository;
 import com.eduquest.springbackend.dto.ItemDto;
 import com.eduquest.springbackend.dto.ItemShopRequest;
-import com.eduquest.springbackend.dto.PageResponse;
+import com.eduquest.springbackend.dto.UtilPageResponse;
 import com.eduquest.springbackend.model.Item;
 import com.eduquest.springbackend.util.PageableUtils;
 import org.springframework.data.domain.Page;
@@ -42,7 +42,7 @@ public class ItemService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<ItemDto> findItemByFilter(ItemShopRequest req, String username, Pageable pageable) {
+    public UtilPageResponse<ItemDto> findItemByFilter(ItemShopRequest req, String username, Pageable pageable) {
         Pageable cleanPageable = PageableUtils.filterSort(pageable, ITEM_DTO_FIELDS);
         List<Specification<Item>> specs = new ArrayList<>();
 
@@ -54,7 +54,7 @@ public class ItemService {
         // 2. Add Name filter
         if (req.name() != null && !req.name().isBlank()) {
             String pattern = "%" + req.name().trim() + "%";
-            specs.add((root, query, cb) -> cb.like(root.get("name"), pattern));
+            specs.add((root, query, cb) -> cb.like(cb.lower(root.get("name")), pattern));
         }
 
         // 3. Add User Points filter
