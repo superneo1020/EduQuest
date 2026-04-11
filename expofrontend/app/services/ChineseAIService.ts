@@ -28,14 +28,15 @@ class ChineseAIService {
     }
 
     async generateQuestions(request: ChineseQuestionRequest): Promise<ChineseQuestion[]> {
+        const targetCount = request.count || 3; // 改為 3 題
         if (!this.enabled) {
-            return this.getDefaultQuestions(request.difficulty);
+            return this.getDefaultQuestions(request.difficulty).slice(0, targetCount);
         }
 
         try {
             const prompt = this.createQuestionPrompt({
                 ...request,
-                count: request.count || 4   // 改為 4 題
+                count: targetCount
             });
 
             const response = await fetch(`${this.baseURL}/chat`, {
@@ -62,14 +63,17 @@ class ChineseAIService {
             const allQuestions = this.parseQuestions(aiResponseText, request.difficulty);
             const uniqueQuestions = this.deduplicateQuestions(allQuestions);
 
-            if (uniqueQuestions.length < 4) {
+            if (uniqueQuestions.length < targetCount) {
                 console.log('Not enough unique questions, adding defaults');
                 const defaults = this.getDefaultQuestions(request.difficulty);
-                return [...uniqueQuestions, ...defaults].slice(0, 4);
+                const combined = [...uniqueQuestions, ...defaults];
+                // 去重後取前 targetCount 題
+                const final = this.deduplicateQuestions(combined).slice(0, targetCount);
+                return final.map((q, index) => ({ ...q, id: index + 1 }));
             }
 
             const shuffled = uniqueQuestions.sort(() => 0.5 - Math.random());
-            const selected = shuffled.slice(0, 4);
+            const selected = shuffled.slice(0, targetCount);
 
             return selected.map((q, index) => ({
                 ...q,
@@ -78,12 +82,12 @@ class ChineseAIService {
 
         } catch (error) {
             console.error('Failed to generate questions:', error);
-            return this.getDefaultQuestions(request.difficulty);
+            return this.getDefaultQuestions(request.difficulty).slice(0, targetCount);
         }
     }
 
     private createQuestionPrompt(request: ChineseQuestionRequest): string {
-        const count = request.count || 4;
+        const count = request.count || 3;
         const topic = request.topic || 'daily life, greetings, family, food, animals, colors, numbers, occupations';
 
         const difficultyGuidelines = {
@@ -233,44 +237,30 @@ Return ONLY the JSON array, no other text.`;
                 options: ["影響；對...有作用", "休息；放鬆", "改變；轉變", "修理；修補"],
                 correctAnswer: 0,
                 explanation: "影響 表示對人或事物產生作用或改變，意思是 'influence; affect'。",
-            },
-            {
-                id: 4,
-                question: "雖然...但是... 用來表示什麼？",
-                options: ["讓步關係（前後對比或相反）", "因果關係（原因和結果）", "並列關係（並列兩件事）", "條件關係（在某種條件下）"],
-                correctAnswer: 0,
-                explanation: "『雖然...但是...』表示讓步或轉折，相當於英文的 'although ... but ...'，為 HSK3 常見句型。",
             }
         ];
 
         const advancedQuestions: ChineseQuestion[] = [
             {
-                "id": 1,
-                "question": "在家庭關係中，「父親」的正式稱呼通常是什麼？",
-                "options": ["父親", "母親", "兄弟", "姊妹"],
-                "correctAnswer": 0,
-                "explanation": "「父親」是較為正式的書面語，對應口語中的「爸爸」。",
+                id: 1,
+                question: "在家庭關係中，「父親」的正式稱呼通常是什麼？",
+                options: ["父親", "母親", "兄弟", "姊妹"],
+                correctAnswer: 0,
+                explanation: "「父親」是較為正式的書面語，對應口語中的「爸爸」。",
             },
             {
-                "id": 2,
-                "question": "下列哪一個詞彙常用於形容教書育人的專業人士？",
-                "options": ["教師", "醫師", "律師", "工程師"],
-                "correctAnswer": 0,
-                "explanation": "「教師」比「老師」更具職業色彩，常用於正式場合。",
+                id: 2,
+                question: "下列哪一個詞彙常用於形容教書育人的專業人士？",
+                options: ["教師", "醫師", "律師", "工程師"],
+                correctAnswer: 0,
+                explanation: "「教師」比「老師」更具職業色彩，常用於正式場合。",
             },
             {
-                "id": 3,
-                "question": "當你覺得食物味道極佳，除了「好吃」，還可以用哪個詞形容？",
-                "options": ["美味", "美觀", "美妙", "美感"],
-                "correctAnswer": 0,
-                "explanation": "「美味」常用於形容食物味道鮮美，層次高於「好吃」。",
-            },
-            {
-                "id": 4,
-                "question": "「傾訴衷腸」通常與下列哪種情感表達最為接近？",
-                "options": ["表白愛意", "表達不滿", "表示懷疑", "表述計畫"],
-                "correctAnswer": 0,
-                "explanation": "「表白」指對人說明內心的愛慕之情，是 HSK 5 常見的情感詞彙。",
+                id: 3,
+                question: "當你覺得食物味道極佳，除了「好吃」，還可以用哪個詞形容？",
+                options: ["美味", "美觀", "美妙", "美感"],
+                correctAnswer: 0,
+                explanation: "「美味」常用於形容食物味道鮮美，層次高於「好吃」。",
             }
         ];
 
