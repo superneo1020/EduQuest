@@ -67,7 +67,7 @@ export default function RootLayout() {
                     }}
                 />
                 <Stack.Screen
-                    name="Profile/teacher"
+                    name="teacher/teacher"
                     options={{
                         headerShown: false,
                     }}
