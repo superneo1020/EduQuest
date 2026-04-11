@@ -15,21 +15,17 @@ public class UserProfileService {
 
     private final UserProfileRepository userProfileRepo;
 
-    private final UserService userService;
     private final UserItemService userItemService;
 
     public UserProfileService(
-            UserService userService,
             UserProfileRepository userProfileRepo,
             UserItemService userItemService) {
-        this.userService = userService;
         this.userProfileRepo = userProfileRepo;
         this.userItemService = userItemService;
     }
 
     @Transactional(readOnly = true)
-    public UserProfileDto getUserProfile(@NonNull String username) {
-        Long userId =  userService.checkIdByUsername(username);
+    public UserProfileDto getUserProfile(@NonNull Long userId) {
         UserProfile userProfile = userProfileRepo.findByUserId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
@@ -44,8 +40,8 @@ public class UserProfileService {
     }
 
     @Transactional
-    public UserProfileResponse setUserProfile(@NonNull String username, @NonNull UserProfileRequest req) {
-        UserProfile userProfile = userProfileRepo.findByUserId(userService.checkIdByUsername(username))
+    public UserProfileResponse setUserProfile(@NonNull Long userId, @NonNull UserProfileRequest req) {
+        UserProfile userProfile = userProfileRepo.findByUserId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         if (req.nickname() != null && !req.nickname().isBlank()) {
@@ -58,7 +54,7 @@ public class UserProfileService {
                     req.equippedItems(),
                     userProfile.getEquippedItems()
             );
-            validateItemsOwnership(username, equippedItems);
+            validateItemsOwnership(userId, equippedItems);
             userProfile.setEquippedItems(equippedItems);
         }
 
@@ -89,12 +85,12 @@ public class UserProfileService {
     }
 
     @Transactional(readOnly = true)
-    public void validateItemsOwnership(String username, ProfileEquippedItemsDto equippedItems) {
-        if (equippedItems.AVATAR() != null && !userItemService.checkUserItemAndItemExists(username, equippedItems.AVATAR(), "AVATAR"))
+    public void validateItemsOwnership(Long userId, ProfileEquippedItemsDto equippedItems) {
+        if (equippedItems.AVATAR() != null && !userItemService.checkUserItemAndItemExists(userId, equippedItems.AVATAR(), "AVATAR"))
             throw new ResourceNotFoundException("Avatar not found");
-        if (equippedItems.BADGE() != null && !userItemService.checkUserItemAndItemExists(username, equippedItems.BADGE(), "BADGE"))
+        if (equippedItems.BADGE() != null && !userItemService.checkUserItemAndItemExists(userId, equippedItems.BADGE(), "BADGE"))
             throw  new ResourceNotFoundException("Badge not found");
-        if (equippedItems.BACKGROUND() != null && !userItemService.checkUserItemAndItemExists(username, equippedItems.BACKGROUND(), "BACKGROUND"))
+        if (equippedItems.BACKGROUND() != null && !userItemService.checkUserItemAndItemExists(userId, equippedItems.BACKGROUND(), "BACKGROUND"))
             throw new ResourceNotFoundException("Background not found");
     }
 

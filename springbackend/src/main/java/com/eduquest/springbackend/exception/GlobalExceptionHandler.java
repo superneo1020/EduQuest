@@ -1,14 +1,15 @@
 package com.eduquest.springbackend.exception;
 
 import jakarta.persistence.EntityNotFoundException;
-import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.TypeMismatchException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
-import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -18,7 +19,6 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.net.URI;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -27,111 +27,65 @@ import java.util.stream.Collectors;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    private ExceptionDto toException(HttpStatus status, String message) {
-        return new ExceptionDto(
-                Instant.now().toString(),
-                status.value(),
-                status.getReasonPhrase(),
-                message
-        );
-    }
+    private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
-    private ExceptionMultiLineDto toExceptionWithMultiLine(HttpStatus status, Map<String, String> message) {
-        return new ExceptionMultiLineDto(
-                Instant.now().toString(),
-                status.value(),
-                status.getReasonPhrase(),
-                message
-        );
+    private ProblemDetail createProblemDetail(HttpStatus status, String title, String detail) {
+        ProblemDetail pb = ProblemDetail.forStatusAndDetail(status, detail);
+        pb.setTitle(title);
+        pb.setProperty("timestamp", Instant.now()); // Simple timestamp as requested
+        return pb;
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ProblemDetail handleIllegalArgument(IllegalArgumentException ex) {
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
-                HttpStatus.BAD_REQUEST,
-                ex.getMessage()
-        );
-        problemDetail.setTitle("Illegal Argument");
-        problemDetail.setProperty("timestamp", Instant.now());
-        return problemDetail;
+        return createProblemDetail(HttpStatus.BAD_REQUEST, "Illegal Argument", ex.getMessage());
     }
 
     @ExceptionHandler(InsufficientPointsException.class)
     public ProblemDetail handleInsufficientPoints(InsufficientPointsException ex) {
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
-                HttpStatus.BAD_REQUEST,
-                ex.getMessage()
-        );
-        problemDetail.setTitle("Insufficient Points");
-        problemDetail.setProperty("timestamp", Instant.now());
-        return problemDetail;
+        return createProblemDetail(HttpStatus.BAD_REQUEST, "Insufficient Points", ex.getMessage());
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ProblemDetail handleDataIntegrity(DataIntegrityViolationException ex) {
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
-                HttpStatus.CONFLICT,
-                ex.getMessage()
-        );
-        problemDetail.setTitle("Data Integrity Violation");
-        problemDetail.setProperty("timestamp", Instant.now());
-        return problemDetail;
+        logger.error("Data integrity violation: {}", ex.getMessage());
+        return createProblemDetail(HttpStatus.CONFLICT, "Data Integrity Violation",
+                "The operation could not be completed due to a data conflict (e.g. duplicate entry).");
     }
 
     @ExceptionHandler(BadCredentialsException.class)
     public ProblemDetail handleBadCredentials(BadCredentialsException ex) {
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
-                HttpStatus.UNAUTHORIZED,
-                ex.getMessage()
-        );
-        problemDetail.setTitle("Bad Credentials");
-        problemDetail.setProperty("timestamp", Instant.now());
-        return problemDetail;
+        return createProblemDetail(HttpStatus.UNAUTHORIZED, "Bad Credentials", ex.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ExceptionMultiLineDto> handleMethodArgumentNotValid(MethodArgumentNotValidException e) {
+    public ProblemDetail handleMethodArgumentNotValid(MethodArgumentNotValidException e) {
+        ProblemDetail pb = createProblemDetail(HttpStatus.BAD_REQUEST, "Validation Failed", "Errors occurred.");
+
         Map<String, String> errors = e.getBindingResult().getFieldErrors().stream()
                 .collect(Collectors.toMap(
                         FieldError::getField,
                         field -> field.getDefaultMessage() != null ? field.getDefaultMessage() : "Invalid value",
                         (existing, replacement) -> existing
                 ));
-        return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body(toExceptionWithMultiLine(HttpStatus.BAD_REQUEST, errors));
+
+        pb.setProperty("errors", errors); // Add multi-line errors here
+        return pb;
     }
 
     @ExceptionHandler(DuplicateResourceException.class)
     public ProblemDetail handleDuplicateResource(DuplicateResourceException ex) {
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
-                HttpStatus.CONFLICT,
-                ex.getMessage()
-        );
-        problemDetail.setTitle("Resource Already Exists");
-        problemDetail.setProperty("timestamp", Instant.now());
-        return problemDetail;
+        return createProblemDetail(HttpStatus.CONFLICT, "Resource Already Exists", ex.getMessage());
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ProblemDetail handleResourceNotFound(ResourceNotFoundException ex) {
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
-                HttpStatus.NOT_FOUND,
-                ex.getMessage()
-        );
-        problemDetail.setTitle("Resource Not Found");
-        problemDetail.setProperty("timestamp", Instant.now());
-        return problemDetail;
+        return createProblemDetail(HttpStatus.NOT_FOUND, "Resource Not Found", ex.getMessage());
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ProblemDetail handleEnumError(HttpMessageNotReadableException ex) {
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
-                HttpStatus.BAD_REQUEST,
-                "JSON parse error"
-        );
-        problemDetail.setTitle("Enum error");
-        problemDetail.setProperty("timestamp", Instant.now());
+        ProblemDetail problemDetail = createProblemDetail(HttpStatus.BAD_REQUEST, "Enum error", "JSON parse error");
 
         // for Theme Enum
         if (ex.getMessage().contains("Theme")) {
@@ -143,94 +97,82 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(JwtValidationException.class)
-    public ResponseEntity<ExceptionDto> handleJwtValidation(JwtValidationException e) {
-        return ResponseEntity
-                .status(HttpStatus.UNAUTHORIZED)
-                .body(toException(HttpStatus.UNAUTHORIZED, e.getMessage()));
+    public ProblemDetail handleJwtValidation(JwtValidationException e) {
+        return createProblemDetail(HttpStatus.UNAUTHORIZED, "Unauthorized", e.getMessage());
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
-    public ResponseEntity<ExceptionMultiLineDto> handleConstraintViolation(ConstraintViolationException e) {
+    public ProblemDetail handleConstraintViolation(ConstraintViolationException e) {
+        ProblemDetail pb = createProblemDetail(HttpStatus.BAD_REQUEST, "Constraint Violation", "Invalid parameters.");
+
         Map<String, String> errors = new LinkedHashMap<>();
-        for (ConstraintViolation<?> violation : e.getConstraintViolations()) {
-            String path = violation.getPropertyPath().toString();
-            errors.put(path, violation.getMessage());
-        }
-        return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body(toExceptionWithMultiLine(HttpStatus.BAD_REQUEST, errors));
+        e.getConstraintViolations().forEach(v -> errors.put(v.getPropertyPath().toString(), v.getMessage()));
+
+        pb.setProperty("errors", errors);
+        return pb;
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
-    public ResponseEntity<ExceptionMultiLineDto> handleMethodArgumentTypeMismatch(MethodArgumentTypeMismatchException ex) {
-        String name = ex.getName(); // parameter name, e.g. "page"
-        String value = ex.getValue() != null ? ex.getValue().toString() : "null";
-        String expectedType = ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "unknown";
-        Map<String, String> errors = Map.of(name, String.format("Failed to convert value '%s' to type %s", value, expectedType));
-        return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body(toExceptionWithMultiLine(HttpStatus.BAD_REQUEST, errors));
+    public ProblemDetail handleMethodArgumentTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        String detail = String.format("Failed to convert value '%s' to type %s", ex.getValue(),
+                ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "unknown");
+
+        ProblemDetail pb = createProblemDetail(HttpStatus.BAD_REQUEST, "Parameter Type Mismatch", detail);
+        pb.setProperty("parameter", ex.getName());
+        return pb;
     }
 
+    // Missing Required Request Parameter
     @ExceptionHandler(MissingServletRequestParameterException.class)
-    public ResponseEntity<ExceptionMultiLineDto> handleMissingParam(MissingServletRequestParameterException e) {
-        Map<String, String> errors = Map.of(e.getParameterName(), "Required request parameter is missing");
-        return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body(toExceptionWithMultiLine(HttpStatus.BAD_REQUEST, errors));
+    public ProblemDetail handleMissingParam(MissingServletRequestParameterException e) {
+        ProblemDetail pb = createProblemDetail(
+                HttpStatus.BAD_REQUEST,
+                "Missing Parameter",
+                String.format("The required parameter '%s' is missing", e.getParameterName())
+        );
+
+        // Adding to the 'errors' map to keep format consistent with your multi-line DTOs
+        pb.setProperty("errors", Map.of(e.getParameterName(), "Required request parameter is missing"));
+        return pb;
     }
 
+    // General Type Mismatch (e.g. Field assignment issues)
     @ExceptionHandler(TypeMismatchException.class)
-    public ResponseEntity<ExceptionMultiLineDto> handleTypeMismatch(TypeMismatchException e) {
-        String name = e.getPropertyName() != null ? e.getPropertyName() : "null";
+    public ProblemDetail handleTypeMismatch(TypeMismatchException e) {
+        String name = e.getPropertyName() != null ? e.getPropertyName() : "unknown";
         String value = e.getValue() != null ? e.getValue().toString() : "null";
-        Map<String, String> errors = Map.of(name, String.format("Type mismatch: cannot convert value '%s'", value));
-        return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body(toExceptionWithMultiLine(HttpStatus.BAD_REQUEST, errors));
+        String detail = String.format("Type mismatch: cannot convert value '%s' for property '%s'", value, name);
+
+        ProblemDetail pb = createProblemDetail(HttpStatus.BAD_REQUEST, "Type Mismatch", detail);
+
+        pb.setProperty("errors", Map.of(name, String.format("Value '%s' is the wrong type", value)));
+        return pb;
     }
 
     @ExceptionHandler(EntityNotFoundException.class)
-    public ResponseEntity<ExceptionDto> handleNotFound(EntityNotFoundException e) {
-        return ResponseEntity
-                .status(HttpStatus.NOT_FOUND)
-                .body(toException(HttpStatus.NOT_FOUND, e.getMessage()));
+    public ProblemDetail handleEntityNotFound(EntityNotFoundException e) {
+        return createProblemDetail(HttpStatus.NOT_FOUND, "Entity Not Found", e.getMessage());
     }
 
     @ExceptionHandler(ResponseStatusException.class)
-    public ResponseEntity<ProblemDetail> handleResponseStatus(ResponseStatusException e) {
+    public ProblemDetail handleResponseStatus(ResponseStatusException e) {
         HttpStatus status = (HttpStatus) e.getStatusCode();
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
-                status, e.getReason() != null ? e.getReason() : "Unexpected error"
-        );
-        problem.setTitle(status.getReasonPhrase());
-        String instanceId = "urn:uuid:" + java.util.UUID.randomUUID();
-        problem.setInstance(URI.create(instanceId));
-        problem.setProperty("instanceId", instanceId);
-        problem.setProperty("timestamp", Instant.now());
-        problem.setProperty("log", e.getMessage());
-        return ResponseEntity.status(status).body(problem);
+        return createProblemDetail(status, status.getReasonPhrase(), 
+                e.getReason() != null ? e.getReason() : "Unexpected error");
     }
 
     @ExceptionHandler(NotActivatedException.class)
     public ProblemDetail handleNotActivatedException(NotActivatedException ex) {
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
-                HttpStatus.FORBIDDEN,
-                ex.getMessage()
-        );
-        problemDetail.setTitle("Account Not Activated");
-        problemDetail.setProperty("timestamp", Instant.now());
-        return problemDetail;
+        return createProblemDetail(HttpStatus.FORBIDDEN, "Account Not Activated", ex.getMessage());
     }
 
     @ExceptionHandler(RuleViolationException.class)
     public ProblemDetail handleRuleViolationException(RuleViolationException ex) {
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
-                HttpStatus.BAD_REQUEST,
-                ex.getMessage()
-        );
-        problemDetail.setTitle("Rule Violation");
-        problemDetail.setProperty("timestamp", Instant.now());
-        return problemDetail;
+        return createProblemDetail(HttpStatus.BAD_REQUEST, "Rule Violation", ex.getMessage());
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ProblemDetail handleAccessDenied(AccessDeniedException e) {
+        return createProblemDetail(HttpStatus.FORBIDDEN, "Access Denied", e.getMessage());
     }
 }
