@@ -1,6 +1,9 @@
 package com.eduquest.springbackend.service.security;
 
 import com.eduquest.springbackend.dao.CourseMemberRepository;
+import com.eduquest.springbackend.service.AppUserDetails;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 @Component("courseMemberSecurity")
@@ -12,7 +15,11 @@ public class CourseMemberSecurity {
         this.courseMemberRepo = courseMemberRepo;
     }
 
-    public boolean isMember(Long courseId, Long userId) {
-        return courseMemberRepo.existsByCourseIdAndUserId(courseId, userId);
+    public boolean isCourseMember(Long courseId) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !(auth.getPrincipal() instanceof AppUserDetails user)) {
+            return false;
+        }
+        return courseMemberRepo.existsByCourseIdAndUserId(courseId, user.getId());
     }
 }

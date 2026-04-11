@@ -19,17 +19,17 @@ public interface CourseMemberRepository extends JpaRepository<CourseMember, Long
             "FROM CourseMember cm " +
             "JOIN cm.course c " +
             "WHERE cm.user.id = :id")
-    List<CourseDto> findCourseByUserId(Long id);
+    List<CourseDto> findCourseByUserId(@Param("id") Long id);
 
     @Query("SELECT new com.eduquest.springbackend.dto.CourseMemberDto(" +
             "u.id, u.username, u.email, u.createdAt, u.updatedAt, cm.roleInClass" +
             ") " +
             "FROM CourseMember cm " +
             "JOIN cm.user u " +
-            "WHERE cm.course.id = :courseId " +
-            "AND EXISTS (SELECT 1 FROM CourseMember cm2 WHERE cm2.course.id = :courseId AND cm2.user.id = :userId)")
-    List<CourseMemberDto> findUserByCourseId(@Param("userId")Long userId, @Param("courseId")Long courseId);
+            "WHERE cm.course.id = :courseId ")
+    List<CourseMemberDto> findUserByCourseId(@Param("courseId") Long courseId);
 
     @Query("SELECT cm.roleInClass FROM CourseMember cm WHERE cm.user.id = :userId AND cm.course.id = :courseId")
-    Optional<String> findRoleInClassByUserIdAndCourseId(Long userId, Long courseId);
+    Optional<String> findRoleInClassByUserIdAndCourseId(@Param("userId") Long userId,
+                                                        @Param("courseId") Long courseId);
 }

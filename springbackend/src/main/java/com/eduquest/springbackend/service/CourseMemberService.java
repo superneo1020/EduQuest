@@ -23,12 +23,12 @@ public class CourseMemberService {
     }
 
     @Transactional(readOnly = true)
-    public List<CourseMemberDto> showAllCourseMemberByCourseId(Long userId, Long courseId) {
-        return courseMemberRepo.findUserByCourseId(userId, courseId);
+    public List<CourseMemberDto> showAllCourseMembers(Long courseId) {
+        return courseMemberRepo.findUserByCourseId(courseId);
     }
 
     @Transactional(readOnly = true)
-    public String showRoleInClassByUserIdAndCourseId(Long userId, Long courseId) {
+    public String getRoleInClass(Long userId, Long courseId) {
         return courseMemberRepo.findRoleInClassByUserIdAndCourseId(userId, courseId).orElse(null);
     }
 }
