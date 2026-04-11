@@ -21,16 +21,17 @@ type Question = {
     userAnswer: string;
     isCorrect: boolean;
     feedback?: string;
-    score?: number; // 0-10分 (原始AI分數/10)
+    score?: number; // 实际得分
+    maxScore?: number; // 本题满分
 };
 
 type Difficulty = 'easy' | 'medium' | null;
 type GameState = 'difficulty_select' | 'playing' | 'result';
 
-// 修改：總題數改為 4 題
-const TOTAL_QUESTIONS = 4;
+// 修改：总题数改为 3
+const TOTAL_QUESTIONS = 3;
 
-// --- 💥 浮動文字元件 (HIT / OUCH) ---
+// --- 💥 浮动文字组件 (HIT / OUCH) ---
 const FloatingText = ({ text, color, onComplete }: { text: string, color: string, onComplete: () => void }) => {
     const opacity = useRef(new Animated.Value(1)).current;
     const translateY = useRef(new Animated.Value(0)).current;
@@ -58,7 +59,7 @@ const FloatingText = ({ text, color, onComplete }: { text: string, color: string
     );
 };
 
-// 可愛角色狀態配置
+// 可爱角色状态配置
 const CHARACTER_STATES = {
     idle: { icon: '🐼', message: 'Let\'s learn Chinese!', bgColor: '#E8F5E9' },
     thinking: { icon: '🤔🐼', message: 'Think about it...', bgColor: '#FFF3E0' },
@@ -69,7 +70,7 @@ const CHARACTER_STATES = {
     celebrate: { icon: '🎊🐼🎉', message: 'Congratulations on completing！', bgColor: '#FFF9C4' }
 };
 
-// 鼓勵語錄庫
+// 鼓励语录库
 const ENCOURAGEMENT_MESSAGES = {
     ggreat: [
         '🎉 Amazing!', '🌟 You are a genius!', '💪 Keep it up!',
@@ -85,7 +86,7 @@ const ENCOURAGEMENT_MESSAGES = {
     ]
 };
 
-// 主題色彩配置
+// 主题色彩配置
 const THEME_COLORS = {
     easy: {
         primary: '#6B8C5C',
@@ -133,29 +134,29 @@ export default function ChineseSentenceGame() {
     const { token } = useAuth();
     const [isSaving, setIsSaving] = useState(false);
 
-    // 動畫值
+    // 动画值
     const bounceAnim = useRef(new Animated.Value(0)).current;
     const shakeAnim = useRef(new Animated.Value(0)).current;
     const feedbackAnim = useRef(new Animated.Value(0)).current;
 
-    // 倒數計時狀態
+    // 倒数计时状态
     const [prepText, setPrepText] = useState<string | null>(null);
     const prepScale = useRef(new Animated.Value(0)).current;
     const [gameActive, setGameActive] = useState(false);
 
-    // ========== 🕒 新增：計時器相關狀態 ==========
+    // ========== 🕒 新增：计时器相关状态 ==========
     const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
     const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
-    const timerStartedRef = useRef<boolean>(false); // 確保計時器只啟動一次
+    const timerStartedRef = useRef<boolean>(false);
 
-    // 格式化時間 (MM:SS)
+    // 格式化时间 (MM:SS)
     const formatTime = (totalSeconds: number): string => {
         const minutes = Math.floor(totalSeconds / 60);
         const seconds = totalSeconds % 60;
         return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     };
 
-    // 停止計時器
+    // 停止计时器
     const stopTimer = () => {
         if (timerIntervalRef.current) {
             clearInterval(timerIntervalRef.current);
@@ -163,9 +164,9 @@ export default function ChineseSentenceGame() {
         }
     };
 
-    // 開始計時器（只在第一次調用時生效）
+    // 开始计时器（只在第一次调用时生效）
     const startTimerOnce = () => {
-        if (timerStartedRef.current) return; // 已經啟動過，不再重複啟動
+        if (timerStartedRef.current) return;
         timerStartedRef.current = true;
         setElapsedSeconds(0);
         timerIntervalRef.current = setInterval(() => {
@@ -173,15 +174,15 @@ export default function ChineseSentenceGame() {
         }, 1000);
     };
 
-    // 特效狀態
+    // 特效状态
     const [floatingText, setFloatingText] = useState<{ id: number, text: string, color: string } | null>(null);
     const screenShake = useRef(new Animated.Value(0)).current;
 
-    // 難度選擇狀態
+    // 难度选择状态
     const [difficulty, setDifficulty] = useState<Difficulty>(null);
     const [gameState, setGameState] = useState<GameState>('difficulty_select');
 
-    // 遊戲狀態
+    // 游戏状态
     const [currentIndex, setCurrentIndex] = useState(0);
     const [questions, setQuestions] = useState<Question[]>([]);
     const [inputText, setInputText] = useState('');
@@ -193,7 +194,10 @@ export default function ChineseSentenceGame() {
     const [characterState, setCharacterState] = useState<keyof typeof CHARACTER_STATES>('idle');
     const [encouragementText, setEncouragementText] = useState('');
 
-    // 保存分數到伺服器
+    // 每道题满分数组
+    const [questionMaxPoints, setQuestionMaxPoints] = useState<number[]>([]);
+
+    // 保存分数到服务器
     const saveScore = async (finalScore: number) => {
         if (!token || !difficulty) return;
 
@@ -214,7 +218,7 @@ export default function ChineseSentenceGame() {
         }
     };
 
-    // 倒數準備序列 - 只在第一次開始計時器
+    // 倒数准备序列 - 只在第一次开始计时器
     const startPrepSequence = (isFirstTime: boolean = true) => {
         setGameActive(false);
 
@@ -229,7 +233,6 @@ export default function ChineseSentenceGame() {
             }).start();
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-            // 只在第一次倒數時啟動計時器
             if (isFirstTime) {
                 startTimerOnce();
             }
@@ -241,7 +244,7 @@ export default function ChineseSentenceGame() {
         }, 1200);
     };
 
-    // 觸發螢幕震動效果
+    // 触发屏幕震动效果
     const triggerScreenShake = () => {
         Animated.sequence([
             Animated.timing(screenShake, { toValue: 10, duration: 50, useNativeDriver: true }),
@@ -254,7 +257,7 @@ export default function ChineseSentenceGame() {
         ]).start();
     };
 
-    // 播放彈跳動畫
+    // 播放弹跳动画
     const playBounceAnimation = () => {
         bounceAnim.setValue(0);
         Animated.spring(bounceAnim, {
@@ -265,7 +268,7 @@ export default function ChineseSentenceGame() {
         }).start();
     };
 
-    // 播放搖晃動畫（答錯時）
+    // 播放摇晃动画（答错时）
     const playShakeAnimation = () => {
         shakeAnim.setValue(0);
         Animated.sequence([
@@ -292,13 +295,13 @@ export default function ChineseSentenceGame() {
         ]).start();
     };
 
-    // 獲取隨機鼓勵語錄
+    // 获取随机鼓励语录
     const getRandomEncouragement = (type: 'great' | 'good' | 'tryAgain') => {
         const messages = ENCOURAGEMENT_MESSAGES[type];
         return messages[Math.floor(Math.random() * messages.length)];
     };
 
-    // 更新角色狀態
+    // 更新角色状态
     const updateCharacterState = (type: keyof typeof CHARACTER_STATES, customMessage?: string) => {
         setCharacterState(type);
         if (customMessage) {
@@ -308,12 +311,19 @@ export default function ChineseSentenceGame() {
         }
     };
 
-    // 初始化遊戲（當難度選擇後）
+    // 初始化游戏（当难度选择后）
     const startGame = (selectedDifficulty: Difficulty) => {
-        // 重置計時器狀態
+        // 重置计时器状态
         timerStartedRef.current = false;
         setElapsedSeconds(0);
         stopTimer();
+
+        // 根据难度设置每道题的满分数组
+        if (selectedDifficulty === 'easy') {
+            setQuestionMaxPoints([30, 30, 40]);
+        } else {
+            setQuestionMaxPoints([40, 40, 40]);
+        }
 
         setDifficulty(selectedDifficulty);
         setGameState('playing');
@@ -345,14 +355,14 @@ export default function ChineseSentenceGame() {
                 alternatives: response.alternatives,
                 explanation: response.explanation,
                 userAnswer: '',
-                isCorrect: false
+                isCorrect: false,
+                maxScore: questionMaxPoints[0]
             }]);
             updateCharacterState('idle');
-            // 開始倒數 - 第一次，啟動計時器
             startPrepSequence(true);
         } catch (error) {
             console.error('Failed to load first question:', error);
-            Alert.alert('錯誤', '無法加載題目，請稍後再試');
+            Alert.alert('错误', '无法加载题目，请稍后再试');
         } finally {
             setLoading(false);
         }
@@ -360,7 +370,7 @@ export default function ChineseSentenceGame() {
 
     const loadNextQuestion = async () => {
         if (currentIndex + 1 >= TOTAL_QUESTIONS) {
-            stopTimer(); // 遊戲完成時停止計時器
+            stopTimer();
             await generateFinalFeedback();
             setGameState('result');
             updateCharacterState('celebrate');
@@ -382,6 +392,7 @@ export default function ChineseSentenceGame() {
                 difficulty: difficulty || 'medium'
             });
 
+            const nextMaxScore = questionMaxPoints[currentIndex + 1] || (difficulty === 'easy' ? 30 : 40);
             setQuestions(prev => [...prev, {
                 id: currentIndex + 1,
                 sentence: response.sentence,
@@ -391,7 +402,8 @@ export default function ChineseSentenceGame() {
                 alternatives: response.alternatives,
                 explanation: response.explanation,
                 userAnswer: '',
-                isCorrect: false
+                isCorrect: false,
+                maxScore: nextMaxScore
             }]);
 
             setCurrentIndex(prev => prev + 1);
@@ -399,11 +411,10 @@ export default function ChineseSentenceGame() {
             setShowHint(false);
             setShowFeedback(false);
             updateCharacterState('idle');
-            // 每題之間重新倒數 - 不是第一次，不啟動計時器
             startPrepSequence(false);
         } catch (error) {
             console.error('Failed to load next question:', error);
-            Alert.alert('錯誤', '無法加載下一題，請稍後再試');
+            Alert.alert('错误', '无法加载下一题，请稍后再试');
             setGameActive(true);
         } finally {
             setLoading(false);
@@ -422,6 +433,7 @@ export default function ChineseSentenceGame() {
         }
 
         const currentQuestion = questions[currentIndex];
+        const maxScoreForThis = questionMaxPoints[currentIndex];
         setSubmitting(true);
 
         try {
@@ -432,17 +444,10 @@ export default function ChineseSentenceGame() {
                 alternatives: currentQuestion.alternatives
             });
 
-            // 修改：根據難度計算每題得分
-            // Easy: 每題滿分 25 分 (總分 100)
-            // Medium: 每題滿分 30 分 (總分 120)
-            let questionScore = 0;
-            if (difficulty === 'easy') {
-                // Easy: 原始分數 0-100 轉換為 0-25
-                questionScore = Math.round((result.score / 100) * 25);
-            } else {
-                // Medium: 原始分數 0-100 轉換為 0-30
-                questionScore = Math.round((result.score / 100) * 30);
-            }
+            // 根据难度和当前题目索引计算实际得分（按比例映射）
+            let questionScore = Math.round((result.score / 100) * maxScoreForThis);
+            // 确保不超过满分
+            questionScore = Math.min(questionScore, maxScoreForThis);
 
             setQuestions(prev => prev.map((q, idx) =>
                 idx === currentIndex
@@ -459,9 +464,7 @@ export default function ChineseSentenceGame() {
             setShowFeedback(true);
             setGameActive(false);
 
-            // 根據答案顯示角色狀態和鼓勵語錄
             if (result.isCorrect) {
-                // ✅ 正確 - 打擊回饋
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
                 setFloatingText({ id: Date.now(), text: 'HIT!', color: '#FFD700' });
                 playBounceAnimation();
@@ -473,7 +476,6 @@ export default function ChineseSentenceGame() {
                     setEncouragementText(getRandomEncouragement('good'));
                 }
             } else {
-                // ❌ 錯誤 - 被打擊回饋
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
                 triggerScreenShake();
                 setFloatingText({ id: Date.now(), text: 'OUCH!', color: '#FF4757' });
@@ -482,14 +484,13 @@ export default function ChineseSentenceGame() {
                 setEncouragementText(getRandomEncouragement('tryAgain'));
             }
 
-            // 清除浮動文字
             setTimeout(() => {
                 setFloatingText(null);
             }, 800);
 
         } catch (error) {
             console.error('Failed to check answer:', error);
-            Alert.alert('錯誤', '無法檢查答案，請稍後再試');
+            Alert.alert('错误', '无法检查答案，请稍后再试');
             setGameActive(true);
         } finally {
             setSubmitting(false);
@@ -501,11 +502,11 @@ export default function ChineseSentenceGame() {
         loadNextQuestion();
     };
 
-    // 修改：計算總分（根據難度不同滿分不同）
+    // 计算总分（根据每题实际得分累加）
     const calculateScore = () => {
         const totalScore = questions.reduce((acc, q) => acc + (q.score || 0), 0);
         const correctCount = questions.filter(q => q.isCorrect).length;
-        const maxScore = difficulty === 'easy' ? 100 : 120;
+        const maxScore = questionMaxPoints.reduce((a, b) => a + b, 0);
 
         return {
             correct: correctCount,
@@ -521,7 +522,6 @@ export default function ChineseSentenceGame() {
         const percentage = score.percentage;
         const maxScore = score.maxScore;
 
-        // 保存分數到伺服器
         await saveScore(score.totalScore);
 
         let feedback = '';
@@ -540,13 +540,12 @@ export default function ChineseSentenceGame() {
         setAiFeedback(feedback);
     };
 
-    // 返回難度選擇頁面
+    // 返回难度选择页面
     const handleNewDifficulty = async () => {
         stopTimer();
         timerStartedRef.current = false;
         setElapsedSeconds(0);
 
-        // 如果有進行中的遊戲且已有分數，保存當前分數
         if (gameState === 'playing' && questions.length > 0) {
             const currentScore = calculateScore();
             if (currentScore.totalScore > 0) {
@@ -589,8 +588,8 @@ export default function ChineseSentenceGame() {
             }
         } else if (gameState === 'playing') {
             Alert.alert(
-                '退出遊戲',
-                '確定要退出嗎？進度將不會保存。',
+                '退出游戏',
+                '确定要退出吗？进度将不会保存。',
                 [
                     { text: '取消', style: 'cancel' },
                     {
@@ -598,7 +597,6 @@ export default function ChineseSentenceGame() {
                         style: 'destructive',
                         onPress: async () => {
                             stopTimer();
-                            // 如果有分數，保存當前分數
                             const currentScore = calculateScore();
                             if (currentScore.totalScore > 0) {
                                 await saveScore(currentScore.totalScore);
@@ -617,7 +615,7 @@ export default function ChineseSentenceGame() {
         }
     };
 
-    // 渲染可愛角色
+    // 渲染可爱角色
     const renderCharacter = () => {
         const state = CHARACTER_STATES[characterState];
         const currentTheme = difficulty ? THEME_COLORS[difficulty] : THEME_COLORS.easy;
@@ -635,13 +633,13 @@ export default function ChineseSentenceGame() {
         );
     };
 
-    // 渲染遊戲中的反饋卡片
+    // 渲染游戏中的反馈卡片
     const renderFeedback = () => {
         if (!showFeedback) return null;
 
         const currentQuestion = questions[currentIndex];
         const score = currentQuestion.score || 0;
-        const maxQuestionScore = difficulty === 'easy' ? 25 : 30;
+        const maxQuestionScore = currentQuestion.maxScore || (difficulty === 'easy' ? 30 : 40);
 
         return (
             <Animated.View
@@ -703,17 +701,14 @@ export default function ChineseSentenceGame() {
         return (
             <Animated.View style={[{ flex: 1 }, { transform: [{ translateX: screenShake }] }]}>
                 <View style={styles.questionContainer}>
-                    {/* 可愛角色 */}
                     {renderCharacter()}
 
-                    {/* 倒數覆蓋層 */}
                     {prepText && (
                         <Animated.View style={[styles.prepOverlay, { transform: [{ scale: prepScale }] }]}>
                             <Text style={[styles.prepText, { color: currentTheme.primary }]}>{prepText}</Text>
                         </Animated.View>
                     )}
 
-                    {/* 浮動文字特效 */}
                     {floatingText && (
                         <FloatingText
                             key={floatingText.id}
@@ -803,7 +798,7 @@ export default function ChineseSentenceGame() {
         );
     };
 
-    // 難度選擇頁面（優化視覺設計）
+    // 难度选择页面（优化视觉设计）
     const renderDifficultySelector = () => {
         return (
             <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -814,8 +809,8 @@ export default function ChineseSentenceGame() {
                         Learn Chinese together with the cute panda! Complete the fill-in-the-blank exercises to gain a sense of accomplishment!✨
                     </Text>
                     <View style={styles.scoreInfoBox}>
-                        <Text style={styles.scoreInfoText}>🏆 Easy: 4 questions, total 100 points</Text>
-                        <Text style={styles.scoreInfoText}>⚡ Medium: 4 questions, total 120 points</Text>
+                        <Text style={styles.scoreInfoText}>🏆 Easy: 3 questions, total 100 points (30+30+40)</Text>
+                        <Text style={styles.scoreInfoText}>⚡ Medium: 3 questions, total 120 points (40 each)</Text>
                     </View>
                 </View>
 
@@ -846,10 +841,9 @@ export default function ChineseSentenceGame() {
                                 </View>
                                 <Text style={styles.diffDesc}>{option.description}</Text>
 
-                                {/* 修改：顯示計分方式 */}
                                 <View style={styles.scoreInfoRow}>
                                     <Text style={[styles.scoreInfoDetail, { color: option.color }]}>
-                                        {option.id === 'easy' ? '🏆 25 points per question (Total 100)' : '⚡ 30 points per question (Total 120)'}
+                                        {option.id === 'easy' ? '🏆 30+30+40 points (Total 100)' : '⚡ 40 points per question (Total 120)'}
                                     </Text>
                                 </View>
 
@@ -877,7 +871,7 @@ export default function ChineseSentenceGame() {
         );
     };
 
-    // 結果頁面
+    // 结果页面
     const renderResult = () => {
         const score = calculateScore();
         const maxScore = score.maxScore;
@@ -896,7 +890,6 @@ export default function ChineseSentenceGame() {
                         <Text style={styles.scoreLabel}>Total Score</Text>
                     </View>
 
-                    {/* 新增：顯示總花費時間 */}
                     <View style={styles.reportTimeBox}>
                         <Text style={styles.reportScoreLabel}>⏱️ Total Time</Text>
                         <Text style={styles.reportTimeValue}>{totalTimeFormatted}</Text>
@@ -928,7 +921,7 @@ export default function ChineseSentenceGame() {
                     <View style={styles.summaryContainer}>
                         <Text style={styles.summaryTitle}>📝 Answer Summary：</Text>
                         {questions.map((q, index) => {
-                            const maxQScore = difficulty === 'easy' ? 25 : 30;
+                            const maxQScore = q.maxScore || (difficulty === 'easy' ? 30 : 40);
                             return (
                                 <View key={index} style={styles.summaryItem}>
                                     <Text style={styles.summaryNumber}>{index + 1}.</Text>
@@ -1000,7 +993,6 @@ export default function ChineseSentenceGame() {
                 <Stack.Screen options={{ headerShown: false }} />
                 <SafeAreaView style={[styles.container, { backgroundColor: '#f5f5f5' }]} edges={['top']}>
                     <StatusBar barStyle="dark-content" />
-                    {/* 修改：頂部欄帶計時器 */}
                     <View style={[styles.headerWithTimer, { backgroundColor: currentTheme.primary }]}>
                         <TouchableOpacity onPress={handleBack} style={styles.headerButton}>
                             <Ionicons name="arrow-back" size={24} color="#fff" />
@@ -1045,7 +1037,6 @@ export default function ChineseSentenceGame() {
         );
     }
 
-    // 难度选择页面
     return (
         <>
             <Stack.Screen options={{ headerShown: false }} />
@@ -1069,7 +1060,6 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#f5f5f5',
     },
-    // 角色樣式
     characterContainer: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1088,7 +1078,6 @@ const styles = StyleSheet.create({
         color: '#333',
         flex: 1,
     },
-    // 加載樣式
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',
@@ -1113,7 +1102,6 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 12,
     },
-    // 新增：帶計時器的頂部欄樣式
     headerWithTimer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -1342,7 +1330,6 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
     },
-    // 倒數覆蓋層樣式
     prepOverlay: {
         position: 'absolute',
         top: '35%',
@@ -1367,7 +1354,6 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
         elevation: 5,
     },
-    // 浮動文字層樣式
     floatingLayer: {
         position: 'absolute',
         top: '30%',
@@ -1385,7 +1371,6 @@ const styles = StyleSheet.create({
         textShadowOffset: { width: 2, height: 2 },
         textShadowRadius: 4,
     },
-    // 難度選擇頁面樣式
     scrollContent: {
         paddingBottom: 40,
     },
@@ -1521,7 +1506,6 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: '#fff',
     },
-    // 結果頁面樣式
     resultContainer: {
         flexGrow: 1,
         justifyContent: 'center',
@@ -1571,7 +1555,6 @@ const styles = StyleSheet.create({
         color: '#666',
         marginLeft: 10,
     },
-    // 新增：總結頁面的時間顯示樣式
     reportTimeBox: {
         backgroundColor: '#FFF8E1',
         padding: 16,
