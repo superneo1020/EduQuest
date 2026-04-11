@@ -2,10 +2,11 @@ package com.eduquest.springbackend.controller;
 
 import com.eduquest.springbackend.dto.CourseDto;
 import com.eduquest.springbackend.dto.CourseMemberDto;
+import com.eduquest.springbackend.service.AppUserDetails;
 import com.eduquest.springbackend.service.CourseMemberService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,23 +24,22 @@ public class CourseMemberController {
     }
 
     @GetMapping
-    public ResponseEntity<List<CourseDto>> showAllCourse(@AuthenticationPrincipal UserDetails userDetails) {
-        return ResponseEntity.ok(courseMemberService.showAllCourse(userDetails.getUsername()));
+    public ResponseEntity<List<CourseDto>> showAllCourse(@AuthenticationPrincipal AppUserDetails userDetails) {
+        return ResponseEntity.ok(courseMemberService.showAllCourse(userDetails.getId()));
     }
 
     @GetMapping("/{id}/members")
-    public ResponseEntity<List<CourseMemberDto>> showAllCourseMemberByCourseId(
-            @AuthenticationPrincipal UserDetails userDetails,
-            @PathVariable Long id
-    ) {
-        return ResponseEntity.ok(courseMemberService.showAllCourseMemberByCourseId(userDetails.getUsername(), id));
+    @PreAuthorize("@courseMemberSecurity.isCourseMember(#id)")
+    public ResponseEntity<List<CourseMemberDto>> showAllMembersInMyCourse(@PathVariable Long id) {
+        return ResponseEntity.ok(courseMemberService.showAllCourseMembers(id));
     }
 
     @GetMapping("/{id}/role")
-    public ResponseEntity<String> showRoleInClassByUserIdAndCourseId(
-            @AuthenticationPrincipal UserDetails userDetails,
+    @PreAuthorize("@courseMemberSecurity.isCourseMember(#id)")
+    public ResponseEntity<String> showMyRoleInClass(
+            @AuthenticationPrincipal AppUserDetails userDetails,
             @PathVariable Long id
     ) {
-        return ResponseEntity.ok(courseMemberService.showRoleInClassByUserIdAndCourseId(userDetails.getUsername(), id));
+        return ResponseEntity.ok(courseMemberService.getRoleInClass(userDetails.getId(), id));
     }
 }

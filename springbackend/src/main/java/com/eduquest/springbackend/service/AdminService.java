@@ -33,9 +33,11 @@ import java.util.Set;
 @Service
 @PreAuthorize("hasRole('ADMIN')")
 public class AdminService {
+
     private final UserRepository userRepo;
     private final SchoolRepository schoolRepo;
     private final RoleRepository roleRepo;
+
     private final DtoMapper dtoMapper;
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
@@ -51,6 +53,16 @@ public class AdminService {
         this.schoolRepo = schoolRepo;
         this.roleRepo = roleRepo;
         this.dtoMapper = dtoMapper;
+    }
+
+    @Transactional(readOnly = true)
+    public Long countAllUser() {
+        return userRepo.count();
+    }
+
+    @Transactional(readOnly = true)
+    public Long countAllSchool() {
+        return schoolRepo.count();
     }
 
     @Transactional(readOnly = true)
