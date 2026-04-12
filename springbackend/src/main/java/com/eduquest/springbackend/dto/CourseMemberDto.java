@@ -1,5 +1,7 @@
 package com.eduquest.springbackend.dto;
 
+import com.eduquest.springbackend.enums.RoleInClass;
+
 import java.time.Instant;
 
 public record CourseMemberDto(
@@ -8,6 +10,6 @@ public record CourseMemberDto(
         String email,
         Instant createdAt,
         Instant updatedAt,
-        String roleInClass
+        RoleInClass roleInClass
 ) {
 }

@@ -1,7 +1,6 @@
 package com.eduquest.springbackend.service;
 
 import com.eduquest.springbackend.dao.RoleRepository;
-import com.eduquest.springbackend.dao.SchoolRepository;
 import com.eduquest.springbackend.dao.UserRepository;
 import com.eduquest.springbackend.dto.AdminFilterForUserRequest;
 import com.eduquest.springbackend.dto.AdminFilterForUserResponse;
@@ -19,11 +18,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -35,7 +35,6 @@ import java.util.Set;
 public class AdminService {
 
     private final UserRepository userRepo;
-    private final SchoolRepository schoolRepo;
     private final RoleRepository roleRepo;
 
     private final DtoMapper dtoMapper;
@@ -46,23 +45,11 @@ public class AdminService {
     );
 
     public AdminService(UserRepository userRepo,
-                        SchoolRepository schoolRepo,
                         RoleRepository roleRepo,
                         DtoMapper dtoMapper) {
         this.userRepo = userRepo;
-        this.schoolRepo = schoolRepo;
         this.roleRepo = roleRepo;
         this.dtoMapper = dtoMapper;
-    }
-
-    @Transactional(readOnly = true)
-    public Long countAllUser() {
-        return userRepo.count();
-    }
-
-    @Transactional(readOnly = true)
-    public Long countAllSchool() {
-        return schoolRepo.count();
     }
 
     @Transactional(readOnly = true)
@@ -145,8 +132,8 @@ public class AdminService {
 
     @Transactional
     public OperationResult activateUser(Long id) {
-        AppUser user = userRepo.findById(id)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+        AppUser user = userRepo.findById(id).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found: " + id));
 
         user.setActive(true);
 
@@ -172,8 +159,8 @@ public class AdminService {
 
     @Transactional
     public OperationResult rejectEducator(Long id) {
-        AppUser user = userRepo.findById(id)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+        AppUser user = userRepo.findById(id).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found: " + id));
 
         String message = "Educator rejected successfully.";
         boolean warning = false;

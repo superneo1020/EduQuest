@@ -2,13 +2,11 @@ package com.eduquest.springbackend.dto;
 
 import java.time.Instant;
 
-public record CourseDto(
+public record CourseResponse(
         Long id,
-        Long schoolId,
         String grade,
         String suffix,
         String academicYear,
-        Instant createdAt,
-        Instant updatedAt
+        Instant createdAt
 ) {
 }

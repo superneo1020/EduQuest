@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS class_members (
     id BIGSERIAL PRIMARY KEY,
     class_id BIGINT NOT NULL,
     user_id BIGINT NOT NULL,
-    role_in_class VARCHAR(20) DEFAULT 'student' CHECK (role_in_class IN ('student', 'teacher', 'assistant')),
+    role_in_class VARCHAR(20) NOT NULL DEFAULT 'STUDENT' CHECK (role_in_class IN ('STUDENT', 'TEACHER', 'ASSISTANT')),
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (class_id, user_id),

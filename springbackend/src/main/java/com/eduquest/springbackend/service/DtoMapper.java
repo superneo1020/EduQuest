@@ -1,11 +1,16 @@
 package com.eduquest.springbackend.service;
 
-import com.eduquest.springbackend.dto.*;
+import com.eduquest.springbackend.dto.UserDto;
+import com.eduquest.springbackend.dto.UtilDetailedListResponse;
+import com.eduquest.springbackend.dto.UtilPageResponse;
+import com.eduquest.springbackend.dto.UtilSliceResponse;
 import com.eduquest.springbackend.model.AppUser;
 import com.eduquest.springbackend.model.Role;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 @Service
 public class DtoMapper {
@@ -20,6 +25,10 @@ public class DtoMapper {
                 user.getCreatedAt(),
                 user.getUpdatedAt()
         );
+    }
+
+    public <T> UtilDetailedListResponse<T> toDetailedListResponse(List<T> items) {
+        return new UtilDetailedListResponse<>(items, items.size(), items.isEmpty());
     }
 
     public <T> UtilPageResponse<T> toPageResponse(Page<T> page) {

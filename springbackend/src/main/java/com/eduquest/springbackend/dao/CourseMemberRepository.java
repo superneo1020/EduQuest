@@ -1,7 +1,7 @@
 package com.eduquest.springbackend.dao;
 
-import com.eduquest.springbackend.dto.CourseDto;
 import com.eduquest.springbackend.dto.CourseMemberDto;
+import com.eduquest.springbackend.enums.RoleInClass;
 import com.eduquest.springbackend.model.CourseMember;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -12,14 +12,10 @@ import java.util.Optional;
 
 public interface CourseMemberRepository extends JpaRepository<CourseMember, Long> {
     boolean existsByCourseIdAndUserId(Long courseId, Long userId);
-
-    @Query("SELECT new com.eduquest.springbackend.dto.CourseDto(" +
-            "c.id, c.grade, c.suffix, c.academicYear, c.createdAt, c.updatedAt" +
-            ") " +
-            "FROM CourseMember cm " +
-            "JOIN cm.course c " +
-            "WHERE cm.user.id = :id")
-    List<CourseDto> findCourseByUserId(@Param("id") Long id);
+    boolean existsByCourseIdAndUserIdAndRoleInClassIn(Long id, Long userId, List<RoleInClass> roleInClass);
+    long deleteByCourseIdAndUserId(Long courseId, Long userId);
+    long countByCourseIdAndRoleInClass(Long courseId, RoleInClass roleInClass);
+    Optional<CourseMember> findByCourseIdAndUserId(Long courseId, Long userId);
 
     @Query("SELECT new com.eduquest.springbackend.dto.CourseMemberDto(" +
             "u.id, u.username, u.email, u.createdAt, u.updatedAt, cm.roleInClass" +
