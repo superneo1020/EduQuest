@@ -348,37 +348,34 @@ ON CONFLICT (name) DO NOTHING;
 DELETE FROM user_items
 WHERE user_id IN (SELECT id FROM users WHERE username IN ('student1', 'student2', 'student3', 'teacher1', 'admin'));
 ;;;
--- Insert sample user items
+-- Insert sample user items with proper VALUES syntax
 INSERT INTO user_items (user_id, item_id)
 VALUES
     -- Student1 items
-    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM items WHERE name = 'Happy Face')),
+    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM items WHERE name = 'Happy Cat')),
     ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM items WHERE name = 'Space Theme')),
 
     -- Student2 items
-    ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM items WHERE name = 'Smart Student')),
+    ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM items WHERE name = 'Smart Owl')),
     ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM items WHERE name = 'Math Champion')),
 
     -- Student3 items
     -- No items for student3 (beginner user)
 
     -- Teacher1 items
-    ((SELECT id FROM users WHERE username = 'teacher1'), (SELECT id FROM items WHERE name = 'Cool Kid')),
+    ((SELECT id FROM users WHERE username = 'teacher1'), (SELECT id FROM items WHERE name = 'Cool Dog')),
     ((SELECT id FROM users WHERE username = 'teacher1'), (SELECT id FROM items WHERE name = 'Forest Adventure')),
     ((SELECT id FROM users WHERE username = 'teacher1'), (SELECT id FROM items WHERE name = 'Reading Star')),
 
-    -- Admin items (all items for demonstration)
+    -- Admin items (only items that definitely exist)
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM items WHERE name = 'Cool Hat')),
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM items WHERE name = 'Superhero Cape')),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM items WHERE name = 'Science Glasses')),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM items WHERE name = 'Sports Jersey')),
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM items WHERE name = 'Space Theme')),
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM items WHERE name = 'Ocean View')),
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM items WHERE name = 'Forest Adventure')),
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM items WHERE name = 'City Skyline')),
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM items WHERE name = 'Math Champion')),
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM items WHERE name = 'Reading Star')),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM items WHERE name = 'Science Explorer')),
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM items WHERE name = 'Memory Master'))
 ON CONFLICT DO NOTHING;
 ;;;

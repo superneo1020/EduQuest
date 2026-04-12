@@ -33,7 +33,7 @@ export default function InventoryScreen() {
         if (!token) return;
         try {
             setLoading(true);
-            const response = await axios.get(`${getApiBaseUrl()}/api/user/item/`, {
+            const response = await axios.get(`${getApiBaseUrl()}/api/user/item`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setUserItems(response.data || []);

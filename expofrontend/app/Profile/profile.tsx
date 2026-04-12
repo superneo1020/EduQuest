@@ -155,7 +155,7 @@ export default function ProfileScreen() {
 
             // Try to update avatar directly first
             try {
-                await axios.post(`${getApiBaseUrl()}/api/user/profile/`,
+                await axios.post(`${getApiBaseUrl()}/api/user/profile`,
                     {
                         nickname: displayUser?.nickname || '',
                         equippedItems: {
@@ -177,7 +177,7 @@ export default function ProfileScreen() {
                     const avatarName = avatarOption?.name || avatarId;
 
                     console.log('Granting avatar item:', avatarName);
-                    await axios.post(`${getApiBaseUrl()}/api/user/item/`,
+                    await axios.post(`${getApiBaseUrl()}/api/user/item`,
                         { itemName: avatarName },
                         { headers: { Authorization: `Bearer ${token}` } }
                     );
@@ -186,7 +186,7 @@ export default function ProfileScreen() {
                     await new Promise(resolve => setTimeout(resolve, 500));
 
                     // Try updating avatar again
-                    await axios.post(`${getApiBaseUrl()}/api/user/profile/`,
+                    await axios.post(`${getApiBaseUrl()}/api/user/profile`,
                         {
                             nickname: displayUser?.nickname || '',
                             equippedItems: {
@@ -243,7 +243,7 @@ export default function ProfileScreen() {
                 try {
                     setLoading(true);
                     // Fetch profile data
-                    const profileResponse = await axios.get(`${getApiBaseUrl()}/api/user/profile/`, {
+                    const profileResponse = await axios.get(`${getApiBaseUrl()}/api/user/profile`, {
                         headers: { Authorization: `Bearer ${token}` }
                     });
                     setProfileData(profileResponse.data);
@@ -260,7 +260,7 @@ export default function ProfileScreen() {
 
                     // Fetch user items
                     try {
-                        const itemsResponse = await axios.get(`${getApiBaseUrl()}/api/user/item/`, {
+                        const itemsResponse = await axios.get(`${getApiBaseUrl()}/api/user/item`, {
                             headers: { Authorization: `Bearer ${token}` }
                         });
                         setUserItems(itemsResponse.data || []);
@@ -270,7 +270,7 @@ export default function ProfileScreen() {
 
                     // Fetch user missions
                     try {
-                        const missionsResponse = await axios.get(`${getApiBaseUrl()}/api/user/mission/`, {
+                        const missionsResponse = await axios.get(`${getApiBaseUrl()}/api/user/mission`, {
                             headers: { Authorization: `Bearer ${token}` }
                         });
                         setUserMissions(missionsResponse.data || []);
@@ -716,7 +716,7 @@ export default function ProfileScreen() {
             setNewEmail('');
 
             // Refresh profile data to get new email
-            const response = await axios.get(`${getApiBaseUrl()}/api/user/profile/`, {
+            const response = await axios.get(`${getApiBaseUrl()}/api/user/profile`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setProfileData(response.data);
@@ -809,7 +809,7 @@ export default function ProfileScreen() {
 
         try {
             setLoading(true);
-            await axios.post(`${getApiBaseUrl()}/api/user/profile/`,
+            await axios.post(`${getApiBaseUrl()}/api/user/profile`,
                 { nickname: newNickname.trim() },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
@@ -823,7 +823,7 @@ export default function ProfileScreen() {
             setNewNickname('');
 
             // Refresh profile data to get new nickname
-            const profileResponse = await axios.get(`${getApiBaseUrl()}/api/user/profile/`, {
+            const profileResponse = await axios.get(`${getApiBaseUrl()}/api/user/profile`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
@@ -2034,8 +2034,10 @@ export default function ProfileScreen() {
                                         style={styles.avatarSelector}
                                         onPress={() => setShowAvatarModal(true)}
                                     >
-                                        {renderAvatar(selectedAvatar, 40)}
-                                        <Text style={styles.changeAvatarText}>Change Avatar</Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            {renderAvatar(selectedAvatar, 40)}
+                                            <Text style={styles.changeAvatarText}>Change Avatar</Text>
+                                        </View>
                                     </TouchableOpacity>
                                 </View>
 
@@ -2123,14 +2125,14 @@ export default function ProfileScreen() {
                                         };
 
                                         // Call API to update profile
-                                        await axios.post(`${getApiBaseUrl()}/api/user/profile/`,
+                                        await axios.post(`${getApiBaseUrl()}/api/user/profile`,
                                             updateData,
                                             { headers: { Authorization: `Bearer ${token}` } }
                                         );
 
                                         // Update email if changed
                                         if (editFormData.email && editFormData.email !== displayUser?.email) {
-                                            await axios.post(`${getApiBaseUrl()}/api/user/email/`,
+                                            await axios.post(`${getApiBaseUrl()}/api/user/email`,
                                                 { newEmail: editFormData.email.trim() },
                                                 { headers: { Authorization: `Bearer ${token}` } }
                                             );
@@ -2138,7 +2140,7 @@ export default function ProfileScreen() {
 
                                         // Update school if changed
                                         if (editFormData.school && editFormData.school !== currentSchool) {
-                                            await axios.post(`${getApiBaseUrl()}/api/user/school/`,
+                                            await axios.post(`${getApiBaseUrl()}/api/user/school`,
                                                 { school: editFormData.school.trim() },
                                                 { headers: { Authorization: `Bearer ${token}` } }
                                             );
@@ -2147,7 +2149,7 @@ export default function ProfileScreen() {
                                         // Update password if provided
                                         if (editFormData.password) {
                                             if (editFormData.password === editFormData.confirmPassword) {
-                                                await axios.post(`${getApiBaseUrl()}/api/user/password/`,
+                                                await axios.post(`${getApiBaseUrl()}/api/user/password`,
                                                     { oldPassword: '', newPassword: editFormData.password },
                                                     { headers: { Authorization: `Bearer ${token}` } }
                                                 );
@@ -2162,7 +2164,7 @@ export default function ProfileScreen() {
                                         setEditFormData({ nickname: '', email: '', school: '', password: '', confirmPassword: '' });
 
                                         // Refresh profile data
-                                        const profileResponse = await axios.get(`${getApiBaseUrl()}/api/user/profile/`, {
+                                        const profileResponse = await axios.get(`${getApiBaseUrl()}/api/user/profile`, {
                                             headers: { Authorization: `Bearer ${token}` }
                                     });
                                     setProfileData(profileResponse.data);

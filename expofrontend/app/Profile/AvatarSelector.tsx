@@ -76,9 +76,9 @@ export const AvatarSelector: React.FC<AvatarSelectorProps> = ({
         // 2. 遍歷用戶已購買的物品
         userItems.forEach(userItem => {
             // 確保物品類型是 AVATAR
-            if (userItem.item?.type === 'AVATAR') {
+            if (userItem.type === 'AVATAR') {
                 // 使用 SQL 裡的 icon 欄位 (如 'happy_cat') 來匹配前端的 id
-                const backendIcon = userItem.item.icon;
+                const backendIcon = userItem.icon;
                 const exists = avatarOptions.some(opt => opt.id === backendIcon);
 
                 if (exists) {
@@ -90,11 +90,7 @@ export const AvatarSelector: React.FC<AvatarSelectorProps> = ({
     // Debug: Log the final results
     console.log('Owned avatar IDs:', ownedAvatarIds);
     
-    // Temporary fix: Add some default avatars for testing if user has no avatars
-    if (ownedAvatarIds.length === 1) { // Only has default
-        console.log('User has no avatars, adding some for testing');
-        ownedAvatarIds.push('happy_cat', 'cool_dog', 'smart_owl');
-    }
+
     
     const ownedAvatars = avatarOptions.filter(avatar => ownedAvatarIds.includes(avatar.id));
     console.log('Owned avatars after filtering:', ownedAvatars);

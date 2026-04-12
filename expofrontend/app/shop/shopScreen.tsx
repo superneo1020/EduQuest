@@ -114,7 +114,7 @@ export default function ShopScreen() {
             let response;
             try {
                 response = await axios.post(
-                    `${getApiBaseUrl()}/api/user/item/`,
+                    `${getApiBaseUrl()}/api/user/item`,
                     { itemName: item.name },
                     {
                         headers: authHeader,
@@ -128,7 +128,7 @@ export default function ShopScreen() {
                     });
 
                     response = await axios.post(
-                        `${getApiBaseUrl()}/api/user/item/`,
+                        `${getApiBaseUrl()}/api/user/item`,
                         { itemName: item.name },
                         {
                             headers: authHeader,
