@@ -148,6 +148,7 @@ const AppliedMath = () => {
     const handleCheckAnswer = async () => {
         if (!userFinalAnswer.trim()) return;
         setLoading(true);
+
         try {
             const payload = {
                 question: data.question,
@@ -155,19 +156,20 @@ const AppliedMath = () => {
                 user_answer: userFinalAnswer,
                 correct_answer: data.answer
             };
-            const res = await axios.post('http://localhost:8000/api/math/check', payload);
-            const { is_correct, feedback } = res.data;
-            setAiFeedback({ isCorrect: is_correct, message: feedback });
 
-            if (is_correct) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            else Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            // 第一步：快速比對答案 (這一步現在會秒回)
+            const checkRes = await axios.post('http://localhost:8000/api/math/check', payload);
+            const isCorrect = checkRes.data.is_correct;
 
-            setSessionHistory(prev => [...prev, {
-                question: data.question, user_answer: userFinalAnswer, is_correct: is_correct
-            }]);
+            setAiFeedback({ isCorrect, message: checkRes.data.feedback });
+            setLoading(false); // 👈 這裡就關掉轉圈圈！
+
+            // 2. 如果錯了，慢慢在下面加載解釋
+            if (!isCorrect) {
+                const explainRes = await axios.post('http://localhost:8000/api/math/explain', payload);
+                setAiFeedback(prev => ({ ...prev, message: explainRes.data.explanation }));
+            }
         } catch (e) {
-            setAiFeedback({ isCorrect: false, message: "解析失敗，請再試一次" });
-        } finally {
             setLoading(false);
         }
     };
