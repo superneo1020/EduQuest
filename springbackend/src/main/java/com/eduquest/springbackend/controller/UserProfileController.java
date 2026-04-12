@@ -18,12 +18,12 @@ public class UserProfileController {
         this.userProfileService = userProfileService;
     }
 
-    @GetMapping("/")
+    @GetMapping
     public ResponseEntity<?> getUserProfile(@AuthenticationPrincipal AppUserDetails userDetails) {
         return ResponseEntity.ok(userProfileService.getUserProfile(userDetails.getId()));
     }
 
-    @PostMapping("/")
+    @PostMapping
     public ResponseEntity<?> updateUserProfile(
             @AuthenticationPrincipal AppUserDetails userDetails,
             @Valid @RequestBody UserProfileRequest userProfileRequest
