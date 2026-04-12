@@ -9,6 +9,7 @@ import com.eduquest.springbackend.exception.DuplicateResourceException;
 import com.eduquest.springbackend.model.AppUser;
 import com.eduquest.springbackend.model.Role;
 import com.eduquest.springbackend.model.School;
+import com.eduquest.springbackend.util.PageableUtils;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -17,12 +18,18 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Collection;
+import java.util.Set;
 
 @Service
 public class UserService {
     private final UserRepository userRepo;
     private final RoleRepository roleRepo;
     private final SchoolRepository schoolRepo;
+
+    private final Set<String> SCHOOL_MEMBER_DTO_FIELD = Set.of(
+            "username", "nickname", "email"
+    );
+
     private final DtoMapper dtoMapper;
 
     public UserService(UserRepository userRepo,
@@ -137,7 +144,8 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public UtilPageResponse<SchoolMemberProfileDto> showAllSchoolMembers(Long userId, Pageable pageable) {
-        var page = userRepo.findAllUserProfileByIdWithSchool(userId, pageable);
+        Pageable cleanPageable = PageableUtils.filterSort(pageable, SCHOOL_MEMBER_DTO_FIELD);
+        var page = userRepo.findAllUserProfileByIdWithSchool(userId, cleanPageable);
         return dtoMapper.toPageResponse(page);
     }
 }
