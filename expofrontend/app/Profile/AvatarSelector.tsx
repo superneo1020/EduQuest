@@ -84,7 +84,7 @@ export const AvatarSelector: React.FC<AvatarSelectorProps> = ({
                                     ]}
                                     onPress={() => onSelect(avatar.id)}
                                 >
-                                    {renderAvatar(avatar.id, 60)}
+                                    {renderAvatar(avatar.id, 55)}
                                     <Text style={styles.avatarName}>{avatar.name}</Text>
                                 </TouchableOpacity>
                             ))}
@@ -147,28 +147,40 @@ const styles = StyleSheet.create({
     gridContainer: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        justifyContent: 'space-around',
+        justifyContent: 'flex-start',
     },
     avatarOption: {
         alignItems: 'center',
-        margin: 10,
-        padding: 10,
-        borderRadius: 15,
+        paddingVertical: 15, // 增加垂直內距，讓格子更高一點
+        borderRadius: 20,    // 圓角加大更顯活潑
         backgroundColor: '#F8F9FA',
         borderWidth: 2,
         borderColor: 'transparent',
-        width: 100,
+
+        // 寬度稍微縮減，增加格子之間的空隙感
+        width: '18%',
+        marginHorizontal: '1%',
+        marginVertical: 8,
+
+        // 增加陰影效果，讓頭像有「浮出來」的感覺，更吸引小朋友
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
     },
     selectedAvatar: {
         borderColor: '#3498DB',
         backgroundColor: '#EBF5FB',
+        transform: [{ scale: 1.1 }], // 被選中時稍微放大 10%
+        zIndex: 10, // 確保放大的時候不會被旁邊的擋住
     },
     avatarName: {
-        fontSize: 12,
+        fontSize: 10,
         textAlign: 'center',
-        marginTop: 5,
-        color: '#2C3E50',
-        fontWeight: '500',
+        marginTop: 8, // 增加文字與圖示的距離
+        color: '#475569',
+        fontWeight: '600',
     },
     closeButton: {
         backgroundColor: '#3498DB',
