@@ -75,26 +75,26 @@ ON CONFLICT (user_id, role_id) DO NOTHING;
 INSERT INTO class_members (class_id, user_id, role_in_class)
 VALUES
     -- EduQuest Academy - Grade 10A
-    ((SELECT id FROM classes WHERE grade = 'G10' AND suffix = 'A'), (SELECT id FROM users WHERE username = 'student1'), 'student'),
-    ((SELECT id FROM classes WHERE grade = 'G10' AND suffix = 'A'), (SELECT id FROM users WHERE username = 'student2'), 'student'),
+    ((SELECT id FROM classes WHERE grade = 'G10' AND suffix = 'A'), (SELECT id FROM users WHERE username = 'student1'), 'STUDENT'),
+    ((SELECT id FROM classes WHERE grade = 'G10' AND suffix = 'A'), (SELECT id FROM users WHERE username = 'student2'), 'STUDENT'),
 
     -- EduQuest Academy - Grade 10B
-    ((SELECT id FROM classes WHERE grade = 'G10' AND suffix = 'B'), (SELECT id FROM users WHERE username = 'student3'), 'student'),
+    ((SELECT id FROM classes WHERE grade = 'G10' AND suffix = 'B'), (SELECT id FROM users WHERE username = 'student3'), 'STUDENT'),
 
     -- EduQuest Academy - Grade 11A
-    ((SELECT id FROM classes WHERE grade = 'G11' AND suffix = 'A'), (SELECT id FROM users WHERE username = 'teacher1'), 'teacher'),
+    ((SELECT id FROM classes WHERE grade = 'G11' AND suffix = 'A'), (SELECT id FROM users WHERE username = 'teacher1'), 'TEACHER'),
 
     -- EduQuest Academy - Grade 12A
-    ((SELECT id FROM classes WHERE grade = 'G12' AND suffix = 'A'), (SELECT id FROM users WHERE username = 'admin'), 'assistant'),
+    ((SELECT id FROM classes WHERE grade = 'G12' AND suffix = 'A'), (SELECT id FROM users WHERE username = 'admin'), 'ASSISTANT'),
 
     -- Tech Institute - Year 4A
-    ((SELECT id FROM classes WHERE grade = 'Y4' AND suffix = 'C'), (SELECT id FROM users WHERE username = 'teacher1'), 'teacher'),
+    ((SELECT id FROM classes WHERE grade = 'Y4' AND suffix = 'C'), (SELECT id FROM users WHERE username = 'teacher1'), 'TEACHER'),
 
     -- Tech Institute - Year 5A
-    ((SELECT id FROM classes WHERE grade = 'Y5' AND suffix = 'A'), (SELECT id FROM users WHERE username = 'teacher1'), 'teacher'),
+    ((SELECT id FROM classes WHERE grade = 'Y5' AND suffix = 'A'), (SELECT id FROM users WHERE username = 'teacher1'), 'TEACHER'),
 
     -- Science High School - Level 9A
-    ((SELECT id FROM classes WHERE grade = 'L9' AND suffix = 'A'), (SELECT id FROM users WHERE username = 'admin'), 'teacher')
+    ((SELECT id FROM classes WHERE grade = 'L9' AND suffix = 'A'), (SELECT id FROM users WHERE username = 'admin'), 'ASSISTANT')
 ON CONFLICT (class_id, user_id) DO NOTHING;
 ;;;
 

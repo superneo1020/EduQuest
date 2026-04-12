@@ -1,8 +1,8 @@
 package com.eduquest.springbackend.dto;
 
-public record UserAuthDto(
+public record UserMiniDto(
         Long id,
         String username,
-        String password
+        String email
 ) {
 }

@@ -1,9 +1,9 @@
 package com.eduquest.springbackend.controller;
 
+import com.eduquest.springbackend.service.AppUserDetails;
 import com.eduquest.springbackend.service.UserMissionService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -19,13 +19,11 @@ public class UserMissionController {
         this.userMissionService = userMissionService;
     }
 
-    @GetMapping({"/", "/{completed}"})
+    @GetMapping("/{completed}")
     public ResponseEntity<?> getMyMission(
-            @AuthenticationPrincipal UserDetails userDetails,
-            @PathVariable(required = false) Boolean completed
+            @AuthenticationPrincipal AppUserDetails userDetails,
+            @PathVariable Boolean completed
     ) {
-        return completed != null
-                ? ResponseEntity.ok(userMissionService.showMission(userDetails.getUsername(), completed))
-                : ResponseEntity.ok(userMissionService.showMission(userDetails.getUsername(), false));
+        return ResponseEntity.ok(userMissionService.showMission(userDetails.getId(), completed));
     }
 }
