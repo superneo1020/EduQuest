@@ -21,16 +21,6 @@ public class AdminController {
         this.adminService = adminService;
     }
 
-    @GetMapping("/count/user")
-    public ResponseEntity<Long> countAllUser() {
-        return ResponseEntity.ok(adminService.countAllUser());
-    }
-
-    @GetMapping("/count/school")
-    public ResponseEntity<Long> countAllSchool() {
-        return ResponseEntity.ok(adminService.countAllSchool());
-    }
-
     @GetMapping("/filter/user")
     public ResponseEntity<UtilPageResponse<AdminFilterForUserResponse>> findAllUserByFilter(
             @Valid AdminFilterForUserRequest req,

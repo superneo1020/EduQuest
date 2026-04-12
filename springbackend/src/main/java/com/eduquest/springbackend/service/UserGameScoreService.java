@@ -33,21 +33,18 @@ public class UserGameScoreService {
     );
 
     private final GameService gameService;
-    private final UserService userService;
 
 
     public UserGameScoreService(UserGameScoreRepository userGameScoreRepo,
                                 UserRepository userRepo,
                                 GameRepository gameRepo,
                                 DtoMapper dtoMapper,
-                                GameService gameService,
-                                UserService userService) {
+                                GameService gameService) {
         this.userGameScoreRepo = userGameScoreRepo;
         this.userRepo = userRepo;
         this.gameRepo = gameRepo;
         this.dtoMapper = dtoMapper;
         this.gameService = gameService;
-        this.userService = userService;
     }
 
     @Transactional
