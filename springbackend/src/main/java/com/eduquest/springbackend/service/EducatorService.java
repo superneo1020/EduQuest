@@ -48,14 +48,14 @@ public class EducatorService {
     }
 
     @Transactional(readOnly = true)
-    public UtilDetailedListResponse<CourseDto> showAllCourse(Long userId) {
-        return dtoMapper.toDetailedListResponse(courseRepo.findAllAvailableCoursesByHomeSchool(userId));
-    }
-
-    @Transactional(readOnly = true)
     public UtilPageResponse<UserMiniDto> showAllSchoolMembers(Long userId, Pageable pageable) {
         Pageable cleanedPageable = PageableUtils.filterSort(pageable, SCHOOL_MEMBER_DTO_FIELD);
         return dtoMapper.toPageResponse(userRepo.findAllUserRecordByIdWithSchool(userId, cleanedPageable));
+    }
+
+    @Transactional(readOnly = true)
+    public UtilDetailedListResponse<CourseDto> showAllCourse(Long userId) {
+        return dtoMapper.toDetailedListResponse(courseRepo.findAllAvailableCoursesByHomeSchool(userId));
     }
 
     @Transactional

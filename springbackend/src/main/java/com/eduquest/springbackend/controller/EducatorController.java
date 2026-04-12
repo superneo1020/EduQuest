@@ -23,19 +23,19 @@ public class EducatorController {
         this.educatorService = educatorService;
     }
 
-    @GetMapping("/class")
-    public ResponseEntity<UtilDetailedListResponse<CourseDto>> showAllCourse(
-            @AuthenticationPrincipal AppUserDetails userDetails
-    ) {
-        return ResponseEntity.ok(educatorService.showAllCourse(userDetails.getId()));
-    }
-
     @GetMapping("/school/members")
     public ResponseEntity<UtilPageResponse<UserMiniDto>> showCourse(
             @AuthenticationPrincipal AppUserDetails userDetails,
             @PageableDefault Pageable pageable
     ) {
         return ResponseEntity.ok(educatorService.showAllSchoolMembers(userDetails.getId(), pageable));
+    }
+
+    @GetMapping("/class")
+    public ResponseEntity<UtilDetailedListResponse<CourseDto>> showAllCourse(
+            @AuthenticationPrincipal AppUserDetails userDetails
+    ) {
+        return ResponseEntity.ok(educatorService.showAllCourse(userDetails.getId()));
     }
 
     @PostMapping("/class")
