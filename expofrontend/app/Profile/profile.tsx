@@ -15,6 +15,7 @@ import axios from 'axios';
 import { getApiBaseUrl } from '@/src/api/client';
 import SkillBarsChart from "@/app/Profile/SkillRadarChart";
 import { LineChart, BarChart, PieChart as RNPieChart } from 'react-native-chart-kit';
+import {AvatarSelector, renderAvatar} from "@/app/Profile/AvatarSelector";
 
 const { width } = Dimensions.get('window');
 
@@ -87,6 +88,133 @@ export default function ProfileScreen() {
 
 
 
+    // Profile Icon selection states
+    const [showAvatarModal, setShowAvatarModal] = useState(false);
+    const [selectedAvatar, setSelectedAvatar] = useState<string>('default');
+
+    const avatarOptions = [
+        // Avatar options are now handled in AvatarSelector component
+        { id: 'default', emoji: 'default', name: 'Default', color: '#636E72' },
+        { id: 'happy', emoji: 'happy', name: 'Happy Face', color: '#FFD93D' },
+        { id: 'cool', emoji: 'cool', name: 'Cool Kid', color: '#4ECDC4' },
+        { id: 'smart', emoji: 'smart', name: 'Smart Student', color: '#9B59B6' },
+        { id: 'sporty', emoji: 'sporty', name: 'Sporty', color: '#FF6B6B' },
+        { id: 'artistic', emoji: 'artistic', name: 'Artistic', color: '#FF9FF3' },
+        { id: 'bookworm', emoji: 'bookworm', name: 'Bookworm', color: '#54A0FF' },
+        { id: 'explorer', emoji: 'explorer', name: 'Explorer', color: '#1DD1A1' },
+        { id: 'star', emoji: 'star', name: 'Star Student', color: '#FFA502' },
+        { id: 'rainbow', emoji: 'rainbow', name: 'Rainbow', color: '#A29BFE' },
+        { id: 'rocket', emoji: 'rocket', name: 'Rocket', color: '#FF6348' },
+        { id: 'heart', emoji: 'heart', name: 'Heart', color: '#FF4757' }
+    ];
+    // Create avatar ID to item ID mapping
+    const mapAvatarIdToItemId = (avatarId: string): number | null => {
+        const avatarMapping = {
+            'default': null,
+            'happy_cat': 1,
+            'cool_dog': 2,
+            'smart_owl': 3,
+            'sporty_rabbit': 4,
+            'artistic_butterfly': 5,
+            'bookworm_bear': 6,
+            'explorer_monkey': 7,
+            'star_student': 8,
+            'rainbow_unicorn': 9,
+            'rocket_raccoon': 10,
+            'heart_panda': 11,
+            'sunshine_bee': 12,
+            'moon_turtle': 13,
+            'flower_ladybug': 14,
+            'rainbow_frog': 15,
+            'cloud_sheep': 16,
+            'apple_teacher': 17,
+            'pencil_wizard': 18,
+            'crayon_dragon': 19
+        };
+        return avatarMapping[avatarId as keyof typeof avatarMapping] || null;
+    };
+
+    // Function to update avatar selection
+    // 修改 handleAvatarSelect 函數
+    const handleAvatarSelect = async (avatarId: string) => {
+        try {
+            setSelectedAvatar(avatarId);
+            setShowAvatarModal(false);
+            console.log('Token exists:', !!token);
+            console.log('Token length:', token?.length || 0);
+            console.log('API URL:', `${getApiBaseUrl()}/api/user/profile/`);
+            console.log('Avatar ID:', avatarId);
+
+            const mappedItemId = mapAvatarIdToItemId(avatarId);
+            console.log('Mapped Item ID:', mappedItemId);
+
+            if (mappedItemId === null) {
+                Alert.alert('Error', 'Invalid avatar selection');
+                return;
+            }
+
+            // Try to update avatar directly first
+            try {
+                await axios.post(`${getApiBaseUrl()}/api/user/profile/`,
+                    {
+                        nickname: displayUser?.nickname || '',
+                        equippedItems: {
+                            AVATAR: mappedItemId
+                        },
+                        preferences: {},
+                        privacySettings: {}
+                    },
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+
+                Alert.alert('Success', 'Avatar updated successfully!');
+            } catch (avatarError: any) {
+                console.log('Avatar update failed, trying to grant item first...');
+
+                if (avatarError.response?.status === 404) {
+                    // User doesn't own the avatar item, try to grant it first
+                    const avatarOption = avatarOptions.find(opt => opt.id === avatarId);
+                    const avatarName = avatarOption?.name || avatarId;
+
+                    console.log('Granting avatar item:', avatarName);
+                    await axios.post(`${getApiBaseUrl()}/api/user/item/`,
+                        { itemName: avatarName },
+                        { headers: { Authorization: `Bearer ${token}` } }
+                    );
+
+                    // Wait a moment for database update
+                    await new Promise(resolve => setTimeout(resolve, 500));
+
+                    // Try updating avatar again
+                    await axios.post(`${getApiBaseUrl()}/api/user/profile/`,
+                        {
+                            nickname: displayUser?.nickname || '',
+                            equippedItems: {
+                                AVATAR: mappedItemId
+                            },
+                            preferences: {},
+                            privacySettings: {}
+                        },
+                        { headers: { Authorization: `Bearer ${token}` } }
+                    );
+
+                    Alert.alert('Success', 'Avatar updated successfully!');
+                } else {
+                    throw avatarError;
+                }
+            }
+        } catch (error: any) {
+            console.error('Avatar update error:', error);
+            console.error('Error response:', error.response?.data);
+            console.error('Error status:', error.response?.status);
+
+            if (error.response?.status === 401) {
+                Alert.alert('Error', 'Authentication failed. Please log in again.');
+            } else {
+                Alert.alert('Error', 'Failed to update avatar');
+            }
+        }
+    };
     // Function to show error with feedback option
     const showErrorWithFeedback = (errorMessage: string, context: string) => {
         Alert.alert(
@@ -187,47 +315,47 @@ export default function ProfileScreen() {
     // Move calculateImprovementRate before calculateLearningStats
     const calculateImprovementRate = useCallback(() => {
         if (gameHistory.length < 3) return 0;
-        
+
         // 按時間排序遊戲記錄
-        const sortedHistory = [...gameHistory].sort((a, b) => 
+        const sortedHistory = [...gameHistory].sort((a, b) =>
             new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()
         );
-        
+
         // 使用加權平均：最近的遊戲權重更高
         const totalGames = sortedHistory.length;
         const recentCount = Math.min(10, totalGames); // 最近10個遊戲
         const earlierCount = Math.min(10, totalGames - recentCount); // 早期10個遊戲
-        
+
         const recentGames = sortedHistory.slice(-recentCount);
         const earlierGames = sortedHistory.slice(0, earlierCount);
-        
+
         // 計算加權平均（越近權重越高）
         const calculateWeightedAverage = (games: any[], baseWeight: number) => {
             if (games.length === 0) return 0;
-            
+
             let weightedSum = 0;
             let totalWeight = 0;
-            
+
             games.forEach((game, index) => {
                 // 權重：baseWeight + index (越新的遊戲權重越高)
                 const weight = baseWeight + index;
                 const score = game.scores || 0;
-                
+
                 weightedSum += score * weight;
                 totalWeight += weight;
             });
-            
+
             return weightedSum / totalWeight;
         };
-        
+
         const recentWeightedAvg = calculateWeightedAverage(recentGames, 1);
-        const earlierWeightedAvg = earlierGames.length > 0 ? 
+        const earlierWeightedAvg = earlierGames.length > 0 ?
             calculateWeightedAverage(earlierGames, 1) : recentWeightedAvg;
-        
+
         // 計算改善率，使用加權平均
-        const improvementRate = earlierWeightedAvg > 0 ? 
+        const improvementRate = earlierWeightedAvg > 0 ?
             ((recentWeightedAvg - earlierWeightedAvg) / earlierWeightedAvg) * 100 : 0;
-        
+
         return Math.round(improvementRate);
     }, [gameHistory]);
 
@@ -245,15 +373,15 @@ export default function ProfileScreen() {
         const subjectScores: { [key: string]: number[] } = {};
         const difficultyCount: { [key: string]: number } = {};
         let totalScore = 0;
-        
+
         gameHistory.forEach((record: any) => {
             const subject = record.gameType || 'UNKNOWN';
             const difficulty = record.gameDifficulty || 'MEDIUM';
             const score = record.scores || 0;
-            
+
             if (!subjectScores[subject]) subjectScores[subject] = [];
             subjectScores[subject].push(score);
-            
+
             difficultyCount[difficulty] = (difficultyCount[difficulty] || 0) + 1;
             totalScore += score;
         });
@@ -274,24 +402,24 @@ export default function ProfileScreen() {
         // 計算更真實的學習時間
         const calculateRealisticPlayTime = () => {
             if (gameHistory.length === 0) return 0;
-            
+
             // 基於難度估算時間
             const difficultyTimeMap: { [key: string]: number } = {
                 'EASY': 5,    // 簡單題目約5分鐘
                 'MEDIUM': 10,  // 中等題目約10分鐘
                 'HARD': 15     // 困難題目約15分鐘
             };
-            
+
             let totalTime = 0;
             gameHistory.forEach((record: any) => {
                 const difficulty = record.gameDifficulty || 'MEDIUM';
                 const estimatedTime = difficultyTimeMap[difficulty] || 10;
                 totalTime += estimatedTime;
             });
-            
+
             return totalTime;
         };
-        
+
         return {
             subjectAverages,
             bestSubject,
@@ -306,7 +434,7 @@ export default function ProfileScreen() {
         const equipped = profileData?.equipped_items || {};
         const totalItems = userItems.length;
         const equippedCount = Object.values(equipped).filter(item => item !== null).length;
-        
+
         return {
             equipped,
             totalItems,
@@ -329,7 +457,7 @@ export default function ProfileScreen() {
             const sortedSubjects = subjectEntries.sort(([, a], [, b]) => a - b);
             const weakestSubject = sortedSubjects[0];
             const strongestSubject = sortedSubjects[sortedSubjects.length - 1];
-            
+
             if (weakestSubject[1] < 70) {
                 const gap = strongestSubject[1] - weakestSubject[1];
                 suggestions.push({
@@ -346,7 +474,7 @@ export default function ProfileScreen() {
         const easyRatio = (stats.difficultyPreference['EASY'] || 0) / totalGames;
         const mediumRatio = (stats.difficultyPreference['MEDIUM'] || 0) / totalGames;
         const hardRatio = (stats.difficultyPreference['HARD'] || 0) / totalGames;
-        
+
         if (easyRatio > 0.6) {
             suggestions.push({
                 type: 'challenge',
@@ -370,7 +498,7 @@ export default function ProfileScreen() {
                 const mean = recentScores.reduce((a, b) => a + b, 0) / recentScores.length;
                 return sum + Math.pow(score - mean, 2);
             }, 0) / recentScores.length);
-            
+
             if (scoreVariance > 20) {
                 suggestions.push({
                     type: 'consistency',
@@ -385,7 +513,7 @@ export default function ProfileScreen() {
         if (gameHistory.length >= 3) {
             const recentGames = gameHistory.slice(-3);
             const avgRecentScore = recentGames.reduce((sum, game) => sum + (game.scores || 0), 0) / recentGames.length;
-            
+
             if (avgRecentScore > stats.averageScore * 1.1) {
                 suggestions.push({
                     type: 'momentum',
@@ -410,10 +538,10 @@ export default function ProfileScreen() {
         }
 
         // AI 分析 6: 學習習慣優化
-        const daysSinceFirstGame = gameHistory.length > 0 ? 
+        const daysSinceFirstGame = gameHistory.length > 0 ?
             Math.ceil((Date.now() - new Date(gameHistory[0].created_at).getTime()) / (1000 * 60 * 60 * 24)) : 0;
         const gamesPerDay = daysSinceFirstGame > 0 ? gameHistory.length / daysSinceFirstGame : 0;
-        
+
         if (gamesPerDay < 0.5 && gameHistory.length < 10) {
             suggestions.push({
                 type: 'habit',
@@ -476,7 +604,7 @@ export default function ProfileScreen() {
         const stats = calculateLearningStats;
         const subjects = Object.keys(stats.subjectAverages);
         const scores = subjects.map((subject: string) => stats.subjectAverages[subject]);
-        
+
         return {
             labels: subjects,
             datasets: [{
@@ -489,7 +617,7 @@ export default function ProfileScreen() {
         const stats = calculateLearningStats;
         const difficulties = Object.keys(stats.difficultyPreference);
         const counts = difficulties.map((diff: string) => stats.difficultyPreference[diff]);
-        
+
         return {
             labels: difficulties,
             datasets: [{
@@ -759,7 +887,7 @@ export default function ProfileScreen() {
 
         try {
             setLoadingSuggestions(true);
-            
+
             // Prepare game score data for Python backend
             const gameScoreData = {
                 user_id: displayUser?.id || 1,
@@ -783,14 +911,14 @@ export default function ProfileScreen() {
             setAiSuggestions(response.data.suggestions || []);
         } catch (error: any) {
             console.error('Failed to fetch AI suggestions:', error);
-            
+
             // Fallback to local suggestions if AI fails
             Alert.alert(
                 'AI Analysis Unavailable',
                 'Using local analysis instead. Make sure Python backend is running.',
                 [{ text: 'OK' }]
             );
-            
+
             // Keep existing local suggestions as fallback
         } finally {
             setLoadingSuggestions(false);
@@ -808,7 +936,7 @@ export default function ProfileScreen() {
                         <View style={styles.profileContent}>
                             <View style={styles.avatarContainer}>
                                 <View style={styles.avatarCircle}>
-                                    <UserIcon size={50} color="#FFF" />
+                                    {renderAvatar(selectedAvatar, 50)}
                                 </View>
                             </View>
                             <View style={styles.profileInfo}>
@@ -853,7 +981,7 @@ export default function ProfileScreen() {
                             </View>
                         </View>
                     </View>
-                    
+
                     {/* Unified User Information */}
                     <View style={styles.unifiedInfoSection}>
                         <Text style={styles.infoSectionTitle}>📋 User Information</Text>
@@ -922,8 +1050,8 @@ export default function ProfileScreen() {
                 {/* Enhanced Features Section */}
                 <View style={styles.enhancedFeaturesContainer}>
                     <Text style={styles.sectionTitle}>Enhanced Analytics</Text>
-                    
-                    
+
+
                     <TouchableOpacity
                         style={styles.featureItem}
                         onPress={() => setShowLearningStats(true)}
@@ -1104,8 +1232,8 @@ export default function ProfileScreen() {
                 </View>
 
                 {/* View All Game Records Button */}
-                <TouchableOpacity 
-                    style={styles.viewAllRecordsBtn} 
+                <TouchableOpacity
+                    style={styles.viewAllRecordsBtn}
                     onPress={() => router.push('/Profile/GameRecords')}
                 >
                     <List size={20} color="#4CAF50" />
@@ -1544,7 +1672,7 @@ export default function ProfileScreen() {
                 </View>
             </Modal>
 
-            
+
             {/* Learning Statistics Modal */}
             <Modal
                 visible={showLearningStats}
@@ -1555,7 +1683,7 @@ export default function ProfileScreen() {
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalContent, { maxHeight: '80%' }]}>
                         <Text style={styles.modalTitle}>Learning Statistics</Text>
-                        
+
                         <ScrollView style={{ flex: 1, maxHeight: 400 }}>
                             <View style={styles.statsCard}>
                                 <Text style={styles.statsCardTitle}>Performance Overview</Text>
@@ -1622,7 +1750,7 @@ export default function ProfileScreen() {
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalContent, { maxHeight: '80%' }]}>
                         <Text style={styles.modalTitle}>Equipment & Collection</Text>
-                        
+
                         <ScrollView style={{ flex: 1, maxHeight: 400 }}>
                             <View style={styles.statsCard}>
                                 <Text style={styles.statsCardTitle}>Collection Stats</Text>
@@ -1693,7 +1821,7 @@ export default function ProfileScreen() {
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalContent, { maxHeight: '80%' }]}>
                         <Text style={styles.modalTitle}>Learning Trends</Text>
-                        
+
                         <ScrollView style={{ flex: 1, maxHeight: 400 }}>
                             <View style={styles.chartContainer}>
                                 <Text style={styles.chartTitle}>Recent Performance (Last 7 Games)</Text>
@@ -1737,6 +1865,7 @@ export default function ProfileScreen() {
                                         width={width * 0.7}
                                         height={200}
                                         yAxisLabel="Score"
+                                        yAxisSuffix=""
                                         chartConfig={{
                                             backgroundColor: '#FFF',
                                             backgroundGradientFrom: '#FFF',
@@ -1808,7 +1937,7 @@ export default function ProfileScreen() {
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalContent, { maxHeight: '80%' }]}>
                         <Text style={styles.modalTitle}>Learning Suggestions</Text>
-                        
+
                         <ScrollView style={{ flex: 1, maxHeight: 400 }}>
                             {loadingSuggestions ? (
                                 <View style={{ alignItems: 'center', padding: 40 }}>
@@ -1831,7 +1960,7 @@ export default function ProfileScreen() {
                                                     styles.priorityText,
                                                     {
                                                         color: suggestion.priority === 'high' ? '#FF6B6B' :
-                                                               suggestion.priority === 'medium' ? '#FFA500' : '#4CAF50'
+                                                            suggestion.priority === 'medium' ? '#FFA500' : '#4CAF50'
                                                     }
                                                 ]}>
                                                     {suggestion.priority?.toUpperCase() || 'MEDIUM'}
@@ -1893,11 +2022,23 @@ export default function ProfileScreen() {
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <Text style={styles.modalTitle}>⚙️ Edit Profile</Text>
-                        
+
                         <ScrollView style={{ flex: 1, maxHeight: 400 }}>
                             <View style={styles.editSection}>
                                 <Text style={styles.editSectionTitle}>👤 Personal Information</Text>
-                                
+
+                                {/* Avatar Selection */}
+                                <View style={styles.inputGroup}>
+                                    <Text style={styles.inputLabel}>Avatar</Text>
+                                    <TouchableOpacity
+                                        style={styles.avatarSelector}
+                                        onPress={() => setShowAvatarModal(true)}
+                                    >
+                                        {renderAvatar(selectedAvatar, 40)}
+                                        <Text style={styles.changeAvatarText}>Change Avatar</Text>
+                                    </TouchableOpacity>
+                                </View>
+
                                 <View style={styles.inputGroup}>
                                     <Text style={styles.inputLabel}>Nickname</Text>
                                     <TextInput
@@ -1907,7 +2048,7 @@ export default function ProfileScreen() {
                                         placeholder="Enter your nickname"
                                     />
                                 </View>
-                                
+
                                 <View style={styles.inputGroup}>
                                     <Text style={styles.inputLabel}>Email</Text>
                                     <TextInput
@@ -1918,7 +2059,7 @@ export default function ProfileScreen() {
                                         keyboardType="email-address"
                                     />
                                 </View>
-                                
+
                                 <View style={styles.inputGroup}>
                                     <Text style={styles.inputLabel}>School</Text>
                                     <TextInput
@@ -1929,10 +2070,10 @@ export default function ProfileScreen() {
                                     />
                                 </View>
                             </View>
-                            
+
                             <View style={styles.editSection}>
                                 <Text style={styles.editSectionTitle}>🔒 Security</Text>
-                                
+
                                 <View style={styles.inputGroup}>
                                     <Text style={styles.inputLabel}>New Password</Text>
                                     <TextInput
@@ -1943,7 +2084,7 @@ export default function ProfileScreen() {
                                         secureTextEntry
                                     />
                                 </View>
-                                
+
                                 <View style={styles.inputGroup}>
                                     <Text style={styles.inputLabel}>Confirm Password</Text>
                                     <TextInput
@@ -1969,11 +2110,71 @@ export default function ProfileScreen() {
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={[styles.modalBtn, styles.confirmBtn]}
-                                onPress={() => {
-                                    // Handle profile update logic here
-                                    Alert.alert('Success', 'Profile updated successfully!');
-                                    setShowEditProfileModal(false);
-                                    setEditFormData({ nickname: '', email: '', school: '', password: '', confirmPassword: '' });
+                                onPress={async () => {
+                                    try {
+                                        // Prepare update data
+                                        const updateData: any = {
+                                            nickname: editFormData.nickname || displayUser?.nickname || '',
+                                            equippedItems: {
+                                                AVATAR: mapAvatarIdToItemId(selectedAvatar)
+                                            },
+                                            preferences: {},
+                                            privacySettings: {}
+                                        };
+
+                                        // Call API to update profile
+                                        await axios.post(`${getApiBaseUrl()}/api/user/profile/`,
+                                            updateData,
+                                            { headers: { Authorization: `Bearer ${token}` } }
+                                        );
+
+                                        // Update email if changed
+                                        if (editFormData.email && editFormData.email !== displayUser?.email) {
+                                            await axios.post(`${getApiBaseUrl()}/api/user/email/`,
+                                                { newEmail: editFormData.email.trim() },
+                                                { headers: { Authorization: `Bearer ${token}` } }
+                                            );
+                                        }
+
+                                        // Update school if changed
+                                        if (editFormData.school && editFormData.school !== currentSchool) {
+                                            await axios.post(`${getApiBaseUrl()}/api/user/school/`,
+                                                { school: editFormData.school.trim() },
+                                                { headers: { Authorization: `Bearer ${token}` } }
+                                            );
+                                        }
+
+                                        // Update password if provided
+                                        if (editFormData.password) {
+                                            if (editFormData.password === editFormData.confirmPassword) {
+                                                await axios.post(`${getApiBaseUrl()}/api/user/password/`,
+                                                    { oldPassword: '', newPassword: editFormData.password },
+                                                    { headers: { Authorization: `Bearer ${token}` } }
+                                                );
+                                            } else {
+                                                Alert.alert('Error', 'Passwords do not match');
+                                                return;
+                                            }
+                                        }
+
+                                        Alert.alert('Success', 'Profile updated successfully!');
+                                        setShowEditProfileModal(false);
+                                        setEditFormData({ nickname: '', email: '', school: '', password: '', confirmPassword: '' });
+
+                                        // Refresh profile data
+                                        const profileResponse = await axios.get(`${getApiBaseUrl()}/api/user/profile/`, {
+                                            headers: { Authorization: `Bearer ${token}` }
+                                    });
+                                    setProfileData(profileResponse.data);
+
+                                } catch (error: any) {
+                                    console.error('Profile update error:', error);
+                                    let errorMessage = 'Failed to update profile';
+                                    if (error.response?.data?.message) {
+                                    errorMessage = error.response.data.message;
+                                }
+                                    Alert.alert('Error', errorMessage);
+                                }
                                 }}
                             >
                                 <Text style={styles.confirmBtnText}>Save Changes</Text>
@@ -1982,6 +2183,12 @@ export default function ProfileScreen() {
                     </View>
                 </View>
             </Modal>
+            <AvatarSelector
+                visible={showAvatarModal}
+                onClose={() => setShowAvatarModal(false)}
+                onSelect={handleAvatarSelect}
+                selectedAvatar={selectedAvatar}
+            />
 
         </SafeAreaView>
     );
@@ -1989,7 +2196,7 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#F8F9FA' },
-    
+
     // Unified Profile Container
     unifiedProfileContainer: {
         marginHorizontal: 20,
@@ -2036,7 +2243,7 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     userName: {
-        fontSize: 24,
+        fontSize: 28,
         fontWeight: '900',
         color: '#FFF',
         marginBottom: 4,
@@ -2075,26 +2282,26 @@ const styles = StyleSheet.create({
         color: '#FFF',
     },
     editProfileBtn: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+        width: 48,
+        height: 48,
+        borderRadius: 24,
         backgroundColor: 'rgba(255, 255, 255, 0.2)',
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 2,
         borderColor: 'rgba(255, 255, 255, 0.3)',
     },
-    
+
     // Unified User Information Section
     unifiedInfoSection: {
         backgroundColor: '#FFF',
         borderRadius: 12,
-        padding: 15,
+        padding: 18,
         marginTop: 20,
         elevation: 2,
     },
     infoSectionTitle: {
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: '800',
         color: '#2D3436',
         marginBottom: 12,
@@ -2107,7 +2314,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         backgroundColor: '#F8F9FA',
         borderRadius: 8,
-        padding: 10,
+        padding: 12,      // 原來是 10
+        marginVertical: 4,
     },
     infoContent: {
         marginLeft: 12,
@@ -2123,7 +2331,7 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         color: '#2D3436',
     },
-    
+
     // Edit Profile Modal Styles
     editSection: {
         marginBottom: 20,
@@ -2146,9 +2354,9 @@ const styles = StyleSheet.create({
     textInput: {
         backgroundColor: '#F8F9FA',
         borderRadius: 8,
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        fontSize: 14,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        fontSize: 16,
         color: '#2D3436',
         borderWidth: 1,
         borderColor: '#E2E8F0',
@@ -2163,32 +2371,33 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         backgroundColor: 'rgba(255, 255, 255, 0.15)',
         borderRadius: 16,
-        paddingHorizontal: 12,
-        paddingVertical: 8,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
     },
     statItem: {
         flexDirection: 'row',
         alignItems: 'center',
         flex: 1,
+        paddingVertical: 4,
     },
     statDivider: {
         width: 1,
-        height: 20,
+        height: 24,
         backgroundColor: 'rgba(255, 255, 255, 0.3)',
-        marginHorizontal: 8,
+        marginHorizontal: 12,
     },
     statValue: {
-        fontSize: 14,
+        fontSize: 16,
         fontWeight: '700',
         color: '#FFF',
         marginLeft: 4,
     },
     statLabel: {
-        fontSize: 10,
+        fontSize: 12,
         color: 'rgba(255, 255, 255, 0.7)',
         marginLeft: 4,
     },
-    
+
     // Info Cards
     infoCardsContainer: {
         flexDirection: 'row',
@@ -2230,7 +2439,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         marginTop: 10 // Reduced from 20 for tighter layout
     },
-    
+
     // Achievements Section
     achievementsContainer: {
         backgroundColor: '#FFF',
@@ -2287,7 +2496,7 @@ const styles = StyleSheet.create({
         color: '#A0A0A0',
         textAlign: 'center',
     },
-    
+
     // Learning Progress Section
     learningProgressContainer: {
         backgroundColor: '#FFF',
@@ -2338,7 +2547,7 @@ const styles = StyleSheet.create({
         fontWeight: '800',
         color: '#2D3436',
     },
-    
+
     // Profile Settings Section
     profileSettingsContainer: {
         backgroundColor: '#FFF',
@@ -2416,7 +2625,7 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         color: '#2D3436',
     },
-    
+
     // Legacy styles for compatibility
     statsAndSkillsContainer: {
         flexDirection: 'row',
@@ -2519,8 +2728,6 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         paddingBottom: 20
     },
-    avatarCircle: { width: 90, height: 90, borderRadius: 45, backgroundColor: '#F1F8E9', justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
-    userName: { fontSize: 22, fontWeight: '900', color: '#2D3436' },
     emailBadge: { flexDirection: 'row', alignItems: 'center', marginTop: 5 },
     emailText: { fontSize: 14, color: '#636E72', marginLeft: 5 },
     schoolBadge: { flexDirection: 'row', alignItems: 'center', marginTop: 5 },
@@ -2600,21 +2807,6 @@ const styles = StyleSheet.create({
     },
     inputContainer: {
         marginBottom: 20,
-    },
-    inputLabel: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: '#2D3436',
-        marginBottom: 8,
-    },
-    textInput: {
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        borderRadius: 12,
-        padding: 15,
-        fontSize: 16,
-        backgroundColor: '#F8F9FA',
-        flex: 1,
     },
     passwordInput: {
         flexDirection: 'row',
@@ -2846,16 +3038,6 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: '#F1F2F6',
     },
-    accountDetailLabel: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#636E72',
-    },
-    accountDetailValue: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: '#2D3436',
-    },
     // Account Info styles
     accountInfoSection: {
         backgroundColor: '#F8F9FA',
@@ -2989,5 +3171,20 @@ const styles = StyleSheet.create({
         marginBottom: 5,
         textAlign: 'center',
     },
-    
+    avatarSelector: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 10,
+        borderWidth: 1,
+        borderColor: '#DDD',
+        borderRadius: 8,
+        backgroundColor: '#F8F9FA',
+    },
+    changeAvatarText: {
+        marginLeft: 10,
+        fontSize: 14,
+        color: '#3498DB',
+        fontWeight: '500',
+    },
+
 });
