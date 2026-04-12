@@ -36,64 +36,105 @@ export default function InventoryScreen() {
             const response = await axios.get(`${getApiBaseUrl()}/api/user/item`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
+            // 後端返回的資料結構是 UserItemDto 數組
+            // 每個元素包含 id, name, type, icon, description, createdAt
             setUserItems(response.data || []);
+            console.log('Fetched items:', response.data);
         } catch (error) {
-            console.log("Items info not available");
+            console.log("Items info not available", error);
         } finally {
             setLoading(false);
         }
     };
 
-    const getItemIcon = (itemType: string) => {
-        const iconProps = { size: 32, color: '#FFF' };
-        
-        switch (itemType?.toLowerCase()) {
-            case 'trophy': return <Trophy {...iconProps} color="#FFD700" />;
-            case 'star': return <Star {...iconProps} color="#FFD700" />;
-            case 'heart': return <Heart {...iconProps} color="#FF69B4" />;
-            case 'shield': return <Shield {...iconProps} color="#4169E1" />;
-            case 'power': return <Zap {...iconProps} color="#FF4500" />;
-            case 'gift': return <Gift {...iconProps} color="#FF69B4" />;
-            case 'crown': return <Crown {...iconProps} color="#FFD700" />;
-            case 'sword': return <Sword {...iconProps} color="#C0C0C0" />;
-            case 'gem': return <Gem {...iconProps} color="#9370DB" />;
-            case 'food': return <Cookie {...iconProps} color="#8B4513" />;
-            case 'candy': return <Candy {...iconProps} color="#FF69B4" />;
-            default: return <Gamepad2 {...iconProps} color="#4CAF50" />;
+    // 獲取物品的實際資料（處理可能的巢狀結構）
+    const getItemData = (item: any) => {
+        // 如果 item 有 item 屬性（巢狀結構），使用 item.item
+        // 否則直接使用 item
+        const itemData = item.item || item;
+        return {
+            id: itemData?.id,
+            name: itemData?.name || 'Unknown Item',
+            type: itemData?.type || 'AVATAR',
+            icon: itemData?.icon || 'default',
+            description: itemData?.description || 'No description available',
+            createdAt: item.createdAt || itemData?.createdAt,
+            quantity: item.quantity || 1
+        };
+    };
+
+    const getItemIcon = (itemType: string, itemIcon?: string) => {
+        // 減小圖標大小，讓它不填滿整個容器
+        const iconProps = { size: 28, color: '#FFF' };  // 從 32 改為 28
+
+        // 如果是頭像類型，使用 AvatarIconRenderer
+        if (itemType === 'AVATAR') {
+            return (
+                <AvatarIconRenderer
+                    iconName={itemIcon || 'default'}
+                    size={28}  // 從 32 改為 28
+                    color="#FFF"
+                />
+            );
         }
+
+        // 根據物品類型顯示不同圖標
+        const typeMap: { [key: string]: any } = {
+            'TROPHY': <Trophy {...iconProps} color="#FFD700" />,
+            'STAR': <Star {...iconProps} color="#FFD700" />,
+            'HEART': <Heart {...iconProps} color="#FF69B4" />,
+            'SHIELD': <Shield {...iconProps} color="#4169E1" />,
+            'POWER': <Zap {...iconProps} color="#FF4500" />,
+            'GIFT': <Gift {...iconProps} color="#FF69B4" />,
+            'CROWN': <Crown {...iconProps} color="#FFD700" />,
+            'SWORD': <Sword {...iconProps} color="#C0C0C0" />,
+            'GEM': <Gem {...iconProps} color="#9370DB" />,
+            'FOOD': <Cookie {...iconProps} color="#8B4513" />,
+            'CANDY': <Candy {...iconProps} color="#FF69B4" />,
+            'BACKGROUND': <Gamepad2 {...iconProps} color="#4CAF50" />,
+            'BADGE': <Trophy {...iconProps} color="#FFD700" />,
+        };
+
+        return typeMap[itemType] || <Gamepad2 {...iconProps} color="#4CAF50" />;
     };
 
     const getItemBackground = (itemType: string) => {
-        switch (itemType?.toLowerCase()) {
-            case 'trophy': return '#FFF9E6';
-            case 'star': return '#FFF9E6';
-            case 'heart': return '#FFE6F0';
-            case 'shield': return '#E6F3FF';
-            case 'power': return '#FFE6E6';
-            case 'gift': return '#FFE6F0';
-            case 'crown': return '#FFF9E6';
-            case 'sword': return '#F5F5F5';
-            case 'gem': return '#F3E6FF';
-            case 'food': return '#F5E6D3';
-            case 'candy': return '#FFE6F0';
-            default: return '#E8F5E9';
-        }
+        const bgMap: { [key: string]: string } = {
+            'AVATAR': '#E8F5E9',
+            'TROPHY': '#FFF9E6',
+            'STAR': '#FFF9E6',
+            'HEART': '#FFE6F0',
+            'SHIELD': '#E6F3FF',
+            'POWER': '#FFE6E6',
+            'GIFT': '#FFE6F0',
+            'CROWN': '#FFF9E6',
+            'SWORD': '#F5F5F5',
+            'GEM': '#F3E6FF',
+            'FOOD': '#F5E6D3',
+            'CANDY': '#FFE6F0',
+            'BACKGROUND': '#E8F5E9',
+            'BADGE': '#FFF9E6',
+        };
+        return bgMap[itemType] || '#E8F5E9';
     };
 
     const getItemRarity = (itemType: string) => {
         const rarities: { [key: string]: { color: string, label: string } } = {
-            'trophy': { color: '#FFD700', label: 'LEGENDARY' },
-            'crown': { color: '#FFD700', label: 'LEGENDARY' },
-            'gem': { color: '#9370DB', label: 'EPIC' },
-            'star': { color: '#4169E1', label: 'RARE' },
-            'shield': { color: '#4169E1', label: 'RARE' },
-            'sword': { color: '#4169E1', label: 'RARE' },
-            'heart': { color: '#FF69B4', label: 'SPECIAL' },
-            'power': { color: '#FF4500', label: 'SPECIAL' },
-            'gift': { color: '#FF69B4', label: 'SPECIAL' },
+            'AVATAR': { color: '#4CAF50', label: 'COMMON' },
+            'TROPHY': { color: '#FFD700', label: 'LEGENDARY' },
+            'CROWN': { color: '#FFD700', label: 'LEGENDARY' },
+            'GEM': { color: '#9370DB', label: 'EPIC' },
+            'STAR': { color: '#4169E1', label: 'RARE' },
+            'SHIELD': { color: '#4169E1', label: 'RARE' },
+            'SWORD': { color: '#4169E1', label: 'RARE' },
+            'HEART': { color: '#FF69B4', label: 'SPECIAL' },
+            'POWER': { color: '#FF4500', label: 'SPECIAL' },
+            'GIFT': { color: '#FF69B4', label: 'SPECIAL' },
+            'BACKGROUND': { color: '#4CAF50', label: 'COMMON' },
+            'BADGE': { color: '#FF9800', label: 'RARE' },
         };
-        
-        return rarities[itemType?.toLowerCase()] || { color: '#4CAF50', label: 'COMMON' };
+
+        return rarities[itemType] || { color: '#4CAF50', label: 'COMMON' };
     };
 
     const renderInventoryGrid = () => {
@@ -112,7 +153,7 @@ export default function InventoryScreen() {
                     <Backpack size={80} color="#C0C0C0" />
                     <Text style={styles.emptyTitle}>Empty Backpack!</Text>
                     <Text style={styles.emptySubtitle}>Complete missions to collect items</Text>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                         style={styles.playButton}
                         onPress={() => router.push('/')}
                     >
@@ -125,22 +166,23 @@ export default function InventoryScreen() {
         return (
             <View style={styles.inventoryGrid}>
                 {userItems.map((item: any, index: number) => {
-                    const rarity = getItemRarity(item.type);
+                    const itemData = getItemData(item);
+                    const rarity = getItemRarity(itemData.type);
+                    const backgroundColor = getItemBackground(itemData.type);
+
                     return (
                         <TouchableOpacity
-                            key={index}
+                            key={itemData.id || index}
                             style={styles.itemSlot}
                             onPress={() => {
-                                // Only show modal on mobile, not on web/desktop
                                 if (Platform.OS !== 'web') {
-                                    setSelectedItem(item);
+                                    setSelectedItem(itemData);
                                     setShowItemDetail(true);
                                 }
                             }}
                             onHoverIn={(e) => {
                                 if (Platform.OS === 'web') {
-                                    setHoveredItem(item);
-                                    // Get position for tooltip
+                                    setHoveredItem(itemData);
                                     const node = e.target;
                                     if (node && node.getBoundingClientRect) {
                                         const rect = node.getBoundingClientRect();
@@ -157,32 +199,24 @@ export default function InventoryScreen() {
                                 }
                             }}
                         >
-                            <View style={[styles.itemBackground, { backgroundColor: getItemBackground(item.item?.type || 'AVATAR') }]}>
+                            <View style={[styles.itemBackground, { backgroundColor }]}>
                                 <View style={styles.itemIconContainer}>
-                                    {item.item?.type === 'AVATAR' ? (
-                                        <AvatarIconRenderer 
-                                            iconName={item.item?.icon || 'default'} 
-                                            size={32} 
-                                            color="#FFF" 
-                                        />
-                                    ) : (
-                                        getItemIcon(item.item?.type || 'AVATAR')
-                                    )}
+                                    {getItemIcon(itemData.type, itemData.icon)}
                                 </View>
-                                <View style={[styles.rarityBadge, { backgroundColor: getItemRarity(item.item?.type || 'AVATAR').color }]}>
-                                    <Text style={styles.rarityText}>{getItemRarity(item.item?.type || 'AVATAR').label}</Text>
+                                <View style={[styles.rarityBadge, { backgroundColor: rarity.color }]}>
+                                    <Text style={styles.rarityText}>{rarity.label}</Text>
                                 </View>
                             </View>
-                            <Text style={styles.itemName} numberOfLines={1}>{item.item?.name || 'Unknown'}</Text>
-                            {item.quantity && item.quantity > 1 && (
+                            <Text style={styles.itemName} numberOfLines={1}>{itemData.name}</Text>
+                            {itemData.quantity > 1 && (
                                 <View style={styles.quantityBadge}>
-                                    <Text style={styles.quantityText}>x{item.quantity}</Text>
+                                    <Text style={styles.quantityText}>x{itemData.quantity}</Text>
                                 </View>
                             )}
                         </TouchableOpacity>
                     );
                 })}
-                
+
                 {/* Empty slots for game-like appearance */}
                 {[...Array(Math.max(0, 12 - userItems.length))].map((_, index) => (
                     <View key={`empty-${index}`} style={styles.emptySlot}>
@@ -196,7 +230,7 @@ export default function InventoryScreen() {
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="light-content" />
-            
+
             {/* Header with backpack design */}
             <View style={styles.headerContainer}>
                 <View style={styles.backpackHeader}>
@@ -220,7 +254,7 @@ export default function InventoryScreen() {
                         <Text style={styles.inventoryTitle}>Your Collection</Text>
                         <Text style={styles.inventorySubtitle}>Tap items to see details</Text>
                     </View>
-                    
+
                     {renderInventoryGrid()}
                 </View>
             </ScrollView>
@@ -230,25 +264,25 @@ export default function InventoryScreen() {
                 <View style={[
                     styles.hoverTooltip,
                     {
-                        left: hoverPosition.x - 100, // Center the tooltip
-                        top: hoverPosition.y - 150, // Position above the item
+                        left: hoverPosition.x - 100,
+                        top: hoverPosition.y - 150,
                     }
                 ]}>
                     <View style={[styles.tooltipItemBackground, { backgroundColor: getItemBackground(hoveredItem.type) }]}>
                         <View style={styles.tooltipIconContainer}>
-                            {getItemIcon(hoveredItem.type)}
+                            {getItemIcon(hoveredItem.type, hoveredItem.icon)}
                         </View>
                     </View>
-                    <Text style={styles.tooltipItemName}>{hoveredItem.name || 'Unknown Item'}</Text>
+                    <Text style={styles.tooltipItemName}>{hoveredItem.name}</Text>
                     <View style={[styles.tooltipRarityBadge, { backgroundColor: getItemRarity(hoveredItem.type).color }]}>
                         <Text style={styles.tooltipRarityText}>{getItemRarity(hoveredItem.type).label}</Text>
                     </View>
-                    {hoveredItem.description && (
+                    {hoveredItem.description && hoveredItem.description !== 'No description available' && (
                         <Text style={styles.tooltipDescription} numberOfLines={3}>
                             {hoveredItem.description}
                         </Text>
                     )}
-                    {hoveredItem.quantity && (
+                    {hoveredItem.quantity > 1 && (
                         <Text style={styles.tooltipQuantity}>Quantity: {hoveredItem.quantity}</Text>
                     )}
                     <View style={styles.tooltipArrow} />
@@ -264,34 +298,34 @@ export default function InventoryScreen() {
             >
                 <View style={styles.modalOverlay}>
                     <View style={styles.itemDetailModal}>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={styles.closeButton}
                             onPress={() => setShowItemDetail(false)}
                         >
                             <ArrowLeft size={24} color="#FFF" />
                         </TouchableOpacity>
-                        
+
                         {selectedItem && (
                             <View style={styles.itemDetailContent}>
                                 <View style={[styles.detailItemBackground, { backgroundColor: getItemBackground(selectedItem.type) }]}>
                                     <View style={styles.detailIconContainer}>
-                                        {getItemIcon(selectedItem.type)}
+                                        {getItemIcon(selectedItem.type, selectedItem.icon)}
                                     </View>
                                 </View>
-                                
-                                <Text style={styles.detailItemName}>{selectedItem.name || 'Unknown Item'}</Text>
+
+                                <Text style={styles.detailItemName}>{selectedItem.name}</Text>
                                 <View style={[styles.detailRarityBadge, { backgroundColor: getItemRarity(selectedItem.type).color }]}>
                                     <Text style={styles.detailRarityText}>{getItemRarity(selectedItem.type).label}</Text>
                                 </View>
-                                
-                                {selectedItem.description && (
+
+                                {selectedItem.description && selectedItem.description !== 'No description available' && (
                                     <View style={styles.descriptionContainer}>
                                         <Info size={16} color="#636E72" />
                                         <Text style={styles.detailDescription}>{selectedItem.description}</Text>
                                     </View>
                                 )}
-                                
-                                {selectedItem.quantity && (
+
+                                {selectedItem.quantity > 1 && (
                                     <View style={styles.detailQuantity}>
                                         <Text style={styles.detailQuantityText}>Quantity: {selectedItem.quantity}</Text>
                                     </View>
@@ -306,9 +340,101 @@ export default function InventoryScreen() {
 }
 
 const styles = StyleSheet.create({
+    inventoryGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        paddingHorizontal: 5,
+    },
+    itemSlot: {
+        width: (width - 40) / 3,  // 稍微增大寬度
+        marginBottom: 20,
+        alignItems: 'center',
+        position: 'relative',
+    },
+    itemBackground: {
+        width: 90,  // 固定寬度，不依賴百分比
+        height: 90, // 固定高度
+        borderRadius: 20,
+        borderWidth: 3,
+        borderColor: '#FFF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        position: 'relative',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 6,
+        elevation: 8,
+    },
+    itemIconContainer: {
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    rarityBadge: {
+        position: 'absolute',
+        top: 4,
+        right: 4,
+        paddingHorizontal: 6,
+        paddingVertical: 3,
+        borderRadius: 10,
+    },
+    rarityText: {
+        fontSize: 8,
+        fontWeight: '800',
+        color: '#FFF',
+    },
+    itemName: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#2D3436',
+        textAlign: 'center',
+        marginTop: 8,
+        maxWidth: 90,
+    },
+    quantityBadge: {
+        position: 'absolute',
+        bottom: -8,
+        right: -5,
+        backgroundColor: '#FF4757',
+        minWidth: 22,
+        height: 22,
+        borderRadius: 11,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: '#FFF',
+        paddingHorizontal: 5,
+    },
+    quantityText: {
+        fontSize: 10,
+        fontWeight: '800',
+        color: '#FFF',
+    },
+    emptySlot: {
+        width: (width - 40) / 3,
+        height: 110,
+        marginBottom: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    emptySlotInner: {
+        width: 90,
+        height: 90,
+        borderRadius: 20,
+        borderWidth: 3,
+        borderColor: 'rgba(255,255,255,0.5)',
+        borderStyle: 'dashed',
+        backgroundColor: 'rgba(255,255,255,0.15)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+
+    // 修改圖標大小
+
     container: {
         flex: 1,
-        backgroundColor: '#87CEEB', // Sky blue background
+        backgroundColor: '#87CEEB',
     },
     headerContainer: {
         backgroundColor: '#4CAF50',
@@ -376,88 +502,7 @@ const styles = StyleSheet.create({
         color: '#636E72',
         fontWeight: '600',
     },
-    inventoryGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'space-between',
-    },
-    itemSlot: {
-        width: (width - 60) / 3,
-        height: (width - 60) / 3,
-        marginBottom: 15,
-        position: 'relative',
-    },
-    itemBackground: {
-        width: '100%',
-        height: '100%',
-        borderRadius: 20,
-        borderWidth: 4,
-        borderColor: '#FFF',
-        justifyContent: 'center',
-        alignItems: 'center',
-        position: 'relative',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-        elevation: 8,
-    },
-    itemIconContainer: {
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    rarityBadge: {
-        position: 'absolute',
-        top: 5,
-        right: 5,
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 8,
-    },
-    rarityText: {
-        fontSize: 8,
-        fontWeight: '800',
-        color: '#FFF',
-    },
-    itemName: {
-        fontSize: 12,
-        fontWeight: '700',
-        color: '#2D3436',
-        textAlign: 'center',
-        marginTop: 5,
-    },
-    quantityBadge: {
-        position: 'absolute',
-        bottom: 5,
-        right: 5,
-        backgroundColor: '#FF4757',
-        width: 20,
-        height: 20,
-        borderRadius: 10,
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 2,
-        borderColor: '#FFF',
-    },
-    quantityText: {
-        fontSize: 10,
-        fontWeight: '800',
-        color: '#FFF',
-    },
-    emptySlot: {
-        width: (width - 60) / 3,
-        height: (width - 60) / 3,
-        marginBottom: 15,
-    },
-    emptySlotInner: {
-        width: '100%',
-        height: '100%',
-        borderRadius: 20,
-        borderWidth: 3,
-        borderColor: 'rgba(255,255,255,0.5)',
-        borderStyle: 'dashed',
-        backgroundColor: 'rgba(255,255,255,0.1)',
-    },
+
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',
@@ -531,12 +576,12 @@ const styles = StyleSheet.create({
         width: '100%',
     },
     detailItemBackground: {
-        width: 100,
-        height: 100,
-        borderRadius: 25,
+        width: 80,
+        height: 80,
+        borderRadius: 20,
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 20,
+        marginBottom: 15,
         borderWidth: 4,
         borderColor: '#FFF',
         shadowColor: '#000',
@@ -548,6 +593,8 @@ const styles = StyleSheet.create({
     detailIconContainer: {
         justifyContent: 'center',
         alignItems: 'center',
+        width: '100%',
+        height: '100%',
     },
     detailItemName: {
         fontSize: 20,
@@ -610,13 +657,14 @@ const styles = StyleSheet.create({
         borderWidth: 3,
         borderColor: '#4CAF50',
     },
+    // 修改 tooltip 相關樣式
     tooltipItemBackground: {
-        width: 60,
-        height: 60,
-        borderRadius: 15,
+        width: 50,
+        height: 50,
+        borderRadius: 12,
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 10,
+        marginBottom: 8,
         borderWidth: 3,
         borderColor: '#FFF',
         shadowColor: '#000',

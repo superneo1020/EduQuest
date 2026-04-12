@@ -74,18 +74,17 @@ export const AvatarSelector: React.FC<AvatarSelectorProps> = ({
     console.log('UserItems data:', userItems);
 
         // 2. 遍歷用戶已購買的物品
-        userItems.forEach(userItem => {
-            // 確保物品類型是 AVATAR
-            if (userItem.type === 'AVATAR') {
-                // 使用 SQL 裡的 icon 欄位 (如 'happy_cat') 來匹配前端的 id
-                const backendIcon = userItem.icon;
-                const exists = avatarOptions.some(opt => opt.id === backendIcon);
-
-                if (exists) {
-                    ownedAvatarIds.push(backendIcon);
-                }
+    // 在 AvatarSelector.tsx 中修改
+    userItems.forEach(userItem => {
+        // 確保物品類型是 AVATAR，並使用 icon 欄位來匹配
+        if (userItem.type === 'AVATAR' && userItem.icon) {
+            const backendIcon = userItem.icon;
+            const exists = avatarOptions.some(opt => opt.id === backendIcon);
+            if (exists && !ownedAvatarIds.includes(backendIcon)) {
+                ownedAvatarIds.push(backendIcon);
             }
-        });
+        }
+    });
     
     // Debug: Log the final results
     console.log('Owned avatar IDs:', ownedAvatarIds);
