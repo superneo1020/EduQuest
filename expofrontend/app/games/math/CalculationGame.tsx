@@ -155,28 +155,91 @@ export default function CalculationGame() {
     const animatedScreenStyle = useAnimatedStyle(() => ({ transform: [{ translateX: screenShake.value }] }));
     const animatedPrepStyle = useAnimatedStyle(() => ({ transform: [{ scale: prepScale.value }], opacity: withTiming(prepText ? 1 : 0) }));
 
+    const generateLocalQuestions = (difficulty: 'easy' | 'medium' | 'hard', count: number) => {
+        const questions = [];
+        for (let i = 0; i < count; i++) {
+            let a, b, op, answer;
+
+            if (difficulty === 'easy') {
+                // 加減法 20 以內
+                a = Math.floor(Math.random() * 15) + 1;
+                b = Math.floor(Math.random() * 10) + 1;
+                op = Math.random() > 0.5 ? '+' : '-';
+                if (op === '-' && a < b) [a, b] = [b, a]; // 確保結果非負
+                answer = op === '+' ? a + b : a - b;
+            } else if (difficulty === 'medium') {
+                // 加減法 100 以內 或 簡單乘法
+                if (Math.random() > 0.3) {
+                    a = Math.floor(Math.random() * 80) + 10;
+                    b = Math.floor(Math.random() * 50) + 5;
+                    op = Math.random() > 0.5 ? '+' : '-';
+                    if (op === '-' && a < b) [a, b] = [b, a];
+                    answer = op === '+' ? a + b : a - b;
+                } else {
+                    a = Math.floor(Math.random() * 12) + 2;
+                    b = Math.floor(Math.random() * 9) + 2;
+                    op = '×';
+                    answer = a * b;
+                }
+            } else {
+                // 混合運算或大數乘除
+                const type = Math.floor(Math.random() * 3);
+                if (type === 0) { // 三數加減
+                    a = Math.floor(Math.random() * 50);
+                    b = Math.floor(Math.random() * 30);
+                    let c = Math.floor(Math.random() * 20);
+                    answer = a + b - c;
+                    op = `${a} + ${b} - ${c}`;
+                } else if (type === 1) { // 乘加
+                    a = Math.floor(Math.random() * 12) + 2;
+                    b = Math.floor(Math.random() * 10) + 2;
+                    let c = Math.floor(Math.random() * 20);
+                    answer = a * b + c;
+                    op = `${a} × ${b} + ${c}`;
+                } else { // 簡單除法
+                    answer = Math.floor(Math.random() * 12) + 2;
+                    b = Math.floor(Math.random() * 10) + 2;
+                    a = answer * b;
+                    op = `${a} ÷ ${b}`;
+                }
+            }
+
+            questions.push({
+                question: typeof op === 'string' && op.includes(' ') ? op : `${a} ${op} ${b}`,
+                answer: answer.toString()
+            });
+        }
+        return questions;
+    };
+
     const fetchQuestions = async (selectedDiff: 'easy' | 'medium' | 'hard') => {
-        setLoading(true);
+        setLoading(true); // 即使是本地，保留一點 Loading 感讓 UI 轉場更順
         setDifficulty(selectedDiff);
         resetTimer();
-        try {
-            const res = await axios.get(`http://localhost:8000/api/math/batch_generate?difficulty=${selectedDiff}&count=10`);
-            setQuestions(res.data);
-            setBossHP(100);
-            setPlayerHP(100);
-            setScore(0);
-            setCombo(0);
-            setCurrentIndex(0);
-            setUserAnswers([]);
-            setupOptions(res.data[0]);
 
-            setLoading(false);
-            setGameStarted(true);
-            startPrepSequence();
-        } catch (e) {
-            Alert.alert("Error", "Backend offline!");
-            setLoading(false);
-        }
+        // --- 核心改動：不再叫 API ---
+        setTimeout(() => {
+            try {
+                const localData = generateLocalQuestions(selectedDiff, 10);
+                setQuestions(localData);
+
+                // 重置戰鬥狀態
+                setBossHP(100);
+                setPlayerHP(100);
+                setScore(0);
+                setCombo(0);
+                setCurrentIndex(0);
+                setUserAnswers([]);
+                setupOptions(localData[0]);
+
+                setLoading(false);
+                setGameStarted(true);
+                startPrepSequence();
+            } catch (e) {
+                console.error(e);
+                setLoading(false);
+            }
+        }, 500); // 稍微延遲 0.5s 讓 Loading 動畫跑一下
     };
 
     const startPrepSequence = () => {
@@ -203,15 +266,20 @@ export default function CalculationGame() {
 
     const setupOptions = (qData: any) => {
         if (!qData) return;
-        const correct = qData.answer;
-        const opts = new Set<string>([correct]);
+        const correct = parseInt(qData.answer);
+        const opts = new Set<string>([qData.answer]);
+
         while (opts.size < 4) {
-            const fake = (parseInt(correct) + (Math.floor(Math.random() * 20) - 10)).toString();
-            if (parseInt(fake) >= 0 && fake !== correct) opts.add(fake);
+            // 根據正確答案的正負範圍隨機抖動
+            const range = correct > 20 ? 15 : 5;
+            const fake = (correct + (Math.floor(Math.random() * (range * 2)) - range)).toString();
+
+            if (fake !== qData.answer) {
+                opts.add(fake);
+            }
         }
         setOptions(Array.from(opts).sort(() => Math.random() - 0.5));
     };
-
     const handleAnswer = (selected: string) => {
         if (!gameActive || isSaving) return;
         const currentQ = questions[currentIndex];

@@ -3,7 +3,7 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from typing import Any
-import asyncio
+
 import ollama
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,11 +18,6 @@ import re
 import random
 
 whisper_model = None
-math_problems_cache: Dict[str, List[Dict]] = {
-    "easy": [],
-    "medium": [],
-    "hard": []
-}
 
 def get_whisper_model():
     global whisper_model
@@ -66,7 +61,6 @@ async def lifespan(app: FastAPI):
         logger.error("Could not pull model: %s", e)
         raise RuntimeError(f"Model {settings.model} unavailable") from e
     logger.info("Model %s ready", settings.model)
-    asyncio.create_task(preload_math_task())
     yield
     logger.info("Shutting down")
 
@@ -120,7 +114,7 @@ class GameScoreData(BaseModel):
     game_scores: list[dict]  # [{"game_type": "MATH", "score": 85, "difficulty": "MEDIUM", "created_at": "2024-01-01"}]
 
 class LearningSuggestions(BaseModel):
-    suggestions: list[dict]  # [{"type": "weakness", "title": "...", "description": "..."}]
+    suggestions: list[dict]  # [{"type": "weakness", "title": "...", 5"description": "..."}]
 # ---------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------
@@ -138,56 +132,6 @@ def chat_sync(prompt: str) -> str:
             detail="Model inference failed",
         ) from exc
 
-def generate_single_problem_sync(difficulty: str) -> Optional[Dict]:
-    topics = ["shopping", "traveling", "farming", "coding", "cooking"]
-    selected_topic = random.choice(topics)
-
-    # 這裡放你原本的 diff_rule 判斷...
-    if difficulty == "hard":
-        diff_rule = "3 numbers and two operations (e.g. multiply then add)."
-    elif difficulty == "medium":
-        diff_rule = "multiplication or division problem."
-    else:
-        diff_rule = "simple addition or subtraction problem."
-
-    prompt = (
-        f"Generate ONE {difficulty} math problem about {selected_topic}.\n"
-        f"Rule: {diff_rule}\n"
-        "Return ONLY a JSON object: {\"question\": \"...\", \"answer\": \"10\", \"explanation\": \"...\"}"
-    )
-
-    try:
-        resp = ollama.chat(model=settings.model, messages=[{"role": "user", "content": prompt}], options={"temperature": 0.1})
-        content = resp["message"]["content"].strip()
-        match = re.search(r'(\{.*\})', content, re.DOTALL)
-        if match:
-            data = json.loads(match.group(1))
-            data["answer"] = str(data.get("answer", "0"))
-            return data
-    except Exception as e:
-        logger.error(f"Pre-gen single error: {e}")
-    return None
-
-async def preload_math_task():
-    logger.info("🚀 [Background] 啟動 AI 題庫預熱...")
-    difficulties = ["easy", "medium", "hard"]
-
-    for diff in difficulties:
-        for i in range(15): # 每個難度生 15 題
-            # 使用 run_in_executor 避免同步的 ollama.chat 卡住異步循環
-            loop = asyncio.get_event_loop()
-            problem = await loop.run_in_executor(None, generate_single_problem_sync, diff)
-
-            if problem:
-                math_problems_cache[diff].append(problem)
-                if (i + 1) % 5 == 0:
-                    logger.info(f"📦 {diff} 題庫已準備: {i+1}/15")
-
-            # 給 CPU 喘息時間，避免 gemma 燒掉
-            await asyncio.sleep(0.5)
-
-    logger.info("✅ [Background] 所有難度題庫預熱完成！")
-
 
 # ---------------------------------------------------------------------
 # Routes
@@ -198,6 +142,8 @@ def chat_endpoint(req: ChatRequest) -> ChatResponse:
     answer = chat_sync(req.prompt)
     logger.info("Answer: %s", answer[:50])
     return ChatResponse(response=answer)
+
+
 
 
 # ---------------------------------------------------------------------
@@ -254,54 +200,121 @@ def batch_generate_math(difficulty: str = "easy", count: int = 10):
         return [{"question": "5 + 5", "answer": "10"}] * count
 
 @app.get("/api/math/generate")
-async def get_math_problem(difficulty: str = "easy"):
-    """取題：優先從快取拿，秒回"""
-    if math_problems_cache[difficulty]:
-        return math_problems_cache[difficulty].pop(0)
+def generate_math_ai(difficulty: str = "easy"):
+    topics = ["shopping", "traveling", "farming", "coding", "cooking"]
+    selected_topic = random.choice(topics)
 
-    # 沒題時才現場生
-    return generate_single_problem_sync(difficulty)
 
-@app.post("/api/math/check")
-async def check_math_answer(req: CheckRequest):
-    """判定答案：純 Python 比對，解決『轉很久』的問題"""
-    logger.info("⚡ 進行快速本地比對...")
+    if difficulty == "hard":
+        diff_rule = "Create a problem with 3 numbers and two operations (e.g., multiply then add). Answer must be a whole number."
+    elif difficulty == "medium":
+        diff_rule = "Create a multiplication or division problem. Answer must be a whole number."
+    else:
+        diff_rule = "Create a simple addition or subtraction problem."
+
+    prompt = (
+        f"Generate a {difficulty} math problem about {selected_topic}.\n"
+        f"Rule: {diff_rule}\n"
+        "Return ONLY a JSON object with keys 'question', 'answer', and 'explanation'.\n"
+        "Example: {\"question\": \"...\", \"answer\": \"10\", \"explanation\": \"...\"}"
+    )
+
     try:
-        # 清理並統一轉為 float 比對
-        u_ans = float(re.sub(r'[^\d.]', '', str(req.user_answer)))
-        c_ans = float(re.sub(r'[^\d.]', '', str(req.correct_answer)))
-        is_right = u_ans == c_ans
-    except:
-        is_right = str(req.user_answer).strip() == str(req.correct_answer).strip()
+        resp = ollama.chat(
+            model=settings.model,
+            messages=[{"role": "user", "content": prompt}],
+            options={"temperature": 0.1}
+        )
+        content = resp["message"]["content"].strip()
+        logger.info(f"AI Raw Output ({difficulty}): {content}")
+
+        start = content.find('{')
+        end = content.rfind('}')
+
+        if start != -1 and end != -1:
+            json_str = content[start:end+1]
+
+            json_str = re.sub(r'[\n\r]', ' ', json_str)
+            json_str = re.sub(r',\s*}', '}', json_str)  # Remove trailing commas
+            json_str = re.sub(r',\s*]', ']', json_str)  # Remove trailing commas in arrays
+            json_str = re.sub(r'\s+', ' ', json_str)    # Normalize whitespace
+            json_str = json_str.strip()
+
+            logger.info(f"Cleaned JSON string: {json_str}")
+
+            try:
+                data = json.loads(json_str)
+
+                data["answer"] = str(data.get("answer", "0"))
+                return data
+            except json.JSONDecodeError as e:
+                logger.error(f"JSON Parse Error: {e}")
+
+    except Exception as e:
+        logger.error(f"AI Fetch Error: {e}")
+
 
     return {
-        "is_correct": is_right,
-        "feedback": "Correct!" if is_right else "Incorrect."
+        "question": f"A {selected_topic} worker works 8 hours a day for 5 days. How many hours in total?",
+        "answer": "40",
+        "explanation": "8 * 5 = 40"
     }
+@app.post("/api/math/check")
+def check_math_answer(req: CheckRequest):
+    logger.info("AI checking student's work...")
 
-@app.post("/api/math/explain")
-async def explain_math_error(req: CheckRequest):
-    """解釋：只有錯了才叫 AI，前端不應等這步完成才關 Loading"""
-    logger.info("💡 AI 正在生成錯誤解釋...")
+    # 1. 強化指令，叫 AI 不要廢話
     prompt = (
+        "You are a math tutor. Analyze this:\n"
         f"Question: {req.question}\n"
+        f"Student's Answer: {req.user_answer}\n"
         f"Correct Answer: {req.correct_answer}\n"
-        f"Student Answer: {req.user_answer}\n"
-        "Briefly explain the mistake in one sentence."
+        "--- RULES ---\n"
+        "1. Response MUST be a JSON object.\n"
+        "2. NO introductory text, NO 'Correct!' mark, NO markdown code blocks.\n"
+        "3. Format: {\"is_correct\": true/false, \"feedback\": \"...\"}"
     )
+
     try:
-        loop = asyncio.get_event_loop()
-        resp = await loop.run_in_executor(
-            None,
-            lambda: ollama.chat(
-                model=settings.model,
-                messages=[{"role": "user", "content": prompt}],
-                options={"num_predict": 50}
-            )
-        )
-        return {"explanation": resp["message"]["content"].strip()}
-    except:
-        return {"explanation": "Please review your steps."}
+        resp = ollama.chat(model=settings.model, messages=[{"role": "user", "content": prompt}])
+        content = resp["message"]["content"].strip()
+
+        # 2. 這是核心：更強大的過濾網
+        # 尋找第一個 '{' 和最後一個 '}' 之間的所有內容
+        match = re.search(r'(\{.*\})', content, re.DOTALL)
+
+        if match:
+            json_str = match.group(1)
+            # 處理掉 AI 有時候會噴出的非法換行符
+            json_str = json_str.replace('\n', ' ').replace('\r', ' ')
+
+            try:
+                # 嘗試解析
+                result = json.loads(json_str)
+                # 即使解析成功，我們也要檢查 feedback 裡面有沒有 AI 偷塞的 "Correct!" 字眼
+                # 如果有，把它們清理掉，只留重點
+                clean_feedback = re.sub(r'^(✅ Correct!|❌ Incorrect!|Correct!|Incorrect!)\s*', '', result['feedback'])
+                result['feedback'] = clean_feedback
+                return result
+            except Exception as e:
+                logger.error(f"JSON Parse Error: {e}")
+
+        # --- Fallback (保底機制) ---
+        # 如果 Regex 沒抓到，或者 JSON 壞了，我們手動做一個 JSON 傳回前端
+        is_right = str(req.user_answer).strip() == str(req.correct_answer).strip()
+
+        # 把 AI 噴出來的廢話洗掉，只拿有用的文字
+        simple_feedback = content.split('}')[-1] if '}' in content else content
+        simple_feedback = simple_feedback.replace("✅ Correct!", "").replace("❌ Incorrect!", "").strip()
+
+        return {
+            "is_correct": is_right,
+            "feedback": simple_feedback if len(simple_feedback) > 5 else "Check your calculation steps again."
+        }
+
+    except Exception as e:
+        logger.error(f"Check failed: {e}")
+        return {"is_correct": False, "feedback": "AI server is busy. Please check manually."}
 
 @app.post("/api/math/final_report")
 def generate_final_report(req: SessionRecord):
@@ -322,7 +335,7 @@ def generate_final_report(req: SessionRecord):
 @app.post("/api/learning/suggestions")
 def generate_learning_suggestions(req: GameScoreData):
     logger.info("Generating learning suggestions for user %s...", req.user_id)
-    
+
     # Analyze game scores to create learning suggestions
     prompt = (
         f"Analyze the following game scores for user {req.user_id} and provide personalized learning suggestions:\n"
@@ -336,23 +349,23 @@ def generate_learning_suggestions(req: GameScoreData):
         "[{\"type\": \"strength|weakness|recommendation\", \"title\": \"...\", \"description\": \"...\", \"priority\": \"high|medium|low\"}]\n"
         "Keep descriptions concise and actionable. Focus on educational improvement."
     )
-    
+
     try:
         resp = ollama.chat(model=settings.model, messages=[{"role": "user", "content": prompt}])
         content = resp["message"]["content"].strip()
-        
+
         # Extract JSON from response
         match = re.search(r'(\[.*\])', content, re.DOTALL)
         if match:
             suggestions = json.loads(match.group(1))
             return LearningSuggestions(suggestions=suggestions)
-        
+
         # Fallback if parsing fails
         fallback_suggestions = [
             {"type": "recommendation", "title": "Continue Learning", "description": "Keep practicing to improve your skills", "priority": "medium"}
         ]
         return LearningSuggestions(suggestions=fallback_suggestions)
-        
+
     except Exception as e:
         logger.error(f"Learning suggestions generation failed: {e}")
         fallback_suggestions = [
