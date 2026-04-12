@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useLayoutEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert, ActivityIndicator, Dimensions, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert, ActivityIndicator, Dimensions, ScrollView, Image } from 'react-native';
 import { ArrowLeft, Trophy, Clock, Zap, Heart, CheckCircle2, XCircle, Brain, Timer } from 'lucide-react-native';
 import { useRouter, useNavigation } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -9,6 +9,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import axios from 'axios';
 import { useAuth } from "@/src/auth/AuthContext";
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // 格式化時間為 mm:ss
 const formatTime = (seconds: number): string => {
@@ -28,6 +30,60 @@ const FloatingText = ({ text, color, onComplete }: { text: string, color: string
     return (
         <Animated.View style={[styles.floatingLayer, useAnimatedStyle(() => ({ opacity: opacity.value, transform: [{ translateY: translateY.value }] }))]}>
             <Text style={[styles.hitText, { color }]}>{text}</Text>
+        </Animated.View>
+    );
+};
+
+// --- 投擲物元件 (Spear / Fire) ---
+const Projectile = ({
+                        type,
+                        onComplete
+                    }: {
+    type: 'spear' | 'fire',
+    onComplete: () => void
+}) => {
+    const translateX = useSharedValue(0);
+    const rotate = useSharedValue(0);
+    const opacity = useSharedValue(1);
+
+    useEffect(() => {
+        const moveDistance = SCREEN_WIDTH * 0.5;
+
+        if (type === 'spear') {
+            translateX.value = withTiming(moveDistance, { duration: 600 });
+            rotate.value = withTiming(45, { duration: 600 });
+            opacity.value = withTiming(0.8, { duration: 100 }, () => {
+                opacity.value = withTiming(0, { duration: 300 }, () => runOnJS(onComplete)());
+            });
+        } else {
+            translateX.value = withTiming(-moveDistance, { duration: 600 });
+            rotate.value = withTiming(-15, { duration: 600 });
+            opacity.value = withTiming(0.8, { duration: 100 }, () => {
+                opacity.value = withTiming(0, { duration: 300 }, () => runOnJS(onComplete)());
+            });
+        }
+    }, []);
+
+    const animatedStyle = useAnimatedStyle(() => ({
+        transform: [
+            { translateX: translateX.value },
+            { rotate: `${rotate.value}deg` }
+        ],
+        opacity: opacity.value,
+    }));
+
+    const imageSource = type === 'spear'
+        ? require('../../../assets/images/spear.png')
+        : require('../../../assets/images/fire.png');
+
+    // 根据类型设置不同的起始位置
+    const containerStyle = type === 'spear'
+        ? { left: '20%' }  // 长矛从勇士位置（左侧）开始
+        : { left: '65%' }; // 火焰从哥斯拉位置（右侧）开始
+
+    return (
+        <Animated.View style={[styles.projectileContainer, containerStyle, animatedStyle]}>
+            <Image source={imageSource} style={styles.projectileImage} />
         </Animated.View>
     );
 };
@@ -75,6 +131,10 @@ const GAME_SCENES = {
     hard: { bg: ['#FEF2F2', '#FEE2E2'], boss: '🌋', color: '#EF4444' }
 } as const;
 
+// 图片资源（根据项目结构调整路径）
+const warriorImg = require('../../../assets/images/IMG_2911.png');
+const godzillaImg = require('../../../assets/images/IMG_2912.png');
+
 export default function CalculationGame() {
     const router = useRouter();
     const navigation = useNavigation();
@@ -113,12 +173,35 @@ export default function CalculationGame() {
     const [userAnswers, setUserAnswers] = useState<any[]>([]);
     const [floatingText, setFloatingText] = useState<{ id: number, text: string, color: string } | null>(null);
 
+    // 投擲物狀態
+    const [projectile, setProjectile] = useState<{ id: number, type: 'spear' | 'fire' } | null>(null);
+
     // 動畫 Shared Values
     const bossY = useSharedValue(0);
     const bossScale = useSharedValue(1);
     const screenShake = useSharedValue(0);
+    const warriorScale = useSharedValue(1);
+    const godzillaScale = useSharedValue(1);
 
     const currentScene = useMemo(() => difficulty ? GAME_SCENES[difficulty] : GAME_SCENES.easy, [difficulty]);
+
+    // 动画样式（必须在组件顶层调用，确保 hooks 数量稳定）
+    const animatedBossStyle = useAnimatedStyle(() => ({
+        transform: [{ translateY: bossY.value }, { scale: bossScale.value }]
+    }));
+    const animatedScreenStyle = useAnimatedStyle(() => ({
+        transform: [{ translateX: screenShake.value }]
+    }));
+    const animatedPrepStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: prepScale.value }],
+        opacity: withTiming(prepText ? 1 : 0)
+    }));
+    const warriorAnimatedStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: warriorScale.value }]
+    }));
+    const godzillaAnimatedStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: godzillaScale.value }]
+    }));
 
     // 啟動計時器
     const startTimer = () => {
@@ -150,10 +233,6 @@ export default function CalculationGame() {
     useEffect(() => {
         bossY.value = withRepeat(withTiming(-10, { duration: 2000 }), -1, true);
     }, []);
-
-    const animatedBossStyle = useAnimatedStyle(() => ({ transform: [{ translateY: bossY.value }, { scale: bossScale.value }] }));
-    const animatedScreenStyle = useAnimatedStyle(() => ({ transform: [{ translateX: screenShake.value }] }));
-    const animatedPrepStyle = useAnimatedStyle(() => ({ transform: [{ scale: prepScale.value }], opacity: withTiming(prepText ? 1 : 0) }));
 
     const fetchQuestions = async (selectedDiff: 'easy' | 'medium' | 'hard') => {
         setLoading(true);
@@ -221,19 +300,36 @@ export default function CalculationGame() {
 
         if (isCorrect) {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-            bossScale.value = withSequence(withTiming(1.3, { duration: 100 }), withSpring(1));
-            setFloatingText({ id: Date.now(), text: 'HIT!', color: '#FFD700' });
+
+            // 触发长矛投掷特效
+            setProjectile({ id: Date.now(), type: 'spear' });
+
+            // 哥斯拉受击动画（延迟一点以配合长矛到达时间）
+            setTimeout(() => {
+                godzillaScale.value = withSequence(withTiming(1.3, { duration: 100 }), withSpring(1));
+                setFloatingText({ id: Date.now(), text: 'HIT!', color: '#FFD700' });
+            }, 300);
+
             setBossHP(prev => Math.max(0, prev - 15));
             setScore(prev => prev + 10 + combo);
             setCombo(prev => prev + 1);
-            setTimeout(nextQuestion, 500);
+            setTimeout(nextQuestion, 800);
         } else {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-            screenShake.value = withSequence(
-                withTiming(15, { duration: 50 }), withTiming(-15, { duration: 50 }),
-                withTiming(15, { duration: 50 }), withTiming(0, { duration: 50 })
-            );
-            setFloatingText({ id: Date.now(), text: 'OUCH!', color: '#FF4757' });
+
+            // 触发火球投掷特效
+            setProjectile({ id: Date.now(), type: 'fire' });
+
+            // 勇士受击动画（延迟一点）
+            setTimeout(() => {
+                warriorScale.value = withSequence(withTiming(1.3, { duration: 100 }), withSpring(1));
+                screenShake.value = withSequence(
+                    withTiming(15, { duration: 50 }), withTiming(-15, { duration: 50 }),
+                    withTiming(15, { duration: 50 }), withTiming(0, { duration: 50 })
+                );
+                setFloatingText({ id: Date.now(), text: 'OUCH!', color: '#FF4757' });
+            }, 300);
+
             setPlayerHP(prev => {
                 const newHP = Math.max(0, prev - 20);
                 if (newHP <= 0) {
@@ -246,7 +342,7 @@ export default function CalculationGame() {
                 return newHP;
             });
             setCombo(0);
-            setTimeout(nextQuestion, 500);
+            setTimeout(nextQuestion, 800);
         }
     };
 
@@ -385,7 +481,9 @@ export default function CalculationGame() {
         <LinearGradient colors={currentScene.bg} style={{ flex: 1 }}>
             <Animated.View style={[{ flex: 1 }, animatedScreenStyle]}>
                 <SafeAreaView style={styles.gameContainer}>
+                    {/* 血条区域，新增勇士和哥斯拉头像 */}
                     <View style={styles.hpHeader}>
+                        <Image source={warriorImg} style={styles.hpAvatar} />
                         <View style={{ flex: 1 }}>
                             <View style={styles.hpBarBg}>
                                 <View style={[styles.hpBarFill, { width: `${playerHP}%`, backgroundColor: '#FF4757' }]} />
@@ -399,6 +497,7 @@ export default function CalculationGame() {
                             </View>
                             <Text style={[styles.hpLabel, { textAlign: 'right' }]}>BOSS: {bossHP}</Text>
                         </View>
+                        <Image source={godzillaImg} style={styles.hpAvatar} />
                     </View>
 
                     <View style={styles.battleArena}>
@@ -416,15 +515,32 @@ export default function CalculationGame() {
                             </View>
                         </View>
 
-                        <View style={styles.bossStage}>
-                            {prepText && (
-                                <Animated.View style={[styles.prepOverlay, animatedPrepStyle]}>
-                                    <Text style={styles.prepText}>{prepText}</Text>
-                                </Animated.View>
-                            )}
-                            {floatingText && <FloatingText key={floatingText.id} text={floatingText.text} color={floatingText.color} onComplete={() => setFloatingText(null)} />}
-                            <Animated.Text style={[styles.bossEmoji, animatedBossStyle]}>{currentScene.boss}</Animated.Text>
+                        {/* 中央战斗区域：移除云，改为勇士和哥斯拉左右站立 */}
+                        <View style={styles.fightersRow}>
+                            <Animated.View style={[styles.fighterContainer, warriorAnimatedStyle]}>
+                                <Image source={warriorImg} style={styles.fighterImage} />
+                            </Animated.View>
+                            <Animated.View style={[styles.fighterContainer, godzillaAnimatedStyle]}>
+                                <Image source={godzillaImg} style={styles.fighterImage} />
+                            </Animated.View>
                         </View>
+
+                        {/* 投掷物特效层 */}
+                        {projectile && (
+                            <Projectile
+                                key={projectile.id}
+                                type={projectile.type}
+                                onComplete={() => setProjectile(null)}
+                            />
+                        )}
+
+                        {/* 浮层文字和准备动画覆盖在中央区域 */}
+                        {prepText && (
+                            <Animated.View style={[styles.prepOverlay, animatedPrepStyle]}>
+                                <Text style={styles.prepText}>{prepText}</Text>
+                            </Animated.View>
+                        )}
+                        {floatingText && <FloatingText key={floatingText.id} text={floatingText.text} color={floatingText.color} onComplete={() => setFloatingText(null)} />}
 
                         <View style={[styles.gridContainer, !gameActive && { opacity: 0.3 }]}>
                             {options.map((opt, i) => (
@@ -604,6 +720,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         gap: 12,
     },
+    hpAvatar: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        borderWidth: 2,
+        borderColor: '#fff',
+    },
     hpBarBg: {
         height: 12,
         backgroundColor: '#E2E8F0',
@@ -663,17 +786,39 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         fontVariant: ['tabular-nums'],
     },
-    bossStage: {
+    fightersRow: {
         flex: 1,
-        justifyContent: 'center',
+        flexDirection: 'row',
+        justifyContent: 'space-around',
         alignItems: 'center',
+        marginVertical: 10,
         position: 'relative',
     },
-    bossEmoji: {
-        fontSize: 130,
+    fighterContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    fighterImage: {
+        width: 120,
+        height: 120,
+        resizeMode: 'contain',
+    },
+    projectileContainer: {
+        position: 'absolute',
+        top: '40%',
+        // left: '35%',
+        zIndex: 200,
+    },
+    projectileImage: {
+        width: 60,
+        height: 60,
+        resizeMode: 'contain',
     },
     prepOverlay: {
         position: 'absolute',
+        top: '30%',
+        left: 0,
+        right: 0,
         zIndex: 100,
         alignItems: 'center',
     },
@@ -685,7 +830,11 @@ const styles = StyleSheet.create({
     },
     floatingLayer: {
         position: 'absolute',
+        top: '40%',
+        left: 0,
+        right: 0,
         zIndex: 50,
+        alignItems: 'center',
     },
     hitText: {
         fontSize: 45,
