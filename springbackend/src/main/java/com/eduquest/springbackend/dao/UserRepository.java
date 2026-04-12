@@ -1,5 +1,6 @@
 package com.eduquest.springbackend.dao;
 
+import com.eduquest.springbackend.dto.SchoolMemberProfileDto;
 import com.eduquest.springbackend.dto.UserAuthDto;
 import com.eduquest.springbackend.dto.UserMiniDto;
 import com.eduquest.springbackend.enums.EducatorStatus;
@@ -18,9 +19,13 @@ public interface UserRepository extends JpaRepository<AppUser, Long>, JpaSpecifi
     Optional<AppUser> findByUsername(String username);
     boolean existsByUsername(String username);
     boolean existsByEmail(String email);
+    boolean existsByIdAndSchoolId(Long userId, Long schoolId);
 
     @Query("SELECT u.points FROM AppUser u WHERE u.id = :id")
     Optional<Integer> findPointsById(@Param("id") Long userId);
+
+    @Query("SELECT u.school.id FROM AppUser u WHERE u.id = :id")
+    Optional<Long> findSchoolIdById(@Param("id") Long userId);
 
     @Query("SELECT s.name FROM AppUser u JOIN u.school s WHERE u.id = :id")
     Optional<String> findSchoolNameById(@Param("id") Long userId);
@@ -51,4 +56,11 @@ public interface UserRepository extends JpaRepository<AppUser, Long>, JpaSpecifi
             "FROM AppUser u " +
             "WHERE u.school.id = (SELECT u.school.id FROM AppUser u WHERE u.id = :id)")
     Page<UserMiniDto> findAllUserRecordByIdWithSchool(Long userId, Pageable pageable);
+
+    @Query("SELECT new com.eduquest.springbackend.dto.SchoolMemberProfileDto" +
+            "(u.username, u.userProfile.nickname, u.email, u.userProfile.equippedItems" +
+            ") " +
+            "FROM AppUser u " +
+            "WHERE u.school.id = (SELECT u.school.id FROM AppUser u WHERE u.id = :id)")
+    Page<SchoolMemberProfileDto> findAllUserProfileByIdWithSchool(Long userId, Pageable pageable);
 }
