@@ -30,7 +30,7 @@ public class EducatorController {
         return ResponseEntity.ok(educatorService.showAllCourse(userDetails.getId()));
     }
 
-    @GetMapping("/class/{courseId}")
+    @GetMapping("/school/members")
     public ResponseEntity<UtilPageResponse<UserMiniDto>> showCourse(
             @AuthenticationPrincipal AppUserDetails userDetails,
             @PageableDefault Pageable pageable
