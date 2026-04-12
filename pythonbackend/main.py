@@ -18,6 +18,7 @@ import re
 import random
 
 whisper_model = None
+math_problems_cache = {"easy": [], "medium": [], "hard": []}
 
 def get_whisper_model():
     global whisper_model
