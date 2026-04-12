@@ -8,6 +8,7 @@ import axios from 'axios';
 import { ShoppingBag, Coins, Package, CheckCircle2, AlertCircle, Star, Sparkles, Gift } from 'lucide-react-native';
 import { getApiBaseUrl } from '@/src/api/client';
 import { useAuth } from '@/src/auth/AuthContext';
+import AvatarIconRenderer from '@/components/AvatarIconRenderer';
 // Import all item images
 // Create image mapping for dynamic loading with proper types
 const itemImages: { [key: string]: any } = {
@@ -151,6 +152,7 @@ export default function ShopScreen() {
         }
     };
 
+    
     const onRefresh = useCallback(() => {
         setRefreshing(true);
         fetchData().finally(() => setRefreshing(false));
@@ -272,7 +274,13 @@ export default function ShopScreen() {
                                     styles.itemIconContainer,
                                     { backgroundColor: itemColor }
                                 ]}>
-                                    {item.icon ? (
+                                    {item.type === 'AVATAR' ? (
+                                        <AvatarIconRenderer 
+                                            iconName={item.icon} 
+                                            size={50} 
+                                            color="#FFF" 
+                                        />
+                                    ) : item.icon ? (
                                         <>
                                             {console.log('Debug - Item:', item.name, 'Icon:', item.icon)}
                                             <Image

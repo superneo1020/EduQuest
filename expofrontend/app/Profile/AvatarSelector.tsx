@@ -29,10 +29,10 @@ export const avatarOptions = [
 // Function to render avatar based on selection
 export const renderAvatar = (avatarId: string, size: number = 50) => {
     const avatar = avatarOptions.find(opt => opt.id === avatarId);
-    
-    // Get the appropriate icon component
+
+    // 修正：如果找不到對應頭像，回傳預設組件避免 Crash
     const IconComponent = AvatarIcons[avatarId as keyof typeof AvatarIcons] || AvatarIcons.default;
-    
+
     return (
         <View style={[
             styles.avatarContainer,
@@ -40,6 +40,7 @@ export const renderAvatar = (avatarId: string, size: number = 50) => {
                 width: size,
                 height: size,
                 borderRadius: size / 2,
+                // 給一個 fallback 顏色
                 backgroundColor: avatar?.color || '#636E72'
             }
         ]}>
@@ -54,14 +55,50 @@ interface AvatarSelectorProps {
     selectedAvatar: string;
     onSelect: (avatarId: string) => void;
     onClose: () => void;
+    userItems: any[];
+    onGoToShop: () => void;
 }
 
 export const AvatarSelector: React.FC<AvatarSelectorProps> = ({
     visible,
     selectedAvatar,
     onSelect,
-    onClose
+    onClose,
+    userItems,
+    onGoToShop
 }) => {
+    // 1. 初始化，始終包含默認頭像
+    const ownedAvatarIds = ['default'];
+
+    // Debug: Log the userItems to see the actual structure
+    console.log('UserItems data:', userItems);
+
+        // 2. 遍歷用戶已購買的物品
+        userItems.forEach(userItem => {
+            // 確保物品類型是 AVATAR
+            if (userItem.item?.type === 'AVATAR') {
+                // 使用 SQL 裡的 icon 欄位 (如 'happy_cat') 來匹配前端的 id
+                const backendIcon = userItem.item.icon;
+                const exists = avatarOptions.some(opt => opt.id === backendIcon);
+
+                if (exists) {
+                    ownedAvatarIds.push(backendIcon);
+                }
+            }
+        });
+    
+    // Debug: Log the final results
+    console.log('Owned avatar IDs:', ownedAvatarIds);
+    
+    // Temporary fix: Add some default avatars for testing if user has no avatars
+    if (ownedAvatarIds.length === 1) { // Only has default
+        console.log('User has no avatars, adding some for testing');
+        ownedAvatarIds.push('happy_cat', 'cool_dog', 'smart_owl');
+    }
+    
+    const ownedAvatars = avatarOptions.filter(avatar => ownedAvatarIds.includes(avatar.id));
+    console.log('Owned avatars after filtering:', ownedAvatars);
+
     return (
         <Modal
             visible={visible}
@@ -71,11 +108,11 @@ export const AvatarSelector: React.FC<AvatarSelectorProps> = ({
         >
             <View style={styles.modalOverlay}>
                 <View style={styles.modalContent}>
-                    <Text style={styles.modalTitle}>Choose Your Avatar</Text>
+                    <Text style={styles.modalTitle}>Your Avatars</Text>
                     
                     <ScrollView style={styles.avatarGrid}>
                         <View style={styles.gridContainer}>
-                            {avatarOptions.map((avatar) => (
+                            {ownedAvatars.map((avatar) => (
                                 <TouchableOpacity
                                     key={avatar.id}
                                     style={[
@@ -90,6 +127,10 @@ export const AvatarSelector: React.FC<AvatarSelectorProps> = ({
                             ))}
                         </View>
                     </ScrollView>
+                    
+                    <TouchableOpacity style={styles.shopButton} onPress={onGoToShop}>
+                        <Text style={styles.shopButtonText}>🛍️ Get More Avatars</Text>
+                    </TouchableOpacity>
                     
                     <TouchableOpacity style={styles.closeButton} onPress={onClose}>
                         <Text style={styles.closeButtonText}>Close</Text>
@@ -190,6 +231,19 @@ const styles = StyleSheet.create({
         marginTop: 20,
     },
     closeButtonText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    shopButton: {
+        backgroundColor: '#FF9800',
+        padding: 15,
+        borderRadius: 10,
+        alignItems: 'center',
+        marginTop: 10,
+        marginBottom: 10,
+    },
+    shopButtonText: {
         color: '#fff',
         fontSize: 16,
         fontWeight: 'bold',

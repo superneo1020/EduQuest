@@ -142,7 +142,7 @@ export default function ProfileScreen() {
             setShowAvatarModal(false);
             console.log('Token exists:', !!token);
             console.log('Token length:', token?.length || 0);
-            console.log('API URL:', `${getApiBaseUrl()}/api/user/profile/`);
+            console.log('API URL:', `${getApiBaseUrl()}/api/user/profile`);
             console.log('Avatar ID:', avatarId);
 
             const mappedItemId = mapAvatarIdToItemId(avatarId);
@@ -2188,6 +2188,8 @@ export default function ProfileScreen() {
                 onClose={() => setShowAvatarModal(false)}
                 onSelect={handleAvatarSelect}
                 selectedAvatar={selectedAvatar}
+                userItems={userItems}
+                onGoToShop={() => router.push('/shop')}
             />
 
         </SafeAreaView>
