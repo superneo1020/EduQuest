@@ -103,7 +103,7 @@ export default function CalculationGame() {
 
     // 計時器狀態
     const [elapsedTime, setElapsedTime] = useState(0);
-    const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const timerIntervalRef = useRef<number | null>(null);
     const [totalGameTime, setTotalGameTime] = useState(0);
 
     // 戰鬥數值

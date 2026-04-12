@@ -15,6 +15,7 @@ import axios from 'axios';
 import { getApiBaseUrl } from '@/src/api/client';
 import SkillBarsChart from "@/app/Profile/SkillRadarChart";
 import { LineChart, BarChart, PieChart as RNPieChart } from 'react-native-chart-kit';
+import {AvatarSelector, renderAvatar} from "@/app/Profile/AvatarSelector";
 
 const { width } = Dimensions.get('window');
 
@@ -86,6 +87,45 @@ export default function ProfileScreen() {
 
 
 
+
+    // Profile Icon selection states
+    const [showAvatarModal, setShowAvatarModal] = useState(false);
+    const [selectedAvatar, setSelectedAvatar] = useState<string>('default');
+
+    const avatarOptions = [
+        // Avatar options are now handled in AvatarSelector component
+        { id: 'default', emoji: 'default', name: 'Default', color: '#636E72' },
+        { id: 'happy', emoji: 'happy', name: 'Happy Face', color: '#FFD93D' },
+        { id: 'cool', emoji: 'cool', name: 'Cool Kid', color: '#4ECDC4' },
+        { id: 'smart', emoji: 'smart', name: 'Smart Student', color: '#9B59B6' },
+        { id: 'sporty', emoji: 'sporty', name: 'Sporty', color: '#FF6B6B' },
+        { id: 'artistic', emoji: 'artistic', name: 'Artistic', color: '#FF9FF3' },
+        { id: 'bookworm', emoji: 'bookworm', name: 'Bookworm', color: '#54A0FF' },
+        { id: 'explorer', emoji: 'explorer', name: 'Explorer', color: '#1DD1A1' },
+        { id: 'star', emoji: 'star', name: 'Star Student', color: '#FFA502' },
+        { id: 'rainbow', emoji: 'rainbow', name: 'Rainbow', color: '#A29BFE' },
+        { id: 'rocket', emoji: 'rocket', name: 'Rocket', color: '#FF6348' },
+        { id: 'heart', emoji: 'heart', name: 'Heart', color: '#FF4757' }
+    ];
+
+    // Function to update avatar selection
+    const handleAvatarSelect = async (avatarId: string) => {
+        try {
+            setSelectedAvatar(avatarId);
+            setShowAvatarModal(false);
+
+            // Here you would save the avatar selection to backend
+            await axios.post(`${getApiBaseUrl()}/api/user/avatar`,
+                 { avatar: avatarId },
+                 { headers: { Authorization: `Bearer ${token}` } }
+             );
+
+            Alert.alert('Success', 'Avatar updated successfully!');
+        } catch (error) {
+            console.error('Avatar update error:', error);
+            Alert.alert('Error', 'Failed to update avatar');
+        }
+    };
 
     // Function to show error with feedback option
     const showErrorWithFeedback = (errorMessage: string, context: string) => {
@@ -808,7 +848,7 @@ export default function ProfileScreen() {
                         <View style={styles.profileContent}>
                             <View style={styles.avatarContainer}>
                                 <View style={styles.avatarCircle}>
-                                    <UserIcon size={50} color="#FFF" />
+                                    {renderAvatar(selectedAvatar, 50)}
                                 </View>
                             </View>
                             <View style={styles.profileInfo}>
@@ -1737,6 +1777,7 @@ export default function ProfileScreen() {
                                         width={width * 0.7}
                                         height={200}
                                         yAxisLabel="Score"
+                                        yAxisSuffix=""
                                         chartConfig={{
                                             backgroundColor: '#FFF',
                                             backgroundGradientFrom: '#FFF',
@@ -1982,6 +2023,12 @@ export default function ProfileScreen() {
                     </View>
                 </View>
             </Modal>
+            <AvatarSelector
+                visible={showAvatarModal}
+                onClose={() => setShowAvatarModal(false)}
+                onSelect={handleAvatarSelect}
+                selectedAvatar={selectedAvatar}
+            />
 
         </SafeAreaView>
     );
@@ -2519,8 +2566,6 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         paddingBottom: 20
     },
-    avatarCircle: { width: 90, height: 90, borderRadius: 45, backgroundColor: '#F1F8E9', justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
-    userName: { fontSize: 22, fontWeight: '900', color: '#2D3436' },
     emailBadge: { flexDirection: 'row', alignItems: 'center', marginTop: 5 },
     emailText: { fontSize: 14, color: '#636E72', marginLeft: 5 },
     schoolBadge: { flexDirection: 'row', alignItems: 'center', marginTop: 5 },
@@ -2600,21 +2645,6 @@ const styles = StyleSheet.create({
     },
     inputContainer: {
         marginBottom: 20,
-    },
-    inputLabel: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: '#2D3436',
-        marginBottom: 8,
-    },
-    textInput: {
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        borderRadius: 12,
-        padding: 15,
-        fontSize: 16,
-        backgroundColor: '#F8F9FA',
-        flex: 1,
     },
     passwordInput: {
         flexDirection: 'row',
@@ -2845,16 +2875,6 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
         borderBottomWidth: 1,
         borderBottomColor: '#F1F2F6',
-    },
-    accountDetailLabel: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#636E72',
-    },
-    accountDetailValue: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: '#2D3436',
     },
     // Account Info styles
     accountInfoSection: {

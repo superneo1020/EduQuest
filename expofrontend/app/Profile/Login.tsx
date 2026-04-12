@@ -51,7 +51,7 @@ export default function Login() {
             }
             else if (isEducator) {
                 console.log("Welcome Educator!");
-                router.replace("/teacher/teacher"); // 導向你的 Admin 面板路徑
+                router.replace("/teacher/classManagement"); // 導向你的 Admin 面板路徑
             }
             else {
                 console.log("Welcome Student!");
