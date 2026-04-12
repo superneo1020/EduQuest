@@ -11,6 +11,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/src/auth/AuthContext';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/src/api/client';
+import AvatarIconRenderer from '@/components/AvatarIconRenderer';
 
 const { width, height } = Dimensions.get('window');
 
@@ -156,15 +157,23 @@ export default function InventoryScreen() {
                                 }
                             }}
                         >
-                            <View style={[styles.itemBackground, { backgroundColor: getItemBackground(item.type) }]}>
+                            <View style={[styles.itemBackground, { backgroundColor: getItemBackground(item.item?.type || 'AVATAR') }]}>
                                 <View style={styles.itemIconContainer}>
-                                    {getItemIcon(item.type)}
+                                    {item.item?.type === 'AVATAR' ? (
+                                        <AvatarIconRenderer 
+                                            iconName={item.item?.icon || 'default'} 
+                                            size={32} 
+                                            color="#FFF" 
+                                        />
+                                    ) : (
+                                        getItemIcon(item.item?.type || 'AVATAR')
+                                    )}
                                 </View>
-                                <View style={[styles.rarityBadge, { backgroundColor: rarity.color }]}>
-                                    <Text style={styles.rarityText}>{rarity.label}</Text>
+                                <View style={[styles.rarityBadge, { backgroundColor: getItemRarity(item.item?.type || 'AVATAR').color }]}>
+                                    <Text style={styles.rarityText}>{getItemRarity(item.item?.type || 'AVATAR').label}</Text>
                                 </View>
                             </View>
-                            <Text style={styles.itemName} numberOfLines={1}>{item.name || 'Unknown'}</Text>
+                            <Text style={styles.itemName} numberOfLines={1}>{item.item?.name || 'Unknown'}</Text>
                             {item.quantity && item.quantity > 1 && (
                                 <View style={styles.quantityBadge}>
                                     <Text style={styles.quantityText}>x{item.quantity}</Text>

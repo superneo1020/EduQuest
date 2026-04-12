@@ -306,11 +306,29 @@ ON CONFLICT DO NOTHING;
 -- Insert sample items for the shop (AVATAR, BACKGROUND, BADGE only - no POWERUP)
 INSERT INTO items (type, name, icon, description, price)
 VALUES
-    -- Avatar Items
-    ('AVATAR', 'Cool Hat', 'cool_hat.png', 'Stylish hat for your avatar', 50),
-    ('AVATAR', 'Superhero Cape', 'superhero_cape.png', 'Fly through challenges with this cape', 100),
-    ('AVATAR', 'Science Glasses', 'Glasses', 'Look smart with these glasses', 75),
-    ('AVATAR', 'Sports Jersey', 'sports_jersey.png', 'Show your team spirit', 60),
+    -- Avatar Items (from AvatarIcons.tsx)
+    ('AVATAR', 'Default', 'default', 'Simple and classic avatar design', 0),
+    ('AVATAR', 'Happy Cat', 'happy_cat', 'Cheerful feline friend with whiskers', 50),
+    ('AVATAR', 'Cool Dog', 'cool_dog', 'Trendy canine with sunglasses attitude', 75),
+    ('AVATAR', 'Smart Owl', 'smart_owl', 'Wise nocturnal scholar with glasses', 100),
+    ('AVATAR', 'Sporty Rabbit', 'sporty_rabbit', 'Athletic bunny ready for action', 60),
+    ('AVATAR', 'Artistic Butterfly', 'artistic_butterfly', 'Creative and colorful winged artist', 80),
+    ('AVATAR', 'Bookworm Bear', 'bookworm_bear', 'Studious bear with a love for reading', 90),
+    ('AVATAR', 'Explorer Monkey', 'explorer_monkey', 'Adventurous primate ready to discover', 70),
+    ('AVATAR', 'Star Student', 'star_student', 'Shining academic achiever', 120),
+    ('AVATAR', 'Rainbow Unicorn', 'rainbow_unicorn', 'Magical creature with colorful mane', 150),
+    ('AVATAR', 'Rocket Raccoon', 'rocket_raccoon', 'Space-faring masked adventurer', 110),
+    ('AVATAR', 'Heart Panda', 'heart_panda', 'Loving bear with heart-shaped ears', 95),
+    ('AVATAR', 'Sunshine Bee', 'sunshine_bee', 'Bright and busy pollinator friend', 65),
+    ('AVATAR', 'Moon Turtle', 'moon_turtle', 'Gentle reptile under moonlight', 85),
+    ('AVATAR', 'Flower Ladybug', 'flower_ladybug', 'Garden-dwelling spotted beauty', 55),
+    ('AVATAR', 'Rainbow Frog', 'rainbow_frog', 'Colorful amphibian with vibrant colors', 75),
+    ('AVATAR', 'Cloud Sheep', 'cloud_sheep', 'Fluffy woolly cloud-like creature', 80),
+    ('AVATAR', 'Apple Teacher', 'apple_teacher', 'Educational fruit-inspired mentor', 100),
+    ('AVATAR', 'Pencil Wizard', 'pencil_wizard', 'Magical drawing tool master', 130),
+    ('AVATAR', 'Crayon Dragon', 'crayon_dragon', 'Colorful artistic fire-breather', 140),
+    ('AVATAR', 'Cool Hat', 'Hat', 'Stylish wizard hat with golden star', 160),
+    ('AVATAR', 'Superhero Cape', 'Cape', 'Heroic red cape with golden accents', 180),
 
     -- Background Items
     ('BACKGROUND', 'Space Theme', 'Space', 'Explore the cosmos', 80),
@@ -334,18 +352,18 @@ WHERE user_id IN (SELECT id FROM users WHERE username IN ('student1', 'student2'
 INSERT INTO user_items (user_id, item_id)
 VALUES
     -- Student1 items
-    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM items WHERE name = 'Cool Hat')),
+    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM items WHERE name = 'Happy Face')),
     ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM items WHERE name = 'Space Theme')),
 
     -- Student2 items
-    ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM items WHERE name = 'Science Glasses')),
+    ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM items WHERE name = 'Smart Student')),
     ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM items WHERE name = 'Math Champion')),
 
     -- Student3 items
     -- No items for student3 (beginner user)
 
     -- Teacher1 items
-    ((SELECT id FROM users WHERE username = 'teacher1'), (SELECT id FROM items WHERE name = 'Superhero Cape')),
+    ((SELECT id FROM users WHERE username = 'teacher1'), (SELECT id FROM items WHERE name = 'Cool Kid')),
     ((SELECT id FROM users WHERE username = 'teacher1'), (SELECT id FROM items WHERE name = 'Forest Adventure')),
     ((SELECT id FROM users WHERE username = 'teacher1'), (SELECT id FROM items WHERE name = 'Reading Star')),
 
