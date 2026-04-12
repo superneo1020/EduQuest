@@ -114,7 +114,7 @@ class GameScoreData(BaseModel):
     game_scores: list[dict]  # [{"game_type": "MATH", "score": 85, "difficulty": "MEDIUM", "created_at": "2024-01-01"}]
 
 class LearningSuggestions(BaseModel):
-    suggestions: list[dict]  # [{"type": "weakness", "title": "...", "description": "..."}]
+    suggestions: list[dict]  # [{"type": "weakness", "title": "...", 5"description": "..."}]
 # ---------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------
@@ -142,6 +142,8 @@ def chat_endpoint(req: ChatRequest) -> ChatResponse:
     answer = chat_sync(req.prompt)
     logger.info("Answer: %s", answer[:50])
     return ChatResponse(response=answer)
+
+
 
 
 # ---------------------------------------------------------------------
@@ -333,7 +335,7 @@ def generate_final_report(req: SessionRecord):
 @app.post("/api/learning/suggestions")
 def generate_learning_suggestions(req: GameScoreData):
     logger.info("Generating learning suggestions for user %s...", req.user_id)
-    
+
     # Analyze game scores to create learning suggestions
     prompt = (
         f"Analyze the following game scores for user {req.user_id} and provide personalized learning suggestions:\n"
@@ -347,23 +349,23 @@ def generate_learning_suggestions(req: GameScoreData):
         "[{\"type\": \"strength|weakness|recommendation\", \"title\": \"...\", \"description\": \"...\", \"priority\": \"high|medium|low\"}]\n"
         "Keep descriptions concise and actionable. Focus on educational improvement."
     )
-    
+
     try:
         resp = ollama.chat(model=settings.model, messages=[{"role": "user", "content": prompt}])
         content = resp["message"]["content"].strip()
-        
+
         # Extract JSON from response
         match = re.search(r'(\[.*\])', content, re.DOTALL)
         if match:
             suggestions = json.loads(match.group(1))
             return LearningSuggestions(suggestions=suggestions)
-        
+
         # Fallback if parsing fails
         fallback_suggestions = [
             {"type": "recommendation", "title": "Continue Learning", "description": "Keep practicing to improve your skills", "priority": "medium"}
         ]
         return LearningSuggestions(suggestions=fallback_suggestions)
-        
+
     except Exception as e:
         logger.error(f"Learning suggestions generation failed: {e}")
         fallback_suggestions = [

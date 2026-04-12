@@ -307,10 +307,10 @@ ON CONFLICT DO NOTHING;
 INSERT INTO items (type, name, icon, description, price)
 VALUES
     -- Avatar Items
-    ('AVATAR', 'Cool Hat', 'Hat', 'Stylish hat for your avatar', 50),
-    ('AVATAR', 'Superhero Cape', 'Cape', 'Fly through challenges with this cape', 100),
+    ('AVATAR', 'Cool Hat', 'cool_hat.png', 'Stylish hat for your avatar', 50),
+    ('AVATAR', 'Superhero Cape', 'superhero_cape.png', 'Fly through challenges with this cape', 100),
     ('AVATAR', 'Science Glasses', 'Glasses', 'Look smart with these glasses', 75),
-    ('AVATAR', 'Sports Jersey', 'Jersey', 'Show your team spirit', 60),
+    ('AVATAR', 'Sports Jersey', 'sports_jersey.png', 'Show your team spirit', 60),
 
     -- Background Items
     ('BACKGROUND', 'Space Theme', 'Space', 'Explore the cosmos', 80),
@@ -321,7 +321,7 @@ VALUES
     -- Badge Items
     ('BADGE', 'Math Champion', 'Trophy', 'Awarded for math excellence', 150),
     ('BADGE', 'Reading Star', 'Book', 'Awarded for reading achievements', 130),
-    ('BADGE', 'Science Explorer', 'Microscope', 'Awarded for science curiosity', 140),
+    ('BADGE', 'Science Explorer', 'science_glasses.png', 'Awarded for science curiosity', 140),
     ('BADGE', 'Memory Master', 'Brain', 'Awarded for memory skills', 135)
 ON CONFLICT (name) DO NOTHING;
 ;;;
