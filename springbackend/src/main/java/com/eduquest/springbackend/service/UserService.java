@@ -9,6 +9,7 @@ import com.eduquest.springbackend.exception.DuplicateResourceException;
 import com.eduquest.springbackend.model.AppUser;
 import com.eduquest.springbackend.model.Role;
 import com.eduquest.springbackend.model.School;
+import com.eduquest.springbackend.util.PageableUtils;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -17,12 +18,18 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Collection;
+import java.util.Set;
 
 @Service
 public class UserService {
     private final UserRepository userRepo;
     private final RoleRepository roleRepo;
     private final SchoolRepository schoolRepo;
+
+    private final Set<String> SCHOOL_MEMBER_DTO_FIELD = Set.of(
+            "username", "nickname", "email"
+    );
+
     private final DtoMapper dtoMapper;
 
     public UserService(UserRepository userRepo,
@@ -72,12 +79,12 @@ public class UserService {
     @Transactional
     public boolean saveSchoolId(Long userId, ResetSchoolRequest req) {
         // 1. find user
-        AppUser user = userRepo.findById(userId)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+        AppUser user = userRepo.findById(userId).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found: " + userId));
 
         // 2. find new school
-        School newSchool = schoolRepo.findByName(req.newSchoolName().trim())
-                .orElseThrow(() -> new UsernameNotFoundException("School not found"));
+        School newSchool = schoolRepo.findByName(req.newSchoolName().trim()).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "School not found: " + req.newSchoolName().trim()));
 
         // 3. confirm that the new schoolId is not same as old schoolId
         if (user.getSchool() != null && user.getSchool().getId().equals(newSchool.getId())) {
@@ -136,8 +143,9 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
-    public UtilPageResponse<UserMiniDto> findAllUsernameById(Long userId, Pageable pageable) {
-        var page = userRepo.findAllUserRecordByIdWithSchool(userId, pageable);
+    public UtilPageResponse<SchoolMemberProfileDto> showAllSchoolMembers(Long userId, Pageable pageable) {
+        Pageable cleanPageable = PageableUtils.filterSort(pageable, SCHOOL_MEMBER_DTO_FIELD);
+        var page = userRepo.findAllUserProfileByIdWithSchool(userId, cleanPageable);
         return dtoMapper.toPageResponse(page);
     }
 }

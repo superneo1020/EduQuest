@@ -12,4 +12,7 @@ public interface SchoolRepository extends JpaRepository<School, Long> {
 
     @Query("SELECT s.id FROM School s WHERE s.name = :name")
     Optional<Long> findIdByName(@Param("name") String schoolName);
+
+    @Query("SELECT s FROM School s JOIN AppUser u ON s.id = u.school.id WHERE u.id = :userId")
+    Optional<School> findByUserId(@Param("userId") Long userId);
 }

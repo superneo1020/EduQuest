@@ -48,12 +48,12 @@ public class UserController {
         return ResponseEntity.ok(userService.saveSchoolId(userDetails.getId(), req));
     }
 
-    @GetMapping("/school/users")
+    @GetMapping("/school/members")
     public ResponseEntity<?> getAllUsersByMySchoolId(
             @AuthenticationPrincipal AppUserDetails userDetails,
             @PageableDefault Pageable pageable
     ) {
-        return ResponseEntity.ok(userService.findAllUsernameById(userDetails.getId(), pageable));
+        return ResponseEntity.ok(userService.showAllSchoolMembers(userDetails.getId(), pageable));
     }
 
     @GetMapping("/email")
