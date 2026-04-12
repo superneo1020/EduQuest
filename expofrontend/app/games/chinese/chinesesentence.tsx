@@ -994,9 +994,8 @@ export default function ChineseSentenceGame() {
                 <SafeAreaView style={[styles.container, { backgroundColor: '#f5f5f5' }]} edges={['top']}>
                     <StatusBar barStyle="dark-content" />
                     <View style={[styles.headerWithTimer, { backgroundColor: currentTheme.primary }]}>
-                        <TouchableOpacity onPress={handleBack} style={styles.headerButton}>
-                            <Ionicons name="arrow-back" size={24} color="#fff" />
-                        </TouchableOpacity>
+                        {/* 隐藏返回按钮，使用空 View 占位保持布局 */}
+                        <View style={styles.headerButton} />
                         <Text style={styles.headerTitle}>
                             🐼 Chinese fill-in-the-blank - {difficulty === 'easy' ? 'Simple mode' : 'Medium mode'}
                         </Text>
