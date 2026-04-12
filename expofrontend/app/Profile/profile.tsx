@@ -144,21 +144,65 @@ export default function ProfileScreen() {
             console.log('Token length:', token?.length || 0);
             console.log('API URL:', `${getApiBaseUrl()}/api/user/profile/`);
             console.log('Avatar ID:', avatarId);
-            console.log('Mapped Item ID:', mapAvatarIdToItemId(avatarId));
-            // 使用現有的 profile API 更新頭像
-            await axios.post(`${getApiBaseUrl()}/api/user/profile/`,
-                {
-                    nickname: displayUser?.nickname || '',
-                    equippedItems: {
-                        AVATAR: mapAvatarIdToItemId(avatarId) // 映射到物品ID
-                    },
-                    preferences: {},
-                    privacySettings: {}
-                },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
 
-            Alert.alert('Success', 'Avatar updated successfully!');
+            const mappedItemId = mapAvatarIdToItemId(avatarId);
+            console.log('Mapped Item ID:', mappedItemId);
+
+            if (mappedItemId === null) {
+                Alert.alert('Error', 'Invalid avatar selection');
+                return;
+            }
+
+            // Try to update avatar directly first
+            try {
+                await axios.post(`${getApiBaseUrl()}/api/user/profile/`,
+                    {
+                        nickname: displayUser?.nickname || '',
+                        equippedItems: {
+                            AVATAR: mappedItemId
+                        },
+                        preferences: {},
+                        privacySettings: {}
+                    },
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+
+                Alert.alert('Success', 'Avatar updated successfully!');
+            } catch (avatarError: any) {
+                console.log('Avatar update failed, trying to grant item first...');
+
+                if (avatarError.response?.status === 404) {
+                    // User doesn't own the avatar item, try to grant it first
+                    const avatarOption = avatarOptions.find(opt => opt.id === avatarId);
+                    const avatarName = avatarOption?.name || avatarId;
+
+                    console.log('Granting avatar item:', avatarName);
+                    await axios.post(`${getApiBaseUrl()}/api/user/item/`,
+                        { itemName: avatarName },
+                        { headers: { Authorization: `Bearer ${token}` } }
+                    );
+
+                    // Wait a moment for database update
+                    await new Promise(resolve => setTimeout(resolve, 500));
+
+                    // Try updating avatar again
+                    await axios.post(`${getApiBaseUrl()}/api/user/profile/`,
+                        {
+                            nickname: displayUser?.nickname || '',
+                            equippedItems: {
+                                AVATAR: mappedItemId
+                            },
+                            preferences: {},
+                            privacySettings: {}
+                        },
+                        { headers: { Authorization: `Bearer ${token}` } }
+                    );
+
+                    Alert.alert('Success', 'Avatar updated successfully!');
+                } else {
+                    throw avatarError;
+                }
+            }
         } catch (error: any) {
             console.error('Avatar update error:', error);
             console.error('Error response:', error.response?.data);
