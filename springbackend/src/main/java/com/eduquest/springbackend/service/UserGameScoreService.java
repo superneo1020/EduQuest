@@ -33,27 +33,22 @@ public class UserGameScoreService {
     );
 
     private final GameService gameService;
-    private final UserService userService;
 
 
     public UserGameScoreService(UserGameScoreRepository userGameScoreRepo,
                                 UserRepository userRepo,
                                 GameRepository gameRepo,
                                 DtoMapper dtoMapper,
-                                GameService gameService,
-                                UserService userService) {
+                                GameService gameService) {
         this.userGameScoreRepo = userGameScoreRepo;
         this.userRepo = userRepo;
         this.gameRepo = gameRepo;
         this.dtoMapper = dtoMapper;
         this.gameService = gameService;
-        this.userService = userService;
     }
 
     @Transactional
-    public UserGameScoreResponse createUserGameScore(String username, UserGameScoreRequest req) {
-
-        Long userId = userService.checkIdByUsername(username);
+    public UserGameScoreResponse createUserGameScore(Long userId, UserGameScoreRequest req) {
         Long gameId = gameService.checkIdByName(req.gameName());
 
         AppUser user = userRepo.getReferenceById(userId);
@@ -78,31 +73,27 @@ public class UserGameScoreService {
     }
 
     @Transactional(readOnly = true)
-    public UtilPageResponse<UserGameScoreDto> showGameRecord(String username, Pageable pageable) {
+    public UtilPageResponse<UserGameScoreDto> showGameRecord(Long userId, Pageable pageable) {
         Pageable cleanPageable = PageableUtils.filterSort(pageable, USER_PROFILE_DTO_FIELD);
-        Long userId = userService.checkIdByUsername(username);
         var page = userGameScoreRepo.findUserGameScoresByUserId(userId, cleanPageable);
         return dtoMapper.toPageResponse(page);
     }
 
     @Transactional(readOnly = true)
-    public UtilPageResponse<UserGameScoreDto> showGameRecord(String username, Pageable pageable, String gameName) {
+    public UtilPageResponse<UserGameScoreDto> showGameRecord(Long userId, Pageable pageable, String gameName) {
         Pageable cleanPageable = PageableUtils.filterSort(pageable, USER_PROFILE_DTO_FIELD);
-        Long userId = userService.checkIdByUsername(username);
         Long gameId = gameService.checkIdByName(gameName);
         var page = userGameScoreRepo.findUserGameScoresByUserIdAndGameId(userId, gameId, cleanPageable);
         return dtoMapper.toPageResponse(page);
     }
 
     @Transactional(readOnly = true)
-    public List<UserGameScoreDto> showBestGameRecord(String username) {
-        Long userId = userService.checkIdByUsername(username);
+    public List<UserGameScoreDto> showBestGameRecord(Long userId) {
         return userGameScoreRepo.findAllHighestScoresByUserId(userId);
     }
 
     @Transactional(readOnly = true)
-    public UserGameScoreDto showBestGameRecord(String username, String gameName) {
-        Long userId = userService.checkIdByUsername(username);
+    public UserGameScoreDto showBestGameRecord(Long userId, String gameName) {
         Long gameId = gameService.checkIdByName(gameName);
         return userGameScoreRepo.findHighestScoresByUserIdAndGameId(userId, gameId);
     }

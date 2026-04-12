@@ -1,40 +1,39 @@
 package com.eduquest.springbackend.service;
 
 import com.eduquest.springbackend.dao.CourseMemberRepository;
+import com.eduquest.springbackend.dao.CourseRepository;
 import com.eduquest.springbackend.dto.CourseDto;
 import com.eduquest.springbackend.dto.CourseMemberDto;
+import com.eduquest.springbackend.dto.UtilDetailedListResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
 
 @Service
 public class CourseMemberService {
 
+    private final CourseRepository courseRepo;
     private final CourseMemberRepository courseMemberRepo;
+    private final DtoMapper dtoMapper;
 
-    private final UserService userService;
-
-    public CourseMemberService(CourseMemberRepository courseMemberRepo, UserService userService) {
+    public CourseMemberService(CourseRepository courseRepo,
+                               CourseMemberRepository courseMemberRepo, DtoMapper dtoMapper) {
+        this.courseRepo = courseRepo;
         this.courseMemberRepo = courseMemberRepo;
-        this.userService = userService;
+        this.dtoMapper = dtoMapper;
     }
 
     @Transactional(readOnly = true)
-    public List<CourseDto> showAllCourse(String username) {
-        Long id = userService.checkIdByUsername(username);
-        return courseMemberRepo.findCourseByUserId(id);
+    public UtilDetailedListResponse<CourseDto> showAllCourse(Long userId) {
+        return dtoMapper.toDetailedListResponse(courseRepo.findAllCourseByUserId(userId));
     }
 
     @Transactional(readOnly = true)
-    public List<CourseMemberDto> showAllCourseMemberByCourseId(String username, Long courseId) {
-        Long userId = userService.checkIdByUsername(username);
-        return courseMemberRepo.findCourseMemberByCourseId(userId, courseId);
+    public UtilDetailedListResponse<CourseMemberDto> showAllCourseMembers(Long courseId) {
+        return dtoMapper.toDetailedListResponse(courseMemberRepo.findUserByCourseId(courseId));
     }
 
     @Transactional(readOnly = true)
-    public String showRoleInClassByUserIdAndCourseId(String username, Long courseId) {
-        Long userId = userService.checkIdByUsername(username);
+    public String getRoleInClass(Long userId, Long courseId) {
         return courseMemberRepo.findRoleInClassByUserIdAndCourseId(userId, courseId).orElse(null);
     }
 }

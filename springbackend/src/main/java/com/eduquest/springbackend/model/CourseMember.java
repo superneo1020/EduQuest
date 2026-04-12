@@ -1,5 +1,6 @@
 package com.eduquest.springbackend.model;
 
+import com.eduquest.springbackend.enums.RoleInClass;
 import jakarta.persistence.*;
 import org.hibernate.annotations.Generated;
 import org.hibernate.generator.EventType;
@@ -22,8 +23,9 @@ public class CourseMember {
     @JoinColumn(name = "user_id", nullable = false)
     private AppUser user;
 
+    @Enumerated(EnumType.STRING)
     @Column(length = 20, nullable = false)
-    private String roleInClass;
+    private RoleInClass roleInClass;
 
     @Column(nullable = false,
             insertable = false,
@@ -41,7 +43,7 @@ public class CourseMember {
 
     public CourseMember() {}
 
-    public CourseMember(Course course, AppUser user, String roleInClass) {
+    public CourseMember(Course course, AppUser user, RoleInClass roleInClass) {
         this.course = course;
         this.user = user;
         this.roleInClass = roleInClass;
@@ -71,11 +73,11 @@ public class CourseMember {
         this.user = user;
     }
 
-    public String getRoleInClass() {
+    public RoleInClass getRoleInClass() {
         return roleInClass;
     }
 
-    public void setRoleInClass(String roleInClass) {
+    public void setRoleInClass(RoleInClass roleInClass) {
         this.roleInClass = roleInClass;
     }
 
