@@ -10,7 +10,7 @@ import {
     Dimensions,
     ActivityIndicator,
     Alert,
-    Platform,  // ← 添加這一行
+    Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LayoutList } from 'lucide-react-native';
@@ -46,9 +46,26 @@ const FloatingText = ({ text, color, onComplete }: { text: string, color: string
     );
 };
 
-// 難度級別配置 - 每題20分，Easy 4題共80分，Medium 4題共80分（但顯示為120滿分？）
-// 根據需求：Easy滿分100分，Medium滿分120分
-// 所以 Easy: 每題25分 (25*4=100)，Medium: 每題30分 (30*4=120)
+// 根據難度和題目索引獲取每題滿分 (共3題)
+const getPointsForQuestion = (difficulty: Difficulty, index: number): number => {
+    if (difficulty === 'easy') {
+        // 第1題30分，第2題30分，第3題40分
+        if (index === 0) return 30;
+        if (index === 1) return 30;
+        return 40;
+    } else { // hard
+        // 每題40分
+        return 40;
+    }
+};
+
+// 獲取總滿分
+const getTotalMaxScore = (difficulty: Difficulty): number => {
+    if (difficulty === 'easy') return 100; // 30+30+40
+    return 120; // 40+40+40
+};
+
+// 難度級別配置 - 3題，動態分值
 const DIFFICULTY_LEVELS = {
     easy: {
         label: 'Easy',
@@ -56,27 +73,23 @@ const DIFFICULTY_LEVELS = {
         color: '#4CAF50',
         bgColor: '#E8F5E9',
         icon: '🌱',
-        questionsPerGame: 4,
-        pointsPerQuestion: 25,  // 25 * 4 = 100
-        maxScore: 100,
+        questionsPerGame: 3,
         desc: 'Simple 3-4 word sentences. Focus on basic structure.',
-        features: ['Short sentences', 'Basic word order', '4 Questions']
+        features: ['Short sentences', 'Basic word order', '3 Questions', 'Points: 30/30/40 (Total 100)']
     },
-    medium: {
-        label: 'Medium',
-        badgeText: 'Intermediate',
-        color: '#FF9800',
-        bgColor: '#FFF3E0',
-        icon: '🌳',
-        questionsPerGame: 4,
-        pointsPerQuestion: 30,  // 30 * 4 = 120
-        maxScore: 120,
-        desc: 'Common 4-5 word phrases. Natural daily expressions.',
-        features: ['Moderate length', 'Common phrases', '4 Questions']
+    hard: {
+        label: 'Hard',
+        badgeText: 'Advanced',
+        color: '#F44336',
+        bgColor: '#FFEBEE',
+        icon: '🔥',
+        questionsPerGame: 3,
+        desc: 'Complex sentences and advanced vocabulary.',
+        features: ['Longer sentences', 'Complex grammar', '3 Questions', 'Points: 40/40/40 (Total 120)']
     }
 };
 
-type Difficulty = 'easy' | 'medium';
+type Difficulty = 'easy' | 'hard';
 
 interface WordItem {
     id: string;
@@ -150,7 +163,7 @@ export default function SentenceReorderScreen() {
     // 遊戲狀態
     const [gameState, setGameState] = useState<GameState>({
         currentQuestionIndex: 0,
-        totalQuestions: 4,
+        totalQuestions: 3,
         score: 0,
         words: [],
         feedback: '',
@@ -397,13 +410,12 @@ export default function SentenceReorderScreen() {
         const originalSentence = gameState.currentQuestion.sentence;
 
         if (isCorrect) {
-            // ✅ 正確 - 根據難度獲取不同的每題分數
+            // ✅ 正確 - 根據難度和題目索引獲取分值
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
             setFloatingText({ id: Date.now(), text: 'HIT!', color: '#FFD700' });
 
             const difficulty = gameState.difficulty!;
-            const pointsPerQuestion = DIFFICULTY_LEVELS[difficulty].pointsPerQuestion;
-            const pointsEarned = pointsPerQuestion;
+            const pointsEarned = getPointsForQuestion(difficulty, gameState.currentQuestionIndex);
             const newScore = gameState.score + pointsEarned;
             const newCorrectAnswers = gameState.correctAnswers + 1;
 
@@ -467,7 +479,7 @@ export default function SentenceReorderScreen() {
         } else {
             setGameState({
                 currentQuestionIndex: 0,
-                totalQuestions: 4,
+                totalQuestions: 3,
                 score: 0,
                 words: [],
                 feedback: '',
@@ -515,14 +527,14 @@ export default function SentenceReorderScreen() {
     // 計算滿分百分比 - 根據難度使用不同的滿分
     const getScorePercentage = () => {
         if (!gameState.difficulty) return 0;
-        const maxScore = DIFFICULTY_LEVELS[gameState.difficulty].maxScore;
+        const maxScore = getTotalMaxScore(gameState.difficulty);
         return Math.round((gameState.score / maxScore) * 100);
     };
 
     // 獲取當前難度的滿分
     const getMaxScore = () => {
         if (!gameState.difficulty) return 100;
-        return DIFFICULTY_LEVELS[gameState.difficulty].maxScore;
+        return getTotalMaxScore(gameState.difficulty);
     };
 
     // 獲取得分顏色
@@ -600,6 +612,7 @@ export default function SentenceReorderScreen() {
                     <View style={styles.menuGrid}>
                         {(Object.keys(DIFFICULTY_LEVELS) as Difficulty[]).map((level) => {
                             const config = DIFFICULTY_LEVELS[level];
+                            const maxScore = getTotalMaxScore(level);
                             return (
                                 <TouchableOpacity
                                     key={level}
@@ -626,7 +639,7 @@ export default function SentenceReorderScreen() {
                                         <Text style={styles.diffDesc}>{config.desc}</Text>
                                         <View style={styles.scoreInfoRow}>
                                             <Text style={styles.scoreInfoText}>
-                                                🎯 {config.questionsPerGame} questions • Max score: {config.maxScore}
+                                                🎯 {config.questionsPerGame} questions • Max score: {maxScore}
                                             </Text>
                                         </View>
                                     </View>

@@ -180,6 +180,8 @@ export default function CalculationGame() {
     const warriorScale = useSharedValue(1);
     const godzillaScale = useSharedValue(1);
 
+    const [projectile, setProjectile] = useState<{ id: number, type: 'spear' | 'fire' } | null>(null);
+
     const currentScene = useMemo(() => difficulty ? GAME_SCENES[difficulty] : GAME_SCENES.easy, [difficulty]);
 
     // 动画样式（必须在组件顶层调用，确保 hooks 数量稳定）
@@ -200,6 +202,7 @@ export default function CalculationGame() {
         transform: [{ scale: godzillaScale.value }]
     }));
 
+
     // 啟動計時器
     const startTimer = () => {
         if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
@@ -208,6 +211,7 @@ export default function CalculationGame() {
             setElapsedTime(prev => prev + 1);
         }, 1000);
     };
+
 
     // 停止計時器並記錄時間
     const stopTimerAndRecord = () => {
@@ -231,9 +235,7 @@ export default function CalculationGame() {
         bossY.value = withRepeat(withTiming(-10, { duration: 2000 }), -1, true);
     }, []);
 
-    const animatedBossStyle = useAnimatedStyle(() => ({ transform: [{ translateY: bossY.value }, { scale: bossScale.value }] }));
-    const animatedScreenStyle = useAnimatedStyle(() => ({ transform: [{ translateX: screenShake.value }] }));
-    const animatedPrepStyle = useAnimatedStyle(() => ({ transform: [{ scale: prepScale.value }], opacity: withTiming(prepText ? 1 : 0) }));
+
 
     const generateLocalQuestions = (difficulty: 'easy' | 'medium' | 'hard', count: number) => {
         const questions = [];
