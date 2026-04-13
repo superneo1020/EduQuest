@@ -279,11 +279,15 @@ export default function ProfileScreen() {
                     const gameHistoryResponse = await axios.get(`${getApiBaseUrl()}/api/user/game/score`, {
                         params: { page: 0, size: 50 },
                         headers: { Authorization: `Bearer ${token}` }
+
+
                     });
+                    console.log(gameHistoryResponse);
 
                     setProfileData((prev: any) => ({
                         ...profileResponse.data,
                         userGameScores: gameHistoryResponse.data.content || []
+
                     }));
                 } catch (error) {
                     console.error("無法獲取最新資料", error);
@@ -302,7 +306,7 @@ export default function ProfileScreen() {
         if (gameHistory.length < 3) return 0;
 
         const sortedHistory = [...gameHistory].sort((a, b) =>
-            new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()
+            new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
         );
 
         const totalGames = sortedHistory.length;
@@ -510,7 +514,7 @@ export default function ProfileScreen() {
         }
 
         const daysSinceFirstGame = gameHistory.length > 0 ?
-            Math.ceil((Date.now() - new Date(gameHistory[0].created_at).getTime()) / (1000 * 60 * 60 * 24)) : 0;
+            Math.ceil((Date.now() - new Date(gameHistory[0].createdAt).getTime()) / (1000 * 60 * 60 * 24)) : 0;
         const gamesPerDay = daysSinceFirstGame > 0 ? gameHistory.length / daysSinceFirstGame : 0;
 
         if (gamesPerDay < 0.5 && gameHistory.length < 10) {
@@ -839,7 +843,7 @@ export default function ProfileScreen() {
                     game_name: game.name || 'Unknown Game',
                     score: game.scores || 0,
                     difficulty: game.gameDifficulty || 'MEDIUM',
-                    created_at: game.createdAt
+                    createdAt: game.createdAt
                 }))
             };
 
@@ -973,7 +977,7 @@ export default function ProfileScreen() {
                                 <View style={styles.infoContent}>
                                     <Text style={styles.infoLabel}>Member Since</Text>
                                     <Text style={styles.infoValue}>
-                                        {displayUser?.created_at ? new Date(displayUser.created_at).toLocaleDateString() : 'N/A'}
+                                        {displayUser?.createdAt ? new Date(displayUser.createdAt).toLocaleDateString() : 'N/A'}
                                     </Text>
                                 </View>
                             </View>
