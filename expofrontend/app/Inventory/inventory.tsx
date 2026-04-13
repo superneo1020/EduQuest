@@ -36,21 +36,19 @@ export default function InventoryScreen() {
             const response = await axios.get(`${getApiBaseUrl()}/api/user/item`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            // 後端返回的資料結構是 UserItemDto 數組
-            // 每個元素包含 id, name, type, icon, description, createdAt
-            setUserItems(response.data || []);
-            console.log('Fetched items:', response.data);
+            // 🔥 关键修复：后端返回 { items: [...], total, isEmpty }
+            const items = response.data?.items || [];
+            setUserItems(Array.isArray(items) ? items : []);
+            console.log('Fetched items:', items);
         } catch (error) {
             console.log("Items info not available", error);
+            setUserItems([]);
         } finally {
             setLoading(false);
         }
     };
 
-    // 獲取物品的實際資料（處理可能的巢狀結構）
     const getItemData = (item: any) => {
-        // 如果 item 有 item 屬性（巢狀結構），使用 item.item
-        // 否則直接使用 item
         const itemData = item.item || item;
         return {
             id: itemData?.id,
@@ -64,21 +62,18 @@ export default function InventoryScreen() {
     };
 
     const getItemIcon = (itemType: string, itemIcon?: string) => {
-        // 減小圖標大小，讓它不填滿整個容器
-        const iconProps = { size: 28, color: '#FFF' };  // 從 32 改為 28
+        const iconProps = { size: 28, color: '#FFF' };
 
-        // 如果是頭像類型，使用 AvatarIconRenderer
         if (itemType === 'AVATAR') {
             return (
                 <AvatarIconRenderer
                     iconName={itemIcon || 'default'}
-                    size={28}  // 從 32 改為 28
+                    size={28}
                     color="#FFF"
                 />
             );
         }
 
-        // 根據物品類型顯示不同圖標
         const typeMap: { [key: string]: any } = {
             'TROPHY': <Trophy {...iconProps} color="#FFD700" />,
             'STAR': <Star {...iconProps} color="#FFD700" />,
@@ -133,7 +128,6 @@ export default function InventoryScreen() {
             'BACKGROUND': { color: '#4CAF50', label: 'COMMON' },
             'BADGE': { color: '#FF9800', label: 'RARE' },
         };
-
         return rarities[itemType] || { color: '#4CAF50', label: 'COMMON' };
     };
 
@@ -217,7 +211,6 @@ export default function InventoryScreen() {
                     );
                 })}
 
-                {/* Empty slots for game-like appearance */}
                 {[...Array(Math.max(0, 12 - userItems.length))].map((_, index) => (
                     <View key={`empty-${index}`} style={styles.emptySlot}>
                         <View style={styles.emptySlotInner} />
@@ -231,7 +224,6 @@ export default function InventoryScreen() {
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="light-content" />
 
-            {/* Header with backpack design */}
             <View style={styles.headerContainer}>
                 <View style={styles.backpackHeader}>
                     <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -247,7 +239,6 @@ export default function InventoryScreen() {
                 </View>
             </View>
 
-            {/* Inventory content */}
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
                 <View style={styles.inventoryContainer}>
                     <View style={styles.inventoryHeader}>
@@ -259,7 +250,6 @@ export default function InventoryScreen() {
                 </View>
             </ScrollView>
 
-            {/* Hover Tooltip for Desktop/Web */}
             {Platform.OS === 'web' && hoveredItem && (
                 <View style={[
                     styles.hoverTooltip,
@@ -289,7 +279,6 @@ export default function InventoryScreen() {
                 </View>
             )}
 
-            {/* Item Detail Modal */}
             <Modal
                 visible={showItemDetail}
                 transparent={true}
@@ -347,14 +336,14 @@ const styles = StyleSheet.create({
         paddingHorizontal: 5,
     },
     itemSlot: {
-        width: (width - 40) / 3,  // 稍微增大寬度
+        width: (width - 40) / 3,
         marginBottom: 20,
         alignItems: 'center',
         position: 'relative',
     },
     itemBackground: {
-        width: 90,  // 固定寬度，不依賴百分比
-        height: 90, // 固定高度
+        width: 90,
+        height: 90,
         borderRadius: 20,
         borderWidth: 3,
         borderColor: '#FFF',
@@ -429,9 +418,6 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-
-    // 修改圖標大小
-
     container: {
         flex: 1,
         backgroundColor: '#87CEEB',
@@ -502,7 +488,6 @@ const styles = StyleSheet.create({
         color: '#636E72',
         fontWeight: '600',
     },
-
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',
@@ -657,7 +642,6 @@ const styles = StyleSheet.create({
         borderWidth: 3,
         borderColor: '#4CAF50',
     },
-    // 修改 tooltip 相關樣式
     tooltipItemBackground: {
         width: 50,
         height: 50,
