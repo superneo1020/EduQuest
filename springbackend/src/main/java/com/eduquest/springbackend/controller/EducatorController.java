@@ -47,13 +47,14 @@ public class EducatorController {
     }
 
     @DeleteMapping("/class/{courseId}")
-    @PreAuthorize("@courseSecurity.isCourseExists(#courseId)")
+    @PreAuthorize("@courseSecurity.isCourseExists(#courseId) && " +
+            "@courseSecurity.isCourseSameSchool(#courseId)")
     public ResponseEntity<OperationResult> removeCourse(@PathVariable Long courseId) {
         return ResponseEntity.ok(educatorService.removeCourse(courseId));
     }
 
     @PostMapping("/class/member")
-    @PreAuthorize("@userSecurity.isSameSchool(#request.userId) && " +
+    @PreAuthorize("@userSecurity.isBothUserSameSchool(#request.userId) && " +
             "!@courseMemberSecurity.isCourseMember(#request.courseId, #request.userId) && " +
             "@courseMemberSecurity.isCourseMember(#request.courseId) && " +
             "@courseMemberSecurity.isCourseStaff(#request.courseId)")

@@ -38,7 +38,7 @@ public class UserSecurity {
         return isSame;
     }
 
-    public boolean isSameSchool(Long targetUserId) {
+    public boolean isBothUserSameSchool(Long targetUserId) {
         AppUserDetails user = getCurrentUser();
         if (user == null) return false;
 
