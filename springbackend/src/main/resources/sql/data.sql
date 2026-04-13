@@ -55,8 +55,10 @@ VALUES
     ('student1', 'student1@eduquestacademy.edu', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha', (SELECT id FROM schools WHERE name = 'EduQuest Academy'), 'NONE'),
     ('student2', 'student2@eduquestacademy.edu', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha', (SELECT id FROM schools WHERE name = 'EduQuest Academy'), 'NONE'),
     ('student3', 'student3@eduquestacademy.edu', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha', (SELECT id FROM schools WHERE name = 'EduQuest Academy'), 'NONE'),
-    ('teacher1', 'teacher1@techinstitute.edu', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha', (SELECT id FROM schools WHERE name = 'Tech Institute'), 'APPROVED'),
-    ('admin', 'admin@sciencehigh.edu', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha', (SELECT id FROM schools WHERE name = 'Science High School'), 'ADMIN')
+    ('tech_teacher1', 'tech_teacher1@techinstitute.edu', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha', (SELECT id FROM schools WHERE name = 'Tech Institute'), 'APPROVED'),
+    ('admin', 'admin@sciencehigh.edu', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha', (SELECT id FROM schools WHERE name = 'Science High School'), 'ADMIN'),
+    ('edu_teacher1', 'tech_teacher1@eduquestacademy.edu', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha', (SELECT id FROM schools WHERE name = 'EduQuest Academy'), 'APPROVED'),
+    ('edu_teacher2', 'teacher2@eduquestacademy.edu', '$2a$10$HyMhvyf0xdf0px.QHjSKG.FOiH.PA5WaNSWBE4YfA3flUArZtvjha', (SELECT id FROM schools WHERE name = 'EduQuest Academy'), 'APPROVED')
 ON CONFLICT (username) DO NOTHING;
 ;;;
 
@@ -66,11 +68,15 @@ VALUES
     ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM roles WHERE name = 'ROLE_USER')),
     ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM roles WHERE name = 'ROLE_USER')),
     ((SELECT id FROM users WHERE username = 'student3'), (SELECT id FROM roles WHERE name = 'ROLE_USER')),
-    ((SELECT id FROM users WHERE username = 'teacher1'), (SELECT id FROM roles WHERE name = 'ROLE_USER')),
-    ((SELECT id FROM users WHERE username = 'teacher1'), (SELECT id FROM roles WHERE name = 'ROLE_EDUCATOR')),
+    ((SELECT id FROM users WHERE username = 'tech_teacher1'), (SELECT id FROM roles WHERE name = 'ROLE_USER')),
+    ((SELECT id FROM users WHERE username = 'tech_teacher1'), (SELECT id FROM roles WHERE name = 'ROLE_EDUCATOR')),
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM roles WHERE name = 'ROLE_USER')),
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM roles WHERE name = 'ROLE_EDUCATOR')),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM roles WHERE name = 'ROLE_ADMIN'))
+    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM roles WHERE name = 'ROLE_ADMIN')),
+    ((SELECT id FROM users WHERE username = 'edu_teacher1'), (SELECT id FROM roles WHERE name = 'ROLE_USER')),
+    ((SELECT id FROM users WHERE username = 'edu_teacher1'), (SELECT id FROM roles WHERE name = 'ROLE_EDUCATOR')),
+    ((SELECT id FROM users WHERE username = 'edu_teacher2'), (SELECT id FROM roles WHERE name = 'ROLE_USER')),
+    ((SELECT id FROM users WHERE username = 'edu_teacher2'), (SELECT id FROM roles WHERE name = 'ROLE_EDUCATOR'))
 ON CONFLICT (user_id, role_id) DO NOTHING;
 ;;;
 
@@ -80,24 +86,30 @@ VALUES
     -- EduQuest Academy - Grade 10A
     ((SELECT id FROM classes WHERE grade = 'G10' AND suffix = 'A'), (SELECT id FROM users WHERE username = 'student1'), 'STUDENT'),
     ((SELECT id FROM classes WHERE grade = 'G10' AND suffix = 'A'), (SELECT id FROM users WHERE username = 'student2'), 'STUDENT'),
+    ((SELECT id FROM classes WHERE grade = 'G10' AND suffix = 'A'), (SELECT id FROM users WHERE username = 'edu_teacher1'), 'HEAD_TEACHER'),
+    ((SELECT id FROM classes WHERE grade = 'G10' AND suffix = 'A'), (SELECT id FROM users WHERE username = 'edu_teacher2'), 'ASSISTANT'),
 
     -- EduQuest Academy - Grade 10B
     ((SELECT id FROM classes WHERE grade = 'G10' AND suffix = 'B'), (SELECT id FROM users WHERE username = 'student3'), 'STUDENT'),
+    ((SELECT id FROM classes WHERE grade = 'G10' AND suffix = 'B'), (SELECT id FROM users WHERE username = 'edu_teacher1'), 'HEAD_TEACHER'),
+    ((SELECT id FROM classes WHERE grade = 'G10' AND suffix = 'B'), (SELECT id FROM users WHERE username = 'edu_teacher2'), 'TEACHER'),
 
     -- EduQuest Academy - Grade 11A
-    ((SELECT id FROM classes WHERE grade = 'G11' AND suffix = 'A'), (SELECT id FROM users WHERE username = 'teacher1'), 'TEACHER'),
+    ((SELECT id FROM classes WHERE grade = 'G11' AND suffix = 'A'), (SELECT id FROM users WHERE username = 'edu_teacher1'), 'HEAD_TEACHER'),
+    ((SELECT id FROM classes WHERE grade = 'G11' AND suffix = 'A'), (SELECT id FROM users WHERE username = 'edu_teacher2'), 'ASSISTANT'),
 
     -- EduQuest Academy - Grade 12A
-    ((SELECT id FROM classes WHERE grade = 'G12' AND suffix = 'A'), (SELECT id FROM users WHERE username = 'admin'), 'ASSISTANT'),
+    ((SELECT id FROM classes WHERE grade = 'G12' AND suffix = 'A'), (SELECT id FROM users WHERE username = 'edu_teacher1'), 'HEAD_TEACHER'),
+    ((SELECT id FROM classes WHERE grade = 'G12' AND suffix = 'A'), (SELECT id FROM users WHERE username = 'edu_teacher2'), 'TEACHER'),
 
-    -- Tech Institute - Year 4A
-    ((SELECT id FROM classes WHERE grade = 'Y4' AND suffix = 'C'), (SELECT id FROM users WHERE username = 'teacher1'), 'TEACHER'),
+    -- Tech Institute - Year 4C
+    ((SELECT id FROM classes WHERE grade = 'Y4' AND suffix = 'C'), (SELECT id FROM users WHERE username = 'tech_teacher1'), 'HEAD_TEACHER'),
 
     -- Tech Institute - Year 5A
-    ((SELECT id FROM classes WHERE grade = 'Y5' AND suffix = 'A'), (SELECT id FROM users WHERE username = 'teacher1'), 'TEACHER'),
+    ((SELECT id FROM classes WHERE grade = 'Y5' AND suffix = 'A'), (SELECT id FROM users WHERE username = 'tech_teacher1'), 'HEAD_TEACHER'),
 
     -- Science High School - Level 9A
-    ((SELECT id FROM classes WHERE grade = 'L9' AND suffix = 'A'), (SELECT id FROM users WHERE username = 'admin'), 'ASSISTANT')
+    ((SELECT id FROM classes WHERE grade = 'L9' AND suffix = 'A'), (SELECT id FROM users WHERE username = 'admin'), 'HEAD_TEACHER')
 ON CONFLICT (class_id, user_id) DO NOTHING;
 ;;;
 
@@ -155,8 +167,8 @@ ON CONFLICT (name) DO NOTHING;
 INSERT INTO activities (creator_id, name, start_date, end_date, score, icon, description)
 VALUES
     -- Teacher1 activities
-    ((SELECT id FROM users WHERE username = 'teacher1'), 'Math Challenge Week', CURRENT_DATE, CURRENT_DATE + INTERVAL '7 days', 50, 'Calculator', 'Complete math problems and earn points!'),
-    ((SELECT id FROM users WHERE username = 'teacher1'), 'Science Fair Project', CURRENT_DATE + INTERVAL '1 day', CURRENT_DATE + INTERVAL '14 days', 100, 'Microscope', 'Create and present a science project'),
+    ((SELECT id FROM users WHERE username = 'tech_teacher1'), 'Math Challenge Week', CURRENT_DATE, CURRENT_DATE + INTERVAL '7 days', 50, 'Calculator', 'Complete math problems and earn points!'),
+    ((SELECT id FROM users WHERE username = 'tech_teacher1'), 'Science Fair Project', CURRENT_DATE + INTERVAL '1 day', CURRENT_DATE + INTERVAL '14 days', 100, 'Microscope', 'Create and present a science project'),
 
     -- Admin activities
     ((SELECT id FROM users WHERE username = 'admin'), 'Reading Marathon', CURRENT_DATE, CURRENT_DATE + INTERVAL '30 days', 75, 'Book', 'Read books and complete comprehension quizzes'),
@@ -182,13 +194,13 @@ VALUES
 
     -- Coding Competition participants
     ((SELECT id FROM activities WHERE name = 'Coding Competition'), (SELECT id FROM users WHERE username = 'student1'), 'coder', FALSE),
-    ((SELECT id FROM activities WHERE name = 'Coding Competition'), (SELECT id FROM users WHERE username = 'teacher1'), 'mentor', TRUE)
+    ((SELECT id FROM activities WHERE name = 'Coding Competition'), (SELECT id FROM users WHERE username = 'tech_teacher1'), 'mentor', TRUE)
 ON CONFLICT (activity_id, user_id) DO NOTHING;
 ;;;
 
 -- Delete only the default user game scores that will be reinserted
 DELETE FROM user_game_scores
-WHERE user_id IN (SELECT id FROM users WHERE username IN ('student1', 'student2', 'student3', 'teacher1', 'admin'));
+WHERE user_id IN (SELECT id FROM users WHERE username IN ('student1', 'student2', 'student3', 'tech_teacher1', 'admin'));
 ;;;
 -- Insert sample game scores for leaderboard display
 INSERT INTO user_game_scores (user_id, game_id, scores)
@@ -207,7 +219,7 @@ VALUES
     ((SELECT id FROM users WHERE username = 'student3'), (SELECT id FROM games WHERE name = 'Word matching game'), 70),
 
     -- Sentence Reordering Game (HARD)
-    ((SELECT id FROM users WHERE username = 'teacher1'), (SELECT id FROM games WHERE name = 'Sentence Reordering Game'), 95),
+    ((SELECT id FROM users WHERE username = 'tech_teacher1'), (SELECT id FROM games WHERE name = 'Sentence Reordering Game'), 95),
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM games WHERE name = 'Sentence Reordering Game'), 88),
 
     -- Animal sorting game (EASY)
@@ -218,7 +230,7 @@ ON CONFLICT DO NOTHING;
 
 -- Delete only the default user missions that will be reinserted
 DELETE FROM user_missions
-WHERE user_id IN (SELECT id FROM users WHERE username IN ('student1', 'student2', 'student3', 'teacher1', 'admin'));
+WHERE user_id IN (SELECT id FROM users WHERE username IN ('student1', 'student2', 'student3', 'tech_teacher1', 'admin'));
 ;;;
 -- Sample user mission completions
 INSERT INTO user_missions (user_id, mission_id, completed)
@@ -243,13 +255,13 @@ VALUES
     ((SELECT id FROM users WHERE username = 'student3'), (SELECT id FROM missions WHERE name = 'Daily Reader'), FALSE),
 
     -- Teacher1 completed missions (demonstration purposes)
-    ((SELECT id FROM users WHERE username = 'teacher1'), (SELECT id FROM missions WHERE name = 'Daily Reader'), TRUE),
-    ((SELECT id FROM users WHERE username = 'teacher1'), (SELECT id FROM missions WHERE name = 'Daily Math Practice'), TRUE),
-    ((SELECT id FROM users WHERE username = 'teacher1'), (SELECT id FROM missions WHERE name = 'Science Fact Finder'), TRUE),
-    ((SELECT id FROM users WHERE username = 'teacher1'), (SELECT id FROM missions WHERE name = 'Word Collector'), TRUE),
-    ((SELECT id FROM users WHERE username = 'teacher1'), (SELECT id FROM missions WHERE name = 'Math Marathon'), TRUE),
-    ((SELECT id FROM users WHERE username = 'teacher1'), (SELECT id FROM missions WHERE name = 'Science Explorer'), TRUE),
-    ((SELECT id FROM users WHERE username = 'teacher1'), (SELECT id FROM missions WHERE name = 'Grammar Guru'), TRUE),
+    ((SELECT id FROM users WHERE username = 'tech_teacher1'), (SELECT id FROM missions WHERE name = 'Daily Reader'), TRUE),
+    ((SELECT id FROM users WHERE username = 'tech_teacher1'), (SELECT id FROM missions WHERE name = 'Daily Math Practice'), TRUE),
+    ((SELECT id FROM users WHERE username = 'tech_teacher1'), (SELECT id FROM missions WHERE name = 'Science Fact Finder'), TRUE),
+    ((SELECT id FROM users WHERE username = 'tech_teacher1'), (SELECT id FROM missions WHERE name = 'Word Collector'), TRUE),
+    ((SELECT id FROM users WHERE username = 'tech_teacher1'), (SELECT id FROM missions WHERE name = 'Math Marathon'), TRUE),
+    ((SELECT id FROM users WHERE username = 'tech_teacher1'), (SELECT id FROM missions WHERE name = 'Science Explorer'), TRUE),
+    ((SELECT id FROM users WHERE username = 'tech_teacher1'), (SELECT id FROM missions WHERE name = 'Grammar Guru'), TRUE),
 
     -- Admin completed missions (all missions)
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Daily Reader'), TRUE),
@@ -296,7 +308,7 @@ ON CONFLICT (name) DO NOTHING;
 
 -- Delete only the default user items that will be reinserted
 DELETE FROM user_items
-WHERE user_id IN (SELECT id FROM users WHERE username IN ('student1', 'student2', 'student3', 'teacher1', 'admin'));
+WHERE user_id IN (SELECT id FROM users WHERE username IN ('student1', 'student2', 'student3', 'tech_teacher1', 'admin'));
 ;;;
 -- Insert sample user items
 INSERT INTO user_items (user_id, item_id)
@@ -313,9 +325,9 @@ VALUES
     -- No items for student3 (beginner user)
 
     -- Teacher1 items
-    ((SELECT id FROM users WHERE username = 'teacher1'), (SELECT id FROM items WHERE name = 'Superhero Cape')),
-    ((SELECT id FROM users WHERE username = 'teacher1'), (SELECT id FROM items WHERE name = 'Forest Adventure')),
-    ((SELECT id FROM users WHERE username = 'teacher1'), (SELECT id FROM items WHERE name = 'Reading Star')),
+    ((SELECT id FROM users WHERE username = 'tech_teacher1'), (SELECT id FROM items WHERE name = 'Superhero Cape')),
+    ((SELECT id FROM users WHERE username = 'tech_teacher1'), (SELECT id FROM items WHERE name = 'Forest Adventure')),
+    ((SELECT id FROM users WHERE username = 'tech_teacher1'), (SELECT id FROM items WHERE name = 'Reading Star')),
 
     -- Admin items (all items for demonstration)
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM items WHERE name = 'Cool Hat')),
@@ -351,7 +363,7 @@ VALUES
      '{"theme": "DARK", "sound": false, "notifications": true}',
      '{"show_email": true, "show_school": false, "show_class": true}'),
 
-    ((SELECT id FROM users WHERE username = 'teacher1'), 'ProfTech',
+    ((SELECT id FROM users WHERE username = 'tech_teacher1'), 'ProfTech',
      '{"AVATAR": 2, "BADGE": 10, "BACKGROUND": 7}',
      '{"theme": "LIGHT", "sound": true, "notifications": true}',
      '{"show_email": true, "show_school": true, "show_class": true}'),

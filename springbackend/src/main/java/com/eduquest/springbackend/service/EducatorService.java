@@ -85,7 +85,7 @@ public class EducatorService {
 
         AppUser user = userRepo.getReferenceById(userId);
 
-        CourseMember courseMember = new CourseMember(savedCourse, user, RoleInClass.TEACHER);
+        CourseMember courseMember = new CourseMember(savedCourse, user, RoleInClass.HEAD_TEACHER);
         CourseMember savedCourseMember = courseMemberRepo.save(courseMember);
         CourseMemberResponse courseMemberResponse = new CourseMemberResponse(
                 savedCourseMember.getId(),
@@ -128,10 +128,10 @@ public class EducatorService {
                 new ResponseStatusException(HttpStatus.NOT_FOUND, "Course Member not found"));
 
         // If changing a TEACHER to something else, check if they are the last captain of the ship
-        if (courseMember.getRoleInClass() == RoleInClass.TEACHER && req.role() != RoleInClass.TEACHER) {
-            if (courseMemberRepo.countByCourseIdAndRoleInClass(req.courseId(), RoleInClass.TEACHER) <= 1) {
+        if (courseMember.getRoleInClass() == RoleInClass.HEAD_TEACHER && req.role() != RoleInClass.HEAD_TEACHER) {
+            if (courseMemberRepo.countByCourseIdAndRoleInClass(req.courseId(), RoleInClass.HEAD_TEACHER) <= 1) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Cannot demote yourself: You are the last teacher in this class.");
+                        "Cannot demote yourself: You are the last headteacher in this class.");
             }
         }
 
