@@ -11,6 +11,9 @@ VALUES
 ON CONFLICT (name) DO NOTHING;
 ;;;
 
+-- Delete only the default classes that will be reinserted
+DELETE FROM classes
+WHERE school_id IN (SELECT id FROM schools WHERE name IN ('EduQuest Academy', 'Tech Institute', 'Science High School'));
 -- Insert sample classes (using new schema with grade, suffix, and generated full_name)
 INSERT INTO classes (school_id, grade, suffix, academic_year)
 VALUES

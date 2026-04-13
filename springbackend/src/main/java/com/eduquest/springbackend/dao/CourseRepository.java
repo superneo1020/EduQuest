@@ -11,6 +11,7 @@ import java.util.List;
 
 public interface CourseRepository extends JpaRepository<Course, Long> {
     boolean existsBySchoolAndGradeAndSuffixAndAcademicYear(School school, String grade, String suffix, String academicYear);
+    boolean existsByIdAndSchoolId(Long courseId, Long schoolId);
 
     @Query("SELECT new com.eduquest.springbackend.dto.CourseDto(" +
             "c.id, c.school.id, c.grade, c.suffix, c.academicYear, c.createdAt, c.updatedAt" +
