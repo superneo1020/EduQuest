@@ -131,13 +131,69 @@ class EducatorService {
         return this.handleResponse(response, 'createClass');
     }
 
+    // educatorService.ts - 修改 deleteClass 方法
+    // educatorService.ts - 修改 deleteClass 方法，添加更多日誌
+    // educatorService.ts - 修改 deleteClass 方法
     async deleteClass(classId: number): Promise<OperationResult> {
         const headers = await this.getAuthHeaders();
-        const response = await fetch(`${getApiBaseUrl()}/api/educator/class/${classId}`, {
+        const url = `${getApiBaseUrl()}/api/educator/class/${classId}`;
+        console.log(`EducatorService: Deleting class at: ${url}`);
+
+        const response = await fetch(url, {
             method: 'DELETE',
             headers,
         });
-        return this.handleResponse(response, 'deleteClass');
+
+        console.log(`EducatorService: deleteClass - Response status:`, response.status);
+
+        if (!response.ok) {
+            let errorMessage = `Failed to delete class`;
+            try {
+                const errorData = await response.json();
+                console.log(`EducatorService: deleteClass - Error response:`, errorData);
+                errorMessage = errorData.message || errorData.error || errorMessage;
+            } catch (e) {
+                console.log(`EducatorService: deleteClass - Could not parse error response`);
+            }
+
+            if (response.status === 403) {
+                throw new Error('Permission denied: You must be in the same school as this class to delete it');
+            } else if (response.status === 404) {
+                throw new Error('Class not found');
+            }
+
+            throw new Error(`${errorMessage} (Status: ${response.status})`);
+        }
+
+        // 成功時解析響應
+        let data;
+        try {
+            data = await response.json();
+            console.log(`EducatorService: deleteClass - Success:`, data);
+        } catch (e) {
+            console.log(`EducatorService: deleteClass - Success (empty response)`);
+            data = { message: 'Class deleted successfully', error: false };
+        }
+
+        return data;
+    }
+
+    // educatorService.ts - 如果有獲取學校信息的方法，也需要修改
+
+    async getUserSchool(): Promise<string> {
+        const headers = await this.getAuthHeaders();
+        const response = await fetch(`${getApiBaseUrl()}/api/user/school`, {
+            headers,
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to get user school: ${response.status}`);
+        }
+
+        // 返回純文字而不是 JSON
+        const schoolName = await response.text();
+        console.log(`EducatorService: User school:`, schoolName);
+        return schoolName;
     }
 
     // Student Management
