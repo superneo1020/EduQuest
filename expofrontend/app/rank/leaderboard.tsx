@@ -7,6 +7,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/src/auth/AuthContext';
 import { getApiBaseUrl } from '@/src/api/client';
+import { Trophy, Crown, Medal, Star, User, Award } from 'lucide-react-native';
 
 const GAME_CATEGORIES = [
     "Speed Calculation",
@@ -16,9 +17,30 @@ const GAME_CATEGORIES = [
     "Sentence Reordering Game",
     "Animal sorting game",
     "Human Body Puzzle"
-].sort(); // Sort alphabetically for consistent ordering
+].sort();
 
 const { width } = Dimensions.get('window');
+
+// 隨機頭像顏色（根據用戶名生成固定顏色）
+const getAvatarColor = (username: string) => {
+    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'];
+    let hash = 0;
+    for (let i = 0; i < username.length; i++) {
+        hash = username.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
+};
+
+// 頭像組件
+const Avatar = ({ username, size = 50 }: { username: string; size?: number }) => {
+    const backgroundColor = getAvatarColor(username);
+    const initial = username.charAt(0).toUpperCase();
+    return (
+        <View style={[styles.avatarContainer, { width: size, height: size, borderRadius: size / 2, backgroundColor }]}>
+            <Text style={[styles.avatarText, { fontSize: size * 0.45 }]}>{initial}</Text>
+        </View>
+    );
+};
 
 const LeaderboardScreen = () => {
     const { token } = useAuth();
@@ -30,9 +52,8 @@ const LeaderboardScreen = () => {
     const [hasNext, setHasNext] = useState(true);
 
     const fetchLeaderboard = async (pageNum: number, isRefreshing = false, targetGame = selectedGame) => {
-
         if (!hasNext && !isRefreshing && pageNum !== 0) return;
-
+        setLoading(true);
         try {
             const authToken = token || await AsyncStorage.getItem('auth_token');
             const response = await axios.get(
@@ -42,18 +63,13 @@ const LeaderboardScreen = () => {
                     headers: { 'Authorization': `Bearer ${authToken}` }
                 }
             );
-
             const { slice: userGameScores, hasNext: nextExists } = response.data;
-            
-            // Ensure userGameScores is always an array
             const scoresArray = Array.isArray(userGameScores) ? userGameScores : [];
-
             if (isRefreshing || pageNum === 0) {
                 setData(scoresArray);
             } else {
-                setData(prev => [...(prev || []), ...scoresArray]);
+                setData(prev => [...prev, ...scoresArray]);
             }
-
             setHasNext(nextExists);
             setPage(pageNum);
         } catch (error) {
@@ -64,21 +80,17 @@ const LeaderboardScreen = () => {
         }
     };
 
-    // When switching game categories
     useEffect(() => {
-        setData([]); // 清空舊數據
+        setData([]);
         setHasNext(true);
         setPage(0);
-        setLoading(true);
         fetchLeaderboard(0, true, selectedGame);
     }, [selectedGame]);
-
 
     const onRefresh = useCallback(() => {
         setRefreshing(true);
         fetchLeaderboard(0, true, selectedGame);
     }, [selectedGame]);
-
 
     const handleLoadMore = () => {
         if (hasNext && !loading && !refreshing) {
@@ -86,28 +98,50 @@ const LeaderboardScreen = () => {
         }
     };
 
-    // Render the ranking of each row
+    const getRankIcon = (rank: number) => {
+        if (rank === 1) return <Crown size={22} color="#FFD700" />;
+        if (rank === 2) return <Medal size={22} color="#C0C0C0" />;
+        if (rank === 3) return <Medal size={22} color="#CD7F32" />;
+        return null;
+    };
+
+    const getRankStyle = (rank: number) => {
+        if (rank === 1) return styles.rankFirst;
+        if (rank === 2) return styles.rankSecond;
+        if (rank === 3) return styles.rankThird;
+        return styles.rankNormal;
+    };
+
     const renderItem = ({ item, index }: { item: any; index: number }) => {
         const rank = index + 1;
         const isTopThree = rank <= 3;
-        const trophyColors = ['#FFD700', '#C0C0C0', '#CD7F32'];
+        const rankIcon = getRankIcon(rank);
+        const rankStyle = getRankStyle(rank);
+        const score = item.scores || 0;
 
         return (
             <View style={[styles.rankItem, isTopThree && styles.topThreeItem]}>
-                <View style={[styles.rankBadge, isTopThree && { backgroundColor: trophyColors[index] }]}>
-                    <Text style={styles.rankText}>{rank}</Text>
+                {/* 排名區塊 */}
+                <View style={[styles.rankBadge, rankStyle]}>
+                    {rankIcon ? rankIcon : <Text style={styles.rankText}>{rank}</Text>}
                 </View>
 
+                {/* 頭像 */}
+                <Avatar username={item.username} size={50} />
+
+                {/* 玩家資訊 */}
                 <View style={styles.userInfo}>
                     <Text style={styles.username}>{item.username}</Text>
-                    <Text style={styles.date}>{new Date(item.createdAt).toLocaleDateString()}</Text>
+                    <View style={styles.levelBadge}>
+                        <Star size={12} color="#FFA500" />
+                        <Text style={styles.levelText}>Lv.{Math.floor(score / 100) + 1}</Text>
+                    </View>
                 </View>
 
+                {/* 分數 */}
                 <View style={styles.scoreContainer}>
-                    <Text style={[styles.score, isTopThree && { color: trophyColors[index] }]}>
-                        {item.scores}
-                    </Text>
-                    <Text style={styles.ptText}>pt</Text>
+                    <Text style={[styles.score, isTopThree && { color: '#FFA500' }]}>{score}</Text>
+                    <Text style={styles.ptText}>分</Text>
                 </View>
             </View>
         );
@@ -115,8 +149,10 @@ const LeaderboardScreen = () => {
 
     return (
         <View style={styles.container}>
-            <Text style={styles.mainTitle}>Leaderboard</Text>
-
+            <View style={styles.header}>
+                <Text style={styles.mainTitle}>🏆 排行榜</Text>
+                <Text style={styles.subTitle}>看看誰是最強學習者！</Text>
+            </View>
 
             <View style={styles.selectorWrapper}>
                 <ScrollView
@@ -137,7 +173,7 @@ const LeaderboardScreen = () => {
                                 styles.categoryText,
                                 selectedGame === game && styles.categoryTextActive
                             ]}>
-                                {game}
+                                {game.replace(/([A-Z])/g, ' $1').trim()}
                             </Text>
                         </TouchableOpacity>
                     ))}
@@ -152,57 +188,62 @@ const LeaderboardScreen = () => {
                 onEndReachedThreshold={0.2}
                 contentContainerStyle={styles.listContent}
                 refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#4CAF50']} />
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#FF6B6B']} />
                 }
                 ListEmptyComponent={
-                    !loading ? <Text style={styles.emptyText}>There are currently no records to challenge.</Text> : null
+                    !loading ? <Text style={styles.emptyText}>✨ 還沒有挑戰記錄，快去闖關吧 ✨</Text> : null
                 }
                 ListFooterComponent={
-                    hasNext && loading ? <ActivityIndicator style={{ margin: 20 }} color="#4CAF50" /> : <View style={{ height: 40 }} />
+                    hasNext && loading ? <ActivityIndicator style={{ margin: 20 }} color="#FF6B6B" /> : <View style={{ height: 40 }} />
                 }
             />
         </View>
     );
 };
 
-
-
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#F0F2F5' },
-    mainTitle: {
-        fontSize: 26, fontWeight: '800', color: '#1A1A1A',
-        textAlign: 'center', marginTop: 60, marginBottom: 20
-    },
-    selectorWrapper: { backgroundColor: '#F0F2F5', paddingBottom: 10 },
-    categoryScroll: { paddingHorizontal: 16 },
+    container: { flex: 1, backgroundColor: '#FFF9F0' },
+    header: { alignItems: 'center', marginTop: 60, marginBottom: 16 },
+    mainTitle: { fontSize: 32, fontWeight: '900', color: '#FF6B6B', textShadowColor: '#FFD700', textShadowOffset: { width: 2, height: 2 }, textShadowRadius: 4 },
+    subTitle: { fontSize: 14, color: '#FFA500', fontWeight: '600', marginTop: 4 },
+    selectorWrapper: { marginBottom: 12, paddingVertical: 8, backgroundColor: '#FFF9F0' },
+    categoryScroll: { paddingHorizontal: 16, gap: 12 },
     categoryButton: {
-        paddingHorizontal: 20, paddingVertical: 10, borderRadius: 25,
-        backgroundColor: '#E0E0E0', marginRight: 10, elevation: 1
+        paddingHorizontal: 20, paddingVertical: 10, borderRadius: 30,
+        backgroundColor: '#FFE4B5', marginRight: 12, elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4
     },
-    categoryButtonActive: { backgroundColor: '#4CAF50' },
-    categoryText: { color: '#666', fontWeight: 'bold' },
-    categoryTextActive: { color: '#FFF' },
-
-    listContent: { padding: 16 },
+    categoryButtonActive: { backgroundColor: '#FF6B6B', transform: [{ scale: 1.02 }] },
+    categoryText: { color: '#FF8C42', fontWeight: 'bold', fontSize: 14 },
+    categoryTextActive: { color: '#FFF', fontWeight: 'bold' },
+    listContent: { paddingHorizontal: 16, paddingBottom: 20 },
     rankItem: {
         flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF',
-        padding: 16, borderRadius: 16, marginBottom: 12,
-        shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05, shadowRadius: 8, elevation: 3
+        padding: 12, borderRadius: 20, marginBottom: 12,
+        shadowColor: '#000', shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.1, shadowRadius: 6, elevation: 4,
+        borderWidth: 1, borderColor: '#FFE0B5'
     },
-    topThreeItem: { borderLeftWidth: 5, borderLeftColor: '#4CAF50' },
+    topThreeItem: { backgroundColor: '#FFF5E6', borderLeftWidth: 8, borderLeftColor: '#FFD700' },
     rankBadge: {
-        width: 32, height: 32, borderRadius: 16, backgroundColor: '#BDC3C7',
-        justifyContent: 'center', alignItems: 'center', marginRight: 16
+        width: 48, height: 48, borderRadius: 24,
+        justifyContent: 'center', alignItems: 'center', marginRight: 12,
+        backgroundColor: '#F0F0F0'
     },
-    rankText: { color: '#FFF', fontWeight: '800', fontSize: 14 },
-    userInfo: { flex: 1 },
-    username: { fontSize: 16, fontWeight: '700', color: '#2C3E50' },
-    date: { fontSize: 12, color: '#95A5A6', marginTop: 2 },
-    scoreContainer: { flexDirection: 'row', alignItems: 'baseline' },
-    score: { fontSize: 22, fontWeight: '900', color: '#2C3E50' },
-    ptText: { fontSize: 12, color: '#95A5A6', marginLeft: 2, fontWeight: '600' },
-    emptyText: { textAlign: 'center', marginTop: 100, color: '#95A5A6', fontSize: 16 }
+    rankFirst: { backgroundColor: '#FFD700', borderWidth: 2, borderColor: '#FFF' },
+    rankSecond: { backgroundColor: '#C0C0C0', borderWidth: 2, borderColor: '#FFF' },
+    rankThird: { backgroundColor: '#CD7F32', borderWidth: 2, borderColor: '#FFF' },
+    rankNormal: { backgroundColor: '#FFE4C4' },
+    rankText: { color: '#FFF', fontWeight: '800', fontSize: 20 },
+    avatarContainer: { justifyContent: 'center', alignItems: 'center', marginRight: 12, borderWidth: 2, borderColor: '#FFF', shadowColor: '#000', shadowRadius: 4, shadowOpacity: 0.2 },
+    avatarText: { color: '#FFF', fontWeight: 'bold' },
+    userInfo: { flex: 1, justifyContent: 'center' },
+    username: { fontSize: 16, fontWeight: '800', color: '#4A2E1A' },
+    levelBadge: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 4 },
+    levelText: { fontSize: 11, color: '#FFA500', fontWeight: '600' },
+    scoreContainer: { flexDirection: 'row', alignItems: 'baseline', marginLeft: 8 },
+    score: { fontSize: 24, fontWeight: '900', color: '#FF8C42' },
+    ptText: { fontSize: 12, color: '#FFA500', marginLeft: 2, fontWeight: '600' },
+    emptyText: { textAlign: 'center', marginTop: 60, fontSize: 16, color: '#FFA500', fontWeight: '600' }
 });
 
 export default LeaderboardScreen;

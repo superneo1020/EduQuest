@@ -121,13 +121,19 @@ VALUES
     ('MATH', 'AI Math Adventure', 'HARD', 'Robot', '結合人工智慧的高難度數學邏輯冒險。'),
 
     -- English Games
-    ('ENGLISH', 'Listening multiple choice questions', 'MEDIUM', 'Headphones', '聽力多選題測試，增強英文聽解能力。'),
-    ('ENGLISH', 'Word matching game', 'EASY', 'ABC', '經典單字配對，幫助記住基礎字彙。'),
-    ('ENGLISH', 'Sentence Reordering Game', 'HARD', 'Book', '句子重組挑戰，強化英文語法結構。'),
+    ('ENGLISH', 'Listening Game', 'MEDIUM', 'Headphones', '聽力多選題測試，增強英文聽解能力。'),
+    ('ENGLISH', 'Writing Game', 'EASY', 'ABC', '經典單字配對，幫助記住基礎字彙。'),
+    ('ENGLISH', 'Sentence Reorder', 'HARD', 'Book', '句子重組挑戰，強化英文語法結構。'),
 
     -- Science Games
-    ('SCIENCE', 'Animal sorting game', 'EASY', 'Leaf', '根據特徵對不同動物進行分類。'),
-    ('SCIENCE', 'Human Body Puzzle', 'MEDIUM', 'Brain', '人體器官拼圖，學習解剖學基礎知識。')
+    ('SCIENCE', 'Animal Catcher', 'EASY', 'Leaf', '根據特徵對不同動物進行分類。'),
+    ('SCIENCE', 'Animal Classification', 'MEDIUM', 'Brain', '人體器官拼圖，學習解剖學基礎知識。'),
+    ('SCIENCE', 'Body Parts Matching', 'MEDIUM', 'Body', '人體系統遊戲索引，探索人體各個系統。'),
+    ('SCIENCE', 'Human organs', 'EASY', 'Paw', '動物遊戲索引，學習各種動物知識。'),
+
+    -- Chinese Games
+    ('CHINESE', 'ChineseGame', 'MEDIUM', 'Character', '中文學習遊戲，提升中文能力。'),
+    ('CHINESE', 'ChineseSentenceGame', 'HARD', 'Scroll', '中文句子遊戲，學習中文句型結構。')
 ON CONFLICT (name) DO UPDATE SET
                                  type = EXCLUDED.type,
                                  difficulty = EXCLUDED.difficulty,
