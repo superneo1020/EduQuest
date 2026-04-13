@@ -32,7 +32,7 @@ public class CourseSecurity {
     public boolean isCourseExists(Long courseId) {
         boolean isExists = courseRepo.existsById(courseId);
         if (!isExists) {
-            logger.info("Course not found");
+            logger.info("Access Denied: Course not found");
         }
         return isExists;
     }
@@ -47,7 +47,7 @@ public class CourseSecurity {
         boolean isSame = courseRepo.existsByIdAndSchoolId(courseId, userSchoolId);
 
         if (!isSame) {
-            logger.info("User {} is not in the same school as course {}", user.getId(), courseId);
+            logger.info("Access Denied: User {} is not in the same school as course {}", user.getId(), courseId);
         }
 
         return isSame;

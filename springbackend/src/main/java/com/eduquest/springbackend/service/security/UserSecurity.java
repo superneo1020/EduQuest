@@ -32,7 +32,7 @@ public class UserSecurity {
 
         boolean isSame = user.getId().equals(targetUserId);
         if (!isSame) {
-            logger.info("User {} is not the target user {} itself", user.getId(), targetUserId);
+            logger.info("Access Denied: User {} is not the target user {} itself", user.getId(), targetUserId);
         }
 
         return isSame;
@@ -51,7 +51,7 @@ public class UserSecurity {
         boolean isSame = userRepo.existsByIdAndSchoolId(targetUserId, schoolId);
 
         if (!isSame) {
-            logger.info("User {} is not in the same school as user {}", user.getId(), targetUserId);
+            logger.info("Access Denied: User {} is not in the same school as user {}", user.getId(), targetUserId);
         }
 
         return isSame;
