@@ -16,6 +16,7 @@ public record UserGameScoreRequest(
         @Min(value = 0)
         Integer scores,
 
+        @NotNull
         Map<String, Object> metadata
 ) {
 }
