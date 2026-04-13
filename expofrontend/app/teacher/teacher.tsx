@@ -113,24 +113,22 @@ export default function TeacherDashboard() {
         try {
             setLoading(true);
 
-            // Load classes from backend (這個端點工作正常)
-            const classesData = await educatorService.getClasses();
+            // Load classes from backend - 提取 items 數組
+            const classesResponse = await educatorService.getClasses();
+            // 從 DetailedListResponse 中提取 items 數組
+            const classesData = classesResponse.items || [];
             setClasses(classesData);
-            console.log('Loaded classes:', classesData);
+            console.log('Loaded classes:', classesData.length);
 
             // Load school members - 如果失敗，使用空陣列而不是拋出錯誤
             try {
                 const membersData = await educatorService.getSchoolMembers();
-                console.log('Loaded school members:', membersData);
-                // 將學校成員轉換為學生格式（如果需要）
-                // 注意：getSchoolMembers 返回的是 UserMiniDto，不是完整的學生數據
-                // 可能需要額外的 API 調用來獲取學生的詳細表現數據
+                console.log('Loaded school members:', membersData.length);
             } catch (memberError) {
                 console.error('Failed to load school members:', memberError);
-                // 不顯示錯誤，因為這個功能可能是可選的
             }
 
-            // Load students (使用 mock 數據，因為後端可能沒有專門的學生列表 API)
+            // Load students
             await loadStudents();
 
         } catch (error) {
@@ -140,7 +138,6 @@ export default function TeacherDashboard() {
             setLoading(false);
         }
     };
-
     const loadStudents = async () => {
         try {
             // TODO: Replace with actual API call to get students
@@ -414,11 +411,11 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
 
                 {/* Navigation Tabs */}
                 <View style={styles.tabContainer}>
-                    {['dashboard', 'students', 'classes', 'analytics'].map((tab) => (
+                    {(['dashboard', 'students', 'classes', 'analytics'] as const).map((tab) => (
                         <TouchableOpacity
                             key={tab}
                             style={[styles.tab, currentView === tab && styles.tabActive]}
-                            onPress={() => setCurrentView(tab as any)}
+                            onPress={() => setCurrentView(tab)}
                         >
                             {tab === 'dashboard' && <TrendingUp size={18} color={currentView === tab ? '#6C5CE7' : '#666'} />}
                             {tab === 'students' && <Users size={18} color={currentView === tab ? '#6C5CE7' : '#666'} />}

@@ -2,6 +2,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getApiBaseUrl } from '@/src/api/client';
 import { Alert } from 'react-native';
+import { isTokenExpired } from '@/src/utils/authUtils';
+import { DetailedListResponse } from './ApiListHandler';
 
 export interface Course {
     id: number;
@@ -9,7 +11,9 @@ export interface Course {
     suffix: string;
     academicYear: string;
     createdAt: string;
-    updatedAt: string;
+    // schoolId might not exist in backend response, make it optional
+    schoolId?: number;
+    updatedAt?: string;
 }
 
 export interface CourseRequest {
@@ -41,13 +45,25 @@ export interface CourseMemberRequest {
 
 export interface OperationResult {
     message: string;
-    error: boolean;
+    warning: boolean;
 }
 
 class EducatorService {
     private async getAuthHeaders() {
         const token = await AsyncStorage.getItem('auth_token');
         console.log('EducatorService: Token exists:', !!token);
+
+        if (!token) {
+            throw new Error('No authentication token found');
+        }
+
+        if (isTokenExpired(token)) {
+            console.log('EducatorService: Token is expired');
+            await AsyncStorage.removeItem('auth_token');
+            await AsyncStorage.removeItem('auth_user');
+            throw new Error('Authentication token has expired. Please log in again.');
+        }
+
         return {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`,
@@ -62,32 +78,47 @@ class EducatorService {
             try {
                 const errorData = await response.json();
                 console.log(`EducatorService: ${endpoint} - Error response:`, errorData);
-                errorMessage = errorData.message || errorData.error || errorMessage;
+                errorMessage = errorData.message || errorData.warning || errorMessage;
             } catch (e) {
                 console.log(`EducatorService: ${endpoint} - Could not parse error response`);
             }
 
             if (response.status === 401) {
                 console.log('EducatorService: Authentication failed - token may be expired');
-                // 可以觸發重新登入
             }
 
             throw new Error(`${errorMessage}`);
         }
 
         const data = await response.json();
-        console.log(`EducatorService: ${endpoint} - Success`);
+        console.log(`EducatorService: ${endpoint} - Response data:`, JSON.stringify(data, null, 2));
         return data;
     }
 
-    // Class Management
-    async getClasses(): Promise<Course[]> {
+    // Class Management - UPDATED to return DetailedListResponse
+    async getClasses(): Promise<DetailedListResponse<Course>> {
         const headers = await this.getAuthHeaders();
-        const response = await fetch(`${getApiBaseUrl()}/api/educator/class`, {
+        const response = await fetch(`${getApiBaseUrl()}/api/user/class`, {
             headers,
         });
         const data = await this.handleResponse(response, 'getClasses');
-        return data.data || [];
+
+        // Handle backend response structure: { items: [...], total: 11, isEmpty: false }
+        if (data.items && Array.isArray(data.items)) {
+            return {
+                items: data.items,
+                total: data.total || data.items.length,
+                isEmpty: data.isEmpty || data.items.length === 0
+            };
+        }
+
+        // Fallback for array response
+        const items = Array.isArray(data) ? data : [];
+        return {
+            items,
+            total: items.length,
+            isEmpty: items.length === 0
+        };
     }
 
     async createClass(classData: CourseRequest): Promise<any> {
@@ -100,40 +131,117 @@ class EducatorService {
         return this.handleResponse(response, 'createClass');
     }
 
+    // educatorService.ts - 修改 deleteClass 方法
+    // educatorService.ts - 修改 deleteClass 方法，添加更多日誌
+    // educatorService.ts - 修改 deleteClass 方法
+    // educatorService.ts - 修改 deleteClass 方法
     async deleteClass(classId: number): Promise<OperationResult> {
+        console.log(`EducatorService.deleteClass: Starting deletion for class ${classId}`);
+
         const headers = await this.getAuthHeaders();
-        const response = await fetch(`${getApiBaseUrl()}/api/educator/class/${classId}`, {
+        const url = `${getApiBaseUrl()}/api/educator/class/${classId}`;
+        console.log(`EducatorService.deleteClass: URL: ${url}`);
+
+        const response = await fetch(url, {
             method: 'DELETE',
             headers,
         });
-        return this.handleResponse(response, 'deleteClass');
+
+        console.log(`EducatorService.deleteClass: Response status: ${response.status}`);
+
+        if (!response.ok) {
+            let errorMessage = `Failed to delete class`;
+            try {
+                const errorData = await response.json();
+                console.log(`EducatorService.deleteClass: Error response:`, errorData);
+                errorMessage = errorData.message || errorData.warning || errorMessage;
+            } catch (e) {
+                console.log(`EducatorService.deleteClass: Could not parse error response`);
+            }
+
+            if (response.status === 403) {
+                throw new Error('Permission denied: You must be in the same school as this class to delete it');
+            } else if (response.status === 404) {
+                throw new Error('Class not found');
+            }
+
+            throw new Error(`${errorMessage} (Status: ${response.status})`);
+        }
+
+        // 成功時解析響應
+        let data;
+        try {
+            const responseText = await response.text();
+            console.log(`EducatorService.deleteClass: Response body:`, responseText);
+            data = responseText ? JSON.parse(responseText) : { message: 'Class deleted successfully', error: false };
+        } catch (e) {
+            console.log(`EducatorService.deleteClass: Could not parse response`);
+            data = { message: 'Class deleted successfully', warning: false };
+        }
+
+        console.log(`EducatorService.deleteClass: Success, returning:`, data);
+        return data;
     }
 
-    // Student Management - 使用正確的 API 端點
+    // educatorService.ts - 如果有獲取學校信息的方法，也需要修改
+
+    async getUserSchool(): Promise<string> {
+        const headers = await this.getAuthHeaders();
+        const response = await fetch(`${getApiBaseUrl()}/api/user/school`, {
+            headers,
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to get user school: ${response.status}`);
+        }
+
+        // 返回純文字而不是 JSON
+        const schoolName = await response.text();
+        console.log(`EducatorService: User school:`, schoolName);
+        return schoolName;
+    }
+
+    // Student Management
     async getSchoolMembers(page: number = 0, size: number = 20): Promise<UserMini[]> {
         const headers = await this.getAuthHeaders();
         const url = `${getApiBaseUrl()}/api/educator/school/members?page=${page}&size=${size}`;
         console.log('EducatorService: Fetching school members from:', url);
 
-        const response = await fetch(url, {
-            headers,
-        });
+        try {
+            const response = await fetch(url, {
+                headers,
+            });
 
-        const data = await this.handleResponse(response, 'getSchoolMembers');
-        // 根據後端返回的結構解析數據
-        // 後端返回 UtilPageResponse，包含 content 陣列
-        return data.content || data.data || [];
+            if (!response.ok) {
+                console.warn(`EducatorService: getSchoolMembers failed with status ${response.status}`);
+                return [];
+            }
+
+            const data = await response.json();
+            return data.content || data.data || [];
+        } catch (error) {
+            console.warn('EducatorService: getSchoolMembers error:', error);
+            return [];
+        }
     }
 
+    // educatorService.ts - 修改 getClassMembers 方法
+    // educatorService.ts - 確保 getClassMembers 正確處理響應
     async getClassMembers(classId: number): Promise<CourseMember[]> {
         const headers = await this.getAuthHeaders();
         const response = await fetch(`${getApiBaseUrl()}/api/user/class/${classId}/members`, {
             headers,
         });
         const data = await this.handleResponse(response, 'getClassMembers');
-        return data.data || [];
-    }
 
+        // 後端返回格式: { items: [...], total: 2, isEmpty: false }
+        if (data.items && Array.isArray(data.items)) {
+            return data.items;
+        }
+
+        // 備用：直接返回 data 或空陣列
+        return data.data || data || [];
+    }
     async addStudentToClass(request: CourseMemberRequest): Promise<CourseMember> {
         const headers = await this.getAuthHeaders();
         const response = await fetch(`${getApiBaseUrl()}/api/educator/class/member`, {
@@ -142,6 +250,15 @@ class EducatorService {
             body: JSON.stringify(request),
         });
         return this.handleResponse(response, 'addStudentToClass');
+    }
+
+    async ensureTeacherAsMember(courseId: number): Promise<CourseMember> {
+        const headers = await this.getAuthHeaders();
+        const response = await fetch(`${getApiBaseUrl()}/api/educator/class/${courseId}/member/ensure-teacher`, {
+            method: 'POST',
+            headers,
+        });
+        return this.handleResponse(response, 'ensureTeacherAsMember');
     }
 
     async updateStudentRole(request: CourseMemberRequest): Promise<OperationResult> {
@@ -154,13 +271,31 @@ class EducatorService {
         return this.handleResponse(response, 'updateStudentRole');
     }
 
+    // educatorService.ts - 添加 removeStudentFromClass 方法（已經存在，確認一下）
     async removeStudentFromClass(classId: number, userId: number): Promise<OperationResult> {
         const headers = await this.getAuthHeaders();
-        const response = await fetch(`${getApiBaseUrl()}/api/educator/class/${classId}/member/${userId}`, {
+        const url = `${getApiBaseUrl()}/api/educator/class/${classId}/member/${userId}`;
+        console.log(`EducatorService: Removing student ${userId} from class ${classId} at: ${url}`);
+
+        const response = await fetch(url, {
             method: 'DELETE',
             headers,
         });
-        return this.handleResponse(response, 'removeStudentFromClass');
+
+        if (!response.ok) {
+            let errorMessage = `Failed to remove student from class`;
+            try {
+                const errorData = await response.json();
+                errorMessage = errorData.message || errorData.error || errorMessage;
+            } catch (e) {
+                console.log('Could not parse error response');
+            }
+            throw new Error(errorMessage);
+        }
+
+        const data = await response.json();
+        console.log(`EducatorService: Remove student result:`, data);
+        return data;
     }
 
     async getUserRoleInClass(classId: number): Promise<string> {
@@ -168,8 +303,25 @@ class EducatorService {
         const response = await fetch(`${getApiBaseUrl()}/api/user/class/${classId}/role`, {
             headers,
         });
-        const data = await this.handleResponse(response, 'getUserRoleInClass');
-        return data;
+        
+        console.log(`EducatorService: getUserRoleInClass - Response status:`, response.status);
+
+        if (!response.ok) {
+            let errorMessage = `Failed to fetch user role in class`;
+            try {
+                const errorData = await response.json();
+                console.log(`EducatorService: getUserRoleInClass - Error response:`, errorData);
+                errorMessage = errorData.message || errorData.error || errorMessage;
+            } catch (e) {
+                console.log(`EducatorService: getUserRoleInClass - Could not parse error response`);
+            }
+            throw new Error(`${errorMessage}`);
+        }
+
+        // Handle plain text response (backend returns "TEACHER", "STUDENT", etc.)
+        const data = await response.text();
+        console.log(`EducatorService: getUserRoleInClass - Response data:`, data);
+        return data.trim();
     }
 }
 
