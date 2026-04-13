@@ -41,9 +41,7 @@ export default function ProfileScreen() {
     const [showNicknameModal, setShowNicknameModal] = useState(false);
     const [newNickname, setNewNickname] = useState('');
 
-    // School change state
-    const [showSchoolModal, setShowSchoolModal] = useState(false);
-    const [newSchool, setNewSchool] = useState('');
+    // School change state (removed editing ability, only display)
     const [currentSchool, setCurrentSchool] = useState('');
 
     // Items state
@@ -74,12 +72,11 @@ export default function ProfileScreen() {
     const [showTrends, setShowTrends] = useState(false);
     const [showSuggestions, setShowSuggestions] = useState(false);
 
-    // Edit Profile states
+    // Edit Profile states (removed school and avatar)
     const [showEditProfileModal, setShowEditProfileModal] = useState(false);
     const [editFormData, setEditFormData] = useState({
         nickname: '',
         email: '',
-        school: '',
         password: '',
         confirmPassword: '',
         oldPassword: ''
@@ -100,9 +97,13 @@ export default function ProfileScreen() {
             const itemsResponse = await axios.get(`${getApiBaseUrl()}/api/user/item`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            const userItemsList = Array.isArray(itemsResponse.data) ? itemsResponse.data : [];
+            const rawItems = itemsResponse.data?.items || itemsResponse.data || [];
+            const userItemsList = Array.isArray(rawItems) ? rawItems : [];
 
-            let existingItem = userItemsList.find((item: any) => item.name === avatarName);
+            let existingItem = userItemsList.find((item: any) => {
+                const itemData = item.item || item;
+                return itemData.name === avatarName;
+            });
 
             if (!existingItem) {
                 try {
@@ -120,8 +121,12 @@ export default function ProfileScreen() {
                     const newItemsResponse = await axios.get(`${getApiBaseUrl()}/api/user/item`, {
                         headers: { Authorization: `Bearer ${token}` }
                     });
-                    const newUserItemsList = newItemsResponse.data || [];
-                    existingItem = newUserItemsList.find((item: any) => item.name === avatarName);
+                    const newRawItems = newItemsResponse.data?.items || newItemsResponse.data || [];
+                    const newUserItemsList = Array.isArray(newRawItems) ? newRawItems : [];
+                    existingItem = newUserItemsList.find((item: any) => {
+                        const itemData = item.item || item;
+                        return itemData.name === avatarName;
+                    });
 
                     setUserItems(newUserItemsList);
                 } catch (itemError: any) {
@@ -136,9 +141,10 @@ export default function ProfileScreen() {
                 return;
             }
 
+            const itemData = existingItem.item || existingItem;
             const updateData = {
                 equippedItems: {
-                    "AVATAR": existingItem.id
+                    "AVATAR": itemData.id
                 }
             };
 
@@ -205,10 +211,17 @@ export default function ProfileScreen() {
                         const itemsResponse = await axios.get(`${getApiBaseUrl()}/api/user/item`, {
                             headers: { Authorization: `Bearer ${token}` }
                         });
-                        const userItemsList = itemsResponse.data || [];
-                        const equippedItem = userItemsList.find((item: any) => item.id === equippedAvatarId);
-                        if (equippedItem && equippedItem.icon) {
-                            setSelectedAvatar(equippedItem.icon);
+                        const rawItems = itemsResponse.data?.items || itemsResponse.data || [];
+                        const userItemsList = Array.isArray(rawItems) ? rawItems : [];
+                        const equippedItem = userItemsList.find((item: any) => {
+                            const itemData = item.item || item;
+                            return itemData.id === equippedAvatarId;
+                        });
+                        if (equippedItem) {
+                            const itemData = equippedItem.item || equippedItem;
+                            if (itemData.icon) {
+                                setSelectedAvatar(itemData.icon);
+                            }
                         }
                     } else {
                         setSelectedAvatar('default');
@@ -227,7 +240,8 @@ export default function ProfileScreen() {
                         const itemsResponse = await axios.get(`${getApiBaseUrl()}/api/user/item`, {
                             headers: { Authorization: `Bearer ${token}` }
                         });
-                        setUserItems(Array.isArray(itemsResponse.data) ? itemsResponse.data : []);
+                        const items = itemsResponse.data?.items || itemsResponse.data || [];
+                        setUserItems(Array.isArray(items) ? items : []);
                     } catch (error) {
                         console.log("Items info not available");
                         setUserItems([]);
@@ -524,10 +538,14 @@ export default function ProfileScreen() {
     }, [gameHistory]);
 
     const processedUserItems = useMemo(() => {
-        return userItems.map(item => ({
-            ...item,
-            icon: item.icon?.replace(/\.png$/i, '') || item.icon
-        }));
+        return userItems.map(item => {
+            const itemData = item.item || item;  // Extract nested item data
+            return {
+                ...itemData,
+                icon: itemData.icon?.replace(/\.png$/i, '') || itemData.icon,
+                quantity: item.quantity || itemData.quantity || 1
+            };
+        });
     }, [userItems]);
 
     const getDifficultyColor = (diff: string) => {
@@ -674,7 +692,6 @@ export default function ProfileScreen() {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
-            // 手動合併 email，確保 UI 即時更新
             setProfileData((prev: any) => ({
                 ...profileResponse.data,
                 email: newEmail.trim() || profileResponse.data.email,
@@ -719,57 +736,6 @@ export default function ProfileScreen() {
         }
     };
 
-    const handleChangeSchool = async () => {
-        if (!newSchool || newSchool.trim() === '') {
-            setModalMessage({ text: 'Please enter a school name', type: 'error' });
-            showErrorWithFeedback('Please enter a school name', 'School Change - Empty Field');
-            return;
-        }
-
-        if (newSchool.trim().length > 100) {
-            setModalMessage({ text: 'School name must be 100 characters or less', type: 'error' });
-            showErrorWithFeedback('School name must be 100 characters or less', 'School Change - Too Long');
-            return;
-        }
-
-        try {
-            setLoading(true);
-            await axios.post(`${getApiBaseUrl()}/api/user/school`,
-                { newSchoolName: newSchool.trim() },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
-
-            Alert.alert('Success', 'School updated successfully');
-            setModalMessage({ text: 'School updated successfully!', type: 'success' });
-            setTimeout(() => {
-                setShowSchoolModal(false);
-                setModalMessage({ text: '', type: '' });
-            }, 1500);
-            setNewSchool('');
-            setCurrentSchool(newSchool.trim());
-        } catch (error: any) {
-            console.error('School change error:', error);
-            let errorMessage = 'Failed to update school';
-            let context = 'School Change - Unknown Error';
-
-            if (error.response?.data?.message) {
-                errorMessage = error.response.data.message;
-                context = `School Change - Server: ${error.response.data.message}`;
-            } else if (error.response?.status === 400) {
-                errorMessage = 'Invalid school name format';
-                context = 'School Change - Validation Error';
-            } else if (error.response?.status === 401) {
-                errorMessage = 'Authentication failed. Please log in again';
-                context = 'School Change - Auth Error';
-            }
-
-            setModalMessage({ text: errorMessage, type: 'error' });
-            showErrorWithFeedback(errorMessage, context);
-        } finally {
-            setLoading(false);
-        }
-    };
-
     const handleChangeNickname = async () => {
         if (!newNickname || newNickname.trim() === '') {
             setModalMessage({ text: 'Please enter a nickname', type: 'error' });
@@ -795,7 +761,6 @@ export default function ProfileScreen() {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
-            // 手動合併 nickname，確保 UI 即時更新
             setProfileData((prev: any) => ({
                 ...profileResponse.data,
                 nickname: newNickname.trim() || profileResponse.data.nickname,
@@ -908,11 +873,15 @@ export default function ProfileScreen() {
                     <View style={styles.profileCover}>
                         <View style={styles.profileCoverGradient} />
                         <View style={styles.profileContent}>
-                            <View style={styles.avatarContainer}>
+                            <TouchableOpacity
+                                style={styles.avatarContainer}
+                                onPress={() => setShowAvatarModal(true)}
+                                activeOpacity={0.7}
+                            >
                                 <View style={styles.avatarCircle}>
                                     {renderAvatar(selectedAvatar, 50)}
                                 </View>
-                            </View>
+                            </TouchableOpacity>
                             <View style={styles.profileInfo}>
                                 <Text style={styles.userName}>{displayUser?.nickname || displayUser?.username || 'Learner'}</Text>
                                 <Text style={styles.userTitle}>🎓 Learning Explorer</Text>
@@ -1038,9 +1007,6 @@ export default function ProfileScreen() {
                         <ChevronRight size={20} color="#BDC3C7" />
                     </TouchableOpacity>
                 </View>
-
-                {/* Personal Achievements Section */}
-
 
                 {/* Learning Progress Section */}
                 <View style={styles.learningProgressContainer}>
@@ -1403,66 +1369,6 @@ export default function ProfileScreen() {
                                 onPress={() => setShowItemsModal(false)}
                             >
                                 <Text style={styles.confirmBtnText}>Close</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </View>
-            </Modal>
-
-            {/* School Change Modal */}
-            <Modal
-                visible={showSchoolModal}
-                transparent={true}
-                animationType="slide"
-                onRequestClose={() => setShowSchoolModal(false)}
-            >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Change School</Text>
-                        <View style={styles.inputContainer}>
-                            <Text style={styles.inputLabel}>New School Name</Text>
-                            <TextInput
-                                style={styles.textInput}
-                                placeholder="Enter your school name"
-                                value={newSchool}
-                                onChangeText={setNewSchool}
-                                maxLength={100}
-                            />
-                        </View>
-                        {modalMessage.text ? (
-                            <Text style={{
-                                color: modalMessage.type === 'success' ? '#4CAF50' : '#FF4757',
-                                textAlign: 'center',
-                                marginBottom: 15,
-                                fontSize: 16,
-                                fontWeight: '600'
-                            }}>
-                                {modalMessage.text}
-                            </Text>
-                        ) : null}
-                        <View style={styles.modalButtons}>
-                            <TouchableOpacity
-                                style={[styles.modalBtn, styles.cancelBtn]}
-                                onPress={() => {
-                                    setShowSchoolModal(false);
-                                    setNewSchool('');
-                                }}
-                            >
-                                <Text style={styles.cancelBtnText}>Cancel</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[styles.modalBtn, styles.confirmBtn]}
-                                onPress={handleChangeSchool}
-                                disabled={loading}
-                            >
-                                {loading ? (
-                                    <View style={styles.loadingContainer}>
-                                        <ActivityIndicator size="small" color="#FFF" />
-                                        <Text style={[styles.confirmBtnText, { marginLeft: 8 }]}>Updating...</Text>
-                                    </View>
-                                ) : (
-                                    <Text style={styles.confirmBtnText}>Update</Text>
-                                )}
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -1840,7 +1746,7 @@ export default function ProfileScreen() {
                 </View>
             </Modal>
 
-            {/* Edit Profile Modal */}
+            {/* Edit Profile Modal - only nickname, email, password fields */}
             <Modal
                 visible={showEditProfileModal}
                 transparent={true}
@@ -1853,18 +1759,6 @@ export default function ProfileScreen() {
                         <ScrollView style={{ flex: 1, maxHeight: 400 }}>
                             <View style={styles.editSection}>
                                 <Text style={styles.editSectionTitle}>👤 Personal Information</Text>
-                                <View style={styles.inputGroup}>
-                                    <Text style={styles.inputLabel}>Avatar</Text>
-                                    <TouchableOpacity
-                                        style={styles.avatarSelector}
-                                        onPress={() => setShowAvatarModal(true)}
-                                    >
-                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                            {renderAvatar(selectedAvatar, 40)}
-                                            <Text style={styles.changeAvatarText}>Change Avatar</Text>
-                                        </View>
-                                    </TouchableOpacity>
-                                </View>
                                 <View style={styles.inputGroup}>
                                     <Text style={styles.inputLabel}>Nickname</Text>
                                     <TextInput
@@ -1925,7 +1819,6 @@ export default function ProfileScreen() {
                                     setEditFormData({
                                         nickname: '',
                                         email: '',
-                                        school: '',
                                         password: '',
                                         confirmPassword: '',
                                         oldPassword: ''
@@ -1938,23 +1831,15 @@ export default function ProfileScreen() {
                                 style={[styles.modalBtn, styles.confirmBtn]}
                                 onPress={async () => {
                                     try {
+                                        // 1. Update nickname (always send current nickname)
                                         const updateData: any = {
                                             nickname: editFormData.nickname || displayUser?.nickname || '',
-                                            equippedItems: {
-                                                AVATAR: (() => {
-                                                    const avatarItem = userItems.find(item => item.icon === selectedAvatar);
-                                                    return avatarItem?.id || null;
-                                                })()
-                                            },
-                                            preferences: {},
-                                            privacySettings: {}
                                         };
+                                        await axios.post(`${getApiBaseUrl()}/api/user/profile`, updateData, {
+                                            headers: { Authorization: `Bearer ${token}` }
+                                        });
 
-                                        await axios.post(`${getApiBaseUrl()}/api/user/profile`,
-                                            updateData,
-                                            { headers: { Authorization: `Bearer ${token}` } }
-                                        );
-
+                                        // 2. Update email if changed
                                         if (editFormData.email && editFormData.email !== displayUser?.email) {
                                             await axios.post(`${getApiBaseUrl()}/api/user/email`,
                                                 { newEmail: editFormData.email.trim() },
@@ -1962,16 +1847,10 @@ export default function ProfileScreen() {
                                             );
                                         }
 
-                                        if (editFormData.school && editFormData.school !== currentSchool) {
-                                            await axios.post(`${getApiBaseUrl()}/api/user/school`,
-                                                { newSchoolName: editFormData.school.trim() },
-                                                { headers: { Authorization: `Bearer ${token}` } }
-                                            );
-                                        }
-
+                                        // 3. Update password if provided
                                         if (editFormData.password && editFormData.password.trim() !== '') {
                                             if (!editFormData.oldPassword || editFormData.oldPassword.trim() === '') {
-                                                Alert.alert('Error', 'Current password is required');
+                                                Alert.alert('Error', 'Current password is required to change password');
                                                 return;
                                             }
                                             if (editFormData.password !== editFormData.confirmPassword) {
@@ -1990,13 +1869,18 @@ export default function ProfileScreen() {
 
                                         Alert.alert('Success', 'Profile updated successfully!');
                                         setShowEditProfileModal(false);
-                                        setEditFormData({ nickname: '', email: '', school: '', password: '', confirmPassword: '' });
+                                        setEditFormData({
+                                            nickname: '',
+                                            email: '',
+                                            password: '',
+                                            confirmPassword: '',
+                                            oldPassword: ''
+                                        });
 
+                                        // Refresh profile data
                                         const profileResponse = await axios.get(`${getApiBaseUrl()}/api/user/profile`, {
                                             headers: { Authorization: `Bearer ${token}` }
                                         });
-
-                                        // 🔧 手動合併 email 與 nickname，確保 UI 即時更新
                                         setProfileData((prev: any) => ({
                                             ...profileResponse.data,
                                             email: editFormData.email?.trim() || profileResponse.data.email,
@@ -2033,555 +1917,54 @@ export default function ProfileScreen() {
     );
 }
 
-// Styles definition omitted for brevity
-// const styles = StyleSheet.create({ ... });
-
+// Styles (unchanged, omitted for brevity - keep existing styles)
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#F8F9FA' },
-
-    // Unified Profile Container
-    unifiedProfileContainer: {
-        marginHorizontal: 20,
-        marginTop: 20,
-    },
-    profileCover: {
-        height: 200,
-        borderRadius: 24,
-        overflow: 'hidden',
-        position: 'relative',
-        elevation: 8,
-        marginBottom: 20,
-    },
-    profileCoverGradient: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: '#4CAF50',
-    },
-    profileContent: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 25,
-        paddingTop: 30,
-    },
-    avatarContainer: {
-        position: 'relative',
-        marginRight: 20,
-    },
-    avatarCircle: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        backgroundColor: 'rgba(255, 255, 255, 0.2)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 3,
-        borderColor: 'rgba(255, 255, 255, 0.3)',
-    },
-    profileInfo: {
-        flex: 1,
-    },
-    userName: {
-        fontSize: 28,
-        fontWeight: '900',
-        color: '#FFF',
-        marginBottom: 4,
-    },
-    profileActions: {
-        flexDirection: 'row',
-        gap: 10,
-    },
-    inventoryBtn: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: 'rgba(255, 255, 255, 0.2)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 2,
-        borderColor: 'rgba(255, 255, 255, 0.3)',
-        position: 'relative',
-    },
-    inventoryBadge: {
-        position: 'absolute',
-        top: -5,
-        right: -5,
-        backgroundColor: '#FF6B6B',
-        borderRadius: 10,
-        minWidth: 18,
-        height: 18,
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 2,
-        borderColor: '#FFF',
-    },
-    inventoryBadgeText: {
-        fontSize: 10,
-        fontWeight: '700',
-        color: '#FFF',
-    },
-    editProfileBtn: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        backgroundColor: 'rgba(255, 255, 255, 0.2)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 2,
-        borderColor: 'rgba(255, 255, 255, 0.3)',
-    },
-
-    // Unified User Information Section
-    unifiedInfoSection: {
-        backgroundColor: '#FFF',
-        borderRadius: 12,
-        padding: 18,
-        marginTop: 20,
-        elevation: 2,
-    },
-    infoSectionTitle: {
-        fontSize: 18,
-        fontWeight: '800',
-        color: '#2D3436',
-        marginBottom: 12,
-    },
-    infoList: {
-        gap: 10,
-    },
-    infoItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#F8F9FA',
-        borderRadius: 8,
-        padding: 12,      // 原來是 10
-        marginVertical: 4,
-    },
-    infoContent: {
-        marginLeft: 12,
-        flex: 1,
-    },
-    infoLabel: {
-        fontSize: 12,
-        color: '#636E72',
-        marginBottom: 2,
-    },
-    infoValue: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: '#2D3436',
-    },
-
-    // Edit Profile Modal Styles
-    editSection: {
-        marginBottom: 20,
-    },
-    editSectionTitle: {
-        fontSize: 16,
-        fontWeight: '800',
-        color: '#2D3436',
-        marginBottom: 12,
-    },
-    inputGroup: {
-        marginBottom: 15,
-    },
-    inputLabel: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#2D3436',
-        marginBottom: 5,
-    },
-    textInput: {
-        backgroundColor: '#F8F9FA',
-        borderRadius: 8,
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        fontSize: 16,
-        color: '#2D3436',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-    },
-    userTitle: {
-        fontSize: 14,
-        color: 'rgba(255, 255, 255, 0.8)',
-        marginBottom: 15,
-    },
-    profileStats: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: 'rgba(255, 255, 255, 0.15)',
-        borderRadius: 16,
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-    },
-    statItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
-        paddingVertical: 4,
-    },
-    statDivider: {
-        width: 1,
-        height: 24,
-        backgroundColor: 'rgba(255, 255, 255, 0.3)',
-        marginHorizontal: 12,
-    },
-    statValue: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: '#FFF',
-        marginLeft: 4,
-    },
-    statLabel: {
-        fontSize: 12,
-        color: 'rgba(255, 255, 255, 0.7)',
-        marginLeft: 4,
-    },
-
-    // Info Cards
-    infoCardsContainer: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 10,
-    },
-    infoCard: {
-        flex: 1,
-        minWidth: '45%',
-        backgroundColor: '#FFF',
-        borderRadius: 16,
-        padding: 15,
-        flexDirection: 'row',
-        alignItems: 'center',
-        elevation: 3,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-    },
-    infoCardContent: {
-        marginLeft: 12,
-        flex: 1,
-    },
-    infoCardLabel: {
-        fontSize: 12,
-        color: '#636E72',
-        marginBottom: 2,
-    },
-    infoCardValue: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: '#2D3436',
-    },
-    statsContainer: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        marginTop: 10 // Reduced from 20 for tighter layout
-    },
-
-    // Achievements Section
-    achievementsContainer: {
-        backgroundColor: '#FFF',
-        marginHorizontal: 20,
-        marginTop: 20,
-        borderRadius: 24,
-        padding: 20,
-        elevation: 2,
-    },
-    achievementsGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 15,
-        marginTop: 15,
-    },
-    achievementCard: {
-        width: '48%',
-        backgroundColor: '#FFF',
-        borderRadius: 12,
-        padding: 15,
-        alignItems: 'center',
-        elevation: 2,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-    },
-    achievementIcon: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
-        backgroundColor: '#FFF',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 12,
-        elevation: 2,
-    },
-    achievementNumber: {
-        fontSize: 22,
-        fontWeight: '900',
-        color: '#2D3436',
-        marginBottom: 4,
-    },
-    achievementLabel: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: '#636E72',
-        marginBottom: 2,
-    },
-    achievementSubLabel: {
-        fontSize: 10,
-        color: '#A0A0A0',
-        textAlign: 'center',
-    },
-
-    // Learning Progress Section
-    learningProgressContainer: {
-        backgroundColor: '#FFF',
-        marginHorizontal: 20,
-        marginTop: 20,
-        borderRadius: 24,
-        padding: 20,
-        elevation: 2,
-    },
-    progressCards: {
-        flexDirection: 'row',
-        gap: 15,
-        marginTop: 15,
-    },
-    progressCard: {
-        flex: 1,
-        backgroundColor: '#F8F9FA',
-        borderRadius: 12,
-        padding: 15,
-        elevation: 2,
-    },
-    progressTitle: {
-        fontSize: 16,
-        fontWeight: '800',
-        color: '#2D3436',
-        marginBottom: 15,
-        textAlign: 'center',
-    },
-    learningStatsList: {
-        gap: 12,
-    },
-    learningStatItem: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        backgroundColor: '#FFF',
-        borderRadius: 12,
-        paddingHorizontal: 15,
-        paddingVertical: 10,
-    },
-    learningStatLabel: {
-        fontSize: 13,
-        color: '#636E72',
-        fontWeight: '600',
-    },
-    learningStatValue: {
-        fontSize: 14,
-        fontWeight: '800',
-        color: '#2D3436',
-    },
-
-    // Profile Settings Section
-    profileSettingsContainer: {
-        backgroundColor: '#FFF',
-        marginHorizontal: 20,
-        marginTop: 20,
-        borderRadius: 24,
-        padding: 20,
-        elevation: 2,
-    },
-    settingsGrid: {
-        gap: 12,
-        marginBottom: 20,
-    },
-    profileSettingCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#F8F9FA',
-        borderRadius: 12,
-        padding: 15,
-        elevation: 2,
-    },
-    settingIconContainer: {
-        width: 45,
-        height: 45,
-        borderRadius: 12,
-        backgroundColor: '#FFF',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 15,
-        elevation: 2,
-    },
-    settingCardContent: {
-        flex: 1,
-    },
-    settingCardTitle: {
-        fontSize: 16,
-        fontWeight: '800',
-        color: '#2D3436',
-        marginBottom: 2,
-    },
-    settingCardValue: {
-        fontSize: 13,
-        color: '#636E72',
-    },
-    accountDetailsCard: {
-        backgroundColor: '#F8F9FA',
-        borderRadius: 12,
-        padding: 15,
-    },
-    accountDetailsTitle: {
-        fontSize: 16,
-        fontWeight: '800',
-        color: '#2D3436',
-        marginBottom: 12,
-    },
-    accountDetailsList: {
-        gap: 8,
-    },
-    accountDetailItem: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        backgroundColor: '#FFF',
-        borderRadius: 12,
-        paddingHorizontal: 15,
-        paddingVertical: 10,
-    },
-    accountDetailLabel: {
-        fontSize: 13,
-        color: '#636E72',
-        fontWeight: '600',
-    },
-    accountDetailValue: {
-        fontSize: 13,
-        fontWeight: '700',
-        color: '#2D3436',
-    },
-
-    // Legacy styles for compatibility
-    statsAndSkillsContainer: {
-        flexDirection: 'row',
-        marginHorizontal: 20,
-        marginTop: 20,
-        justifyContent: 'space-between'
-    },
-    statsColumn: {
-        flex: 1,
-        marginRight: 10
-    },
-    skillsColumn: {
-        flex: 1,
-        marginLeft: 10
-    },
-    radarSection: {
-        marginTop: 10,
-        borderRadius: 24,
-        padding: 12,
-        alignItems: 'center',
-        elevation: 2,
-        flex: 1
-    },
-    sectionTitle: {
-        fontSize: 16,
-        fontWeight: '800',
-        color: '#2D3436',
-        alignSelf: 'flex-start',
-        marginBottom: 10,
-    },
-    statCard: {
-        width: '48%', // Adjusted from 31% to fit in column layout
-        padding: 12, // Reduced from default
-        borderRadius: 20,
-        alignItems: 'center',
-        borderWidth: 1,
-        marginBottom: 8 // Reduced from default
-    },
-    statNumber: {
-        fontSize: 20,
-        fontWeight: '900',
-        color: '#2D3436',
-        marginTop: 8
-    },
-    statTitle: {
-        fontSize: 11,
-        color: '#636E72',
-        fontWeight: '700',
-        marginTop: 2
-    },
-    segmentedControl: {
-        flexDirection: 'row',
-        backgroundColor: '#E2E8F0',
-        marginHorizontal: 20,
-        marginTop: 25,
-        padding: 4,
-        borderRadius: 16,
-    },
-    segmentBtn: {
-        flex: 1,
-        paddingVertical: 10,
-        borderRadius: 12,
-        alignItems: 'center',
-    },
-    activeSegment: {
-        backgroundColor: '#FFF',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-        elevation: 2,
-    },
-    segmentText: {
-        fontSize: 12,
-        fontWeight: '800',
-        color: '#64748B',
-    },
-    activeSegmentText: {
-        color: '#4CAF50',
-    },
-
-    // 列表樣式微調
-    activityList: {
-        marginHorizontal: 20,
-        backgroundColor: '#FFF',
-        borderRadius: 24,
-        paddingHorizontal: 20, // 增加內距
-        paddingVertical: 5,
-        marginTop: 15,
-        elevation: 2
-    },
-    activityCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 18, // 增加高度更舒適
-        borderBottomWidth: 1,
-        borderBottomColor: '#F1F2F6'
-    },
-    scrollContent: {
-        paddingHorizontal: 20,
-        paddingBottom: 20
-    },
-    emailBadge: { flexDirection: 'row', alignItems: 'center', marginTop: 5 },
-    emailText: { fontSize: 14, color: '#636E72', marginLeft: 5 },
-    schoolBadge: { flexDirection: 'row', alignItems: 'center', marginTop: 5 },
-    schoolText: { fontSize: 14, color: '#636E72', marginLeft: 5 },
-    rolesBadge: { flexDirection: 'row', alignItems: 'center', marginTop: 5 },
-    rolesText: { fontSize: 14, color: '#636E72', marginLeft: 5 },
-    tabContainer: { flexDirection: 'row', marginLeft: 25, marginTop: 20, gap: 20 },
-    tabBtn: { paddingBottom: 5, borderBottomWidth: 2, borderBottomColor: 'transparent' },
-    activeTab: { borderBottomColor: '#4CAF50' },
-    tabText: { fontSize: 13, fontWeight: '800', color: '#A0A0A0' },
-    activeTabText: { color: '#4CAF50' },
-
+    unifiedProfileContainer: { marginHorizontal: 20, marginTop: 20 },
+    profileCover: { height: 200, borderRadius: 24, overflow: 'hidden', position: 'relative', elevation: 8, marginBottom: 20 },
+    profileCoverGradient: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#4CAF50' },
+    profileContent: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 25, paddingTop: 30 },
+    avatarContainer: { position: 'relative', marginRight: 20 },
+    avatarCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255, 255, 255, 0.2)', justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: 'rgba(255, 255, 255, 0.3)' },
+    profileInfo: { flex: 1 },
+    userName: { fontSize: 28, fontWeight: '900', color: '#FFF', marginBottom: 4 },
+    userTitle: { fontSize: 14, color: 'rgba(255, 255, 255, 0.8)', marginBottom: 15 },
+    profileStats: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.15)', borderRadius: 16, paddingHorizontal: 16, paddingVertical: 12 },
+    statItem: { flexDirection: 'row', alignItems: 'center', flex: 1, paddingVertical: 4 },
+    statDivider: { width: 1, height: 24, backgroundColor: 'rgba(255, 255, 255, 0.3)', marginHorizontal: 12 },
+    statValue: { fontSize: 16, fontWeight: '700', color: '#FFF', marginLeft: 4 },
+    statLabel: { fontSize: 12, color: 'rgba(255, 255, 255, 0.7)', marginLeft: 4 },
+    profileActions: { flexDirection: 'row', gap: 10 },
+    inventoryBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255, 255, 255, 0.2)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'rgba(255, 255, 255, 0.3)', position: 'relative' },
+    inventoryBadge: { position: 'absolute', top: -5, right: -5, backgroundColor: '#FF6B6B', borderRadius: 10, minWidth: 18, height: 18, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFF' },
+    inventoryBadgeText: { fontSize: 10, fontWeight: '700', color: '#FFF' },
+    editProfileBtn: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255, 255, 255, 0.2)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'rgba(255, 255, 255, 0.3)' },
+    unifiedInfoSection: { backgroundColor: '#FFF', borderRadius: 12, padding: 18, marginTop: 20, elevation: 2 },
+    infoSectionTitle: { fontSize: 18, fontWeight: '800', color: '#2D3436', marginBottom: 12 },
+    infoList: { gap: 10 },
+    infoItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8F9FA', borderRadius: 8, padding: 12, marginVertical: 4 },
+    infoContent: { marginLeft: 12, flex: 1 },
+    infoLabel: { fontSize: 12, color: '#636E72', marginBottom: 2 },
+    infoValue: { fontSize: 14, fontWeight: '700', color: '#2D3436' },
+    enhancedFeaturesContainer: { backgroundColor: '#FFF', marginHorizontal: 20, marginTop: 20, borderRadius: 24, padding: 20, elevation: 2 },
+    featureItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#F1F2F6' },
+    featureContent: { flex: 1, marginLeft: 15 },
+    featureTitle: { fontSize: 16, fontWeight: '800', color: '#2D3436' },
+    featureDescription: { fontSize: 12, color: '#636E72', marginTop: 2 },
+    learningProgressContainer: { backgroundColor: '#FFF', marginHorizontal: 20, marginTop: 20, borderRadius: 24, padding: 20, elevation: 2 },
+    progressCards: { flexDirection: 'row', gap: 15, marginTop: 15 },
+    progressCard: { flex: 1, backgroundColor: '#F8F9FA', borderRadius: 12, padding: 15, elevation: 2 },
+    progressTitle: { fontSize: 16, fontWeight: '800', color: '#2D3436', marginBottom: 15, textAlign: 'center' },
+    radarSection: { marginTop: 10, borderRadius: 24, padding: 12, alignItems: 'center', elevation: 2, flex: 1 },
+    sectionTitle: { fontSize: 16, fontWeight: '800', color: '#2D3436', alignSelf: 'flex-start', marginBottom: 10 },
+    segmentedControl: { flexDirection: 'row', backgroundColor: '#E2E8F0', marginHorizontal: 20, marginTop: 25, padding: 4, borderRadius: 16 },
+    segmentBtn: { flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: 'center' },
+    activeSegment: { backgroundColor: '#FFF', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
+    segmentText: { fontSize: 12, fontWeight: '800', color: '#64748B' },
+    activeSegmentText: { color: '#4CAF50' },
+    activityList: { marginHorizontal: 20, backgroundColor: '#FFF', borderRadius: 24, paddingHorizontal: 20, paddingVertical: 5, marginTop: 15, elevation: 2 },
+    activityCard: { flexDirection: 'row', alignItems: 'center', paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: '#F1F2F6' },
+    scrollContent: { paddingHorizontal: 20, paddingBottom: 20 },
     gameIconBg: { width: 42, height: 42, borderRadius: 12, backgroundColor: '#F8F9FA', justifyContent: 'center', alignItems: 'center' },
     activityName: { fontSize: 15, fontWeight: '800', color: '#2D3436' },
     row: { flexDirection: 'row', alignItems: 'center' },
@@ -2594,439 +1977,65 @@ const styles = StyleSheet.create({
     logoutBtn: { margin: 20, padding: 15, backgroundColor: '#FFF', borderRadius: 20, alignItems: 'center' },
     logoutText: { color: '#FF4757', fontWeight: '800' },
     emptyText: { textAlign: 'center', padding: 20, color: '#BDC3C7' },
-
-    // Settings styles
-    settingsContainer: {
-        backgroundColor: '#FFF',
-        marginHorizontal: 20,
-        marginTop: 20,
-        borderRadius: 24,
-        padding: 20,
-        elevation: 2,
-    },
-    settingItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 15,
-        borderBottomWidth: 1,
-        borderBottomColor: '#F1F2F6',
-    },
-    settingContent: {
-        flex: 1,
-        marginLeft: 15,
-    },
-    settingTitle: {
-        fontSize: 16,
-        fontWeight: '800',
-        color: '#2D3436',
-    },
-    settingDescription: {
-        fontSize: 12,
-        color: '#636E72',
-        marginTop: 2,
-    },
-
-    // Modal styles
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    modalContent: {
-        backgroundColor: '#FFF',
-        borderRadius: 24,
-        padding: 25,
-        width: '85%',
-        maxWidth: 400,
-    },
-    modalTitle: {
-        fontSize: 20,
-        fontWeight: '900',
-        color: '#2D3436',
-        marginBottom: 20,
-        textAlign: 'center',
-    },
-    inputContainer: {
-        marginBottom: 20,
-    },
-    passwordInput: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        borderRadius: 12,
-        backgroundColor: '#F8F9FA',
-        paddingHorizontal: 15,
-    },
-    modalButtons: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginTop: 10,
-    },
-    modalBtn: {
-        flex: 1,
-        padding: 15,
-        borderRadius: 12,
-        alignItems: 'center',
-        marginHorizontal: 5,
-    },
-    cancelBtn: {
-        backgroundColor: '#F8F9FA',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-    },
-    cancelBtnText: {
-        color: '#636E72',
-        fontWeight: '800',
-    },
-    confirmBtn: {
-        backgroundColor: '#4CAF50',
-    },
-    confirmBtnText: {
-        color: '#FFF',
-        fontWeight: '800',
-    },
-    loadingContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    errorContextText: {
-        fontSize: 14,
-        color: '#FF4757',
-        fontWeight: '600',
-        backgroundColor: '#FFF5F5',
-        padding: 12,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: '#FFB6B6',
-    },
-    // Items modal styles
-    itemCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 15,
-        borderBottomWidth: 1,
-        borderBottomColor: '#F1F2F6',
-    },
-    itemIcon: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: '#F8F9FA',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 15,
-    },
-    itemIconText: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#4CAF50',
-    },
-    itemInfo: {
-        flex: 1,
-    },
-    itemName: {
-        fontSize: 16,
-        fontWeight: '800',
-        color: '#2D3436',
-    },
-    itemType: {
-        fontSize: 12,
-        color: '#636E72',
-        marginTop: 2,
-    },
-    itemDescription: {
-        fontSize: 12,
-        color: '#A0A0A0',
-        marginTop: 4,
-    },
-    emptyItemsContainer: {
-        alignItems: 'center',
-        padding: 40,
-    },
-    emptyItemsText: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#636E72',
-    },
-    emptyItemsSubText: {
-        fontSize: 12,
-        color: '#A0A0A0',
-        marginTop: 5,
-    },
-    // Missions modal styles
-    missionCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 15,
-        borderBottomWidth: 1,
-        borderBottomColor: '#F1F2F6',
-    },
-    missionStatus: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 15,
-    },
-    missionStatusText: {
-        fontSize: 14,
-        fontWeight: 'bold',
-        color: '#FFF',
-    },
-    missionInfo: {
-        flex: 1,
-    },
-    missionName: {
-        fontSize: 16,
-        fontWeight: '800',
-        color: '#2D3436',
-    },
-    missionType: {
-        fontSize: 12,
-        color: '#636E72',
-        marginTop: 2,
-    },
-    missionDescription: {
-        fontSize: 12,
-        color: '#A0A0A0',
-        marginTop: 4,
-    },
-    missionMeta: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginTop: 8,
-    },
-    missionDifficulty: {
-        fontSize: 11,
-        fontWeight: '700',
-        color: '#FF9800',
-    },
-    missionScores: {
-        fontSize: 11,
-        fontWeight: '700',
-        color: '#4CAF50',
-    },
-    emptyMissionsContainer: {
-        alignItems: 'center',
-        padding: 40,
-    },
-    emptyMissionsText: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#636E72',
-    },
-    emptyMissionsSubText: {
-        fontSize: 12,
-        color: '#A0A0A0',
-        marginTop: 5,
-    },
-    viewAllRecordsBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: '#F8F9FA',
-        padding: 18,
-        borderRadius: 12,
-        borderWidth: 2,
-        borderColor: '#4CAF50',
-        marginVertical: 15,
-    },
-    viewAllRecordsText: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: '#4CAF50',
-        flex: 1,
-        textAlign: 'center',
-    },
-    // Enhanced Features styles
-    enhancedFeaturesContainer: {
-        backgroundColor: '#FFF',
-        marginHorizontal: 20,
-        marginTop: 20,
-        borderRadius: 24,
-        padding: 20,
-        elevation: 2,
-    },
-    featureItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 15,
-        borderBottomWidth: 1,
-        borderBottomColor: '#F1F2F6',
-    },
-    featureContent: {
-        flex: 1,
-        marginLeft: 15,
-    },
-    featureTitle: {
-        fontSize: 16,
-        fontWeight: '800',
-        color: '#2D3436',
-    },
-    featureDescription: {
-        fontSize: 12,
-        color: '#636E72',
-        marginTop: 2,
-    },
-    // Account Details Modal styles
-    accountDetailRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: '#F1F2F6',
-    },
-    // Account Info styles
-    accountInfoSection: {
-        backgroundColor: '#F8F9FA',
-        borderRadius: 12,
-        padding: 15,
-        marginBottom: 15,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-    },
-    accountInfoRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        paddingVertical: 8,
-        borderBottomWidth: 1,
-        borderBottomColor: '#F1F2F6',
-    },
-    accountInfoLabel: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#636E72',
-    },
-    accountInfoValue: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: '#2D3436',
-    },
-    // Learning Stats styles
-    statsCard: {
-        backgroundColor: '#F8F9FA',
-        borderRadius: 12,
-        padding: 15,
-        marginBottom: 10,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-    },
-    statsCardTitle: {
-        fontSize: 16,
-        fontWeight: '800',
-        color: '#2D3436',
-        marginBottom: 10,
-    },
-    statsRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: 8,
-    },
-    statsLabel: {
-        fontSize: 14,
-        color: '#636E72',
-    },
-    statsValue: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: '#2D3436',
-    },
-    // Equipment styles
-    equipmentGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'space-between',
-        marginBottom: 20,
-    },
-    equipmentItem: {
-        width: '48%',
-        backgroundColor: '#F8F9FA',
-        borderRadius: 12,
-        padding: 15,
-        marginBottom: 10,
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-    },
-    equipmentIcon: {
-        fontSize: 24,
-        marginBottom: 5,
-    },
-    equipmentName: {
-        fontSize: 12,
-        fontWeight: '700',
-        color: '#2D3436',
-        textAlign: 'center',
-    },
-    // Suggestions styles
-    suggestionCard: {
-        backgroundColor: '#FFF',
-        borderRadius: 12,
-        padding: 15,
-        marginBottom: 10,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    suggestionIcon: {
-        marginRight: 15,
-    },
-    suggestionContent: {
-        flex: 1,
-    },
-    suggestionTitle: {
-        fontSize: 14,
-        fontWeight: '800',
-        color: '#2D3436',
-        marginBottom: 2,
-    },
-    suggestionDescription: {
-        fontSize: 12,
-        color: '#636E72',
-        marginBottom: 5,
-    },
-    suggestionPriority: {
-        alignSelf: 'flex-start',
-    },
-    priorityText: {
-        fontSize: 10,
-        fontWeight: '700',
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 8,
-        backgroundColor: '#F0F0F0',
-    },
-    // Chart container styles
-    chartContainer: {
-        marginVertical: 10,
-        alignItems: 'center',
-    },
-    chartTitle: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: '#2D3436',
-        marginBottom: 5,
-        textAlign: 'center',
-    },
-    avatarSelector: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 10,
-        borderWidth: 1,
-        borderColor: '#DDD',
-        borderRadius: 8,
-        backgroundColor: '#F8F9FA',
-    },
-    changeAvatarText: {
-        marginLeft: 10,
-        fontSize: 14,
-        color: '#3498DB',
-        fontWeight: '500',
-    },
-
+    viewAllRecordsBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F8F9FA', padding: 18, borderRadius: 12, borderWidth: 2, borderColor: '#4CAF50', marginVertical: 15 },
+    viewAllRecordsText: { fontSize: 16, fontWeight: '700', color: '#4CAF50', flex: 1, textAlign: 'center' },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center' },
+    modalContent: { backgroundColor: '#FFF', borderRadius: 24, padding: 25, width: '85%', maxWidth: 400 },
+    modalTitle: { fontSize: 20, fontWeight: '900', color: '#2D3436', marginBottom: 20, textAlign: 'center' },
+    inputContainer: { marginBottom: 20 },
+    inputLabel: { fontSize: 14, fontWeight: '600', color: '#2D3436', marginBottom: 5 },
+    textInput: { backgroundColor: '#F8F9FA', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16, color: '#2D3436', borderWidth: 1, borderColor: '#E2E8F0' },
+    passwordInput: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, backgroundColor: '#F8F9FA', paddingHorizontal: 15 },
+    modalButtons: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
+    modalBtn: { flex: 1, padding: 15, borderRadius: 12, alignItems: 'center', marginHorizontal: 5 },
+    cancelBtn: { backgroundColor: '#F8F9FA', borderWidth: 1, borderColor: '#E2E8F0' },
+    cancelBtnText: { color: '#636E72', fontWeight: '800' },
+    confirmBtn: { backgroundColor: '#4CAF50' },
+    confirmBtnText: { color: '#FFF', fontWeight: '800' },
+    loadingContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+    errorContextText: { fontSize: 14, color: '#FF4757', fontWeight: '600', backgroundColor: '#FFF5F5', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#FFB6B6' },
+    itemCard: { flexDirection: 'row', alignItems: 'center', padding: 15, borderBottomWidth: 1, borderBottomColor: '#F1F2F6' },
+    itemIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F8F9FA', justifyContent: 'center', alignItems: 'center', marginRight: 15 },
+    itemIconText: { fontSize: 16, fontWeight: 'bold', color: '#4CAF50' },
+    itemInfo: { flex: 1 },
+    itemName: { fontSize: 16, fontWeight: '800', color: '#2D3436' },
+    itemType: { fontSize: 12, color: '#636E72', marginTop: 2 },
+    itemDescription: { fontSize: 12, color: '#A0A0A0', marginTop: 4 },
+    emptyItemsContainer: { alignItems: 'center', padding: 40 },
+    emptyItemsText: { fontSize: 16, fontWeight: 'bold', color: '#636E72' },
+    emptyItemsSubText: { fontSize: 12, color: '#A0A0A0', marginTop: 5 },
+    missionCard: { flexDirection: 'row', alignItems: 'center', padding: 15, borderBottomWidth: 1, borderBottomColor: '#F1F2F6' },
+    missionStatus: { width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
+    missionStatusText: { fontSize: 14, fontWeight: 'bold', color: '#FFF' },
+    missionInfo: { flex: 1 },
+    missionName: { fontSize: 16, fontWeight: '800', color: '#2D3436' },
+    missionType: { fontSize: 12, color: '#636E72', marginTop: 2 },
+    missionDescription: { fontSize: 12, color: '#A0A0A0', marginTop: 4 },
+    missionMeta: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
+    missionDifficulty: { fontSize: 11, fontWeight: '700', color: '#FF9800' },
+    missionScores: { fontSize: 11, fontWeight: '700', color: '#4CAF50' },
+    emptyMissionsContainer: { alignItems: 'center', padding: 40 },
+    emptyMissionsText: { fontSize: 16, fontWeight: 'bold', color: '#636E72' },
+    emptyMissionsSubText: { fontSize: 12, color: '#A0A0A0', marginTop: 5 },
+    statsCard: { backgroundColor: '#F8F9FA', borderRadius: 12, padding: 15, marginBottom: 10, borderWidth: 1, borderColor: '#E2E8F0' },
+    statsCardTitle: { fontSize: 16, fontWeight: '800', color: '#2D3436', marginBottom: 10 },
+    statsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+    statsLabel: { fontSize: 14, color: '#636E72' },
+    statsValue: { fontSize: 14, fontWeight: '700', color: '#2D3436' },
+    equipmentGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 20 },
+    equipmentItem: { width: '48%', backgroundColor: '#F8F9FA', borderRadius: 12, padding: 15, marginBottom: 10, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
+    equipmentIcon: { fontSize: 24, marginBottom: 5 },
+    equipmentName: { fontSize: 12, fontWeight: '700', color: '#2D3436', textAlign: 'center' },
+    suggestionCard: { backgroundColor: '#FFF', borderRadius: 12, padding: 15, marginBottom: 10, borderWidth: 1, borderColor: '#E2E8F0', flexDirection: 'row', alignItems: 'center' },
+    suggestionIcon: { marginRight: 15 },
+    suggestionContent: { flex: 1 },
+    suggestionTitle: { fontSize: 14, fontWeight: '800', color: '#2D3436', marginBottom: 2 },
+    suggestionDescription: { fontSize: 12, color: '#636E72', marginBottom: 5 },
+    suggestionPriority: { alignSelf: 'flex-start' },
+    priorityText: { fontSize: 10, fontWeight: '700', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, backgroundColor: '#F0F0F0' },
+    chartContainer: { marginVertical: 10, alignItems: 'center' },
+    chartTitle: { fontSize: 14, fontWeight: '700', color: '#2D3436', marginBottom: 5, textAlign: 'center' },
+    editSection: { marginBottom: 20 },
+    editSectionTitle: { fontSize: 16, fontWeight: '800', color: '#2D3436', marginBottom: 12 },
+    inputGroup: { marginBottom: 15 },
 });
