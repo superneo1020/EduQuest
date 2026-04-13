@@ -130,11 +130,6 @@ class EducatorService {
         });
         return this.handleResponse(response, 'createClass');
     }
-
-    // educatorService.ts - 修改 deleteClass 方法
-    // educatorService.ts - 修改 deleteClass 方法，添加更多日誌
-    // educatorService.ts - 修改 deleteClass 方法
-    // educatorService.ts - 修改 deleteClass 方法
     async deleteClass(classId: number): Promise<OperationResult> {
         console.log(`EducatorService.deleteClass: Starting deletion for class ${classId}`);
 
@@ -183,8 +178,6 @@ class EducatorService {
         return data;
     }
 
-    // educatorService.ts - 如果有獲取學校信息的方法，也需要修改
-
     async getUserSchool(): Promise<string> {
         const headers = await this.getAuthHeaders();
         const response = await fetch(`${getApiBaseUrl()}/api/user/school`, {
@@ -225,8 +218,7 @@ class EducatorService {
         }
     }
 
-    // educatorService.ts - 修改 getClassMembers 方法
-    // educatorService.ts - 確保 getClassMembers 正確處理響應
+
     async getClassMembers(classId: number): Promise<CourseMember[]> {
         const headers = await this.getAuthHeaders();
         const response = await fetch(`${getApiBaseUrl()}/api/user/class/${classId}/members`, {
@@ -322,6 +314,35 @@ class EducatorService {
         const data = await response.text();
         console.log(`EducatorService: getUserRoleInClass - Response data:`, data);
         return data.trim();
+    }
+
+    // New method to get class members with permission handling
+    async getClassMembersSafe(classId: number): Promise<CourseMember[]> {
+        const headers = await this.getAuthHeaders();
+        const response = await fetch(`${getApiBaseUrl()}/api/user/class/${classId}/members`, {
+            headers,
+        });
+
+        // Handle permission errors gracefully - if user is not a member, return empty array
+        if (response.status === 403) {
+            console.log(`EducatorService: No access to members for class ${classId} (not a member)`);
+            return [];
+        }
+
+        try {
+            const data = await this.handleResponse(response, 'getClassMembersSafe');
+
+            // backend return format: { items: [...], total: 2, isEmpty: false }
+            if (data.items && Array.isArray(data.items)) {
+                return data.items;
+            }
+
+            // fallback: return data or empty array
+            return data.data || data || [];
+        } catch (error) {
+            console.log(`EducatorService: Error getting members for class ${classId}:`, error);
+            return [];
+        }
     }
 }
 
