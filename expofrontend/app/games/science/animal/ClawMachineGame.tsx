@@ -164,7 +164,7 @@ const ClawMachineGame: React.FC = () => {
     const [prepText, setPrepText] = useState<string | null>(null);
     const prepScale = useRef(new Animated.Value(0)).current;
     const itemWobbleAnim = useRef(new Animated.Value(0)).current;
-    
+
     // 粒子效果系統
     const [particles, setParticles] = useState<Array<{
         id: number;
@@ -193,10 +193,17 @@ const ClawMachineGame: React.FC = () => {
     // 请求去重
     const refreshAIPromiseRef = useRef<Promise<void> | null>(null);
 
-    // ========== 🎯 新增：回答次数限制 ==========
-    const MAX_ANSWERS = 4;               // 最多回答4次
+    // ========== 🎯 修改：回答次数限制（3次） ==========
+    const MAX_ANSWERS = 3;               // 最多回答3次
     const [answerCount, setAnswerCount] = useState<number>(0);  // 已回答次数
-    const pointsPerAnimal = 100 / MAX_ANSWERS; // 每题满分25分
+
+    // 根据第几次回答返回对应分值（30, 30, 40）
+    const getPointsForAttempt = (attemptNumber: number): number => {
+        if (attemptNumber === 1) return 30;
+        if (attemptNumber === 2) return 30;
+        if (attemptNumber === 3) return 40;
+        return 0;
+    };
 
     // ========== 🕒 新增：計時器相關狀態 ==========
     const [startTime, setStartTime] = useState<number | null>(null);
@@ -326,26 +333,21 @@ const ClawMachineGame: React.FC = () => {
 
     // ========== 🎭 萬向節晃動動畫 ==========
     const startWobbleAnimation = () => {
-        // 重置動畫值
         wobbleAnim.setValue(0);
         itemWobbleRotation.setValue(0);
-        
-        // 創建持續的左右晃動效果
+
         const wobbleLoop = Animated.loop(
             Animated.sequence([
-                // 向左晃動
                 Animated.timing(wobbleAnim, {
                     toValue: 1,
                     duration: 400,
                     useNativeDriver: true,
                 }),
-                // 向右晃動
                 Animated.timing(wobbleAnim, {
                     toValue: -1,
                     duration: 400,
                     useNativeDriver: true,
                 }),
-                // 回到中心
                 Animated.timing(wobbleAnim, {
                     toValue: 0,
                     duration: 300,
@@ -353,10 +355,9 @@ const ClawMachineGame: React.FC = () => {
                 }),
             ])
         );
-        
+
         wobbleLoop.start();
-        
-        // 物品旋轉效果
+
         const rotationLoop = Animated.loop(
             Animated.sequence([
                 Animated.timing(itemWobbleRotation, {
@@ -371,9 +372,9 @@ const ClawMachineGame: React.FC = () => {
                 }),
             ])
         );
-        
+
         rotationLoop.start();
-        
+
         return { wobbleLoop, rotationLoop };
     };
 
@@ -407,7 +408,6 @@ const ClawMachineGame: React.FC = () => {
                 useNativeDriver: true,
             }).start();
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            // 倒數結束後開始計時
             startTimer();
         }, 1000);
         setTimeout(() => {
@@ -468,8 +468,8 @@ const ClawMachineGame: React.FC = () => {
     const initializeItems = () => {
         const newItems: Item[] = [];
         const itemCount = 12;
-        const animalCount = 8;      // 場上放置 8 隻動物
-        const nonAnimalCount = 4;   // 干擾物 4 個
+        const animalCount = 8;
+        const nonAnimalCount = 4;
 
         const shuffledAnimals = [...ALL_ANIMAL_TYPES].sort(() => 0.5 - Math.random());
         const selectedAnimals = shuffledAnimals.slice(0, animalCount);
@@ -503,7 +503,6 @@ const ClawMachineGame: React.FC = () => {
             });
         }
 
-        // 隨機排列
         setItems(newItems.sort(() => 0.5 - Math.random()));
         setScore(0);
         setCollectedAnimals([]);
@@ -511,16 +510,13 @@ const ClawMachineGame: React.FC = () => {
         setGameComplete(false);
         setShowReport(false);
         setClawX((GAME_WIDTH - 36) / 2);
-        setAnswerCount(0);          // 重置回答次数
-        // 重置計時器狀態
+        setAnswerCount(0);
         stopTimer();
         setElapsedSeconds(0);
         setStartTime(null);
         clawAIService.resetGame();
         setCurrentQuestion(null);
     };
-
-    
 
     // ========== 初始化遊戲和倒數 ==========
     useEffect(() => {
@@ -657,7 +653,7 @@ const ClawMachineGame: React.FC = () => {
     // 結束遊戲（顯示總結）
     const endGameAndShowReport = async (finalScore: number) => {
         if (gameComplete || showReport) return;
-        stopTimer(); // 停止計時器
+        stopTimer();
         setGameComplete(true);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         await saveScore(finalScore);
@@ -671,7 +667,6 @@ const ClawMachineGame: React.FC = () => {
 
         try {
             if (!caughtItem.isAnimal) {
-                // 抓错非动物，不计数回答次数
                 showFeedback(`❌ ${caughtItem.type.name} It's not an animal! Try again.～`, 'wrong');
                 showHitFeedback(false);
                 await refreshAIQuestion();
@@ -688,32 +683,15 @@ const ClawMachineGame: React.FC = () => {
                 showHitFeedback(aiResult.isCorrect);
                 setTimeout(() => setAiFeedback(null), 4000);
 
-                // 回答次数增加（无论对错）
+                // 计算本次是第几次回答（在增加计数前）
+                const attemptNumber = answerCount + 1;
                 const newCount = answerCount + 1;
                 setAnswerCount(newCount);
 
-                // ✅ 关键修改：达到最大次数立即结束，不再进行任何刷新或后续操作
-                if (newCount >= MAX_ANSWERS) {
-                    // 如果是正确回答，先加分再结束
-                    let finalScore = score;
-                    if (isCorrect) {
-                        finalScore = Math.min(100, score + pointsPerAnimal);
-                        setScore(finalScore);
-                        animateScore();
-                        // 更新物品和收集列表
-                        setItems(prev => prev.map(i =>
-                            i.id === caughtItem.id ? { ...i, caught: true } : i
-                        ));
-                        setCollectedAnimals(prev => [...prev, caughtItem]);
-                    }
-                    await endGameAndShowReport(finalScore);
-                    setProcessing(false);
-                    return;  // ✅ 直接返回，不再刷新题目
-                }
-
-                // 未达到最大次数，正常处理
+                // 处理正确抓取
                 if (isCorrect) {
-                    const newScore = Math.min(100, score + pointsPerAnimal);
+                    const pointsToAdd = getPointsForAttempt(attemptNumber);
+                    const newScore = Math.min(100, score + pointsToAdd);
                     setScore(newScore);
                     animateScore();
 
@@ -721,9 +699,23 @@ const ClawMachineGame: React.FC = () => {
                         i.id === caughtItem.id ? { ...i, caught: true } : i
                     ));
                     setCollectedAnimals(prev => [...prev, caughtItem]);
+
+                    // 如果达到最大回答次数，结束游戏
+                    if (newCount >= MAX_ANSWERS) {
+                        await endGameAndShowReport(newScore);
+                        setProcessing(false);
+                        return;
+                    }
                 } else {
-                    // 错误回答，刷新题目
+                    // 错误回答，刷新题目（不加分，不收集动物）
                     await refreshAIQuestion();
+
+                    // 如果达到最大回答次数，结束游戏
+                    if (newCount >= MAX_ANSWERS) {
+                        await endGameAndShowReport(score);
+                        setProcessing(false);
+                        return;
+                    }
                 }
             }
         } catch (error) {
@@ -784,7 +776,7 @@ const ClawMachineGame: React.FC = () => {
     };
 
     const resetGame = () => {
-        stopTimer(); // 停止舊計時器
+        stopTimer();
         initializeItems();
         setClawX((GAME_WIDTH - 36) / 2);
         setIsDropping(false);
@@ -808,7 +800,7 @@ const ClawMachineGame: React.FC = () => {
     };
 
     const showReportPage = async () => {
-        stopTimer(); // 手動結束時停止計時器
+        stopTimer();
         await saveScore(Math.round(score));
         setShowReport(true);
     };
@@ -863,7 +855,6 @@ const ClawMachineGame: React.FC = () => {
                             <Text style={styles.reportScoreLabel}>Final score</Text>
                             <Text style={styles.reportScoreValue}>{Math.round(score)}/100</Text>
                         </View>
-                        {/* 新增：顯示總花費時間 */}
                         <View style={styles.reportTimeBox}>
                             <Text style={styles.reportScoreLabel}>⏱️ Total Time</Text>
                             <Text style={styles.reportTimeValue}>{totalTimeFormatted}</Text>
@@ -933,7 +924,6 @@ const ClawMachineGame: React.FC = () => {
             <View style={styles.header}>
                 <View style={styles.headerPlaceholder} />
                 <Text style={styles.title}>🐾 Animal Scratch Fun 🐾</Text>
-                {/* 修改右上角：將計時器與分數並排 */}
                 <View style={styles.rightHeader}>
                     <View style={styles.timerContainer}>
                         <Text style={styles.timerIcon}>⏱️</Text>
@@ -1025,11 +1015,9 @@ const ClawMachineGame: React.FC = () => {
                                 )}
                             </Animated.View>
                         ))}
-                        {/* 伸长柱（绳子）保持不变 */}
                         <Animated.View
                             style={[styles.rope, { left: clawX + 22, height: dropHeight }]}
                         />
-                        {/* 爪子改为图片 */}
                         <Animated.View
                             style={[
                                 styles.claw,
@@ -1142,7 +1130,6 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         fontFamily: Platform.OS === 'web' ? 'monospace' : 'Courier',
     },
-    // 新增：右上角容器，讓計時器和分數並排
     rightHeader: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1555,7 +1542,6 @@ const styles = StyleSheet.create({
     },
     reportScoreLabel: { fontSize: 14, color: '#c9a87b', marginBottom: 8 },
     reportScoreValue: { fontSize: 48, fontWeight: 'bold', color: '#ffdd88' },
-    // 新增：總結頁面的時間顯示樣式
     reportTimeBox: {
         backgroundColor: '#3a2a1f',
         padding: 12,
