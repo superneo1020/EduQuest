@@ -27,6 +27,7 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
     const [classesResponse, setClassesResponse] = useState<DetailedListResponse<Course> | null>(null);
     const [schoolMembers, setSchoolMembers] = useState<UserMini[]>([]);
     const [classMembers, setClassMembers] = useState<CourseMember[]>([]);
+    const [classMemberCounts, setClassMemberCounts] = useState<Map<number, number>>(new Map());
     const [loading, setLoading] = useState(true);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showAddStudentModal, setShowAddStudentModal] = useState(false);
@@ -35,6 +36,13 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
     const [newClassData, setNewClassData] = useState<CourseRequest>({ grade: '', suffix: '', academicYear: '' });
     const [selectedStudents, setSelectedStudents] = useState<number[]>([]);
     const [currentView, setCurrentView] = useState<'classes' | 'students'>('classes');
+    // 確認刪除 Modal 狀態
+    const [showConfirmModal, setShowConfirmModal] = useState(false);
+    const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
+    const [pendingDeleteName, setPendingDeleteName] = useState('');
+    const [deleteType, setDeleteType] = useState<'class' | 'student'>('class');
+    const [pendingStudentId, setPendingStudentId] = useState<number | null>(null);
+    const [pendingStudentName, setPendingStudentName] = useState('');
 
     useEffect(() => {
         loadData();
@@ -50,6 +58,23 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                 const classesData = await educatorService.getClasses();
                 setClassesResponse(classesData);
                 console.log('Classes loaded:', classesData.items.length);
+                
+                // Load member counts for each class
+                if (classesData?.items) {
+                    const counts = new Map<number, number>();
+                    await Promise.all(
+                        classesData.items.map(async (course) => {
+                            try {
+                                const members = await educatorService.getClassMembersSafe(course.id);
+                                counts.set(course.id, members.length);
+                            } catch (error) {
+                                console.error(`Error loading members for class ${course.id}:`, error);
+                                counts.set(course.id, 0);
+                            }
+                        })
+                    );
+                    setClassMemberCounts(counts);
+                }
             } catch (classError) {
                 console.error('Error loading classes:', classError);
                 setClassesResponse(null);
@@ -109,97 +134,92 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
 
     // ClassManagementPanel.tsx - 在 deleteClass 函數最開頭添加日誌
     // ClassManagementPanel.tsx - 修改 deleteClass 函數中的 Alert
-    const deleteClass = async (classId: number) => {
-        console.log('=== deleteClass function CALLED ===');
-        console.log('Class ID to delete:', classId);
+    const ensureUserAsTeacher = async (classId: number): Promise<boolean> => {
+        try {
+            console.log(`Ensuring user is teacher for class ${classId}`);
+            await educatorService.ensureTeacherAsMember(classId);
+            console.log('User added as teacher successfully');
+            return true;
+        } catch (error: any) {
+            console.error('Error ensuring user as teacher:', error);
+            Alert.alert(
+                'Permission Issue',
+                'Cannot manage this class. You need to be assigned as a teacher to this class first.\n\n' +
+                'Please contact your administrator to be assigned as a teacher to this class.',
+                [{ text: 'OK' }]
+            );
+            return false;
+        }
+    };
 
+    const deleteClass = (classId: number) => {
         const classToDelete = classesResponse?.items.find(c => c.id === classId);
-        console.log('Class to delete:', classToDelete);
-
         if (!classToDelete) {
-            console.log('Class not found in list');
-            Alert.alert('Error', 'Class not found');
+            console.log('Class not found');
             return;
         }
 
-        console.log('Showing confirmation alert...');
-
-        // 使用 Alert.alert 的三個參數版本，確保回調正確執行
-        Alert.alert(
-            'Delete Class',
-            `Are you sure you want to delete class ${classToDelete.grade} ${classToDelete.suffix}? This action cannot be undone.`,
-            [
-                {
-                    text: 'Cancel',
-                    style: 'cancel',
-                    onPress: () => console.log('User cancelled deletion')
-                },
-                {
-                    text: 'Delete',
-                    style: 'destructive',
-                    onPress: () => {
-                        console.log('User confirmed deletion for class:', classId);
-                        // 使用立即執行的異步函數
-                        (async () => {
-                            try {
-                                console.log('Calling educatorService.deleteClass...');
-                                const result = await educatorService.deleteClass(classId);
-                                console.log('Delete result:', result);
-
-                                if (result && !result.warning) {
-                                    Alert.alert('Success', result.message || 'Class deleted successfully');
-                                    console.log('Reloading data...');
-                                    await loadData();
-                                } else {
-                                    Alert.alert('Error', result?.message || 'Failed to delete class');
-                                }
-                            } catch (error: any) {
-                                console.error('Error in delete confirmation:', error);
-                                Alert.alert('Error', `Failed to delete class: ${error.message}`);
-                            }
-                        })();
-                    }
-                }
-            ]
-        );
+        setPendingDeleteId(classId);
+        setPendingDeleteName(`${classToDelete.grade} ${classToDelete.suffix}`);
+        setDeleteType('class');
+        setShowConfirmModal(true);
     };
 
     // ClassManagementPanel.tsx - 添加 removeStudentFromClass 函數
-    const removeStudentFromClass = (userId: number, userName: string) => {
-        Alert.alert(
-            'Remove Student',
-            `Are you sure you want to remove ${userName} from this class?`,
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Remove',
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            console.log(`Removing student ${userId} from class ${selectedClass?.id}`);
-                            const result = await educatorService.removeStudentFromClass(
-                                selectedClass!.id,
-                                userId
-                            );
-                            console.log('Remove result:', result);
+    const confirmRemoveStudent = (userId: number, userName: string) => {
+        setPendingStudentId(userId);
+        setPendingStudentName(userName);
+        setDeleteType('student');
+        setShowConfirmModal(true);
+    };
 
-                            if (result && !result.error) {
-                                Alert.alert('Success', 'Student removed from class successfully');
-                                // 重新加載班級成員列表
-                                await loadClassMembers(selectedClass!.id);
-                                // 同時刷新班級列表（更新學生數量）
-                                await loadData();
-                            } else {
-                                Alert.alert('Error', result?.message || 'Failed to remove student');
-                            }
-                        } catch (error: any) {
-                            console.error('Error removing student:', error);
-                            Alert.alert('Error', `Failed to remove student: ${error.message}`);
-                        }
-                    }
+// 實際執行刪除的函數
+    const executeDelete = async () => {
+        setShowConfirmModal(false);
+
+        if (deleteType === 'class' && pendingDeleteId) {
+            try {
+                console.log(`Deleting class ${pendingDeleteId}`);
+                const result = await educatorService.deleteClass(pendingDeleteId);
+                if (result && !result.warning) {
+                    Alert.alert('Success', result.message || 'Class deleted successfully');
+                    await loadData();
+                } else {
+                    Alert.alert('Error', result?.message || 'Failed to delete class');
                 }
-            ]
-        );
+            } catch (error: any) {
+                console.error('Error deleting class:', error);
+                Alert.alert('Error', `Failed to delete class: ${error.message}`);
+            } finally {
+                setPendingDeleteId(null);
+                setPendingDeleteName('');
+            }
+        } else if (deleteType === 'student' && pendingStudentId && selectedClass) {
+            try {
+                console.log(`Removing student ${pendingStudentId} from class ${selectedClass.id}`);
+                const result = await educatorService.removeStudentFromClass(selectedClass.id, pendingStudentId);
+                if (result && !result.warning) {
+                    Alert.alert('Success', 'Student removed from class successfully');
+                    
+                    // Update member count for the class
+                    const currentCount = classMemberCounts.get(selectedClass.id) || 0;
+                    setClassMemberCounts(prev => new Map(prev).set(selectedClass.id, Math.max(0, currentCount - 1)));
+                    
+                    await loadClassMembers(selectedClass.id);
+                    await loadData();
+                } else {
+                    Alert.alert('Error', result?.message || 'Failed to remove student');
+                }
+            } catch (error: any) {
+                console.error('Error removing student:', error);
+                Alert.alert('Error', `Failed to remove student: ${error.message}`);
+            } finally {
+                setPendingStudentId(null);
+                setPendingStudentName('');
+            }
+        }
+
+        setDeleteType('class');
     };
     const addStudentsToClass = async () => {
         if (selectedStudents.length === 0) {
@@ -207,26 +227,8 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
             return;
         }
 
+        // 直接嘗試添加學生，不再調用 ensureTeacherAsMember
         try {
-            // Check if user is class member and staff
-            const isMemberAndStaff = await educatorService.getUserRoleInClass(selectedClass!.id);
-            if (isMemberAndStaff !== 'TEACHER' && isMemberAndStaff !== 'ASSISTANT') {
-                // Try to add user as teacher first
-                try {
-                    await educatorService.ensureTeacherAsMember(selectedClass!.id);
-                    console.log('Teacher added as class member');
-                } catch (ensureError) {
-                    console.error('Error ensuring teacher as member:', ensureError);
-                    Alert.alert(
-                        'Permission Denied',
-                        'You need to be a teacher or assistant in this class to add students.\n\n' +
-                        'Failed to automatically add you as a teacher to this class.'
-                    );
-                    return;
-                }
-            }
-
-            // Add students
             const promises = selectedStudents.map(studentId =>
                 educatorService.addStudentToClass({
                     userId: studentId,
@@ -239,11 +241,15 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
             Alert.alert('Success', `${selectedStudents.length} students added to class`);
             setShowAddStudentModal(false);
             setSelectedStudents([]);
+
+            // Update member count
+            const currentCount = classMemberCounts.get(selectedClass.id) || 0;
+            setClassMemberCounts(prev => new Map(prev).set(selectedClass.id, currentCount + selectedStudents.length));
+
             loadData();
 
         } catch (error: any) {
             console.error('Error adding students:', error);
-
             if (error.message?.includes('403') || error.message?.includes('Access Denied')) {
                 Alert.alert(
                     'Permission Denied',
@@ -273,7 +279,7 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
     // ClassManagementPanel.tsx - 修改 loadClassMembers 函數
     const loadClassMembers = async (classId: number) => {
         try {
-            const members = await educatorService.getClassMembers(classId);
+            const members = await educatorService.getClassMembersSafe(classId);
             console.log('Class members loaded:', members);
             setClassMembers(members);
         } catch (error) {
@@ -283,30 +289,48 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
     };
 // ClassManagementPanel.tsx - 確保 viewClassMembers 被正確調用
     const viewClassMembers = async (classItem: Course) => {
-        console.log('Viewing members for class:', classItem.id);
-        setSelectedClass(classItem);
-        setShowClassMembersModal(true);
-        await loadClassMembers(classItem.id);
+        try {
+            console.log('Opening modal for class:', classItem.id);
+            setSelectedClass(classItem);
+
+            // 1. 先開啟 Modal，讓用戶感覺「有反應」
+            setShowClassMembersModal(true);
+
+            // 2. 加載數據
+            const members = await educatorService.getClassMembersSafe(classItem.id);
+            console.log('Fetched members:', members);
+            setClassMembers(members);
+        } catch (error: any) {
+            console.error('View members failed:', error);
+            // 如果失敗，關閉 Modal 並報錯
+            setShowClassMembersModal(false);
+            Alert.alert('Error', 'Could not load class members: ' + error.message);
+        }
     };
 
     // Render methods remain the same
     const renderClassCard = ({ item: classItem }: { item: Course }) => (
         <TouchableOpacity
             style={styles.classCard}
-            onPress={() => viewClassMembers(classItem)}
+            // 確保外層點擊明確觸發查看成員
+            onPress={() => {
+                console.log('Outer card pressed for:', classItem.id);
+                viewClassMembers(classItem);
+            }}
             activeOpacity={0.7}
         >
             <View style={styles.classHeader}>
-                <View>
+                <View pointerEvents="none"> {/* 讓標題部分不干擾點擊 */}
                     <Text style={styles.classTitle}>{classItem.grade} {classItem.suffix}</Text>
                     <Text style={styles.classYear}>{classItem.academicYear}</Text>
                 </View>
+
                 <View style={styles.classActions}>
+                    {/* 內部按鈕必須明確使用 e.stopPropagation() */}
                     <TouchableOpacity
                         style={styles.actionBtn}
                         onPress={(e) => {
-                            e.stopPropagation();  // 阻止事件冒泡到父級
-                            console.log('View members button pressed for class:', classItem.id);
+                            e.stopPropagation();
                             viewClassMembers(classItem);
                         }}
                     >
@@ -346,6 +370,10 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                         <Text style={styles.statText}>School ID: {classItem.schoolId}</Text>
                     </View>
                 )}
+                <View style={styles.statItem}>
+                    <Users2 size={16} color="#6C5CE7" />
+                    <Text style={styles.statText}>Members: {classMemberCounts.get(classItem.id) || 0}</Text>
+                </View>
                 <View style={styles.statItem}>
                     <BookOpen size={16} color="#4CAF50" />
                     <Text style={styles.statText}>Created: {new Date(classItem.createdAt).toLocaleDateString()}</Text>
@@ -423,15 +451,20 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
 
             {/* Content */}
             {currentView === 'classes' && (
-                <View style={styles.content}>
-                    {/* NEW: Using ApiListHandler for classes */}
-                    <ApiListHandler
-                        response={classesResponse}
-                        loading={loading}
-                        renderItem={renderClassCard}
-                        onRefresh={loadData}
-                    />
-                </View>
+                <FlatList
+                    data={classesResponse?.items || []}
+                    renderItem={renderClassCard}
+                    keyExtractor={(item) => item.id.toString()}
+                    refreshing={loading}
+                    onRefresh={loadData}
+                    ListHeaderComponent={
+                        classesResponse && (
+                            <Text style={{ fontWeight: 'bold', padding: 10 }}>
+                                Showing {classesResponse.items.length} of {classesResponse.total}
+                            </Text>
+                        )
+                    }
+                />
             )}
 
             {currentView === 'students' && (
@@ -537,7 +570,7 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                 </View>
             </Modal>
 
-
+            {/* Class Members Modal - 保留這個有刪除按鈕的版本 */}
             <Modal
                 visible={showClassMembersModal}
                 animationType="slide"
@@ -567,9 +600,7 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                             <FlatList
                                 data={classMembers}
                                 renderItem={({ item }) => {
-                                    // 只有 STUDENT 可以移除，TEACHER 和 ASSISTANT 不能移除
-                                    const canRemove = item.roleInClass === 'STUDENT';
-
+                                    const isStudent = item.roleInClass === 'STUDENT';
                                     return (
                                         <View style={styles.memberItem}>
                                             <View style={styles.memberInfo}>
@@ -581,15 +612,13 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                                                     item.roleInClass === 'ASSISTANT' && styles.assistantBadge,
                                                     item.roleInClass === 'STUDENT' && styles.studentBadge
                                                 ]}>
-                                                    <Text style={styles.roleBadgeText}>
-                                                        {item.roleInClass}
-                                                    </Text>
+                                                    <Text style={styles.roleBadgeText}>{item.roleInClass}</Text>
                                                 </View>
                                             </View>
-                                            {canRemove && (
+                                            {isStudent && (
                                                 <TouchableOpacity
                                                     style={styles.removeMemberBtn}
-                                                    onPress={() => removeStudentFromClass(item.userId, item.username)}
+                                                    onPress={() => confirmRemoveStudent(item.userId, item.username)}
                                                 >
                                                     <Trash2 size={18} color="#FF4757" />
                                                 </TouchableOpacity>
@@ -604,6 +633,44 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                     </View>
                 </View>
             </Modal>
+
+            {/* 自定義確認刪除 Modal - 修正 visible 為 showConfirmModal */}
+            <Modal
+                visible={showConfirmModal}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowConfirmModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.confirmModal}>
+                        <Text style={styles.confirmTitle}>
+                            {deleteType === 'class' ? 'Delete Class' : 'Remove Student'}
+                        </Text>
+                        <Text style={styles.confirmMessage}>
+                            {deleteType === 'class'
+                                ? `Are you sure you want to delete class "${pendingDeleteName}"? This action cannot be undone.`
+                                : `Are you sure you want to remove "${pendingStudentName}" from this class?`
+                            }
+                        </Text>
+                        <View style={styles.confirmButtons}>
+                            <TouchableOpacity
+                                style={[styles.confirmBtn, styles.cancelConfirmBtn]}
+                                onPress={() => setShowConfirmModal(false)}
+                            >
+                                <Text style={styles.cancelConfirmText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.confirmBtn, styles.deleteConfirmBtn]}
+                                onPress={executeDelete}
+                            >
+                                <Text style={styles.deleteConfirmText}>
+                                    {deleteType === 'class' ? 'Delete' : 'Remove'}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 };
@@ -613,6 +680,72 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#F8F9FA',
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    confirmModal: {
+        backgroundColor: '#FFF',
+        borderRadius: 16,
+        padding: 24,
+        width: '80%',
+        maxWidth: 320,
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 4,
+        elevation: 5,
+    },
+    confirmTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#2D3436',
+        marginBottom: 12,
+    },
+    confirmMessage: {
+        fontSize: 14,
+        color: '#666',
+        textAlign: 'center',
+        marginBottom: 24,
+        lineHeight: 20,
+    },
+    confirmButtons: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    confirmBtn: {
+        flex: 1,
+        paddingVertical: 12,
+        borderRadius: 8,
+        alignItems: 'center',
+    },
+    cancelConfirmBtn: {
+        backgroundColor: '#F5F5F5',
+        borderWidth: 1,
+        borderColor: '#E0E0E0',
+    },
+    cancelConfirmText: {
+        color: '#666',
+        fontWeight: '600',
+    },
+    deleteConfirmBtn: {
+        backgroundColor: '#FF4757',
+    },
+    deleteConfirmText: {
+        color: '#FFF',
+        fontWeight: '600',
+    },
+    removeMemberBtn: {
+        padding: 10,
+        backgroundColor: '#FFF5F5',
+        borderRadius: 8,
+        marginLeft: 8,
+        borderWidth: 1,
+        borderColor: '#FFE0E0',
     },
     loadingContainer: {
         flex: 1,
@@ -844,12 +977,7 @@ const styles = StyleSheet.create({
         marginBottom: 20,
     },
     // styles 中添加
-    removeMemberBtn: {
-        padding: 8,
-        backgroundColor: '#FFF5F5',
-        borderRadius: 8,
-        marginLeft: 8,
-    },
+
     memberItem: {
         backgroundColor: '#fff',
         borderRadius: 8,
