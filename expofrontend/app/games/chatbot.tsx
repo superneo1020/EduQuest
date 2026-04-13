@@ -24,6 +24,16 @@ export default function chatbot() {
     /*  ---------- TALK -> TEXT  ----------  */
     const startRecording = async () => {
         try {
+            // 清理之前的录音对象
+            if (recording) {
+                try {
+                    await recording.stopAndUnloadAsync();
+                } catch (e) {
+                    // 忽略停止失败
+                }
+                setRecording(null);
+            }
+
             const { status } = await Audio.requestPermissionsAsync();
             if (status !== 'granted') { alert('Microphone permission required'); return; }
 
@@ -33,8 +43,8 @@ export default function chatbot() {
                 staysActiveInBackground: true,
             });
 
-            const recording = new Audio.Recording();
-            await recording.prepareToRecordAsync({
+            const newRecording = new Audio.Recording();
+            await newRecording.prepareToRecordAsync({
                 android: {
                     extension: '.wav',
                     outputFormat: 2,
@@ -54,10 +64,13 @@ export default function chatbot() {
                     linearPCMIsBigEndian: false,
                     linearPCMIsFloat: false,
                 },
-                web: {},
+                web: {
+                    mimeType: 'audio/webm',
+                    bitsPerSecond: 128000,
+                },
             });
-            await recording.startAsync();
-            setRecording(recording);
+            await newRecording.startAsync();
+            setRecording(newRecording);
         } catch (err) {
             console.error('Failed to start recording', err);
         }

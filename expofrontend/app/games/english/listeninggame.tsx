@@ -39,6 +39,12 @@ type Option = {
     emoji?: string;
 };
 
+// 扩展 Question 类型，添加每道题的满分值
+interface ExtendedQuestion extends Question {
+    maxPoints: number;   // 本题满分
+    earnedPoints?: number; // 实际得分
+}
+
 // 魚的位置類型
 type FishPosition = {
     x: RNAnimated.Value;
@@ -64,7 +70,7 @@ type GameState = {
     showHint: boolean;
     selectedOptionId: string | null;
     isLoading: boolean;
-    questions: Question[];
+    questions: ExtendedQuestion[];
     fishCaught: boolean;
     totalTime: number;
 };
@@ -94,21 +100,40 @@ const DIFFICULTY_CONFIG: Record<Difficulty, { label: string; color: string; desc
     }
 };
 
-// 魚的顏色配置
+// 鱼的颜色配置
 const FISH_COLORS = {
     easy: ['#FFB6C1', '#FFC0CB', '#FF69B4', '#FF1493'],
     medium: ['#87CEEB', '#00BFFF', '#1E90FF', '#4169E1'],
     hard: ['#FFA500', '#FF8C00', '#FF7F50', '#FF6347'],
 };
 
-// 魚的表情
+// 鱼的表情
 const FISH_EMOJIS = ['🐟', '🐠', '🐡', '🎏', '🐋'];
 
-// 格式化時間為 mm:ss
+// 格式化时间为 mm:ss
 const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+};
+
+// 根据难度和题目索引获取该题满分
+const getMaxPointsForQuestion = (level: Difficulty, index: number): number => {
+    // index: 0, 1, 2 (共3题)
+    if (level === 'easy') {
+        return index === 0 ? 30 : index === 1 ? 30 : 40;
+    } else if (level === 'medium') {
+        return index === 0 ? 30 : index === 1 ? 40 : 40;
+    } else { // hard
+        return 40;
+    }
+};
+
+// 获取总分（根据难度）
+const getTotalMaxScore = (level: Difficulty): number => {
+    if (level === 'easy') return 100;
+    if (level === 'medium') return 110;
+    return 120;
 };
 
 export default function ListeningScreen() {
@@ -120,7 +145,7 @@ export default function ListeningScreen() {
         streak: 0,
         maxStreak: 0,
         correctAnswers: 0,
-        totalQuestions: 4,
+        totalQuestions: 3,
         isAnswered: false,
         isPlaying: false,
         gameCompleted: false,
@@ -169,7 +194,7 @@ export default function ListeningScreen() {
             icon: '🐟',
             color: '#4CAF50',
             bgColor: '#E8F5E9',
-            features: ['Slow speed', 'Basic vocabulary', '4 Questions', 'Colorful fish', '25 points per correct catch']
+            features: ['Slow speed', 'Basic vocabulary', '3 Questions', 'Points: 30/30/40']
         },
         {
             id: 'medium' as const,
@@ -179,7 +204,7 @@ export default function ListeningScreen() {
             icon: '🐠',
             color: '#FF9800',
             bgColor: '#FFF3E0',
-            features: ['Normal speed', 'Common phrases', '4 Questions', 'Faster fish', '27.5 points per correct catch']
+            features: ['Normal speed', 'Common phrases', '3 Questions', 'Points: 30/40/40']
         },
         {
             id: 'hard' as const,
@@ -189,31 +214,14 @@ export default function ListeningScreen() {
             icon: '🐡',
             color: '#F44336',
             bgColor: '#FFEBEE',
-            features: ['Fast speed', 'Idiomatic usage', '4 Questions', 'Very fast fish', '30 points per correct catch']
+            features: ['Fast speed', 'Idiomatic usage', '3 Questions', 'Points: 40/40/40']
         }
     ];
 
-    // 获取每題滿分（根據難度）
-    const getMaxScorePerQuestion = (): number => {
-        switch (gameState.currentLevel) {
-            case 'easy': return 25;
-            case 'medium': return 27.5;
-            case 'hard': return 30;
-            default: return 25;
-        }
-    };
+    // 获取当前难度下的总分
+    const totalMaxScore = gameState.currentLevel ? getTotalMaxScore(gameState.currentLevel) : 100;
 
-    // 获取總滿分
-    const getTotalMaxScore = (): number => {
-        switch (gameState.currentLevel) {
-            case 'easy': return 100;
-            case 'medium': return 110;
-            case 'hard': return 120;
-            default: return 100;
-        }
-    };
-
-    // 啟動計時器
+    // 启动计时器
     const startTimer = () => {
         if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
         setElapsedTime(0);
@@ -222,7 +230,7 @@ export default function ListeningScreen() {
         }, 1000);
     };
 
-    // 停止計時器並記錄時間
+    // 停止计时器并记录时间
     const stopTimerAndRecord = () => {
         if (timerIntervalRef.current) {
             clearInterval(timerIntervalRef.current);
@@ -231,7 +239,7 @@ export default function ListeningScreen() {
         setGameState(prev => ({ ...prev, totalTime: elapsedTime }));
     };
 
-    // 重置計時器
+    // 重置计时器
     const resetTimer = () => {
         if (timerIntervalRef.current) {
             clearInterval(timerIntervalRef.current);
@@ -247,7 +255,7 @@ export default function ListeningScreen() {
         }
     }, [gameState.currentLevel]);
 
-    // 播放水波動畫
+    // 播放水波动画
     useEffect(() => {
         RNAnimated.loop(
             RNAnimated.sequence([
@@ -304,7 +312,7 @@ export default function ListeningScreen() {
         }
     };
 
-    // 初始化魚的位置
+    // 初始化鱼的位置
     const initFishPositions = (options: Option[]) => {
         const positions: FishPosition[] = [];
         const speedMultiplier = gameState.currentLevel === 'easy' ? 0.5 :
@@ -328,7 +336,7 @@ export default function ListeningScreen() {
         startFishAnimation(positions);
     };
 
-    // 啟動魚的游動動畫
+    // 启动鱼的游动动画
     const startFishAnimation = (positions: FishPosition[]) => {
         positions.forEach((fish, index) => {
             const animate = () => {
@@ -355,11 +363,13 @@ export default function ListeningScreen() {
         });
     };
 
-    // 生成并追加指定索引的题目
-    const generateAndAddQuestion = async (index: number, level: Difficulty): Promise<Question | null> => {
+    // 生成并追加指定索引的题目（附带本题满分）
+    const generateAndAddQuestion = async (index: number, level: Difficulty): Promise<ExtendedQuestion | null> => {
         try {
             const question = await AIService.generateSingleQuestion(level, index);
             if (!question) return null;
+
+            const maxPoints = getMaxPointsForQuestion(level, index);
 
             const coloredOptions = question.options.map((opt, idx) => ({
                 ...opt,
@@ -367,7 +377,7 @@ export default function ListeningScreen() {
                 emoji: FISH_EMOJIS[idx % FISH_EMOJIS.length],
             }));
 
-            return { ...question, options: coloredOptions };
+            return { ...question, options: coloredOptions, maxPoints };
         } catch (error) {
             console.error(`Failed to generate question at index ${index}:`, error);
             return null;
@@ -385,7 +395,7 @@ export default function ListeningScreen() {
                     ...prev,
                     isLoading: false,
                     questions: [firstQuestion],
-                    totalQuestions: 4,
+                    totalQuestions: 3,
                     currentQuestionIndex: 0,
                     gameCompleted: false,
                     score: 0,
@@ -507,7 +517,7 @@ export default function ListeningScreen() {
             streak: 0,
             maxStreak: 0,
             correctAnswers: 0,
-            totalQuestions: 4,
+            totalQuestions: 3,
             isAnswered: false,
             isPlaying: false,
             gameCompleted: false,
@@ -528,7 +538,7 @@ export default function ListeningScreen() {
     };
 
     // 获取当前问题
-    const getCurrentQuestion = (): Question | null => {
+    const getCurrentQuestion = (): ExtendedQuestion | null => {
         if (gameState.questions.length === 0) return null;
         return gameState.questions[gameState.currentQuestionIndex];
     };
@@ -586,14 +596,17 @@ export default function ListeningScreen() {
         setGameState(prev => ({ ...prev, isPlaying: false }));
     };
 
-    // 釣魚！選擇選項
+    // 钓鱼！选择选项
     const catchFish = (option: Option, index: number) => {
         if (gameState.isAnswered || gameState.gameCompleted || gameState.fishCaught || prepText !== null) return;
 
         stopAudio();
 
         const isCorrect = option.correct;
-        const maxPerQuestion = getMaxScorePerQuestion();
+        const currentQ = getCurrentQuestion();
+        if (!currentQ) return;
+
+        const maxPoints = currentQ.maxPoints;
         let pointsEarned = 0;
 
         setGameState(prev => ({ ...prev, isAnswered: true, selectedOptionId: option.id, fishCaught: true }));
@@ -624,8 +637,8 @@ export default function ListeningScreen() {
         if (isCorrect) {
             Vibration.vibrate(100);
             const newStreak = gameState.streak + 1;
-            pointsEarned = maxPerQuestion;
-            const newScore = Math.min(gameState.score + pointsEarned, getTotalMaxScore());
+            pointsEarned = maxPoints;
+            const newScore = Math.min(gameState.score + pointsEarned, totalMaxScore);
             const newMaxStreak = Math.max(newStreak, gameState.maxStreak);
 
             setGameState(prev => ({
@@ -649,7 +662,7 @@ export default function ListeningScreen() {
 
         const updatedQuestions = [...gameState.questions];
         if (updatedQuestions[gameState.currentQuestionIndex]) {
-            (updatedQuestions[gameState.currentQuestionIndex] as any).earnedPoints = pointsEarned;
+            updatedQuestions[gameState.currentQuestionIndex].earnedPoints = pointsEarned;
             setGameState(prev => ({ ...prev, questions: updatedQuestions }));
         }
     };
@@ -733,9 +746,8 @@ export default function ListeningScreen() {
 
     // 计算分数百分比
     const calculatePercentageScore = (): number => {
-        const maxTotal = getTotalMaxScore();
-        const currentScore = Math.min(gameState.score, maxTotal);
-        const percentage = (currentScore / maxTotal) * 100;
+        const currentScore = Math.min(gameState.score, totalMaxScore);
+        const percentage = (currentScore / totalMaxScore) * 100;
         return Math.round(percentage);
     };
 
@@ -770,7 +782,7 @@ export default function ListeningScreen() {
         }
     };
 
-    // 當問題改變時初始化魚的位置
+    // 当问题改变时初始化鱼的位置
     useEffect(() => {
         const currentQ = getCurrentQuestion();
         if (currentQ && !gameState.isLoading && !gameState.gameCompleted && !prepText) {
@@ -782,8 +794,7 @@ export default function ListeningScreen() {
     const accuracy = calculateAccuracy();
     const percentageScore = calculatePercentageScore();
     const stars = getStarRating(percentageScore);
-    const maxTotal = getTotalMaxScore();
-    const maxPerQuestion = getMaxScorePerQuestion();
+    const currentMaxPoints = currentQuestion?.maxPoints || 0;
 
     // 难度选择页面
     if (gameState.currentLevel === null) {
@@ -798,9 +809,9 @@ export default function ListeningScreen() {
                             Listen carefully and catch the right fish! 🎣
                         </Text>
                         <View style={styles.scoreInfoBox}>
-                            <Text style={styles.scoreInfoText}>🐟 Easy: 4 questions, total 100 points (25 per catch)</Text>
-                            <Text style={styles.scoreInfoText}>🐠 Medium: 4 questions, total 110 points (27.5 per catch)</Text>
-                            <Text style={styles.scoreInfoText}>🐡 Hard: 4 questions, total 120 points (30 per catch)</Text>
+                            <Text style={styles.scoreInfoText}>🐟 Easy: 3 questions, total 100 points (30/30/40)</Text>
+                            <Text style={styles.scoreInfoText}>🐠 Medium: 3 questions, total 110 points (30/40/40)</Text>
+                            <Text style={styles.scoreInfoText}>🐡 Hard: 3 questions, total 120 points (40/40/40)</Text>
                         </View>
                     </View>
 
@@ -877,7 +888,7 @@ export default function ListeningScreen() {
                 <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color="#4b6cb7" />
                     <Text style={styles.loadingText}>
-                        🎣 Preparing fishing pond... (1/4)
+                        🎣 Preparing fishing pond... (1/3)
                     </Text>
                 </View>
             </View>
@@ -936,7 +947,7 @@ export default function ListeningScreen() {
                     <View style={styles.resultCard}>
                         <View style={styles.scoreCircle}>
                             <Text style={styles.scoreCircleNumber}>{gameState.score}</Text>
-                            <Text style={styles.scoreCircleLabel}>/ {maxTotal} points</Text>
+                            <Text style={styles.scoreCircleLabel}>/ {totalMaxScore} points</Text>
                         </View>
 
                         <View style={styles.resultStars}>
@@ -985,7 +996,7 @@ export default function ListeningScreen() {
                                 </View>
                             </View>
 
-                            {/* 顯示總花費時間 */}
+                            {/* 显示总花费时间 */}
                             <View style={styles.resultStatItem}>
                                 <View style={styles.resultStatIcon}>
                                     <Ionicons name="time" size={24} color="#4b6cb7" />
@@ -997,11 +1008,12 @@ export default function ListeningScreen() {
                             </View>
                         </View>
 
-                        {/* 每題得分詳情 */}
+                        {/* 每题得分详情 */}
                         <View style={styles.detailScoreContainer}>
                             <Text style={styles.detailScoreTitle}>📊 Per Question Score:</Text>
                             {gameState.questions.map((q, idx) => {
-                                const earned = (q as any).earnedPoints || 0;
+                                const earned = q.earnedPoints || 0;
+                                const maxPts = q.maxPoints;
                                 return (
                                     <View key={idx} style={styles.detailScoreItem}>
                                         <Text style={styles.detailScoreNumber}>{idx + 1}.</Text>
@@ -1009,7 +1021,7 @@ export default function ListeningScreen() {
                                             {q.options.find(opt => opt.correct)?.text || '?'}
                                         </Text>
                                         <Text style={[styles.detailScoreValue, earned > 0 ? styles.correctScore : styles.incorrectScore]}>
-                                            {earned > 0 ? `${earned}/${maxPerQuestion}` : '0'}
+                                            {earned > 0 ? `${earned}/${maxPts}` : '0'}
                                         </Text>
                                     </View>
                                 );
@@ -1038,7 +1050,7 @@ export default function ListeningScreen() {
         );
     }
 
-    // 游戏主界面 - 計時器放在遊戲資訊區右側
+    // 游戏主界面 - 计时器放在游戏信息区右侧
     return (
         <View style={styles.container}>
             <Stack.Screen
@@ -1059,13 +1071,13 @@ export default function ListeningScreen() {
                 contentContainerStyle={styles.fishingScrollContent}
                 showsVerticalScrollIndicator={false}
             >
-                {/* 游戏信息 - 包含計時器 */}
+                {/* 游戏信息 - 包含计时器 */}
                 <View style={styles.fishingGameInfo}>
                     <View style={styles.fishingStats}>
                         <View style={styles.fishingStatBox}>
                             <Fish size={24} color="#4b6cb7" />
                             <Text style={styles.fishingStatValue}>{gameState.score}</Text>
-                            <Text style={styles.fishingStatLabel}>/ {maxTotal}</Text>
+                            <Text style={styles.fishingStatLabel}>/ {totalMaxScore}</Text>
                         </View>
                         <View style={styles.fishingStatBox}>
                             <Ionicons name="flag" size={24} color="#FF9800" />
@@ -1079,7 +1091,7 @@ export default function ListeningScreen() {
                             <Text style={styles.fishingStatValue}>{gameState.streak}</Text>
                             <Text style={styles.fishingStatLabel}>Streak</Text>
                         </View>
-                        {/* 計時器放在最右邊 */}
+                        {/* 计时器放在最右边 */}
                         <View style={styles.fishingStatBox}>
                             <Ionicons name="time-outline" size={24} color="#4b6cb7" />
                             <Text style={styles.fishingStatValue}>{formatTime(elapsedTime)}</Text>
@@ -1275,7 +1287,7 @@ export default function ListeningScreen() {
                     ]}>
                         <Text style={styles.fishingFeedbackText}>
                             {gameState.streak > 0
-                                ? `🎣 Great catch! +${maxPerQuestion} points!`
+                                ? `🎣 Great catch! +${currentMaxPoints} points!`
                                 : "😢 Oops! That fish got away... Try again!"}
                         </Text>
                     </View>

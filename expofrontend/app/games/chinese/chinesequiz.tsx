@@ -1,6 +1,6 @@
 // app/games/chinese/chinesequiz.tsx
 // 餐廳大作戰 - 傳送帶版本（加入打擊回饋與倒數特效版）
-// 修正：動態每題分數、避免異步分數遺失、Advanced 模式 4 題滿分 120
+// 修正：3題模式，初級分數 30+30+40=100，高級 40+40+40=120
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -239,7 +239,9 @@ const ChineseRestaurantGame = () => {
     const [loading, setLoading] = useState(false);
     const [difficulty, setDifficulty] = useState<'beginner' | 'advanced' | null>(null);
     const [aiFeedback, setAiFeedback] = useState<string>('');
-    const [maxScore, setMaxScore] = useState(100); // 依難度變動
+    const [maxScore, setMaxScore] = useState(100);
+    // 每題對應的滿分分數（初級: [30,30,40], 高級: [40,40,40]）
+    const [questionPoints, setQuestionPoints] = useState<number[]>([]);
 
     const [items, setItems] = useState<ConveyorItem[]>([]);
     const [combo, setCombo] = useState(0);
@@ -564,7 +566,7 @@ const ChineseRestaurantGame = () => {
         setGameState('result');
     };
 
-    // 修改：動態每題分數，並傳遞最新分數給完成函式
+    // 修改：根據當前題目索引獲取對應分數
     const handleItemClick = async (item: ConveyorItem) => {
         if (!isGameActive || gameComplete || nextQuestionDelay || !gameActive) return;
 
@@ -581,15 +583,16 @@ const ChineseRestaurantGame = () => {
         };
         setQuestions(updatedQuestions);
 
-        // 動態計算每一題的分數（確保能達到該難度的滿分）
-        const pointsPerQuestion = maxScore / questions.length;
+        // 獲取當前題目的分數權重
+        const pointsForThisQuestion = questionPoints[currentIndex] || 0;
         let updatedScore = score;
 
         if (item.isCorrect) {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
             setFloatingText({ id: Date.now(), text: 'HIT!', color: '#FFD700' });
             const newCombo = combo + 1;
-            updatedScore = Math.min(score + pointsPerQuestion, maxScore);
+            // 加分，不超過滿分
+            updatedScore = Math.min(score + pointsForThisQuestion, maxScore);
             setScore(updatedScore);
             setCombo(newCombo);
             setMaxCombo(prev => Math.max(prev, newCombo));
@@ -603,7 +606,7 @@ const ChineseRestaurantGame = () => {
             ]).start();
             setCustomerState('happy');
             await animateCustomerReaction(true);
-            showTemporaryHint(`🎉 So delicious! +${pointsPerQuestion}`, '#4CAF50');
+            showTemporaryHint(`🎉 So delicious! +${pointsForThisQuestion}`, '#4CAF50');
         } else {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
             triggerScreenShake();
@@ -627,7 +630,7 @@ const ChineseRestaurantGame = () => {
                 setNextQuestionDelay(false);
                 startPrepSequence(false); // 不是第一次，不啟動計時器
             } else {
-                // 傳遞剛剛計算好的最新分數，避免閉包抓到舊的 score
+                // 傳遞剛剛計算好的最新分數
                 handleGameComplete(updatedScore);
             }
         }, 800);
@@ -635,16 +638,18 @@ const ChineseRestaurantGame = () => {
 
     const loadQuestions = async (selectedDifficulty: 'beginner' | 'advanced') => {
         setLoading(true);
-        // 設定滿分
+        // 設定滿分與每題分數權重
         if (selectedDifficulty === 'beginner') {
             setMaxScore(100);
+            setQuestionPoints([30, 30, 40]);
         } else {
             setMaxScore(120);
+            setQuestionPoints([40, 40, 40]);
         }
         try {
             const newQuestions = await ChineseAIService.generateQuestions({
                 difficulty: selectedDifficulty,
-                count: 4   // 改為4題
+                count: 3   // 改為3題
             });
             const extendedQuestions: ExtendedQuestion[] = newQuestions.map(q => ({
                 ...q,
@@ -908,7 +913,7 @@ const ChineseRestaurantGame = () => {
                 level: 'beginner' as const,
                 title: 'Intern chef',
                 badgeText: 'Easy to serve',
-                description: 'The conveyor belt is slower, with simple dishes, suitable for beginner little chefs. (Full Score: 100)',
+                description: 'The conveyor belt is slower, with simple dishes, suitable for beginner little chefs. (3 dishes, Full Score: 30+30+40=100)',
                 icon: '👨‍🍳',
                 color: '#FFA07A',
                 bgColor: '#FFF3E0',
@@ -918,7 +923,7 @@ const ChineseRestaurantGame = () => {
                 level: 'advanced' as const,
                 title: 'Master Chef',
                 badgeText: 'Expert Challenge',
-                description: 'The conveyor belt is faster, with complex dishes, testing your reaction speed. (Full Score: 120)',
+                description: 'The conveyor belt is faster, with complex dishes, testing your reaction speed. (3 dishes, each 40 points, Full Score: 120)',
                 icon: '👩‍🍳',
                 color: '#E67E22',
                 bgColor: '#FFE4C4',

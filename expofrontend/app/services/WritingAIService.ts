@@ -41,15 +41,15 @@ class WritingAIService {
 
     // 預定義的文法類型清單（小四程度）
     private readonly grammarTypes: string[] = [
-        'to be (is/am/are) 肯定句',
-        'to have (has/have) 表示擁有',
-        '一般現在式 (Simple Present) 習慣/事實',
-        '現在進行式 (Present Continuous) 正在做',
-        '一般過去式 (Simple Past) 常見動詞',
-        '將來式 (Future: will / going to)',
-        '比較級 (Comparatives)',
+        'to be (is/am/are) affirmative sentences',
+        'to have (has/have) indicates possession',
+        'Simple Present (habits/routines & facts)',
+        'Present Continuous (actions happening now)',
+        'Simple Past (common verbs)',
+        'Future tense (will / going to)',
+        'Comparatives',
         'There is / There are',
-        '連接詞 (and / but / so / because)'
+        'Conjunctions (and / but / so / because)'
     ];
 
     constructor() {

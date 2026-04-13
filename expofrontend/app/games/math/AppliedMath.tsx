@@ -11,7 +11,7 @@ import axios from 'axios';
 import { useAuth } from "@/src/auth/AuthContext";
 import { useRouter, useNavigation } from 'expo-router';
 
-const MAX_STEPS = 5;
+const MAX_STEPS = 3;
 
 // 格式化時間為 mm:ss
 const formatTime = (seconds: number): string => {
