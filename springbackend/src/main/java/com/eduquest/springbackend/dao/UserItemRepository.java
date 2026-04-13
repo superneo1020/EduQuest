@@ -12,10 +12,19 @@ public interface UserItemRepository extends JpaRepository<UserItem,Long> {
     Boolean existsByUserIdAndItemId(Long userId, Long itemId);
 
     @Query(value = "SELECT new com.eduquest.springbackend.dto.UserItemDto( " +
-            "i.name, i.type, i.icon, i.description, ui.createdAt" +
+            "ui.id, i.id, i.name, i.type, i.icon, i.description, ui.createdAt" +
             ") " +
             "FROM UserItem ui " +
             "JOIN ui.item i " +
             "WHERE ui.user.id = :userId ")
     List<UserItemDto> findAllByUserId(@Param("userId") Long userId);
+
+    @Query(value = "SELECT new com.eduquest.springbackend.dto.UserItemDto( " +
+            "ui.id, i.id, i.name, i.type, i.icon, i.description, ui.createdAt" +
+            ") " +
+            "FROM UserItem ui " +
+            "JOIN ui.item i " +
+            "WHERE ui.user.id = :userId " +
+            "AND i.type = :type ")
+    List<UserItemDto> findAllByUserIdAndItemType(@Param("userId") Long userId, @Param("type") String type);
 }

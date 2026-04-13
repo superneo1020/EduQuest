@@ -6,14 +6,13 @@ import com.eduquest.springbackend.dao.UserRepository;
 import com.eduquest.springbackend.dto.UserItemDto;
 import com.eduquest.springbackend.dto.UserItemRequest;
 import com.eduquest.springbackend.dto.UserItemResponse;
+import com.eduquest.springbackend.dto.UtilDetailedListResponse;
 import com.eduquest.springbackend.exception.InsufficientPointsException;
 import com.eduquest.springbackend.model.AppUser;
 import com.eduquest.springbackend.model.Item;
 import com.eduquest.springbackend.model.UserItem;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
 
 @Service
 public class UserItemService {
@@ -23,15 +22,17 @@ public class UserItemService {
     private final ItemRepository itemRepo;
 
     private final ItemService itemService;
+    private final DtoMapper dtoMapper;
 
     public UserItemService(UserItemRepository userItemRepo,
                            UserRepository userRepo,
                            ItemRepository itemRepo,
-                           ItemService itemService) {
+                           ItemService itemService, DtoMapper dtoMapper) {
         this.userItemRepo = userItemRepo;
         this.userRepo = userRepo;
         this.itemRepo = itemRepo;
         this.itemService = itemService;
+        this.dtoMapper = dtoMapper;
     }
 
     @Transactional
@@ -62,8 +63,13 @@ public class UserItemService {
     }
 
     @Transactional(readOnly = true)
-    public List<UserItemDto> showItem(Long userId) {
-        return userItemRepo.findAllByUserId(userId);
+    public UtilDetailedListResponse<UserItemDto> showItem(Long userId) {
+        return dtoMapper.toDetailedListResponse(userItemRepo.findAllByUserId(userId));
+    }
+
+    @Transactional(readOnly = true)
+    public UtilDetailedListResponse<UserItemDto> showItemByType(Long userId, String type) {
+        return dtoMapper.toDetailedListResponse(userItemRepo.findAllByUserIdAndItemType(userId, type));
     }
 
     @Transactional(readOnly = true)
