@@ -29,12 +29,17 @@ export default function Login() {
         try {
             await signIn(username, password);
 
+            // Debug: Check if token was stored
+            const storedToken = await AsyncStorage.getItem('auth_token');
+            console.log('Login: Stored token after signIn:', storedToken ? storedToken.substring(0, 20) + '...' : 'missing');
+
             // 注意：因為 setUser 是異步的，直接拿剛剛 signIn 存入的數據最保險
             // 或者在 AuthContext 的 signIn 裡 return userData
 
             // 獲取存儲在 AsyncStorage 的用戶資訊來判斷
             const storedUser = await AsyncStorage.getItem('auth_user');
             const user = JSON.parse(storedUser || '{}');
+            console.log('Login: User roles:', user.roles);
 
             // 檢查 roles 陣列中是否包含 ADMIN 權限
             // 這裡要對應你後端回傳的字串，通常是 'ROLE_ADMIN' 或 'ADMIN'
@@ -51,7 +56,7 @@ export default function Login() {
             }
             else if (isEducator) {
                 console.log("Welcome Educator!");
-                router.replace("/teacher/classManagement"); // 導向你的 Admin 面板路徑
+                router.replace("/teacher/teacher"); // 導向你的 Admin 面板路徑
             }
             else {
                 console.log("Welcome Student!");
