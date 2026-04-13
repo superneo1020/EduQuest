@@ -8,6 +8,7 @@ import org.hibernate.generator.EventType;
 import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Map;
 
 @Entity
@@ -31,7 +32,7 @@ public class UserGameScore {
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
-    private Map<String, Object> metadata;
+    private Map<String, Object> metadata = new HashMap<>();
 
     @Column(nullable = false,
             insertable = false,

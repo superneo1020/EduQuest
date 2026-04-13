@@ -55,12 +55,22 @@ public interface UserRepository extends JpaRepository<AppUser, Long>, JpaSpecifi
     @Query("SELECT new com.eduquest.springbackend.dto.UserMiniDto(u.id, u.username, u.email) " +
             "FROM AppUser u " +
             "WHERE u.school.id = (SELECT u.school.id FROM AppUser u WHERE u.id = :id)")
-    Page<UserMiniDto> findAllUserRecordByIdWithSchool(Long userId, Pageable pageable);
+    Page<UserMiniDto> findAllUserRecordByIdWithSchool(@Param("id") Long userId, Pageable pageable);
 
     @Query("SELECT new com.eduquest.springbackend.dto.SchoolMemberProfileDto" +
             "(u.username, u.userProfile.nickname, u.email, u.userProfile.equippedItems" +
             ") " +
             "FROM AppUser u " +
             "WHERE u.school.id = (SELECT u.school.id FROM AppUser u WHERE u.id = :id)")
-    Page<SchoolMemberProfileDto> findAllUserProfileByIdWithSchool(Long userId, Pageable pageable);
+    Page<SchoolMemberProfileDto> findAllUserProfileByIdWithSchool(@Param("id") Long userId, Pageable pageable);
+
+    @Query("SELECT new com.eduquest.springbackend.dto.UserMiniDto(u.id, u.username, u.email) " +
+            "FROM AppUser u " +
+            "WHERE u.school.id = (SELECT user.school.id FROM AppUser user WHERE user.id = :id) " +
+            "AND u.id NOT IN (" +
+            "    SELECT cm.user.id FROM CourseMember cm WHERE cm.course.id = :courseId" +
+            ")")
+    Page<UserMiniDto> findPotentialMembersByIdWithSchool(@Param("id") Long userId,
+                                                         @Param("courseId") Long courseId,
+                                                         Pageable pageable);
 }
