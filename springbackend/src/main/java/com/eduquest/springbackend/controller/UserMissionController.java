@@ -19,13 +19,11 @@ public class UserMissionController {
         this.userMissionService = userMissionService;
     }
 
-    @GetMapping({"/", "/{completed}"})
+    @GetMapping("/{completed}")
     public ResponseEntity<?> getMyMission(
             @AuthenticationPrincipal AppUserDetails userDetails,
-            @PathVariable(required = false) Boolean completed
+            @PathVariable Boolean completed
     ) {
-        return completed != null
-                ? ResponseEntity.ok(userMissionService.showMission(userDetails.getId(), completed))
-                : ResponseEntity.ok(userMissionService.showMission(userDetails.getId(), false));
+        return ResponseEntity.ok(userMissionService.showMission(userDetails.getId(), completed));
     }
 }

@@ -15,7 +15,7 @@ export default function inventoryScreen() {
     const fetchMyItems = async () => {
         if (!token) return;
         try {
-            const response = await axios.get(`${getApiBaseUrl()}/api/user/item/`, {
+            const response = await axios.get(`${getApiBaseUrl()}/api/user/item`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             console.log('Items response:', response.data);

@@ -18,12 +18,12 @@ public class UserItemController {
         this.userItemService = userItemService;
     }
 
-    @GetMapping("/")
+    @GetMapping
     public ResponseEntity<?> getMyItem(@AuthenticationPrincipal AppUserDetails userDetails) {
         return ResponseEntity.ok(userItemService.showItem(userDetails.getId()));
     }
 
-    @PostMapping("/")
+    @PostMapping
     public ResponseEntity<?> createMyItem(
             @AuthenticationPrincipal AppUserDetails userDetails,
             @Valid @RequestBody UserItemRequest request

@@ -14,7 +14,7 @@ public interface UserMissionRepository extends JpaRepository<UserMission,Long> {
             ") " +
             "FROM UserMission um " +
             "JOIN um.mission m " +
-            "WHERE um.user.username = :userId " +
+            "WHERE um.user.id = :userId " +
             "AND um.completed = :completed ")
     List<UserMissionDto> findAllByUserIdAndCompleted(
             @Param("userId") Long userId,

@@ -1,19 +1,28 @@
 import React from 'react';
 import { TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
 import { AvatarSelector, renderAvatar } from './AvatarSelector';
 
 interface AvatarSelectionButtonProps {
     selectedAvatar: string;
     onSelect: (avatarId: string) => void;
     size?: number;
+    userItems?: any[];
 }
 
 export const AvatarSelectionButton: React.FC<AvatarSelectionButtonProps> = ({
     selectedAvatar,
     onSelect,
-    size = 50
+    size = 50,
+    userItems = []
 }) => {
     const [showModal, setShowModal] = React.useState(false);
+    const router = useRouter();
+
+    const handleGoToShop = () => {
+        setShowModal(false);
+        router.push('/shop');
+    };
 
     return (
         <>
@@ -33,6 +42,8 @@ export const AvatarSelectionButton: React.FC<AvatarSelectionButtonProps> = ({
                     setShowModal(false);
                 }}
                 onClose={() => setShowModal(false)}
+                userItems={userItems}
+                onGoToShop={handleGoToShop}
             />
         </>
     );
