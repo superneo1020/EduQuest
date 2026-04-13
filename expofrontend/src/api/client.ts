@@ -15,7 +15,7 @@ export function getApiBaseUrl(): string {
     const override = (Constants.expoConfig?.extra as any)?.API_BASE_URL || process.env.REACT_NATIVE_PUBLIC_HOST;
     if (override) return override;
 
-    // Basic heuristic: if running on web, use localhost:8080
+    // Basic heuristic: if running on web, use localhost:8080 to match Spring backend default port
     if (typeof window !== "undefined") {
         return "http://localhost:8080";
     }

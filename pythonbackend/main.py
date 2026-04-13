@@ -115,6 +115,12 @@ class GameScoreData(BaseModel):
 
 class LearningSuggestions(BaseModel):
     suggestions: list[dict]  # [{"type": "weakness", "title": "...", 5"description": "..."}]
+
+class AvatarRequest(BaseModel):
+    avatar: str
+
+class AvatarResponse(BaseModel):
+    avatar: str
 # ---------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------
