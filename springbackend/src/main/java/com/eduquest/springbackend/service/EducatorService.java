@@ -97,7 +97,7 @@ public class EducatorService {
     @Transactional
     public OperationResult removeCourse(Long courseId) {
         courseRepo.deleteById(courseId);
-        return new OperationResult("Course Member removed successfully.", false);
+        return new OperationResult("Course removed successfully.", false);
     }
 
     @Transactional
