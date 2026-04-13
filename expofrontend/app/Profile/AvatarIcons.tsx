@@ -386,5 +386,43 @@ export const AvatarIcons = {
             <Circle cx="35" cy="40" r="3" fill="#FFD700" />
             <Circle cx="65" cy="40" r="3" fill="#FFD700" />
         </Svg>
+    ),
+
+    // 数据库 icon 字段映射 (带 .png 后缀)
+    'cool_hat.png': ({ size = 50, color = '#4B0082' }) => (
+        <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
+            <Circle cx="50" cy="50" r="40" fill={color} />
+            <Path d="M 25 50 L 75 50 L 70 35 L 30 35 Z" fill="#8B008B" />
+            <Rect x="20" y="48" width="60" height="8" fill="#8B008B" />
+            <Circle cx="50" cy="35" r="3" fill="#FFD700" />
+        </Svg>
+    ),
+
+    'superhero_cape.png': ({ size = 50, color = '#DC143C' }) => (
+        <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
+            <Circle cx="50" cy="50" r="40" fill={color} />
+            <Path d="M 30 30 Q 50 25 70 30 L 75 70 Q 50 65 25 70 Z" fill="#8B0000" />
+            <Circle cx="35" cy="40" r="3" fill="#FFD700" />
+            <Circle cx="65" cy="40" r="3" fill="#FFD700" />
+        </Svg>
+    ),
+
+    'sports_jersey.png': ({ size = 50, color = '#FF6B6B' }) => (
+        <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
+            <Circle cx="50" cy="50" r="40" fill={color} />
+            <Path d="M 30 35 L 70 35 L 75 50 L 65 50 L 65 70 L 35 70 L 35 50 L 25 50 Z" fill="#FFF" />
+            <Path d="M 40 50 L 60 50" stroke={color} strokeWidth="2" />
+            <Path d="M 50 50 L 50 70" stroke={color} strokeWidth="2" />
+            <Circle cx="50" cy="40" r="2" fill="#000" />
+        </Svg>
+    ),
+
+    'science_glasses.png': ({ size = 50, color = '#4169E1' }) => (
+        <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
+            <Circle cx="50" cy="50" r="40" fill={color} />
+            <Circle cx="35" cy="50" r="12" stroke="#87CEEB" strokeWidth="3" fill="none" />
+            <Circle cx="65" cy="50" r="12" stroke="#87CEEB" strokeWidth="3" fill="none" />
+            <Path d="M 47 50 L 53 50" stroke="#87CEEB" strokeWidth="3" />
+        </Svg>
     )
 };

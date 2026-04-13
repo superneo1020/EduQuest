@@ -17,7 +17,6 @@ import SkillBarsChart from "@/app/Profile/SkillRadarChart";
 import { LineChart, BarChart, PieChart as RNPieChart } from 'react-native-chart-kit';
 import { AvatarSelector, renderAvatar, avatarOptions } from "@/app/Profile/AvatarSelector";
 
-
 const { width } = Dimensions.get('window');
 
 export default function ProfileScreen() {
@@ -63,7 +62,7 @@ export default function ProfileScreen() {
     const [errorContext, setErrorContext] = useState('');
     const [userFeedback, setUserFeedback] = useState('');
 
-    const [modalMessage, setModalMessage] = useState({ text: '', type: '' }); // type: 'error' | 'success'
+    const [modalMessage, setModalMessage] = useState({ text: '', type: '' });
 
     // AI Learning suggestions state
     const [aiSuggestions, setAiSuggestions] = useState<any[]>([]);
@@ -90,26 +89,21 @@ export default function ProfileScreen() {
     const [showAvatarModal, setShowAvatarModal] = useState(false);
     const [selectedAvatar, setSelectedAvatar] = useState<string>('default');
 
-
-
-
-    // 修改 ProfileScreen.tsx 中的 handleAvatarSelect 函數
+    // User points state
+    const [userPoints, setUserPoints] = useState<number>(0);
 
     const handleAvatarSelect = async (avatarId: string) => {
         try {
             const avatarOption = avatarOptions.find(opt => opt.id === avatarId);
             const avatarName = avatarOption?.name || avatarId;
 
-            // 1. 先獲取用戶擁有的物品列表，找到對應的物品 ID
             const itemsResponse = await axios.get(`${getApiBaseUrl()}/api/user/item`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            const userItemsList = itemsResponse.data || [];
+            const userItemsList = Array.isArray(itemsResponse.data) ? itemsResponse.data : [];
 
-            // 查找是否已經擁有該頭像
             let existingItem = userItemsList.find((item: any) => item.name === avatarName);
 
-            // 如果沒有，先獲取該物品
             if (!existingItem) {
                 try {
                     await axios.post(`${getApiBaseUrl()}/api/user/item`, {
@@ -121,10 +115,8 @@ export default function ProfileScreen() {
                         }
                     });
 
-                    // 等待後端處理
                     await new Promise(resolve => setTimeout(resolve, 1000));
 
-                    // 重新獲取物品列表
                     const newItemsResponse = await axios.get(`${getApiBaseUrl()}/api/user/item`, {
                         headers: { Authorization: `Bearer ${token}` }
                     });
@@ -144,19 +136,15 @@ export default function ProfileScreen() {
                 return;
             }
 
-            // 2. 更新用戶資料中的裝備頭像（使用實際的物品 ID）
             const updateData = {
                 equippedItems: {
-                    "AVATAR": existingItem.id  // 使用實際的物品 ID
+                    "AVATAR": existingItem.id
                 }
             };
 
-            // 如果有暱稱也要一起更新
             if (displayUser?.nickname) {
                 Object.assign(updateData, { nickname: displayUser.nickname });
             }
-
-            console.log('Updating with data:', JSON.stringify(updateData, null, 2));
 
             await axios.post(`${getApiBaseUrl()}/api/user/profile`, updateData, {
                 headers: {
@@ -169,7 +157,6 @@ export default function ProfileScreen() {
             setShowAvatarModal(false);
             Alert.alert('Success', 'Avatar updated successfully!');
 
-            // 重新獲取最新資料
             const profileResponse = await axios.get(`${getApiBaseUrl()}/api/user/profile`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -180,7 +167,7 @@ export default function ProfileScreen() {
             Alert.alert('Error', error.response?.data?.detail || 'Update failed. Please try again.');
         }
     };
-    // Function to show error with feedback option
+
     const showErrorWithFeedback = (errorMessage: string, context: string) => {
         Alert.alert(
             'Error',
@@ -208,16 +195,13 @@ export default function ProfileScreen() {
                 try {
                     setLoading(true);
 
-                    // 獲取用戶資料 - 使用 GET 方法
                     const profileResponse = await axios.get(`${getApiBaseUrl()}/api/user/profile`, {
                         headers: { Authorization: `Bearer ${token}` }
                     });
                     setProfileData(profileResponse.data);
 
-                    // 🔥 新增：從後端獲取裝備的頭像 ID，並更新 selectedAvatar
                     const equippedAvatarId = profileResponse.data?.equipped_items?.AVATAR;
                     if (equippedAvatarId) {
-                        // 根據物品 ID 找到對應的頭像 icon
                         const itemsResponse = await axios.get(`${getApiBaseUrl()}/api/user/item`, {
                             headers: { Authorization: `Bearer ${token}` }
                         });
@@ -230,7 +214,6 @@ export default function ProfileScreen() {
                         setSelectedAvatar('default');
                     }
 
-                    // 獲取學校資訊
                     try {
                         const schoolResponse = await axios.get(`${getApiBaseUrl()}/api/user/school`, {
                             headers: { Authorization: `Bearer ${token}` }
@@ -240,17 +223,16 @@ export default function ProfileScreen() {
                         console.log("School info not available");
                     }
 
-                    // 獲取用戶物品 - 使用 GET 方法
                     try {
                         const itemsResponse = await axios.get(`${getApiBaseUrl()}/api/user/item`, {
                             headers: { Authorization: `Bearer ${token}` }
                         });
-                        setUserItems(itemsResponse.data || []);
+                        setUserItems(Array.isArray(itemsResponse.data) ? itemsResponse.data : []);
                     } catch (error) {
                         console.log("Items info not available");
+                        setUserItems([]);
                     }
 
-                    // 獲取用戶任務
                     try {
                         const missionsResponse = await axios.get(`${getApiBaseUrl()}/api/user/mission`, {
                             headers: { Authorization: `Bearer ${token}` }
@@ -260,7 +242,6 @@ export default function ProfileScreen() {
                         console.log("Missions info not available");
                     }
 
-                    // 獲取用戶角色
                     try {
                         const rolesResponse = await axios.get(`${getApiBaseUrl()}/api/user/roles`, {
                             headers: { Authorization: `Bearer ${token}` }
@@ -270,7 +251,17 @@ export default function ProfileScreen() {
                         console.log("Roles info not available");
                     }
 
-                    // 獲取遊戲記錄
+                    try {
+                        const pointsResponse = await axios.get(`${getApiBaseUrl()}/api/user/point`, {
+                            headers: { Authorization: `Bearer ${token}` }
+                        });
+                        if (pointsResponse.data !== undefined) {
+                            setUserPoints(pointsResponse.data);
+                        }
+                    } catch (error) {
+                        console.log("Points info not available");
+                    }
+
                     const gameHistoryResponse = await axios.get(`${getApiBaseUrl()}/api/user/game/score`, {
                         params: { page: 0, size: 50 },
                         headers: { Authorization: `Bearer ${token}` }
@@ -290,27 +281,23 @@ export default function ProfileScreen() {
         }, [token])
     );
 
-    const displayUser = profileData ? { ...user, ...profileData } : user;
+    const displayUser = profileData ? { ...user, ...profileData, points: userPoints } : { ...user, points: userPoints };
     const gameHistory = displayUser?.userGameScores || [];
 
-    // Move calculateImprovementRate before calculateLearningStats
     const calculateImprovementRate = useCallback(() => {
         if (gameHistory.length < 3) return 0;
 
-        // 按時間排序遊戲記錄
         const sortedHistory = [...gameHistory].sort((a, b) =>
             new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()
         );
 
-        // 使用加權平均：最近的遊戲權重更高
         const totalGames = sortedHistory.length;
-        const recentCount = Math.min(10, totalGames); // 最近10個遊戲
-        const earlierCount = Math.min(10, totalGames - recentCount); // 早期10個遊戲
+        const recentCount = Math.min(10, totalGames);
+        const earlierCount = Math.min(10, totalGames - recentCount);
 
         const recentGames = sortedHistory.slice(-recentCount);
         const earlierGames = sortedHistory.slice(0, earlierCount);
 
-        // 計算加權平均（越近權重越高）
         const calculateWeightedAverage = (games: any[], baseWeight: number) => {
             if (games.length === 0) return 0;
 
@@ -318,7 +305,6 @@ export default function ProfileScreen() {
             let totalWeight = 0;
 
             games.forEach((game, index) => {
-                // 權重：baseWeight + index (越新的遊戲權重越高)
                 const weight = baseWeight + index;
                 const score = game.scores || 0;
 
@@ -333,14 +319,12 @@ export default function ProfileScreen() {
         const earlierWeightedAvg = earlierGames.length > 0 ?
             calculateWeightedAverage(earlierGames, 1) : recentWeightedAvg;
 
-        // 計算改善率，使用加權平均
         const improvementRate = earlierWeightedAvg > 0 ?
             ((recentWeightedAvg - earlierWeightedAvg) / earlierWeightedAvg) * 100 : 0;
 
         return Math.round(improvementRate);
     }, [gameHistory]);
 
-    // Enhanced Analytics Functions
     const calculateLearningStats = useMemo(() => {
         if (gameHistory.length === 0) return {
             subjectAverages: {},
@@ -380,15 +364,13 @@ export default function ProfileScreen() {
             }
         });
 
-        // 計算更真實的學習時間
         const calculateRealisticPlayTime = () => {
             if (gameHistory.length === 0) return 0;
 
-            // 基於難度估算時間
             const difficultyTimeMap: { [key: string]: number } = {
-                'EASY': 5,    // 簡單題目約5分鐘
-                'MEDIUM': 10,  // 中等題目約10分鐘
-                'HARD': 15     // 困難題目約15分鐘
+                'EASY': 5,
+                'MEDIUM': 10,
+                'HARD': 15
             };
 
             let totalTime = 0;
@@ -413,18 +395,18 @@ export default function ProfileScreen() {
 
     const getEquipmentStats = useMemo(() => {
         const equipped = profileData?.equipped_items || {};
-        const totalItems = userItems.length;
+        const totalItems = Array.isArray(userItems) ? userItems.length : 0;
         const equippedCount = Object.values(equipped).filter(item => item !== null).length;
+        const rareItems = Array.isArray(userItems)
+            ? userItems.filter(item => item.price > 100)
+            : [];
 
         return {
             equipped,
             totalItems,
             equippedCount,
             collectionProgress: Math.round((equippedCount / Math.max(totalItems, 1)) * 100),
-            rareItems: userItems.filter(item => {
-                const itemData = item;
-                return itemData.price > 100; // 假設價格超過100的為稀有物品
-            })
+            rareItems
         };
     }, [profileData, userItems]);
 
@@ -432,7 +414,6 @@ export default function ProfileScreen() {
         const stats = calculateLearningStats;
         const suggestions = [];
 
-        // AI 分析 1: 弱項科目深度分析
         const subjectEntries = Object.entries(stats.subjectAverages);
         if (subjectEntries.length > 0) {
             const sortedSubjects = subjectEntries.sort(([, a], [, b]) => a - b);
@@ -450,7 +431,6 @@ export default function ProfileScreen() {
             }
         }
 
-        // AI 分析 2: 學習模式分析
         const totalGames = Object.values(stats.difficultyPreference).reduce((a, b) => a + b, 0);
         const easyRatio = (stats.difficultyPreference['EASY'] || 0) / totalGames;
         const mediumRatio = (stats.difficultyPreference['MEDIUM'] || 0) / totalGames;
@@ -472,7 +452,6 @@ export default function ProfileScreen() {
             });
         }
 
-        // AI 分析 3: 學習一致性模式
         if (gameHistory.length >= 5) {
             const recentScores = gameHistory.slice(-5).map(g => g.scores || 0);
             const scoreVariance = Math.sqrt(recentScores.reduce((sum, score) => {
@@ -490,7 +469,6 @@ export default function ProfileScreen() {
             }
         }
 
-        // AI 分析 4: 最佳學習時間建議
         if (gameHistory.length >= 3) {
             const recentGames = gameHistory.slice(-3);
             const avgRecentScore = recentGames.reduce((sum, game) => sum + (game.scores || 0), 0) / recentGames.length;
@@ -505,7 +483,6 @@ export default function ProfileScreen() {
             }
         }
 
-        // AI 分析 5: 個人化學習路徑
         if (stats.averageScore >= 85 && Object.keys(stats.subjectAverages).length >= 3) {
             const balancedSubjects = Object.values(stats.subjectAverages).filter(score => score >= 80).length;
             if (balancedSubjects >= 2) {
@@ -518,7 +495,6 @@ export default function ProfileScreen() {
             }
         }
 
-        // AI 分析 6: 學習習慣優化
         const daysSinceFirstGame = gameHistory.length > 0 ?
             Math.ceil((Date.now() - new Date(gameHistory[0].created_at).getTime()) / (1000 * 60 * 60 * 24)) : 0;
         const gamesPerDay = daysSinceFirstGame > 0 ? gameHistory.length / daysSinceFirstGame : 0;
@@ -535,7 +511,6 @@ export default function ProfileScreen() {
         return suggestions;
     }, [calculateLearningStats, gameHistory]);
 
-    // 計算最高分邏輯
     const bestScores = useMemo(() => {
         if (gameHistory.length === 0) return [];
         const scoresMap = new Map();
@@ -547,6 +522,13 @@ export default function ProfileScreen() {
         });
         return Array.from(scoresMap.values());
     }, [gameHistory]);
+
+    const processedUserItems = useMemo(() => {
+        return userItems.map(item => ({
+            ...item,
+            icon: item.icon?.replace(/\.png$/i, '') || item.icon
+        }));
+    }, [userItems]);
 
     const getDifficultyColor = (diff: string) => {
         switch (diff?.toUpperCase()) {
@@ -568,7 +550,6 @@ export default function ProfileScreen() {
 
     const displayList = recordMode === 'recent' ? gameHistory.slice(0, 5) : bestScores;
 
-    // Chart data preparation
     const prepareTrendData = useMemo(() => {
         const last7Days = gameHistory.slice(-7);
         return {
@@ -607,8 +588,6 @@ export default function ProfileScreen() {
         };
     }, [calculateLearningStats]);
 
-    // Password change function
-    // Password change function
     const handleChangePassword = async () => {
         if (!oldPassword || !newPassword) {
             setModalMessage({ text: 'Please fill in all password fields', type: 'error' });
@@ -663,9 +642,6 @@ export default function ProfileScreen() {
         }
     };
 
-    // Email change function
-    // Email change function
-    // Email change function
     const handleChangeEmail = async () => {
         if (!newEmail) {
             setModalMessage({ text: 'Please enter a new email address', type: 'error' });
@@ -680,7 +656,6 @@ export default function ProfileScreen() {
             return;
         }
 
-        // Check if new email is the same as current email
         if (displayUser?.email && newEmail.trim().toLowerCase() === displayUser.email.toLowerCase()) {
             setModalMessage({ text: 'New email cannot be the same as your current email', type: 'error' });
             showErrorWithFeedback('New email cannot be the same as your current email', 'Email Change - Same Email');
@@ -690,24 +665,22 @@ export default function ProfileScreen() {
         try {
             setLoading(true);
 
-            // 發送更改郵箱請求
             await axios.post(`${getApiBaseUrl()}/api/user/email`,
                 { newEmail: newEmail.trim() },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 
-            // 重新獲取用戶資料以更新郵箱顯示
             const profileResponse = await axios.get(`${getApiBaseUrl()}/api/user/profile`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
-            // 更新 profileData，保留遊戲記錄
+            // 手動合併 email，確保 UI 即時更新
             setProfileData((prev: any) => ({
                 ...profileResponse.data,
+                email: newEmail.trim() || profileResponse.data.email,
                 userGameScores: prev?.userGameScores || []
             }));
 
-            // 顯示成功提示
             Alert.alert(
                 '✅ Success',
                 `Email changed to: ${newEmail.trim()}`,
@@ -746,7 +719,6 @@ export default function ProfileScreen() {
         }
     };
 
-    // School change function
     const handleChangeSchool = async () => {
         if (!newSchool || newSchool.trim() === '') {
             setModalMessage({ text: 'Please enter a school name', type: 'error' });
@@ -797,6 +769,7 @@ export default function ProfileScreen() {
             setLoading(false);
         }
     };
+
     const handleChangeNickname = async () => {
         if (!newNickname || newNickname.trim() === '') {
             setModalMessage({ text: 'Please enter a nickname', type: 'error' });
@@ -813,24 +786,22 @@ export default function ProfileScreen() {
         try {
             setLoading(true);
 
-            // 發送更改暱稱請求
             await axios.post(`${getApiBaseUrl()}/api/user/profile`,
                 { nickname: newNickname.trim() },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 
-            // 重新獲取用戶資料
             const profileResponse = await axios.get(`${getApiBaseUrl()}/api/user/profile`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
-            // 更新 profileData，保留遊戲記錄
+            // 手動合併 nickname，確保 UI 即時更新
             setProfileData((prev: any) => ({
                 ...profileResponse.data,
+                nickname: newNickname.trim() || profileResponse.data.nickname,
                 userGameScores: prev?.userGameScores || []
             }));
 
-            // 顯示成功提示
             Alert.alert(
                 '✅ Success',
                 `Nickname changed to: ${newNickname.trim()}`,
@@ -869,10 +840,8 @@ export default function ProfileScreen() {
         }
     };
 
-    // Function to handle feedback submission
     const handleSubmitFeedback = async () => {
         try {
-            // Here you would send the feedback to your backend or logging service
             const feedbackData = {
                 context: errorContext,
                 userFeedback: userFeedback,
@@ -881,9 +850,6 @@ export default function ProfileScreen() {
             };
 
             console.log('User feedback submitted:', feedbackData);
-
-            // You could also send this to a logging service
-            // await axios.post(`${getApiBaseUrl()}/api/feedback`, feedbackData);
 
             Alert.alert('Thank You', 'Your feedback has been submitted. We\'ll look into this issue.');
             setShowErrorFeedbackModal(false);
@@ -895,14 +861,12 @@ export default function ProfileScreen() {
         }
     };
 
-    // Function to fetch AI learning suggestions
     const fetchAiLearningSuggestions = async () => {
         if (loadingSuggestions || gameHistory.length === 0) return;
 
         try {
             setLoadingSuggestions(true);
 
-            // Prepare game score data for Python backend
             const gameScoreData = {
                 user_id: displayUser?.id || 1,
                 game_scores: gameHistory.map((game: any) => ({
@@ -914,9 +878,8 @@ export default function ProfileScreen() {
                 }))
             };
 
-            // Call Python backend API
             const response = await axios.post('http://localhost:8000/api/learning/suggestions', gameScoreData, {
-                timeout: 30000, // 30 seconds timeout
+                timeout: 30000,
                 headers: {
                     'Content-Type': 'application/json'
                 }
@@ -926,14 +889,11 @@ export default function ProfileScreen() {
         } catch (error: any) {
             console.error('Failed to fetch AI suggestions:', error);
 
-            // Fallback to local suggestions if AI fails
             Alert.alert(
                 'AI Analysis Unavailable',
                 'Using local analysis instead. Make sure Python backend is running.',
                 [{ text: 'OK' }]
             );
-
-            // Keep existing local suggestions as fallback
         } finally {
             setLoadingSuggestions(false);
         }
@@ -1059,48 +1019,9 @@ export default function ProfileScreen() {
                     </View>
                 </View>
 
-
-
                 {/* Enhanced Features Section */}
                 <View style={styles.enhancedFeaturesContainer}>
                     <Text style={styles.sectionTitle}>Enhanced Analytics</Text>
-
-
-                    <TouchableOpacity
-                        style={styles.featureItem}
-                        onPress={() => setShowLearningStats(true)}
-                    >
-                        <BarChart3 size={20} color="#FF9800" />
-                        <View style={styles.featureContent}>
-                            <Text style={styles.featureTitle}>Learning Statistics</Text>
-                            <Text style={styles.featureDescription}>Analyze your learning performance</Text>
-                        </View>
-                        <ChevronRight size={20} color="#BDC3C7" />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={styles.featureItem}
-                        onPress={() => setShowEquipment(true)}
-                    >
-                        <Award size={20} color="#9C27B0" />
-                        <View style={styles.featureContent}>
-                            <Text style={styles.featureTitle}>Equipment & Collection</Text>
-                            <Text style={styles.featureDescription}>View your equipped items and collection</Text>
-                        </View>
-                        <ChevronRight size={20} color="#BDC3C7" />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={styles.featureItem}
-                        onPress={() => setShowTrends(true)}
-                    >
-                        <TrendingUp size={20} color="#4CAF50" />
-                        <View style={styles.featureContent}>
-                            <Text style={styles.featureTitle}>Learning Trends</Text>
-                            <Text style={styles.featureDescription}>Track your progress over time</Text>
-                        </View>
-                        <ChevronRight size={20} color="#BDC3C7" />
-                    </TouchableOpacity>
 
                     <TouchableOpacity
                         style={styles.featureItem}
@@ -1116,55 +1037,9 @@ export default function ProfileScreen() {
                         </View>
                         <ChevronRight size={20} color="#BDC3C7" />
                     </TouchableOpacity>
-
-
                 </View>
 
                 {/* Personal Achievements Section */}
-                <View style={styles.achievementsContainer}>
-                    <Text style={styles.sectionTitle}>🏆 My Achievements</Text>
-                    <View style={styles.achievementsGrid}>
-                        <View style={styles.achievementCard}>
-                            <View style={styles.achievementIcon}>
-                                <Trophy size={28} color="#FFD700" />
-                            </View>
-                            <Text style={styles.achievementNumber}>{displayUser?.points || 0}</Text>
-                            <Text style={styles.achievementLabel}>Total Points</Text>
-                            <Text style={styles.achievementSubLabel}>Proof of hard work</Text>
-                        </View>
-                        <View style={styles.achievementCard}>
-                            <View style={styles.achievementIcon}>
-                                <Gamepad2 size={28} color="#FF6B6B" />
-                            </View>
-                            <Text style={styles.achievementNumber}>{gameHistory.length}</Text>
-                            <Text style={styles.achievementLabel}>Games Played</Text>
-                            <Text style={styles.achievementSubLabel}>Result of continuous learning</Text>
-                        </View>
-                        <TouchableOpacity
-                            style={styles.achievementCard}
-                            onPress={() => setShowMissionsModal(true)}
-                        >
-                            <View style={styles.achievementIcon}>
-                                <Target size={28} color="#9C27B0" />
-                            </View>
-                            <Text style={styles.achievementNumber}>{userMissions.filter(m => m.completed).length}</Text>
-                            <Text style={styles.achievementLabel}>Missions Done</Text>
-                            <Text style={styles.achievementSubLabel}>Achievement of challenging yourself</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={styles.achievementCard}
-                            onPress={() => router.push('/Inventory/inventory')}
-                        >
-                            <View style={styles.achievementIcon}>
-                                <Star size={28} color="#FF9800" />
-                            </View>
-                            <Text style={styles.achievementNumber}>{userItems.length}</Text>
-                            <Text style={styles.achievementLabel}>Items Collected</Text>
-                            <Text style={styles.achievementSubLabel}>Rewards on the learning journey</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-
 
 
                 {/* Learning Progress Section */}
@@ -1177,35 +1052,10 @@ export default function ProfileScreen() {
                                 <SkillBarsChart gameHistory={gameHistory} />
                             </View>
                         </View>
-                        <View style={styles.progressCard}>
-                            <Text style={styles.progressTitle}>Learning Statistics</Text>
-                            <View style={styles.learningStatsList}>
-                                <View style={styles.learningStatItem}>
-                                    <Text style={styles.learningStatLabel}>Average Score</Text>
-                                    <Text style={styles.learningStatValue}>{calculateLearningStats.averageScore}</Text>
-                                </View>
-                                <View style={styles.learningStatItem}>
-                                    <Text style={styles.learningStatLabel}>Best Subject</Text>
-                                    <Text style={styles.learningStatValue}>{calculateLearningStats.bestSubject || 'N/A'}</Text>
-                                </View>
-                                <View style={styles.learningStatItem}>
-                                    <Text style={styles.learningStatLabel}>Study Time</Text>
-                                    <Text style={styles.learningStatValue}>{calculateLearningStats.totalPlayTime} minutes</Text>
-                                </View>
-                                <View style={styles.learningStatItem}>
-                                    <Text style={styles.learningStatLabel}>Improvement Rate</Text>
-                                    <Text style={[styles.learningStatValue, { color: calculateLearningStats.improvementRate >= 0 ? '#4CAF50' : '#FF4757' }]}>
-                                        {calculateLearningStats.improvementRate >= 0 ? '+' : ''}{calculateLearningStats.improvementRate}%
-                                    </Text>
-                                </View>
-                            </View>
-                        </View>
                     </View>
                 </View>
 
-
-                {/* 切換標籤 */}
-                {/* 在 return 裡替換原有的 tabContainer */}
+                {/* Segmented Control */}
                 <View style={styles.segmentedControl}>
                     <TouchableOpacity
                         onPress={() => setRecordMode('recent')}
@@ -1245,7 +1095,6 @@ export default function ProfileScreen() {
                     )) : <Text style={styles.emptyText}>No records found.</Text>}
                 </View>
 
-                {/* View All Game Records Button */}
                 <TouchableOpacity
                     style={styles.viewAllRecordsBtn}
                     onPress={() => router.push('/Profile/GameRecords')}
@@ -1270,11 +1119,9 @@ export default function ProfileScreen() {
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <Text style={styles.modalTitle}>Change Password</Text>
-
                         <View style={styles.inputContainer}>
                             <Text style={styles.inputLabel}>Current Password</Text>
                             <View style={styles.passwordInput}>
-
                                 <TextInput
                                     style={[styles.textInput, { borderWidth: 0, backgroundColor: 'transparent' }]}
                                     placeholder="Enter current password"
@@ -1287,7 +1134,6 @@ export default function ProfileScreen() {
                                 </TouchableOpacity>
                             </View>
                         </View>
-
                         <View style={styles.inputContainer}>
                             <Text style={styles.inputLabel}>New Password</Text>
                             <View style={styles.passwordInput}>
@@ -1303,7 +1149,6 @@ export default function ProfileScreen() {
                                 </TouchableOpacity>
                             </View>
                         </View>
-
                         {modalMessage.text ? (
                             <Text style={{
                                 color: modalMessage.type === 'success' ? '#4CAF50' : '#FF4757',
@@ -1315,7 +1160,6 @@ export default function ProfileScreen() {
                                 {modalMessage.text}
                             </Text>
                         ) : null}
-
                         <View style={styles.modalButtons}>
                             <TouchableOpacity
                                 style={[styles.modalBtn, styles.cancelBtn]}
@@ -1356,7 +1200,6 @@ export default function ProfileScreen() {
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <Text style={styles.modalTitle}>Change Email</Text>
-
                         <View style={styles.inputContainer}>
                             <Text style={styles.inputLabel}>New Email Address</Text>
                             <TextInput
@@ -1368,7 +1211,6 @@ export default function ProfileScreen() {
                                 onChangeText={setNewEmail}
                             />
                         </View>
-
                         {modalMessage.text ? (
                             <Text style={{
                                 color: modalMessage.type === 'success' ? '#4CAF50' : '#FF4757',
@@ -1380,7 +1222,6 @@ export default function ProfileScreen() {
                                 {modalMessage.text}
                             </Text>
                         ) : null}
-
                         <View style={styles.modalButtons}>
                             <TouchableOpacity
                                 style={[styles.modalBtn, styles.cancelBtn]}
@@ -1409,6 +1250,7 @@ export default function ProfileScreen() {
                     </View>
                 </View>
             </Modal>
+
             {/* Nickname Change Modal */}
             <Modal
                 visible={showNicknameModal}
@@ -1419,7 +1261,6 @@ export default function ProfileScreen() {
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <Text style={styles.modalTitle}>Change Nickname</Text>
-
                         <View style={styles.inputContainer}>
                             <Text style={styles.inputLabel}>New Nickname</Text>
                             <TextInput
@@ -1430,7 +1271,6 @@ export default function ProfileScreen() {
                                 maxLength={50}
                             />
                         </View>
-
                         {modalMessage.text ? (
                             <Text style={{
                                 color: modalMessage.type === 'success' ? '#4CAF50' : '#FF4757',
@@ -1442,7 +1282,6 @@ export default function ProfileScreen() {
                                 {modalMessage.text}
                             </Text>
                         ) : null}
-
                         <View style={styles.modalButtons}>
                             <TouchableOpacity
                                 style={[styles.modalBtn, styles.cancelBtn]}
@@ -1482,7 +1321,6 @@ export default function ProfileScreen() {
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalContent, { maxHeight: '70%' }]}>
                         <Text style={styles.modalTitle}>My Missions</Text>
-
                         <ScrollView style={{ flex: 1, maxHeight: 300 }}>
                             {userMissions.length > 0 ? userMissions.map((mission: any, index: number) => (
                                 <View key={index} style={styles.missionCard}>
@@ -1516,7 +1354,6 @@ export default function ProfileScreen() {
                                 </View>
                             )}
                         </ScrollView>
-
                         <View style={styles.modalButtons}>
                             <TouchableOpacity
                                 style={[styles.modalBtn, styles.confirmBtn]}
@@ -1539,7 +1376,6 @@ export default function ProfileScreen() {
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalContent, { maxHeight: '70%' }]}>
                         <Text style={styles.modalTitle}>My Items</Text>
-
                         <ScrollView style={{ flex: 1, maxHeight: 300 }}>
                             {userItems.length > 0 ? userItems.map((item: any, index: number) => (
                                 <View key={index} style={styles.itemCard}>
@@ -1561,7 +1397,6 @@ export default function ProfileScreen() {
                                 </View>
                             )}
                         </ScrollView>
-
                         <View style={styles.modalButtons}>
                             <TouchableOpacity
                                 style={[styles.modalBtn, styles.confirmBtn]}
@@ -1584,7 +1419,6 @@ export default function ProfileScreen() {
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <Text style={styles.modalTitle}>Change School</Text>
-
                         <View style={styles.inputContainer}>
                             <Text style={styles.inputLabel}>New School Name</Text>
                             <TextInput
@@ -1595,7 +1429,6 @@ export default function ProfileScreen() {
                                 maxLength={100}
                             />
                         </View>
-
                         {modalMessage.text ? (
                             <Text style={{
                                 color: modalMessage.type === 'success' ? '#4CAF50' : '#FF4757',
@@ -1607,7 +1440,6 @@ export default function ProfileScreen() {
                                 {modalMessage.text}
                             </Text>
                         ) : null}
-
                         <View style={styles.modalButtons}>
                             <TouchableOpacity
                                 style={[styles.modalBtn, styles.cancelBtn]}
@@ -1647,12 +1479,10 @@ export default function ProfileScreen() {
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <Text style={styles.modalTitle}>Report Issue</Text>
-
                         <View style={styles.inputContainer}>
                             <Text style={styles.inputLabel}>What went wrong?</Text>
                             <Text style={styles.errorContextText}>{errorContext}</Text>
                         </View>
-
                         <View style={styles.inputContainer}>
                             <Text style={styles.inputLabel}>Please describe what happened (optional)</Text>
                             <TextInput
@@ -1664,7 +1494,6 @@ export default function ProfileScreen() {
                                 maxLength={500}
                             />
                         </View>
-
                         <View style={styles.modalButtons}>
                             <TouchableOpacity
                                 style={[styles.modalBtn, styles.cancelBtn]}
@@ -1687,7 +1516,6 @@ export default function ProfileScreen() {
                 </View>
             </Modal>
 
-
             {/* Learning Statistics Modal */}
             <Modal
                 visible={showLearningStats}
@@ -1698,7 +1526,6 @@ export default function ProfileScreen() {
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalContent, { maxHeight: '80%' }]}>
                         <Text style={styles.modalTitle}>Learning Statistics</Text>
-
                         <ScrollView style={{ flex: 1, maxHeight: 400 }}>
                             <View style={styles.statsCard}>
                                 <Text style={styles.statsCardTitle}>Performance Overview</Text>
@@ -1721,7 +1548,6 @@ export default function ProfileScreen() {
                                     </Text>
                                 </View>
                             </View>
-
                             <View style={styles.statsCard}>
                                 <Text style={styles.statsCardTitle}>Subject Performance</Text>
                                 {Object.entries(calculateLearningStats.subjectAverages).map(([subject, avg]: [string, number]) => (
@@ -1731,7 +1557,6 @@ export default function ProfileScreen() {
                                     </View>
                                 ))}
                             </View>
-
                             <View style={styles.statsCard}>
                                 <Text style={styles.statsCardTitle}>Difficulty Preference</Text>
                                 {Object.entries(calculateLearningStats.difficultyPreference).map(([difficulty, count]: [string, number]) => (
@@ -1742,7 +1567,6 @@ export default function ProfileScreen() {
                                 ))}
                             </View>
                         </ScrollView>
-
                         <View style={styles.modalButtons}>
                             <TouchableOpacity
                                 style={[styles.modalBtn, styles.confirmBtn]}
@@ -1765,7 +1589,6 @@ export default function ProfileScreen() {
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalContent, { maxHeight: '80%' }]}>
                         <Text style={styles.modalTitle}>Equipment & Collection</Text>
-
                         <ScrollView style={{ flex: 1, maxHeight: 400 }}>
                             <View style={styles.statsCard}>
                                 <Text style={styles.statsCardTitle}>Collection Stats</Text>
@@ -1786,7 +1609,6 @@ export default function ProfileScreen() {
                                     <Text style={styles.statsValue}>{getEquipmentStats.rareItems.length}</Text>
                                 </View>
                             </View>
-
                             <View style={styles.statsCard}>
                                 <Text style={styles.statsCardTitle}>Equipped Items</Text>
                                 <View style={styles.equipmentGrid}>
@@ -1800,7 +1622,6 @@ export default function ProfileScreen() {
                                     ))}
                                 </View>
                             </View>
-
                             {getEquipmentStats.rareItems.length > 0 && (
                                 <View style={styles.statsCard}>
                                     <Text style={styles.statsCardTitle}>Rare Items</Text>
@@ -1813,7 +1634,6 @@ export default function ProfileScreen() {
                                 </View>
                             )}
                         </ScrollView>
-
                         <View style={styles.modalButtons}>
                             <TouchableOpacity
                                 style={[styles.modalBtn, styles.confirmBtn]}
@@ -1836,7 +1656,6 @@ export default function ProfileScreen() {
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalContent, { maxHeight: '80%' }]}>
                         <Text style={styles.modalTitle}>Learning Trends</Text>
-
                         <ScrollView style={{ flex: 1, maxHeight: 400 }}>
                             <View style={styles.chartContainer}>
                                 <Text style={styles.chartTitle}>Recent Performance (Last 7 Games)</Text>
@@ -1871,7 +1690,6 @@ export default function ProfileScreen() {
                                     <Text style={styles.emptyText}>No data available</Text>
                                 )}
                             </View>
-
                             <View style={styles.chartContainer}>
                                 <Text style={styles.chartTitle}>Subject Performance</Text>
                                 {prepareSubjectData.labels.length > 0 ? (
@@ -1901,7 +1719,6 @@ export default function ProfileScreen() {
                                     <Text style={styles.emptyText}>No data available</Text>
                                 )}
                             </View>
-
                             <View style={styles.chartContainer}>
                                 <Text style={styles.chartTitle}>Difficulty Preference</Text>
                                 {prepareDifficultyData.labels.length > 0 ? (
@@ -1929,7 +1746,6 @@ export default function ProfileScreen() {
                                 )}
                             </View>
                         </ScrollView>
-
                         <View style={styles.modalButtons}>
                             <TouchableOpacity
                                 style={[styles.modalBtn, styles.confirmBtn]}
@@ -1952,7 +1768,6 @@ export default function ProfileScreen() {
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalContent, { maxHeight: '80%' }]}>
                         <Text style={styles.modalTitle}>Learning Suggestions</Text>
-
                         <ScrollView style={{ flex: 1, maxHeight: 400 }}>
                             {loadingSuggestions ? (
                                 <View style={{ alignItems: 'center', padding: 40 }}>
@@ -2004,17 +1819,15 @@ export default function ProfileScreen() {
                                     </Text>
                                 </View>
                             )}
-
                             <View style={styles.statsCard}>
-                                <Text style={styles.statsCardTitle}>AI 學習策略建議</Text>
-                                <Text style={styles.statsLabel}>🧠 **認知科學原理**：間隔重複比集中學習更有效</Text>
-                                <Text style={styles.statsLabel}>⏰ **最佳學習時長**：每次25-30分鐘，之後休息5分鐘</Text>
-                                <Text style={styles.statsLabel}>🎯 **目標設定**：設定具體可衡量的學習目標</Text>
-                                <Text style={styles.statsLabel}>🔄 **多樣化學習**：結合不同難度和科目提升綜合能力</Text>
-                                <Text style={styles.statsLabel}>📊 **數據驅動**：定期檢查學習數據，調整學習策略</Text>
+                                <Text style={styles.statsCardTitle}>AI Learning Strategy Suggestions</Text>
+                                <Text style={styles.statsLabel}>🧠 **Principles of Cognitive Science**: Spaced repetition is more effective than massed learning</Text>
+                                <Text style={styles.statsLabel}>⏰ **Optimal Study Duration**: 25-30 minutes each session, followed by a 5-minute break</Text>
+                                <Text style={styles.statsLabel}>🎯 **Goal Setting**: Set specific and measurable learning objectives</Text>
+                                <Text style={styles.statsLabel}>🔄 **Diverse Learning**: Combining different levels of difficulty and subjects to enhance overall abilities</Text>
+                                <Text style={styles.statsLabel}>📊 **Data-Driven**: Regularly check learning data and adjust learning strategies</Text>
                             </View>
                         </ScrollView>
-
                         <View style={styles.modalButtons}>
                             <TouchableOpacity
                                 style={[styles.modalBtn, styles.confirmBtn]}
@@ -2037,12 +1850,9 @@ export default function ProfileScreen() {
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <Text style={styles.modalTitle}>⚙️ Edit Profile</Text>
-
                         <ScrollView style={{ flex: 1, maxHeight: 400 }}>
                             <View style={styles.editSection}>
                                 <Text style={styles.editSectionTitle}>👤 Personal Information</Text>
-
-                                {/* Avatar Selection */}
                                 <View style={styles.inputGroup}>
                                     <Text style={styles.inputLabel}>Avatar</Text>
                                     <TouchableOpacity
@@ -2055,8 +1865,6 @@ export default function ProfileScreen() {
                                         </View>
                                     </TouchableOpacity>
                                 </View>
-
-                                {/* Edit Profile Modal 中的 TextInput 全部改用這個模式 */}
                                 <View style={styles.inputGroup}>
                                     <Text style={styles.inputLabel}>Nickname</Text>
                                     <TextInput
@@ -2066,7 +1874,6 @@ export default function ProfileScreen() {
                                         placeholder="Enter your nickname"
                                     />
                                 </View>
-
                                 <View style={styles.inputGroup}>
                                     <Text style={styles.inputLabel}>Email</Text>
                                     <TextInput
@@ -2078,8 +1885,6 @@ export default function ProfileScreen() {
                                         autoCapitalize="none"
                                     />
                                 </View>
-
-                                {/* Security 部分 */}
                                 <View style={styles.inputGroup}>
                                     <Text style={styles.inputLabel}>Current Password</Text>
                                     <TextInput
@@ -2090,7 +1895,6 @@ export default function ProfileScreen() {
                                         secureTextEntry
                                     />
                                 </View>
-
                                 <View style={styles.inputGroup}>
                                     <Text style={styles.inputLabel}>New Password</Text>
                                     <TextInput
@@ -2101,7 +1905,6 @@ export default function ProfileScreen() {
                                         secureTextEntry
                                     />
                                 </View>
-
                                 <View style={styles.inputGroup}>
                                     <Text style={styles.inputLabel}>Confirm Password</Text>
                                     <TextInput
@@ -2114,7 +1917,6 @@ export default function ProfileScreen() {
                                 </View>
                             </View>
                         </ScrollView>
-
                         <View style={styles.modalButtons}>
                             <TouchableOpacity
                                 style={[styles.modalBtn, styles.cancelBtn]}
@@ -2136,7 +1938,6 @@ export default function ProfileScreen() {
                                 style={[styles.modalBtn, styles.confirmBtn]}
                                 onPress={async () => {
                                     try {
-                                        // Prepare update data
                                         const updateData: any = {
                                             nickname: editFormData.nickname || displayUser?.nickname || '',
                                             equippedItems: {
@@ -2149,13 +1950,11 @@ export default function ProfileScreen() {
                                             privacySettings: {}
                                         };
 
-                                        // Call API to update profile
                                         await axios.post(`${getApiBaseUrl()}/api/user/profile`,
                                             updateData,
                                             { headers: { Authorization: `Bearer ${token}` } }
                                         );
 
-                                        // Update email if changed
                                         if (editFormData.email && editFormData.email !== displayUser?.email) {
                                             await axios.post(`${getApiBaseUrl()}/api/user/email`,
                                                 { newEmail: editFormData.email.trim() },
@@ -2163,7 +1962,6 @@ export default function ProfileScreen() {
                                             );
                                         }
 
-                                        // Update school if changed
                                         if (editFormData.school && editFormData.school !== currentSchool) {
                                             await axios.post(`${getApiBaseUrl()}/api/user/school`,
                                                 { newSchoolName: editFormData.school.trim() },
@@ -2171,7 +1969,6 @@ export default function ProfileScreen() {
                                             );
                                         }
 
-                                        // Update password if provided
                                         if (editFormData.password && editFormData.password.trim() !== '') {
                                             if (!editFormData.oldPassword || editFormData.oldPassword.trim() === '') {
                                                 Alert.alert('Error', 'Current password is required');
@@ -2185,7 +1982,6 @@ export default function ProfileScreen() {
                                                 Alert.alert('Error', 'Password must be at least 8 characters');
                                                 return;
                                             }
-
                                             await axios.post(`${getApiBaseUrl()}/api/user/password`,
                                                 { oldPassword: editFormData.oldPassword, newPassword: editFormData.password },
                                                 { headers: { Authorization: `Bearer ${token}` } }
@@ -2196,20 +1992,26 @@ export default function ProfileScreen() {
                                         setShowEditProfileModal(false);
                                         setEditFormData({ nickname: '', email: '', school: '', password: '', confirmPassword: '' });
 
-                                        // Refresh profile data
                                         const profileResponse = await axios.get(`${getApiBaseUrl()}/api/user/profile`, {
                                             headers: { Authorization: `Bearer ${token}` }
-                                    });
-                                    setProfileData(profileResponse.data);
+                                        });
 
-                                } catch (error: any) {
-                                    console.error('Profile update error:', error);
-                                    let errorMessage = 'Failed to update profile';
-                                    if (error.response?.data?.message) {
-                                    errorMessage = error.response.data.message;
-                                }
-                                    Alert.alert('Error', errorMessage);
-                                }
+                                        // 🔧 手動合併 email 與 nickname，確保 UI 即時更新
+                                        setProfileData((prev: any) => ({
+                                            ...profileResponse.data,
+                                            email: editFormData.email?.trim() || profileResponse.data.email,
+                                            nickname: editFormData.nickname?.trim() || profileResponse.data.nickname,
+                                            userGameScores: prev?.userGameScores || []
+                                        }));
+
+                                    } catch (error: any) {
+                                        console.error('Profile update error:', error);
+                                        let errorMessage = 'Failed to update profile';
+                                        if (error.response?.data?.message) {
+                                            errorMessage = error.response.data.message;
+                                        }
+                                        Alert.alert('Error', errorMessage);
+                                    }
                                 }}
                             >
                                 <Text style={styles.confirmBtnText}>Save Changes</Text>
@@ -2218,18 +2020,21 @@ export default function ProfileScreen() {
                     </View>
                 </View>
             </Modal>
+
             <AvatarSelector
                 visible={showAvatarModal}
                 onClose={() => setShowAvatarModal(false)}
                 onSelect={handleAvatarSelect}
                 selectedAvatar={selectedAvatar}
-                userItems={userItems}
+                userItems={processedUserItems}
                 onGoToShop={() => router.push('/shop')}
             />
-
         </SafeAreaView>
     );
 }
+
+// Styles definition omitted for brevity
+// const styles = StyleSheet.create({ ... });
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#F8F9FA' },
