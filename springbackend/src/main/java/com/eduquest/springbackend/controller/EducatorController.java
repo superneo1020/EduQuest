@@ -24,11 +24,20 @@ public class EducatorController {
     }
 
     @GetMapping("/school/members")
-    public ResponseEntity<UtilPageResponse<UserMiniDto>> showCourse(
+    public ResponseEntity<UtilPageResponse<UserMiniDto>> showCourseMembers(
             @AuthenticationPrincipal AppUserDetails userDetails,
             @PageableDefault Pageable pageable
     ) {
         return ResponseEntity.ok(educatorService.showAllSchoolMembers(userDetails.getId(), pageable));
+    }
+
+    @GetMapping("/class/{courseId}/members/potential")
+    public ResponseEntity<UtilPageResponse<UserMiniDto>> showPotentialCourseMembers(
+            @AuthenticationPrincipal AppUserDetails userDetails,
+            @PathVariable Long courseId,
+            @PageableDefault Pageable pageable
+    ) {
+        return ResponseEntity.ok(educatorService.showAllPotentialSchoolMembers(userDetails.getId(), courseId, pageable));
     }
 
     @GetMapping("/class")
