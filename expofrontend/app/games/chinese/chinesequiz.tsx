@@ -324,7 +324,8 @@ const ChineseRestaurantGame = () => {
             await axios.post('http://localhost:8080/api/user/game/score', {
                 gameName: "ChineseGame",
                 scores: finalScore,
-                difficulty: difficulty === 'beginner' ? 'EASY' : 'MEDIUM'
+                difficulty: difficulty === 'beginner' ? 'EASY' : 'MEDIUM',
+                "metadata": {}
             }, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });

@@ -125,7 +125,8 @@ const AnimalClassificationGame: React.FC = () => {
             await axios.post('http://localhost:8080/api/user/game/score', {
                 gameName: "Animal Classification",
                 scores: finalScore,
-                difficulty: "ANIMALS"
+                difficulty: "ANIMALS",
+                "metadata": {}
             }, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });

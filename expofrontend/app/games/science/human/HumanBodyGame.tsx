@@ -281,7 +281,8 @@ const HumanBodyGame = () => {
             await axios.post('http://localhost:8080/api/user/game/score', {
                 gameName: "Human organs",
                 scores: finalScore,
-                difficulty: "ORGANS"
+                difficulty: "ORGANS",
+                "metadata": {}
             }, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });

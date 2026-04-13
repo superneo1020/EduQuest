@@ -194,7 +194,7 @@ const ClawMachineGame: React.FC = () => {
     const refreshAIPromiseRef = useRef<Promise<void> | null>(null);
 
     // ========== 🎯 修改：回答次数限制（3次） ==========
-    const MAX_ANSWERS = 3;               // 最多回答3次
+    const MAX_ANSWERS = 3;               // 最多回答2次
     const [answerCount, setAnswerCount] = useState<number>(0);  // 已回答次数
 
     // 根据第几次回答返回对应分值（30, 30, 40）
@@ -253,7 +253,8 @@ const ClawMachineGame: React.FC = () => {
             await axios.post('http://localhost:8080/api/user/game/score', {
                 gameName: "Animal Catcher",
                 scores: finalScore,
-                difficulty: "ANIMAL"
+                difficulty: "ANIMAL",
+                "metadata": {}
             }, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });

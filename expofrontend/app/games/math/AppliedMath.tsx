@@ -185,7 +185,7 @@ const AppliedMath = () => {
 
             const finalScore = Math.round((reportData.accuracy / 100) * sessionHistory.length * 10);
             await axios.post('http://localhost:8080/api/user/game/score',
-                { gameName: "AI Math Adventure", scores: finalScore },
+                { gameName: "AI Math Adventure", scores: finalScore ,"metadata": {}},
                 { headers: { 'Authorization': `Bearer ${token}` } }
             );
             setIsFinished(true);

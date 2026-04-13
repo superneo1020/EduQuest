@@ -563,7 +563,8 @@ export default function SentenceReorderScreen() {
             await axios.post('http://localhost:8080/api/user/game/score', {
                 gameName: "Sentence Reorder",
                 scores: gameState.score,
-                difficulty: getLevelLabel(gameState.difficulty).toUpperCase()
+                difficulty: getLevelLabel(gameState.difficulty).toUpperCase(),
+                "metadata": {}
             }, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
