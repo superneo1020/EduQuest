@@ -40,6 +40,7 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
         loadData();
     }, []);
 
+    // ClassManagementPanel.tsx - 確保 loadData 正確刷新列表
     const loadData = async () => {
         try {
             setLoading(true);
@@ -106,10 +107,26 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
         }
     };
 
+    // ClassManagementPanel.tsx - 修改 deleteClass 函數
+    // ClassManagementPanel.tsx - 在刪除前檢查權限
+    // ClassManagementPanel.tsx - 完整版
+    // ClassManagementPanel.tsx - 修改 deleteClass 函數
+    // ClassManagementPanel.tsx - 修改獲取學校信息的代碼
+
+    // ClassManagementPanel.tsx - 完整版 deleteClass
+    // ClassManagementPanel.tsx - 修改 deleteClass 函數
+    // ClassManagementPanel.tsx - 修改 deleteClass 函數
     const deleteClass = async (classId: number) => {
+        const classToDelete = classesResponse?.items.find(c => c.id === classId);
+
+        if (!classToDelete) {
+            Alert.alert('Error', 'Class not found');
+            return;
+        }
+
         Alert.alert(
             'Delete Class',
-            'Are you sure you want to delete this class? This action cannot be undone.',
+            `Are you sure you want to delete class ${classToDelete.grade} ${classToDelete.suffix}? This action cannot be undone.`,
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -117,19 +134,25 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                     style: 'destructive',
                     onPress: async () => {
                         try {
-                            await educatorService.deleteClass(classId);
-                            Alert.alert('Success', 'Class deleted successfully');
-                            loadData();
-                        } catch (error) {
+                            console.log(`Attempting to delete class ${classId}`);
+                            const result = await educatorService.deleteClass(classId);
+                            console.log('Delete result:', result);
+
+                            if (result && !result.error) {
+                                Alert.alert('Success', result.message || 'Class deleted successfully');
+                                await loadData(); // 重新加載數據
+                            } else {
+                                Alert.alert('Error', result?.message || 'Failed to delete class');
+                            }
+                        } catch (error: any) {
                             console.error('Error deleting class:', error);
-                            Alert.alert('Error', 'Failed to delete class');
+                            Alert.alert('Error', `Failed to delete class: ${error.message}`);
                         }
                     }
                 }
             ]
         );
     };
-
     const addStudentsToClass = async () => {
         if (selectedStudents.length === 0) {
             Alert.alert('Error', 'Please select at least one student');
