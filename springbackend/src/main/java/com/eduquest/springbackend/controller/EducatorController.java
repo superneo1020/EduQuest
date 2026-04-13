@@ -32,6 +32,9 @@ public class EducatorController {
     }
 
     @GetMapping("/class/{courseId}/members/potential")
+    @PreAuthorize("@courseSecurity.isCourseExists(#courseId) && " +
+            "@courseMemberSecurity.isCourseMember(#courseId) && " +
+            "@courseSecurity.isCourseSameSchool(#courseId)")
     public ResponseEntity<UtilPageResponse<UserMiniDto>> showPotentialCourseMembers(
             @AuthenticationPrincipal AppUserDetails userDetails,
             @PathVariable Long courseId,
@@ -57,6 +60,7 @@ public class EducatorController {
 
     @DeleteMapping("/class/{courseId}")
     @PreAuthorize("@courseSecurity.isCourseExists(#courseId) && " +
+            "@courseMemberSecurity.isCourseMember(#courseId) && " +
             "@courseSecurity.isCourseSameSchool(#courseId)")
     public ResponseEntity<OperationResult> removeCourse(@PathVariable Long courseId) {
         return ResponseEntity.ok(educatorService.removeCourse(courseId));
