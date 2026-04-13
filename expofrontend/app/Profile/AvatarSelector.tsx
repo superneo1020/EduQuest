@@ -75,7 +75,8 @@ export const AvatarSelector: React.FC<AvatarSelectorProps> = ({
 
         // 2. 遍歷用戶已購買的物品
     // 在 AvatarSelector.tsx 中修改
-    userItems.forEach(userItem => {
+    const itemsArray = Array.isArray(userItems) ? userItems : [];
+    itemsArray.forEach(userItem => {
         // 確保物品類型是 AVATAR，並使用 icon 欄位來匹配
         if (userItem.type === 'AVATAR' && userItem.icon) {
             const backendIcon = userItem.icon;

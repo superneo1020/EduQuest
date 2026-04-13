@@ -413,7 +413,8 @@ export default function ProfileScreen() {
 
     const getEquipmentStats = useMemo(() => {
         const equipped = profileData?.equipped_items || {};
-        const totalItems = userItems.length;
+        const itemsArray = Array.isArray(userItems) ? userItems : [];
+        const totalItems = itemsArray.length;
         const equippedCount = Object.values(equipped).filter(item => item !== null).length;
 
         return {
@@ -421,7 +422,7 @@ export default function ProfileScreen() {
             totalItems,
             equippedCount,
             collectionProgress: Math.round((equippedCount / Math.max(totalItems, 1)) * 100),
-            rareItems: userItems.filter(item => {
+            rareItems: itemsArray.filter(item => {
                 const itemData = item;
                 return itemData.price > 100; // 假設價格超過100的為稀有物品
             })

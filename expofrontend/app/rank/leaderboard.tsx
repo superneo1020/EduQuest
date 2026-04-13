@@ -11,15 +11,11 @@ import { getApiBaseUrl } from '@/src/api/client';
 const GAME_CATEGORIES = [
     "Speed Calculation",
     "AI Math Adventure",
-    "Listening Game",
-    "Writing Game",
-    "Sentence Reorder",
-    "Animal Catcher",
-    "Human organs",
-    "Animal Classification",
-    "Body Parts Matching",
-    "ChineseGame",
-    "ChineseSentenceGame"
+    "Listening multiple choice questions",
+    "Word matching game",
+    "Sentence Reordering Game",
+    "Animal sorting game",
+    "Human Body Puzzle"
 ].sort(); // Sort alphabetically for consistent ordering
 
 const { width } = Dimensions.get('window');
