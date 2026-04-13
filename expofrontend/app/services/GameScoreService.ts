@@ -4,8 +4,8 @@ import axios from 'axios';
 export interface GameScoreRequest {
     gameName: string;
     scores: number;
-    gameType: string;
-    gameDifficulty: string;
+    gameType?: string;
+    gameDifficulty?: string;
 }
 
 export interface GameResult {
@@ -38,9 +38,56 @@ class GameScoreService {
                 throw new Error('No authentication token found');
             }
 
+            // Transform data to match backend expectations
+            console.log('Original gameData:', gameData);
+            
+            // Known game names from database
+            const knownGames = [
+                "Speed Calculation",
+                "AI Math Adventure", 
+                "Listening multiple choice questions",
+                "Word matching game",
+                "Sentence Reordering Game",
+                "Animal sorting game",
+                "Human Body Puzzle"
+            ];
+            
+            // Ensure gameName is not blank and within 50 chars
+            const gameName = gameData.gameName?.trim();
+            console.log('Trimmed gameName:', `"${gameName}"`);
+            console.log('GameName length:', gameName?.length);
+            console.log('Known games:', knownGames);
+            console.log('Is game known?', knownGames.includes(gameName));
+            
+            if (!gameName || gameName.length === 0) {
+                throw new Error('Game name cannot be empty');
+            }
+            if (gameName.length > 50) {
+                throw new Error('Game name too long (max 50 characters)');
+            }
+            
+            if (!knownGames.includes(gameName)) {
+                console.warn(`Warning: Game name "${gameName}" is not in the known games list`);
+            }
+            
+            // Ensure scores is a valid integer >= 0
+            const scores = Math.max(0, Math.floor(gameData.scores || 0));
+            
+            const backendRequest = {
+                gameName: gameName,
+                scores: scores,
+                metadata: {
+                    gameType: gameData.gameType || 'EDUCATIONAL',
+                    gameDifficulty: gameData.gameDifficulty || 'MEDIUM',
+                    timestamp: new Date().toISOString()
+                }
+            };
+            
+            console.log('Backend request:', JSON.stringify(backendRequest, null, 2));
+
             const response = await axios.post(
                 `${this.getApiBaseUrl()}/api/user/game/score`,
-                gameData,
+                backendRequest,
                 {
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -50,8 +97,27 @@ class GameScoreService {
             );
 
             console.log('Game score saved successfully:', response.data);
-        } catch (error) {
+        } catch (error: any) {
             console.error('Failed to save game score:', error);
+            
+            // Enhanced error logging for debugging
+            if (error.response) {
+                console.error('Backend validation error:', {
+                    status: error.response.status,
+                    data: error.response.data,
+                    headers: error.response.headers
+                });
+                
+                // Try to extract validation error details
+                if (error.response.data && typeof error.response.data === 'object') {
+                    console.error('Validation error details:', JSON.stringify(error.response.data, null, 2));
+                }
+            } else if (error.request) {
+                console.error('No response received:', error.request);
+            } else {
+                console.error('Request setup error:', error.message);
+            }
+            
             throw error;
         }
     }
