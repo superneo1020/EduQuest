@@ -63,4 +63,14 @@ public interface UserRepository extends JpaRepository<AppUser, Long>, JpaSpecifi
             "FROM AppUser u " +
             "WHERE u.school.id = (SELECT u.school.id FROM AppUser u WHERE u.id = :id)")
     Page<SchoolMemberProfileDto> findAllUserProfileByIdWithSchool(@Param("id") Long userId, Pageable pageable);
+
+    @Query("SELECT new com.eduquest.springbackend.dto.UserMiniDto(u.id, u.username, u.email) " +
+            "FROM AppUser u " +
+            "WHERE u.school.id = (SELECT user.school.id FROM AppUser user WHERE user.id = :id) " +
+            "AND u.id NOT IN (" +
+            "    SELECT cm.user.id FROM CourseMember cm WHERE cm.course.id = :courseId" +
+            ")")
+    Page<UserMiniDto> findPotentialMembersByIdWithSchool(@Param("id") Long userId,
+                                                         @Param("courseId") Long courseId,
+                                                         Pageable pageable);
 }
