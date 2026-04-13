@@ -18,7 +18,7 @@ public interface CourseMemberRepository extends JpaRepository<CourseMember, Long
     Optional<CourseMember> findByCourseIdAndUserId(Long courseId, Long userId);
 
     @Query("SELECT new com.eduquest.springbackend.dto.CourseMemberDto(" +
-            "u.id, u.username, u.email, u.createdAt, u.updatedAt, cm.roleInClass" +
+            "u.id, u.username, u.email, cm.createdAt, cm.updatedAt, cm.roleInClass" +
             ") " +
             "FROM CourseMember cm " +
             "JOIN cm.user u " +

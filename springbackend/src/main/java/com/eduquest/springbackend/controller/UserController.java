@@ -25,7 +25,7 @@ public class UserController {
         this.authService = authService;
     }
 
-    @GetMapping("/")
+    @GetMapping
     public ResponseEntity<?> getMyBasicInfo(@AuthenticationPrincipal AppUserDetails userDetails) {
         return ResponseEntity.ok(userService.findBasicInfoById(userDetails.getId()));
     }

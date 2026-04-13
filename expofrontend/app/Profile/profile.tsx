@@ -15,7 +15,8 @@ import axios from 'axios';
 import { getApiBaseUrl } from '@/src/api/client';
 import SkillBarsChart from "@/app/Profile/SkillRadarChart";
 import { LineChart, BarChart, PieChart as RNPieChart } from 'react-native-chart-kit';
-import {AvatarSelector, renderAvatar} from "@/app/Profile/AvatarSelector";
+import { AvatarSelector, renderAvatar, avatarOptions } from "@/app/Profile/AvatarSelector";
+
 
 const { width } = Dimensions.get('window');
 
@@ -81,138 +82,102 @@ export default function ProfileScreen() {
         email: '',
         school: '',
         password: '',
-        confirmPassword: ''
+        confirmPassword: '',
+        oldPassword: ''
     });
-
-
-
-
 
     // Profile Icon selection states
     const [showAvatarModal, setShowAvatarModal] = useState(false);
     const [selectedAvatar, setSelectedAvatar] = useState<string>('default');
 
-    const avatarOptions = [
-        // Avatar options are now handled in AvatarSelector component
-        { id: 'default', emoji: 'default', name: 'Default', color: '#636E72' },
-        { id: 'happy', emoji: 'happy', name: 'Happy Face', color: '#FFD93D' },
-        { id: 'cool', emoji: 'cool', name: 'Cool Kid', color: '#4ECDC4' },
-        { id: 'smart', emoji: 'smart', name: 'Smart Student', color: '#9B59B6' },
-        { id: 'sporty', emoji: 'sporty', name: 'Sporty', color: '#FF6B6B' },
-        { id: 'artistic', emoji: 'artistic', name: 'Artistic', color: '#FF9FF3' },
-        { id: 'bookworm', emoji: 'bookworm', name: 'Bookworm', color: '#54A0FF' },
-        { id: 'explorer', emoji: 'explorer', name: 'Explorer', color: '#1DD1A1' },
-        { id: 'star', emoji: 'star', name: 'Star Student', color: '#FFA502' },
-        { id: 'rainbow', emoji: 'rainbow', name: 'Rainbow', color: '#A29BFE' },
-        { id: 'rocket', emoji: 'rocket', name: 'Rocket', color: '#FF6348' },
-        { id: 'heart', emoji: 'heart', name: 'Heart', color: '#FF4757' }
-    ];
-    // Create avatar ID to item ID mapping
-    const mapAvatarIdToItemId = (avatarId: string): number | null => {
-        const avatarMapping = {
-            'default': null,
-            'happy_cat': 1,
-            'cool_dog': 2,
-            'smart_owl': 3,
-            'sporty_rabbit': 4,
-            'artistic_butterfly': 5,
-            'bookworm_bear': 6,
-            'explorer_monkey': 7,
-            'star_student': 8,
-            'rainbow_unicorn': 9,
-            'rocket_raccoon': 10,
-            'heart_panda': 11,
-            'sunshine_bee': 12,
-            'moon_turtle': 13,
-            'flower_ladybug': 14,
-            'rainbow_frog': 15,
-            'cloud_sheep': 16,
-            'apple_teacher': 17,
-            'pencil_wizard': 18,
-            'crayon_dragon': 19
-        };
-        return avatarMapping[avatarId as keyof typeof avatarMapping] || null;
-    };
 
-    // Function to update avatar selection
-    // 修改 handleAvatarSelect 函數
+
+
+    // 修改 ProfileScreen.tsx 中的 handleAvatarSelect 函數
+
     const handleAvatarSelect = async (avatarId: string) => {
         try {
-            setSelectedAvatar(avatarId);
-            setShowAvatarModal(false);
-            console.log('Token exists:', !!token);
-            console.log('Token length:', token?.length || 0);
-            console.log('API URL:', `${getApiBaseUrl()}/api/user/profile/`);
-            console.log('Avatar ID:', avatarId);
+            const avatarOption = avatarOptions.find(opt => opt.id === avatarId);
+            const avatarName = avatarOption?.name || avatarId;
 
-            const mappedItemId = mapAvatarIdToItemId(avatarId);
-            console.log('Mapped Item ID:', mappedItemId);
+            // 1. 先獲取用戶擁有的物品列表，找到對應的物品 ID
+            const itemsResponse = await axios.get(`${getApiBaseUrl()}/api/user/item`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const userItemsList = itemsResponse.data || [];
 
-            if (mappedItemId === null) {
-                Alert.alert('Error', 'Invalid avatar selection');
+            // 查找是否已經擁有該頭像
+            let existingItem = userItemsList.find((item: any) => item.name === avatarName);
+
+            // 如果沒有，先獲取該物品
+            if (!existingItem) {
+                try {
+                    await axios.post(`${getApiBaseUrl()}/api/user/item`, {
+                        itemName: avatarName
+                    }, {
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Bearer ${token}`
+                        }
+                    });
+
+                    // 等待後端處理
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+
+                    // 重新獲取物品列表
+                    const newItemsResponse = await axios.get(`${getApiBaseUrl()}/api/user/item`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+                    const newUserItemsList = newItemsResponse.data || [];
+                    existingItem = newUserItemsList.find((item: any) => item.name === avatarName);
+
+                    setUserItems(newUserItemsList);
+                } catch (itemError: any) {
+                    console.error('Failed to grant item:', itemError);
+                    Alert.alert('Error', 'Failed to get avatar item. Please try again.');
+                    return;
+                }
+            }
+
+            if (!existingItem) {
+                Alert.alert('Error', 'Avatar item not found in system');
                 return;
             }
 
-            // Try to update avatar directly first
-            try {
-                await axios.post(`${getApiBaseUrl()}/api/user/profile/`,
-                    {
-                        nickname: displayUser?.nickname || '',
-                        equippedItems: {
-                            AVATAR: mappedItemId
-                        },
-                        preferences: {},
-                        privacySettings: {}
-                    },
-                    { headers: { Authorization: `Bearer ${token}` } }
-                );
-
-                Alert.alert('Success', 'Avatar updated successfully!');
-            } catch (avatarError: any) {
-                console.log('Avatar update failed, trying to grant item first...');
-
-                if (avatarError.response?.status === 404) {
-                    // User doesn't own the avatar item, try to grant it first
-                    const avatarOption = avatarOptions.find(opt => opt.id === avatarId);
-                    const avatarName = avatarOption?.name || avatarId;
-
-                    console.log('Granting avatar item:', avatarName);
-                    await axios.post(`${getApiBaseUrl()}/api/user/item/`,
-                        { itemName: avatarName },
-                        { headers: { Authorization: `Bearer ${token}` } }
-                    );
-
-                    // Wait a moment for database update
-                    await new Promise(resolve => setTimeout(resolve, 500));
-
-                    // Try updating avatar again
-                    await axios.post(`${getApiBaseUrl()}/api/user/profile/`,
-                        {
-                            nickname: displayUser?.nickname || '',
-                            equippedItems: {
-                                AVATAR: mappedItemId
-                            },
-                            preferences: {},
-                            privacySettings: {}
-                        },
-                        { headers: { Authorization: `Bearer ${token}` } }
-                    );
-
-                    Alert.alert('Success', 'Avatar updated successfully!');
-                } else {
-                    throw avatarError;
+            // 2. 更新用戶資料中的裝備頭像（使用實際的物品 ID）
+            const updateData = {
+                equippedItems: {
+                    "AVATAR": existingItem.id  // 使用實際的物品 ID
                 }
-            }
-        } catch (error: any) {
-            console.error('Avatar update error:', error);
-            console.error('Error response:', error.response?.data);
-            console.error('Error status:', error.response?.status);
+            };
 
-            if (error.response?.status === 401) {
-                Alert.alert('Error', 'Authentication failed. Please log in again.');
-            } else {
-                Alert.alert('Error', 'Failed to update avatar');
+            // 如果有暱稱也要一起更新
+            if (displayUser?.nickname) {
+                Object.assign(updateData, { nickname: displayUser.nickname });
             }
+
+            console.log('Updating with data:', JSON.stringify(updateData, null, 2));
+
+            await axios.post(`${getApiBaseUrl()}/api/user/profile`, updateData, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`
+                }
+            });
+
+            setSelectedAvatar(avatarId);
+            setShowAvatarModal(false);
+            Alert.alert('Success', 'Avatar updated successfully!');
+
+            // 重新獲取最新資料
+            const profileResponse = await axios.get(`${getApiBaseUrl()}/api/user/profile`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setProfileData(profileResponse.data);
+
+        } catch (error: any) {
+            console.error("Update failed", error.response?.data);
+            Alert.alert('Error', error.response?.data?.detail || 'Update failed. Please try again.');
         }
     };
     // Function to show error with feedback option
@@ -242,13 +207,30 @@ export default function ProfileScreen() {
                 if (!token) return;
                 try {
                     setLoading(true);
-                    // Fetch profile data
-                    const profileResponse = await axios.get(`${getApiBaseUrl()}/api/user/profile/`, {
+
+                    // 獲取用戶資料 - 使用 GET 方法
+                    const profileResponse = await axios.get(`${getApiBaseUrl()}/api/user/profile`, {
                         headers: { Authorization: `Bearer ${token}` }
                     });
                     setProfileData(profileResponse.data);
 
-                    // Fetch school info
+                    // 🔥 新增：從後端獲取裝備的頭像 ID，並更新 selectedAvatar
+                    const equippedAvatarId = profileResponse.data?.equipped_items?.AVATAR;
+                    if (equippedAvatarId) {
+                        // 根據物品 ID 找到對應的頭像 icon
+                        const itemsResponse = await axios.get(`${getApiBaseUrl()}/api/user/item`, {
+                            headers: { Authorization: `Bearer ${token}` }
+                        });
+                        const userItemsList = itemsResponse.data || [];
+                        const equippedItem = userItemsList.find((item: any) => item.id === equippedAvatarId);
+                        if (equippedItem && equippedItem.icon) {
+                            setSelectedAvatar(equippedItem.icon);
+                        }
+                    } else {
+                        setSelectedAvatar('default');
+                    }
+
+                    // 獲取學校資訊
                     try {
                         const schoolResponse = await axios.get(`${getApiBaseUrl()}/api/user/school`, {
                             headers: { Authorization: `Bearer ${token}` }
@@ -258,9 +240,9 @@ export default function ProfileScreen() {
                         console.log("School info not available");
                     }
 
-                    // Fetch user items
+                    // 獲取用戶物品 - 使用 GET 方法
                     try {
-                        const itemsResponse = await axios.get(`${getApiBaseUrl()}/api/user/item/`, {
+                        const itemsResponse = await axios.get(`${getApiBaseUrl()}/api/user/item`, {
                             headers: { Authorization: `Bearer ${token}` }
                         });
                         setUserItems(itemsResponse.data || []);
@@ -268,9 +250,9 @@ export default function ProfileScreen() {
                         console.log("Items info not available");
                     }
 
-                    // Fetch user missions
+                    // 獲取用戶任務
                     try {
-                        const missionsResponse = await axios.get(`${getApiBaseUrl()}/api/user/mission/`, {
+                        const missionsResponse = await axios.get(`${getApiBaseUrl()}/api/user/mission`, {
                             headers: { Authorization: `Bearer ${token}` }
                         });
                         setUserMissions(missionsResponse.data || []);
@@ -278,7 +260,7 @@ export default function ProfileScreen() {
                         console.log("Missions info not available");
                     }
 
-                    // Fetch user roles
+                    // 獲取用戶角色
                     try {
                         const rolesResponse = await axios.get(`${getApiBaseUrl()}/api/user/roles`, {
                             headers: { Authorization: `Bearer ${token}` }
@@ -288,17 +270,16 @@ export default function ProfileScreen() {
                         console.log("Roles info not available");
                     }
 
-                    // Fetch game history separately
+                    // 獲取遊戲記錄
                     const gameHistoryResponse = await axios.get(`${getApiBaseUrl()}/api/user/game/score`, {
-                        params: { page: 0, size: 50 }, // Get up to 50 recent game records
+                        params: { page: 0, size: 50 },
                         headers: { Authorization: `Bearer ${token}` }
                     });
 
-                    // Combine profile data with game history
-                    setProfileData({
+                    setProfileData((prev: any) => ({
                         ...profileResponse.data,
                         userGameScores: gameHistoryResponse.data.content || []
-                    });
+                    }));
                 } catch (error) {
                     console.error("無法獲取最新資料", error);
                 } finally {
@@ -627,6 +608,7 @@ export default function ProfileScreen() {
     }, [calculateLearningStats]);
 
     // Password change function
+    // Password change function
     const handleChangePassword = async () => {
         if (!oldPassword || !newPassword) {
             setModalMessage({ text: 'Please fill in all password fields', type: 'error' });
@@ -647,14 +629,16 @@ export default function ProfileScreen() {
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 
-            Alert.alert('Success', 'Password changed successfully');
+            Alert.alert('✅ Success', 'Password changed successfully!');
             setModalMessage({ text: 'Password changed successfully!', type: 'success' });
+
             setTimeout(() => {
                 setShowPasswordModal(false);
                 setModalMessage({ text: '', type: '' });
+                setOldPassword('');
+                setNewPassword('');
             }, 1500);
-            setOldPassword('');
-            setNewPassword('');
+
         } catch (error: any) {
             console.error('Password change error:', error);
             let errorMessage = 'Failed to change password';
@@ -672,12 +656,15 @@ export default function ProfileScreen() {
             }
 
             setModalMessage({ text: errorMessage, type: 'error' });
+            Alert.alert('❌ Error', errorMessage);
             showErrorWithFeedback(errorMessage, context);
         } finally {
             setLoading(false);
         }
     };
 
+    // Email change function
+    // Email change function
     // Email change function
     const handleChangeEmail = async () => {
         if (!newEmail) {
@@ -702,24 +689,39 @@ export default function ProfileScreen() {
 
         try {
             setLoading(true);
+
+            // 發送更改郵箱請求
             await axios.post(`${getApiBaseUrl()}/api/user/email`,
                 { newEmail: newEmail.trim() },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 
-            Alert.alert('Success', 'Email changed successfully');
+            // 重新獲取用戶資料以更新郵箱顯示
+            const profileResponse = await axios.get(`${getApiBaseUrl()}/api/user/profile`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            // 更新 profileData，保留遊戲記錄
+            setProfileData((prev: any) => ({
+                ...profileResponse.data,
+                userGameScores: prev?.userGameScores || []
+            }));
+
+            // 顯示成功提示
+            Alert.alert(
+                '✅ Success',
+                `Email changed to: ${newEmail.trim()}`,
+                [{ text: 'OK' }]
+            );
+
             setModalMessage({ text: 'Email changed successfully!', type: 'success' });
+
             setTimeout(() => {
                 setShowEmailModal(false);
                 setModalMessage({ text: '', type: '' });
+                setNewEmail('');
             }, 1500);
-            setNewEmail('');
 
-            // Refresh profile data to get new email
-            const response = await axios.get(`${getApiBaseUrl()}/api/user/profile/`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            setProfileData(response.data);
         } catch (error: any) {
             console.error('Email change error:', error);
             let errorMessage = 'Failed to change email';
@@ -737,6 +739,7 @@ export default function ProfileScreen() {
             }
 
             setModalMessage({ text: errorMessage, type: 'error' });
+            Alert.alert('❌ Error', errorMessage);
             showErrorWithFeedback(errorMessage, context);
         } finally {
             setLoading(false);
@@ -760,7 +763,7 @@ export default function ProfileScreen() {
         try {
             setLoading(true);
             await axios.post(`${getApiBaseUrl()}/api/user/school`,
-                { school: newSchool.trim() },
+                { newSchoolName: newSchool.trim() },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 
@@ -809,29 +812,39 @@ export default function ProfileScreen() {
 
         try {
             setLoading(true);
-            await axios.post(`${getApiBaseUrl()}/api/user/profile/`,
+
+            // 發送更改暱稱請求
+            await axios.post(`${getApiBaseUrl()}/api/user/profile`,
                 { nickname: newNickname.trim() },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 
-            Alert.alert('Success', 'Nickname changed successfully');
-            setModalMessage({ text: 'Nickname changed successfully!', type: 'success' });
-            setTimeout(() => {
-                setShowNicknameModal(false);
-                setModalMessage({ text: '', type: '' });
-            }, 1500);
-            setNewNickname('');
-
-            // Refresh profile data to get new nickname
-            const profileResponse = await axios.get(`${getApiBaseUrl()}/api/user/profile/`, {
+            // 重新獲取用戶資料
+            const profileResponse = await axios.get(`${getApiBaseUrl()}/api/user/profile`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
-            // Preserve existing game history while updating profile
+            // 更新 profileData，保留遊戲記錄
             setProfileData((prev: any) => ({
                 ...profileResponse.data,
                 userGameScores: prev?.userGameScores || []
             }));
+
+            // 顯示成功提示
+            Alert.alert(
+                '✅ Success',
+                `Nickname changed to: ${newNickname.trim()}`,
+                [{ text: 'OK' }]
+            );
+
+            setModalMessage({ text: 'Nickname changed successfully!', type: 'success' });
+
+            setTimeout(() => {
+                setShowNicknameModal(false);
+                setModalMessage({ text: '', type: '' });
+                setNewNickname('');
+            }, 1500);
+
         } catch (error: any) {
             console.error('Nickname change error:', error);
             let errorMessage = 'Failed to change nickname';
@@ -849,6 +862,7 @@ export default function ProfileScreen() {
             }
 
             setModalMessage({ text: errorMessage, type: 'error' });
+            Alert.alert('❌ Error', errorMessage);
             showErrorWithFeedback(errorMessage, context);
         } finally {
             setLoading(false);
@@ -1260,6 +1274,7 @@ export default function ProfileScreen() {
                         <View style={styles.inputContainer}>
                             <Text style={styles.inputLabel}>Current Password</Text>
                             <View style={styles.passwordInput}>
+
                                 <TextInput
                                     style={[styles.textInput, { borderWidth: 0, backgroundColor: 'transparent' }]}
                                     placeholder="Enter current password"
@@ -2034,16 +2049,19 @@ export default function ProfileScreen() {
                                         style={styles.avatarSelector}
                                         onPress={() => setShowAvatarModal(true)}
                                     >
-                                        {renderAvatar(selectedAvatar, 40)}
-                                        <Text style={styles.changeAvatarText}>Change Avatar</Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            {renderAvatar(selectedAvatar, 40)}
+                                            <Text style={styles.changeAvatarText}>Change Avatar</Text>
+                                        </View>
                                     </TouchableOpacity>
                                 </View>
 
+                                {/* Edit Profile Modal 中的 TextInput 全部改用這個模式 */}
                                 <View style={styles.inputGroup}>
                                     <Text style={styles.inputLabel}>Nickname</Text>
                                     <TextInput
                                         style={styles.textInput}
-                                        value={editFormData.nickname || displayUser?.nickname || ''}
+                                        value={editFormData.nickname ?? displayUser?.nickname ?? ''}
                                         onChangeText={(text) => setEditFormData(prev => ({ ...prev, nickname: text }))}
                                         placeholder="Enter your nickname"
                                     />
@@ -2053,32 +2071,31 @@ export default function ProfileScreen() {
                                     <Text style={styles.inputLabel}>Email</Text>
                                     <TextInput
                                         style={styles.textInput}
-                                        value={editFormData.email || displayUser?.email || ''}
+                                        value={editFormData.email ?? displayUser?.email ?? ''}
                                         onChangeText={(text) => setEditFormData(prev => ({ ...prev, email: text }))}
                                         placeholder="Enter your email"
                                         keyboardType="email-address"
+                                        autoCapitalize="none"
                                     />
                                 </View>
 
+                                {/* Security 部分 */}
                                 <View style={styles.inputGroup}>
-                                    <Text style={styles.inputLabel}>School</Text>
+                                    <Text style={styles.inputLabel}>Current Password</Text>
                                     <TextInput
                                         style={styles.textInput}
-                                        value={editFormData.school || currentSchool || ''}
-                                        onChangeText={(text) => setEditFormData(prev => ({ ...prev, school: text }))}
-                                        placeholder="Enter your school"
+                                        value={editFormData.oldPassword ?? ''}
+                                        onChangeText={(text) => setEditFormData(prev => ({ ...prev, oldPassword: text }))}
+                                        placeholder="Enter current password"
+                                        secureTextEntry
                                     />
                                 </View>
-                            </View>
-
-                            <View style={styles.editSection}>
-                                <Text style={styles.editSectionTitle}>🔒 Security</Text>
 
                                 <View style={styles.inputGroup}>
                                     <Text style={styles.inputLabel}>New Password</Text>
                                     <TextInput
                                         style={styles.textInput}
-                                        value={editFormData.password}
+                                        value={editFormData.password ?? ''}
                                         onChangeText={(text) => setEditFormData(prev => ({ ...prev, password: text }))}
                                         placeholder="Enter new password (optional)"
                                         secureTextEntry
@@ -2089,7 +2106,7 @@ export default function ProfileScreen() {
                                     <Text style={styles.inputLabel}>Confirm Password</Text>
                                     <TextInput
                                         style={styles.textInput}
-                                        value={editFormData.confirmPassword}
+                                        value={editFormData.confirmPassword ?? ''}
                                         onChangeText={(text) => setEditFormData(prev => ({ ...prev, confirmPassword: text }))}
                                         placeholder="Confirm new password"
                                         secureTextEntry
@@ -2103,7 +2120,14 @@ export default function ProfileScreen() {
                                 style={[styles.modalBtn, styles.cancelBtn]}
                                 onPress={() => {
                                     setShowEditProfileModal(false);
-                                    setEditFormData({ nickname: '', email: '', school: '', password: '', confirmPassword: '' });
+                                    setEditFormData({
+                                        nickname: '',
+                                        email: '',
+                                        school: '',
+                                        password: '',
+                                        confirmPassword: '',
+                                        oldPassword: ''
+                                    });
                                 }}
                             >
                                 <Text style={styles.cancelBtnText}>Cancel</Text>
@@ -2116,21 +2140,24 @@ export default function ProfileScreen() {
                                         const updateData: any = {
                                             nickname: editFormData.nickname || displayUser?.nickname || '',
                                             equippedItems: {
-                                                AVATAR: mapAvatarIdToItemId(selectedAvatar)
+                                                AVATAR: (() => {
+                                                    const avatarItem = userItems.find(item => item.icon === selectedAvatar);
+                                                    return avatarItem?.id || null;
+                                                })()
                                             },
                                             preferences: {},
                                             privacySettings: {}
                                         };
 
                                         // Call API to update profile
-                                        await axios.post(`${getApiBaseUrl()}/api/user/profile/`,
+                                        await axios.post(`${getApiBaseUrl()}/api/user/profile`,
                                             updateData,
                                             { headers: { Authorization: `Bearer ${token}` } }
                                         );
 
                                         // Update email if changed
                                         if (editFormData.email && editFormData.email !== displayUser?.email) {
-                                            await axios.post(`${getApiBaseUrl()}/api/user/email/`,
+                                            await axios.post(`${getApiBaseUrl()}/api/user/email`,
                                                 { newEmail: editFormData.email.trim() },
                                                 { headers: { Authorization: `Bearer ${token}` } }
                                             );
@@ -2138,23 +2165,31 @@ export default function ProfileScreen() {
 
                                         // Update school if changed
                                         if (editFormData.school && editFormData.school !== currentSchool) {
-                                            await axios.post(`${getApiBaseUrl()}/api/user/school/`,
-                                                { school: editFormData.school.trim() },
+                                            await axios.post(`${getApiBaseUrl()}/api/user/school`,
+                                                { newSchoolName: editFormData.school.trim() },
                                                 { headers: { Authorization: `Bearer ${token}` } }
                                             );
                                         }
 
                                         // Update password if provided
-                                        if (editFormData.password) {
-                                            if (editFormData.password === editFormData.confirmPassword) {
-                                                await axios.post(`${getApiBaseUrl()}/api/user/password/`,
-                                                    { oldPassword: '', newPassword: editFormData.password },
-                                                    { headers: { Authorization: `Bearer ${token}` } }
-                                                );
-                                            } else {
+                                        if (editFormData.password && editFormData.password.trim() !== '') {
+                                            if (!editFormData.oldPassword || editFormData.oldPassword.trim() === '') {
+                                                Alert.alert('Error', 'Current password is required');
+                                                return;
+                                            }
+                                            if (editFormData.password !== editFormData.confirmPassword) {
                                                 Alert.alert('Error', 'Passwords do not match');
                                                 return;
                                             }
+                                            if (editFormData.password.length < 8) {
+                                                Alert.alert('Error', 'Password must be at least 8 characters');
+                                                return;
+                                            }
+
+                                            await axios.post(`${getApiBaseUrl()}/api/user/password`,
+                                                { oldPassword: editFormData.oldPassword, newPassword: editFormData.password },
+                                                { headers: { Authorization: `Bearer ${token}` } }
+                                            );
                                         }
 
                                         Alert.alert('Success', 'Profile updated successfully!');
@@ -2162,7 +2197,7 @@ export default function ProfileScreen() {
                                         setEditFormData({ nickname: '', email: '', school: '', password: '', confirmPassword: '' });
 
                                         // Refresh profile data
-                                        const profileResponse = await axios.get(`${getApiBaseUrl()}/api/user/profile/`, {
+                                        const profileResponse = await axios.get(`${getApiBaseUrl()}/api/user/profile`, {
                                             headers: { Authorization: `Bearer ${token}` }
                                     });
                                     setProfileData(profileResponse.data);
@@ -2188,6 +2223,8 @@ export default function ProfileScreen() {
                 onClose={() => setShowAvatarModal(false)}
                 onSelect={handleAvatarSelect}
                 selectedAvatar={selectedAvatar}
+                userItems={userItems}
+                onGoToShop={() => router.push('/shop')}
             />
 
         </SafeAreaView>

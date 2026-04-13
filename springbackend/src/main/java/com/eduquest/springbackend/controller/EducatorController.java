@@ -52,22 +52,24 @@ public class EducatorController {
         return ResponseEntity.ok(educatorService.removeCourse(courseId));
     }
 
-    @PostMapping("/class/user")
+    @PostMapping("/class/member")
     @PreAuthorize("@userSecurity.isSameSchool(#request.userId) && " +
             "!@courseMemberSecurity.isCourseMember(#request.courseId, #request.userId) && " +
-            "(@courseMemberSecurity.isCourseStaff(#request.courseId) || " +
-            "(@userSecurity.isSameUser(#request.userId)))")
+            "@courseMemberSecurity.isCourseMember(#request.courseId) && " +
+            "@courseMemberSecurity.isCourseStaff(#request.courseId)")
     public ResponseEntity<CourseMemberResponse> addCourseMember(@Valid @RequestBody CourseMemberRequest request) {
         return ResponseEntity.ok(educatorService.addCourseMember(request));
     }
 
-    @PatchMapping("/class/user")
-    @PreAuthorize("@courseMemberSecurity.isCourseMember(#request.courseId, #request.userId)")
+    @PatchMapping("/class/member")
+    @PreAuthorize("@courseMemberSecurity.isCourseMember(#request.courseId, #request.userId) && " +
+            "@courseMemberSecurity.isCourseMember(#request.courseId) && " +
+            "@courseMemberSecurity.isCourseStaff(#request.courseId)")
     public ResponseEntity<OperationResult> updateCourseMember(@Valid @RequestBody CourseMemberRequest request) {
         return ResponseEntity.ok(educatorService.updateCourseMember(request));
     }
 
-    @DeleteMapping("/class/{courseId}/user/{userId}")
+    @DeleteMapping("/class/{courseId}/member/{userId}")
     @PreAuthorize("@courseMemberSecurity.isAvailableModifyTeacher(#courseId) && " +
             "@courseMemberSecurity.isCourseMember(#courseId, #userId) && " +
             "@courseMemberSecurity.isCourseStaff(#courseId)")
