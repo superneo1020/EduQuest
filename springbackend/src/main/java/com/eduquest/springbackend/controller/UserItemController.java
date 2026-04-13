@@ -23,6 +23,14 @@ public class UserItemController {
         return ResponseEntity.ok(userItemService.showItem(userDetails.getId()));
     }
 
+    @GetMapping("/type/{type}")
+    public ResponseEntity<?> getMyItemByType(
+            @AuthenticationPrincipal AppUserDetails userDetails,
+            @PathVariable String type
+    ) {
+        return ResponseEntity.ok(userItemService.showItemByType(userDetails.getId(), type));
+    }
+
     @PostMapping
     public ResponseEntity<?> createMyItem(
             @AuthenticationPrincipal AppUserDetails userDetails,
