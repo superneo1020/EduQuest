@@ -771,7 +771,8 @@ export default function ListeningScreen() {
             await axios.post('http://localhost:8080/api/user/game/score', {
                 gameName: "Listening Game",
                 scores: scoreToSave,
-                difficulty: getLevelLabel(gameState.currentLevel!).toUpperCase()
+                difficulty: getLevelLabel(gameState.currentLevel!).toUpperCase(),
+                "metadata": {}
             }, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });

@@ -263,7 +263,8 @@ export default function WritingScreen() {
             await axios.post('http://localhost:8080/api/user/game/score', {
                 gameName: "Writing Game",
                 scores: score,
-                difficulty: difficulty === 'easy' ? 'EASY' : 'HARD'
+                difficulty: difficulty === 'easy' ? 'EASY' : 'HARD',
+                "metadata": {}
             }, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });

@@ -206,7 +206,8 @@ export default function ChineseSentenceGame() {
             await axios.post('http://localhost:8080/api/user/game/score', {
                 gameName: "ChineseSentenceGame",
                 scores: finalScore,
-                difficulty: difficulty === 'easy' ? 'EASY' : 'MEDIUM'
+                difficulty: difficulty === 'easy' ? 'EASY' : 'MEDIUM',
+                "metadata": {}
             }, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });

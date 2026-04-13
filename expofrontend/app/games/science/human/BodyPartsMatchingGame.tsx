@@ -148,7 +148,9 @@ const BodyPartsMatchingGame = () => {
             await axios.post('http://localhost:8080/api/user/game/score', {
                 gameName: "Body Parts Matching",
                 scores: finalScore,
-                difficulty: "MATCHING"
+                difficulty: "MATCHING",
+                "metadata": {}
+
             }, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
