@@ -13,6 +13,7 @@ import java.util.Optional;
 public interface CourseMemberRepository extends JpaRepository<CourseMember, Long> {
     boolean existsByCourseIdAndUserId(Long courseId, Long userId);
     boolean existsByCourseIdAndUserIdAndRoleInClassIn(Long id, Long userId, List<RoleInClass> roleInClass);
+    boolean existsByCourseIdAndUserIdAndRoleInClass(Long courseId, Long userId, RoleInClass roleInClass);
     long deleteByCourseIdAndUserId(Long courseId, Long userId);
     long countByCourseIdAndRoleInClass(Long courseId, RoleInClass roleInClass);
     Optional<CourseMember> findByCourseIdAndUserId(Long courseId, Long userId);
