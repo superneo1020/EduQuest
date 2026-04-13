@@ -199,28 +199,25 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
         );
     };
 
-    // ClassManagementPanel.tsx - 修改 loadClassMembers 函數
     const loadClassMembers = async (classId: number) => {
         try {
             const members = await educatorService.getClassMembers(classId);
-            console.log('Class members loaded:', members);
             setClassMembers(members);
         } catch (error) {
             console.error('Error loading class members:', error);
             setClassMembers([]);
         }
     };
-// ClassManagementPanel.tsx - 確保 viewClassMembers 被正確調用
-    const viewClassMembers = async (classItem: Course) => {
-        console.log('Viewing members for class:', classItem.id);
+
+    const viewClassMembers = (classItem: Course) => {
         setSelectedClass(classItem);
         setShowClassMembersModal(true);
-        await loadClassMembers(classItem.id);
+        loadClassMembers(classItem.id);
     };
 
     // Render methods remain the same
     const renderClassCard = ({ item: classItem }: { item: Course }) => (
-        <TouchableOpacity
+        <TouchableOpacity 
             style={styles.classCard}
             onPress={() => viewClassMembers(classItem)}
         >
@@ -385,7 +382,7 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                             <X size={24} color="#666" />
                         </TouchableOpacity>
                     </View>
-
+                    
                     <View style={styles.form}>
                         <View style={styles.formGroup}>
                             <Text style={styles.formLabel}>Grade</Text>
@@ -396,7 +393,7 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                                 onChangeText={(text) => setNewClassData(prev => ({ ...prev, grade: text }))}
                             />
                         </View>
-
+                        
                         <View style={styles.formGroup}>
                             <Text style={styles.formLabel}>Suffix</Text>
                             <TextInput
@@ -406,7 +403,7 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                                 onChangeText={(text) => setNewClassData(prev => ({ ...prev, suffix: text }))}
                             />
                         </View>
-
+                        
                         <View style={styles.formGroup}>
                             <Text style={styles.formLabel}>Academic Year</Text>
                             <TextInput
@@ -416,7 +413,7 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                                 onChangeText={(text) => setNewClassData(prev => ({ ...prev, academicYear: text }))}
                             />
                         </View>
-
+                        
                         <TouchableOpacity style={styles.submitBtn} onPress={createClass}>
                             <Text style={styles.submitBtnText}>Create Class</Text>
                         </TouchableOpacity>
@@ -440,19 +437,19 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                             <X size={24} color="#666" />
                         </TouchableOpacity>
                     </View>
-
+                    
                     <View style={styles.modalContent}>
                         <Text style={styles.selectionInfo}>
                             {selectedStudents.length} student{selectedStudents.length !== 1 ? 's' : ''} selected
                         </Text>
-
+                        
                         <FlatList
                             data={schoolMembers}
                             renderItem={renderStudentItem}
                             keyExtractor={item => item.id.toString()}
                             contentContainerStyle={styles.modalStudentList}
                         />
-
+                        
                         <TouchableOpacity style={styles.submitBtn} onPress={addStudentsToClass}>
                             <Text style={styles.submitBtnText}>
                                 Add {selectedStudents.length} Student{selectedStudents.length !== 1 ? 's' : ''}
@@ -462,7 +459,6 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                 </View>
             </Modal>
 
-            {/* Class Members Modal */}
             {/* Class Members Modal */}
             <Modal
                 visible={showClassMembersModal}
@@ -479,42 +475,36 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                             <X size={24} color="#666" />
                         </TouchableOpacity>
                     </View>
-
+                    
                     <View style={styles.modalContent}>
                         <Text style={styles.selectionInfo}>
                             {classMembers.length} member{classMembers.length !== 1 ? 's' : ''}
                         </Text>
-
-                        {classMembers.length === 0 ? (
-                            <View style={{ padding: 20, alignItems: 'center' }}>
-                                <Text>No members found</Text>
-                            </View>
-                        ) : (
-                            <FlatList
-                                data={classMembers}
-                                renderItem={({ item }) => (
-                                    <View style={styles.memberItem}>
-                                        <View style={styles.memberInfo}>
-                                            <Text style={styles.memberName}>{item.username}</Text>
-                                            <Text style={styles.memberEmail}>{item.email}</Text>
-                                            <Text style={styles.memberRole}>{item.roleInClass}</Text>
-                                        </View>
-                                        <View style={[
-                                            styles.roleBadge,
-                                            item.roleInClass === 'TEACHER' && styles.teacherBadge,
-                                            item.roleInClass === 'ASSISTANT' && styles.assistantBadge,
-                                            item.roleInClass === 'STUDENT' && styles.studentBadge
-                                        ]}>
-                                            <Text style={styles.roleBadgeText}>
-                                                {item.roleInClass}
-                                            </Text>
-                                        </View>
+                        
+                        <FlatList
+                            data={classMembers}
+                            renderItem={({ item }) => (
+                                <View style={styles.memberItem}>
+                                    <View style={styles.memberInfo}>
+                                        <Text style={styles.memberName}>{item.username}</Text>
+                                        <Text style={styles.memberEmail}>{item.email}</Text>
+                                        <Text style={styles.memberRole}>{item.roleInClass}</Text>
                                     </View>
-                                )}
-                                keyExtractor={item => item.userId.toString()}
-                                contentContainerStyle={styles.modalStudentList}
-                            />
-                        )}
+                                    <View style={[
+                                        styles.roleBadge,
+                                        item.roleInClass === 'TEACHER' && styles.teacherBadge,
+                                        item.roleInClass === 'ASSISTANT' && styles.assistantBadge,
+                                        item.roleInClass === 'STUDENT' && styles.studentBadge
+                                    ]}>
+                                        <Text style={styles.roleBadgeText}>
+                                            {item.roleInClass}
+                                        </Text>
+                                    </View>
+                                </View>
+                            )}
+                            keyExtractor={item => item.userId.toString()}
+                            contentContainerStyle={styles.modalStudentList}
+                        />
                     </View>
                 </View>
             </Modal>

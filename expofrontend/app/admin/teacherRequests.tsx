@@ -11,6 +11,7 @@ import {
     ActivityIndicator,
     SafeAreaView
 } from "react-native";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from "expo-router";
 import { 
     User, 
@@ -26,6 +27,7 @@ import {
 import { TeacherRegistrationStorage, TeacherRegistrationRequest } from "../../src/utils/teacherRegistrationStorage";
 import { useAuth } from "../../src/auth/AuthContext";
 import { getApiBaseUrl } from "../../src/api/client";
+import { adminService } from "../../src/services/adminService";
 
 export default function TeacherRequests() {
     const { user } = useAuth();
@@ -83,6 +85,8 @@ export default function TeacherRequests() {
         setFilteredRequests(filtered);
     };
 
+    // teacherRequests.tsx - 修改 handleApprove 函數
+
     const handleApprove = async () => {
         if (!selectedRequest) return;
 
@@ -91,19 +95,18 @@ export default function TeacherRequests() {
             // Refresh the request data to get latest status
             const allRequests = await TeacherRegistrationStorage.getAllRequests();
             const currentRequest = allRequests.find(req => req.id === selectedRequest.id);
-            
+
             if (!currentRequest) {
                 throw new Error('Request not found');
             }
-            
+
             if (currentRequest.status !== "pending") {
                 throw new Error(`Request is not pending. Current status: ${currentRequest.status}`);
             }
-            
-            // Update selected request with fresh data
+
             setSelectedRequest(currentRequest);
-            
-            // Update request status
+
+            // Update request status in local storage
             await TeacherRegistrationStorage.updateRequestStatus(
                 currentRequest.id,
                 "approved",
@@ -114,34 +117,15 @@ export default function TeacherRequests() {
             // Create the actual user account by calling the backend API
             const apiUrl = `${getApiBaseUrl()}/api/auth/register`;
             console.log('Creating teacher account at:', apiUrl);
-            
-            // Debug: Log the request data
-            console.log('Request data:', {
-                username: currentRequest.username,
-                email: currentRequest.email,
-                password: currentRequest.password ? '[HIDDEN]' : '[EMPTY]',
-                isEducator: true,
-                schoolName: currentRequest.schoolName
-            });
-            
-            // Validate email format - more comprehensive regex
-            const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-            if (!emailRegex.test(currentRequest.email)) {
-                throw new Error(`Invalid email format: "${currentRequest.email}". Please provide a valid email address.`);
-            }
-            
-            console.log('Email validation passed for:', currentRequest.email);
-            
+
             const requestBody = {
                 username: currentRequest.username,
-                email: currentRequest.email.trim(), // Trim whitespace
+                email: currentRequest.email.trim(),
                 password: currentRequest.password,
                 isEducator: true,
                 schoolName: currentRequest.schoolName
             };
-            
-            console.log('Sending request body:', JSON.stringify(requestBody, null, 2));
-            
+
             let response = await fetch(apiUrl, {
                 method: 'POST',
                 headers: {
@@ -154,17 +138,15 @@ export default function TeacherRequests() {
             if (!response.ok) {
                 const errorText = await response.text();
                 console.error('First attempt failed:', response.status, errorText);
-                
+
                 if (response.status === 404 && errorText.includes('School not found')) {
                     console.log('School not found, trying with null schoolName...');
-                    
+
                     const fallbackRequestBody = {
                         ...requestBody,
                         schoolName: null
                     };
-                    
-                    console.log('Fallback request body:', JSON.stringify(fallbackRequestBody, null, 2));
-                    
+
                     response = await fetch(apiUrl, {
                         method: 'POST',
                         headers: {
@@ -178,26 +160,57 @@ export default function TeacherRequests() {
             if (!response.ok) {
                 const errorText = await response.text();
                 console.error('Backend response:', response.status, errorText);
-                
-                if (response.status === 404) {
-                    if (errorText.includes('School not found')) {
-                        throw new Error('School not found even with null. Please check school setup in backend.');
-                    } else {
-                        throw new Error('API endpoint not found. Please check if backend is running correctly.');
-                    }
-                } else if (response.status === 400) {
-                    throw new Error(`Invalid request: ${errorText}`);
-                } else {
-                    throw new Error(`Server error (${response.status}): ${errorText}`);
-                }
+                throw new Error(`Server error (${response.status}): ${errorText}`);
             }
 
-            Alert.alert("Success", "Teacher registration approved and account created successfully!");
+            const userData = await response.json();
+            console.log('User created successfully:', userData);
+
+            // 嘗試激活用戶並更新 educatorStatus
+            if (userData && userData.id) {
+                console.log('Activating user account for ID:', userData.id);
+
+                try {
+                    // 調用 activate API（這會設置 isActive = true）
+                    const activationSuccess = await adminService.activateUser(userData.id);
+
+                    if (activationSuccess) {
+                        console.log('User activation successful');
+
+                        // 注意：educatorStatus 仍然是 PENDING
+                        // 需要後端提供 approve API 來更新 educatorStatus
+
+                        Alert.alert(
+                            "Success",
+                            `Teacher account created and activated!\n\nUser ID: ${userData.id}\nUsername: ${userData.username}\n\nNote: Educator status will be updated to APPROVED after backend approval.`,
+                            [
+                                {
+                                    text: "OK",
+                                    onPress: () => {
+                                        console.log('Admin acknowledged');
+                                    }
+                                }
+                            ]
+                        );
+                    } else {
+                        throw new Error('Activation failed');
+                    }
+                } catch (activationError) {
+                    console.error('Activation failed:', activationError);
+                    Alert.alert(
+                        "Partial Success",
+                        `Teacher account created but activation failed.\n\nUser ID: ${userData.id}\nUsername: ${userData.username}\n\nPlease manually activate in database:\nUPDATE users SET is_active = true, educator_status = 'APPROVED' WHERE id = ${userData.id};`,
+                        [{ text: "OK" }]
+                    );
+                }
+            } else {
+                Alert.alert("Success", "Teacher registration approved and account created successfully!");
+            }
+
             setModalVisible(false);
             setSelectedRequest(null);
             setAdminNotes("");
-            
-            // Refresh the requests list to update UI
+
             await loadRequests();
         } catch (error) {
             console.error("Error approving request:", error);
