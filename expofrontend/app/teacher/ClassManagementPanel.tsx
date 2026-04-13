@@ -107,46 +107,94 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
         }
     };
 
-    // ClassManagementPanel.tsx - 修改 deleteClass 函數
-    // ClassManagementPanel.tsx - 在刪除前檢查權限
-    // ClassManagementPanel.tsx - 完整版
-    // ClassManagementPanel.tsx - 修改 deleteClass 函數
-    // ClassManagementPanel.tsx - 修改獲取學校信息的代碼
-
-    // ClassManagementPanel.tsx - 完整版 deleteClass
-    // ClassManagementPanel.tsx - 修改 deleteClass 函數
-    // ClassManagementPanel.tsx - 修改 deleteClass 函數
+    // ClassManagementPanel.tsx - 在 deleteClass 函數最開頭添加日誌
+    // ClassManagementPanel.tsx - 修改 deleteClass 函數中的 Alert
     const deleteClass = async (classId: number) => {
+        console.log('=== deleteClass function CALLED ===');
+        console.log('Class ID to delete:', classId);
+
         const classToDelete = classesResponse?.items.find(c => c.id === classId);
+        console.log('Class to delete:', classToDelete);
 
         if (!classToDelete) {
+            console.log('Class not found in list');
             Alert.alert('Error', 'Class not found');
             return;
         }
 
+        console.log('Showing confirmation alert...');
+
+        // 使用 Alert.alert 的三個參數版本，確保回調正確執行
         Alert.alert(
             'Delete Class',
             `Are you sure you want to delete class ${classToDelete.grade} ${classToDelete.suffix}? This action cannot be undone.`,
             [
-                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Cancel',
+                    style: 'cancel',
+                    onPress: () => console.log('User cancelled deletion')
+                },
                 {
                     text: 'Delete',
                     style: 'destructive',
+                    onPress: () => {
+                        console.log('User confirmed deletion for class:', classId);
+                        // 使用立即執行的異步函數
+                        (async () => {
+                            try {
+                                console.log('Calling educatorService.deleteClass...');
+                                const result = await educatorService.deleteClass(classId);
+                                console.log('Delete result:', result);
+
+                                if (result && !result.warning) {
+                                    Alert.alert('Success', result.message || 'Class deleted successfully');
+                                    console.log('Reloading data...');
+                                    await loadData();
+                                } else {
+                                    Alert.alert('Error', result?.message || 'Failed to delete class');
+                                }
+                            } catch (error: any) {
+                                console.error('Error in delete confirmation:', error);
+                                Alert.alert('Error', `Failed to delete class: ${error.message}`);
+                            }
+                        })();
+                    }
+                }
+            ]
+        );
+    };
+
+    // ClassManagementPanel.tsx - 添加 removeStudentFromClass 函數
+    const removeStudentFromClass = (userId: number, userName: string) => {
+        Alert.alert(
+            'Remove Student',
+            `Are you sure you want to remove ${userName} from this class?`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Remove',
+                    style: 'destructive',
                     onPress: async () => {
                         try {
-                            console.log(`Attempting to delete class ${classId}`);
-                            const result = await educatorService.deleteClass(classId);
-                            console.log('Delete result:', result);
+                            console.log(`Removing student ${userId} from class ${selectedClass?.id}`);
+                            const result = await educatorService.removeStudentFromClass(
+                                selectedClass!.id,
+                                userId
+                            );
+                            console.log('Remove result:', result);
 
                             if (result && !result.error) {
-                                Alert.alert('Success', result.message || 'Class deleted successfully');
-                                await loadData(); // 重新加載數據
+                                Alert.alert('Success', 'Student removed from class successfully');
+                                // 重新加載班級成員列表
+                                await loadClassMembers(selectedClass!.id);
+                                // 同時刷新班級列表（更新學生數量）
+                                await loadData();
                             } else {
-                                Alert.alert('Error', result?.message || 'Failed to delete class');
+                                Alert.alert('Error', result?.message || 'Failed to remove student');
                             }
                         } catch (error: any) {
-                            console.error('Error deleting class:', error);
-                            Alert.alert('Error', `Failed to delete class: ${error.message}`);
+                            console.error('Error removing student:', error);
+                            Alert.alert('Error', `Failed to remove student: ${error.message}`);
                         }
                     }
                 }
@@ -246,6 +294,7 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
         <TouchableOpacity
             style={styles.classCard}
             onPress={() => viewClassMembers(classItem)}
+            activeOpacity={0.7}
         >
             <View style={styles.classHeader}>
                 <View>
@@ -256,7 +305,8 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                     <TouchableOpacity
                         style={styles.actionBtn}
                         onPress={(e) => {
-                            e.stopPropagation();
+                            e.stopPropagation();  // 阻止事件冒泡到父級
+                            console.log('View members button pressed for class:', classItem.id);
                             viewClassMembers(classItem);
                         }}
                     >
@@ -265,7 +315,8 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                     <TouchableOpacity
                         style={styles.actionBtn}
                         onPress={(e) => {
-                            e.stopPropagation();
+                            e.stopPropagation();  // 阻止事件冒泡到父級
+                            console.log('Add student button pressed for class:', classItem.id);
                             setSelectedClass(classItem);
                             setShowAddStudentModal(true);
                         }}
@@ -275,7 +326,8 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                     <TouchableOpacity
                         style={styles.actionBtn}
                         onPress={(e) => {
-                            e.stopPropagation();
+                            e.stopPropagation();  // 阻止事件冒泡到父級
+                            console.log('Delete button pressed for class:', classItem.id);
                             deleteClass(classItem.id);
                         }}
                     >
@@ -485,8 +537,7 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                 </View>
             </Modal>
 
-            {/* Class Members Modal */}
-            {/* Class Members Modal */}
+
             <Modal
                 visible={showClassMembersModal}
                 animationType="slide"
@@ -515,25 +566,37 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                         ) : (
                             <FlatList
                                 data={classMembers}
-                                renderItem={({ item }) => (
-                                    <View style={styles.memberItem}>
-                                        <View style={styles.memberInfo}>
-                                            <Text style={styles.memberName}>{item.username}</Text>
-                                            <Text style={styles.memberEmail}>{item.email}</Text>
-                                            <Text style={styles.memberRole}>{item.roleInClass}</Text>
+                                renderItem={({ item }) => {
+                                    // 只有 STUDENT 可以移除，TEACHER 和 ASSISTANT 不能移除
+                                    const canRemove = item.roleInClass === 'STUDENT';
+
+                                    return (
+                                        <View style={styles.memberItem}>
+                                            <View style={styles.memberInfo}>
+                                                <Text style={styles.memberName}>{item.username}</Text>
+                                                <Text style={styles.memberEmail}>{item.email}</Text>
+                                                <View style={[
+                                                    styles.roleBadge,
+                                                    item.roleInClass === 'TEACHER' && styles.teacherBadge,
+                                                    item.roleInClass === 'ASSISTANT' && styles.assistantBadge,
+                                                    item.roleInClass === 'STUDENT' && styles.studentBadge
+                                                ]}>
+                                                    <Text style={styles.roleBadgeText}>
+                                                        {item.roleInClass}
+                                                    </Text>
+                                                </View>
+                                            </View>
+                                            {canRemove && (
+                                                <TouchableOpacity
+                                                    style={styles.removeMemberBtn}
+                                                    onPress={() => removeStudentFromClass(item.userId, item.username)}
+                                                >
+                                                    <Trash2 size={18} color="#FF4757" />
+                                                </TouchableOpacity>
+                                            )}
                                         </View>
-                                        <View style={[
-                                            styles.roleBadge,
-                                            item.roleInClass === 'TEACHER' && styles.teacherBadge,
-                                            item.roleInClass === 'ASSISTANT' && styles.assistantBadge,
-                                            item.roleInClass === 'STUDENT' && styles.studentBadge
-                                        ]}>
-                                            <Text style={styles.roleBadgeText}>
-                                                {item.roleInClass}
-                                            </Text>
-                                        </View>
-                                    </View>
-                                )}
+                                    );
+                                }}
                                 keyExtractor={item => item.userId.toString()}
                                 contentContainerStyle={styles.modalStudentList}
                             />
@@ -779,6 +842,13 @@ const styles = StyleSheet.create({
     modalStudentList: {
         gap: 8,
         marginBottom: 20,
+    },
+    // styles 中添加
+    removeMemberBtn: {
+        padding: 8,
+        backgroundColor: '#FFF5F5',
+        borderRadius: 8,
+        marginLeft: 8,
     },
     memberItem: {
         backgroundColor: '#fff',

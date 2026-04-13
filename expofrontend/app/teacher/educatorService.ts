@@ -45,7 +45,7 @@ export interface CourseMemberRequest {
 
 export interface OperationResult {
     message: string;
-    error: boolean;
+    warning: boolean;
 }
 
 class EducatorService {
@@ -78,7 +78,7 @@ class EducatorService {
             try {
                 const errorData = await response.json();
                 console.log(`EducatorService: ${endpoint} - Error response:`, errorData);
-                errorMessage = errorData.message || errorData.error || errorMessage;
+                errorMessage = errorData.message || errorData.warning || errorMessage;
             } catch (e) {
                 console.log(`EducatorService: ${endpoint} - Could not parse error response`);
             }
@@ -134,26 +134,29 @@ class EducatorService {
     // educatorService.ts - 修改 deleteClass 方法
     // educatorService.ts - 修改 deleteClass 方法，添加更多日誌
     // educatorService.ts - 修改 deleteClass 方法
+    // educatorService.ts - 修改 deleteClass 方法
     async deleteClass(classId: number): Promise<OperationResult> {
+        console.log(`EducatorService.deleteClass: Starting deletion for class ${classId}`);
+
         const headers = await this.getAuthHeaders();
         const url = `${getApiBaseUrl()}/api/educator/class/${classId}`;
-        console.log(`EducatorService: Deleting class at: ${url}`);
+        console.log(`EducatorService.deleteClass: URL: ${url}`);
 
         const response = await fetch(url, {
             method: 'DELETE',
             headers,
         });
 
-        console.log(`EducatorService: deleteClass - Response status:`, response.status);
+        console.log(`EducatorService.deleteClass: Response status: ${response.status}`);
 
         if (!response.ok) {
             let errorMessage = `Failed to delete class`;
             try {
                 const errorData = await response.json();
-                console.log(`EducatorService: deleteClass - Error response:`, errorData);
-                errorMessage = errorData.message || errorData.error || errorMessage;
+                console.log(`EducatorService.deleteClass: Error response:`, errorData);
+                errorMessage = errorData.message || errorData.warning || errorMessage;
             } catch (e) {
-                console.log(`EducatorService: deleteClass - Could not parse error response`);
+                console.log(`EducatorService.deleteClass: Could not parse error response`);
             }
 
             if (response.status === 403) {
@@ -168,13 +171,15 @@ class EducatorService {
         // 成功時解析響應
         let data;
         try {
-            data = await response.json();
-            console.log(`EducatorService: deleteClass - Success:`, data);
+            const responseText = await response.text();
+            console.log(`EducatorService.deleteClass: Response body:`, responseText);
+            data = responseText ? JSON.parse(responseText) : { message: 'Class deleted successfully', error: false };
         } catch (e) {
-            console.log(`EducatorService: deleteClass - Success (empty response)`);
-            data = { message: 'Class deleted successfully', error: false };
+            console.log(`EducatorService.deleteClass: Could not parse response`);
+            data = { message: 'Class deleted successfully', warning: false };
         }
 
+        console.log(`EducatorService.deleteClass: Success, returning:`, data);
         return data;
     }
 
@@ -266,13 +271,31 @@ class EducatorService {
         return this.handleResponse(response, 'updateStudentRole');
     }
 
+    // educatorService.ts - 添加 removeStudentFromClass 方法（已經存在，確認一下）
     async removeStudentFromClass(classId: number, userId: number): Promise<OperationResult> {
         const headers = await this.getAuthHeaders();
-        const response = await fetch(`${getApiBaseUrl()}/api/educator/class/${classId}/member/${userId}`, {
+        const url = `${getApiBaseUrl()}/api/educator/class/${classId}/member/${userId}`;
+        console.log(`EducatorService: Removing student ${userId} from class ${classId} at: ${url}`);
+
+        const response = await fetch(url, {
             method: 'DELETE',
             headers,
         });
-        return this.handleResponse(response, 'removeStudentFromClass');
+
+        if (!response.ok) {
+            let errorMessage = `Failed to remove student from class`;
+            try {
+                const errorData = await response.json();
+                errorMessage = errorData.message || errorData.error || errorMessage;
+            } catch (e) {
+                console.log('Could not parse error response');
+            }
+            throw new Error(errorMessage);
+        }
+
+        const data = await response.json();
+        console.log(`EducatorService: Remove student result:`, data);
+        return data;
     }
 
     async getUserRoleInClass(classId: number): Promise<string> {
