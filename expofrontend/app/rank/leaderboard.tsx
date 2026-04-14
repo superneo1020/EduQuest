@@ -155,8 +155,8 @@ const LeaderboardScreen = () => {
     return (
         <View style={styles.container}>
             <View style={styles.header}>
-                <Text style={styles.mainTitle}>🏆 排行榜</Text>
-                <Text style={styles.subTitle}>看看誰是最強學習者！</Text>
+                <Text style={styles.mainTitle}>🏆 Ranking</Text>
+                <Text style={styles.subTitle}>Let's see who is the strongest learner!</Text>
             </View>
 
             <View style={styles.selectorWrapper}>
