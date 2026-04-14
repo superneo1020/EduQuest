@@ -118,9 +118,20 @@ class EducatorService {
     private async getAuthHeaders() {
         const token = await AsyncStorage.getItem('auth_token');
         console.log('EducatorService: Token exists:', !!token);
+        console.log('EducatorService: Token length:', token?.length || 0);
 
-        if (!token) {
+        if (!token || token.trim() === '') {
+            console.error('EducatorService: No authentication token found');
             throw new Error('No authentication token found');
+        }
+
+        // Check if token has valid JWT format (3 parts separated by dots)
+        const parts = token.split('.');
+        if (parts.length !== 3) {
+            console.error('EducatorService: Invalid token format - expected 3 parts, got', parts.length);
+            await AsyncStorage.removeItem('auth_token');
+            await AsyncStorage.removeItem('auth_user');
+            throw new Error('Invalid token format. Please log in again.');
         }
 
         if (isTokenExpired(token)) {
@@ -729,7 +740,29 @@ class EducatorService {
 
         // Calculate subject performance
         const subjectScores = gameScores.reduce((acc, score) => {
-            const subject = score.type || 'Unknown';
+            // Map game types to subjects
+            const gameTypeToSubject: Record<string, string> = {
+                'math': 'math',
+                'mathematics': 'math',
+                'arithmetic': 'math',
+                'calculation': 'math',
+                'english': 'english',
+                'vocabulary': 'english',
+                'grammar': 'english',
+                'reading': 'english',
+                'science': 'science',
+                'physics': 'science',
+                'chemistry': 'science',
+                'biology': 'science',
+                'chinese': 'chinese',
+                'mandarin': 'chinese',
+                'writing': 'chinese',
+                'characters': 'chinese'
+            };
+            
+            const normalizedType = (score.type || '').toLowerCase();
+            const subject = gameTypeToSubject[normalizedType] || normalizedType || 'Unknown';
+            
             if (!acc[subject]) {
                 acc[subject] = { scores: [], count: 0 };
             }
@@ -759,6 +792,8 @@ class EducatorService {
                 trend
             };
         });
+        
+        console.log('calculateProgressTrends - subjectPerformance:', subjectPerformance);
 
         return {
             weeklyProgress,
