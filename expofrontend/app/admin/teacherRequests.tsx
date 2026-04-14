@@ -30,7 +30,7 @@ import { getApiBaseUrl } from "../../src/api/client";
 import { adminService } from "../../src/services/adminService";
 
 export default function TeacherRequests() {
-    const { user } = useAuth();
+    const { user, token } = useAuth();
     const [requests, setRequests] = useState<TeacherRegistrationRequest[]>([]);
     const [filteredRequests, setFilteredRequests] = useState<TeacherRegistrationRequest[]>([]);
     const [loading, setLoading] = useState(true);
@@ -92,126 +92,118 @@ export default function TeacherRequests() {
 
         setActionLoading(true);
         try {
-            // Refresh the request data to get latest status
-            const allRequests = await TeacherRegistrationStorage.getAllRequests();
-            const currentRequest = allRequests.find(req => req.id === selectedRequest.id);
+            // 1. 先查詢用戶是否已存在
+            const searchUrl = `${getApiBaseUrl()}/api/admin/filter/user?username=${encodeURIComponent(selectedRequest.username)}`;
+            const searchResponse = await fetch(searchUrl, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
 
-            if (!currentRequest) {
-                throw new Error('Request not found');
+            if (!searchResponse.ok) {
+                throw new Error(`Failed to search user: ${searchResponse.status}`);
             }
 
-            if (currentRequest.status !== "pending") {
-                throw new Error(`Request is not pending. Current status: ${currentRequest.status}`);
+            const searchData = await searchResponse.json();
+            const existingUser = searchData.content?.find((u: any) =>
+                u.username === selectedRequest.username || u.email === selectedRequest.email
+            );
+
+            let userId: number;
+
+            if (existingUser) {
+                // 用戶已存在 → 直接升級為教師
+                userId = existingUser.userId;
+                console.log('User already exists, activating:', userId);
+
+                const activateUrl = `${getApiBaseUrl()}/api/admin/user/${userId}/activate`;
+                const activateResponse = await fetch(activateUrl, {
+                    method: 'PATCH',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!activateResponse.ok) {
+                    const errorText = await activateResponse.text();
+                    throw new Error(`Activation failed: ${activateResponse.status} - ${errorText}`);
+                }
+
+                const result = await activateResponse.json();
+                Alert.alert(
+                    "Success",
+                    `User "${selectedRequest.username}" has been upgraded to Teacher!\n\n${result.message || ''}`,
+                    [{ text: "OK" }]
+                );
+            } else {
+                // 用戶不存在 → 創建新帳號
+                console.log('User not found, creating new account...');
+                const registerUrl = `${getApiBaseUrl()}/api/auth/register`;
+                const registerBody = {
+                    username: selectedRequest.username,
+                    email: selectedRequest.email.trim(),
+                    password: selectedRequest.password,
+                    isEducator: true,
+                    schoolName: selectedRequest.schoolName
+                };
+
+                let registerResponse = await fetch(registerUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(registerBody)
+                });
+
+                // 若學校不存在，嘗試不帶學校名稱
+                if (!registerResponse.ok) {
+                    const errorText = await registerResponse.text();
+                    if (registerResponse.status === 404 && errorText.includes('School not found')) {
+                        console.log('School not found, retrying without school...');
+                        const fallbackBody = { ...registerBody, schoolName: null };
+                        registerResponse = await fetch(registerUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(fallbackBody)
+                        });
+                    } else {
+                        throw new Error(`Registration failed: ${registerResponse.status} - ${errorText}`);
+                    }
+                }
+
+                if (!registerResponse.ok) {
+                    throw new Error(`Registration failed after retry`);
+                }
+
+                const userData = await registerResponse.json();
+                userId = userData.id;
+
+                // 新建立的用戶需要啟用
+                const activateUrl = `${getApiBaseUrl()}/api/admin/user/${userId}/activate`;
+                const activateResponse = await fetch(activateUrl, {
+                    method: 'PATCH',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!activateResponse.ok) {
+                    console.warn('Activation after registration failed, but user created');
+                }
+
+                Alert.alert(
+                    "Success",
+                    `New teacher account created and activated!\n\nUsername: ${userData.username}\nUser ID: ${userId}`,
+                    [{ text: "OK" }]
+                );
             }
 
-            setSelectedRequest(currentRequest);
-
-            // Update request status in local storage
+            // 2. 更新本地申請狀態為 approved
             await TeacherRegistrationStorage.updateRequestStatus(
-                currentRequest.id,
+                selectedRequest.id,
                 "approved",
                 adminNotes,
                 user?.username
             );
 
-            // Create the actual user account by calling the backend API
-            const apiUrl = `${getApiBaseUrl()}/api/auth/register`;
-            console.log('Creating teacher account at:', apiUrl);
-
-            const requestBody = {
-                username: currentRequest.username,
-                email: currentRequest.email.trim(),
-                password: currentRequest.password,
-                isEducator: true,
-                schoolName: currentRequest.schoolName
-            };
-
-            let response = await fetch(apiUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(requestBody)
-            });
-
-            // If school not found, try with null schoolName
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error('First attempt failed:', response.status, errorText);
-
-                if (response.status === 404 && errorText.includes('School not found')) {
-                    console.log('School not found, trying with null schoolName...');
-
-                    const fallbackRequestBody = {
-                        ...requestBody,
-                        schoolName: null
-                    };
-
-                    response = await fetch(apiUrl, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(fallbackRequestBody)
-                    });
-                }
-            }
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error('Backend response:', response.status, errorText);
-                throw new Error(`Server error (${response.status}): ${errorText}`);
-            }
-
-            const userData = await response.json();
-            console.log('User created successfully:', userData);
-
-            // 嘗試激活用戶並更新 educatorStatus
-            if (userData && userData.id) {
-                console.log('Activating user account for ID:', userData.id);
-
-                try {
-                    // 調用 activate API（這會設置 isActive = true）
-                    const activationSuccess = await adminService.activateUser(userData.id);
-
-                    if (activationSuccess) {
-                        console.log('User activation successful');
-
-                        // 注意：educatorStatus 仍然是 PENDING
-                        // 需要後端提供 approve API 來更新 educatorStatus
-
-                        Alert.alert(
-                            "Success",
-                            `Teacher account created and activated!\n\nUser ID: ${userData.id}\nUsername: ${userData.username}\n\nNote: Educator status will be updated to APPROVED after backend approval.`,
-                            [
-                                {
-                                    text: "OK",
-                                    onPress: () => {
-                                        console.log('Admin acknowledged');
-                                    }
-                                }
-                            ]
-                        );
-                    } else {
-                        throw new Error('Activation failed');
-                    }
-                } catch (activationError) {
-                    console.error('Activation failed:', activationError);
-                    Alert.alert(
-                        "Partial Success",
-                        `Teacher account created but activation failed.\n\nUser ID: ${userData.id}\nUsername: ${userData.username}\n\nPlease manually activate in database:\nUPDATE users SET is_active = true, educator_status = 'APPROVED' WHERE id = ${userData.id};`,
-                        [{ text: "OK" }]
-                    );
-                }
-            } else {
-                Alert.alert("Success", "Teacher registration approved and account created successfully!");
-            }
-
+            // 3. 關閉 modal 並刷新列表
             setModalVisible(false);
             setSelectedRequest(null);
             setAdminNotes("");
-
             await loadRequests();
+
         } catch (error) {
             console.error("Error approving request:", error);
             const errorMessage = error instanceof Error ? error.message : "Failed to approve request. Please try again.";

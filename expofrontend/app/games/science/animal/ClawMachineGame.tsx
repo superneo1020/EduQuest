@@ -1,5 +1,6 @@
 // app/games/science/animal/ClawMachineGame.tsx
 import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
+import { createGameMetadata, GameMetadata } from '../../../../types/GameMetadata';
 import {
     View,
     Text,
@@ -194,7 +195,7 @@ const ClawMachineGame: React.FC = () => {
     const refreshAIPromiseRef = useRef<Promise<void> | null>(null);
 
     // ========== 🎯 修改：回答次数限制（3次） ==========
-    const MAX_ANSWERS = 3;               // 最多回答2次
+    const MAX_ANSWERS = 3;               // 最多回答3次
     const [answerCount, setAnswerCount] = useState<number>(0);  // 已回答次数
 
     // 根据第几次回答返回对应分值（30, 30, 40）
@@ -250,12 +251,41 @@ const ClawMachineGame: React.FC = () => {
         if (!token) return;
         setIsSaving(true);
         try {
-            await axios.post('http://localhost:8080/api/user/game/score', {
-                gameName: "Animal Catcher",
+            const gameData = {
+                gameName: "Animal Classification",
                 scores: finalScore,
-                difficulty: "ANIMAL",
-                "metadata": {}
-            }, {
+                gameType: "SCIENCE",
+                gameDifficulty: "EASY"
+            };
+            
+            const questionsData = Array.from({ length: answerCount }, (_, index) => ({
+                id: index + 1,
+                question: currentQuestion?.question || 'Catch the correct animal',
+                correctAnswer: currentQuestion?.answer || 'Unknown',
+                userAnswer: index < correctCatches ? 'Correct catch' : 'Wrong catch',
+                isCorrect: index < correctCatches,
+                questionType: 'claw-machine',
+                timeSpent: 0
+            }));
+
+            const metadata: GameMetadata = createGameMetadata(
+                gameData.gameType,
+                gameData.gameDifficulty,
+                finalScore,
+                {
+                    totalAttempts: answerCount,
+                    caughtAnimals: correctCatches
+                },
+                questionsData
+            );
+
+            const backendRequest = {
+                gameName: gameData.gameName,
+                scores: gameData.scores,
+                metadata: metadata
+            };
+            
+            await axios.post('http://localhost:8080/api/user/game/score', backendRequest, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             console.log("Score synced to server!");
@@ -1002,14 +1032,18 @@ const ClawMachineGame: React.FC = () => {
                                         transform: [{
                                             scale: suctionItem?.id === item.id && isSuction ? suctionScale : 1
                                         }],
-                                        borderColor: '#4caf50',
-                                        backgroundColor: 'rgba(76, 175, 80, 0.15)',
+                                        borderColor: item.isAnimal ? '#4caf50' : '#e74c3c',
+                                        backgroundColor: item.isAnimal ? 'rgba(76, 175, 80, 0.15)' : 'rgba(231, 76, 60, 0.1)',
                                     }
                                 ]}
                             >
                                 <Text style={styles.itemIcon}>{item.type.icon}</Text>
                                 <Text style={styles.itemName}>{item.type.name}</Text>
-
+                                {!item.isAnimal && (
+                                    <View style={styles.warningBadge}>
+                                        <Text style={styles.warningText}>⚠️</Text>
+                                    </View>
+                                )}
                             </Animated.View>
                         ))}
                         <Animated.View

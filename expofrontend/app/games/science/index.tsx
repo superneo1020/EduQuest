@@ -1,4 +1,4 @@
-// app/games/science/index.tsx
+// app/games/science/classLeaderboard.tsx
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';

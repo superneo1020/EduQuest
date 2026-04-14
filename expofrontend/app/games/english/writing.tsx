@@ -1,5 +1,6 @@
 // app/english/writing.tsx
 import React, { useState, useRef, useEffect } from 'react';
+import { createGameMetadata, GameMetadata } from '../../../types/GameMetadata';
 import {
     View,
     Text,
@@ -204,10 +205,6 @@ export default function WritingScreen() {
 
     const textInputRef = useRef<TextInput>(null);
 
-    // 教學彈窗狀態
-    const [showTutorial, setShowTutorial] = useState(false);
-    const tutorialShownRef = useRef(false);
-
     // ==================== 計時器控制函數 ====================
     const startTimer = () => {
         if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
@@ -259,25 +256,46 @@ export default function WritingScreen() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [difficulty, currentScene, isFinished]);
 
-    // 顯示教學彈窗（僅在首次進入寫作界面時）
-    useEffect(() => {
-        if (difficulty && currentScene && !isFinished && !tutorialShownRef.current) {
-            setShowTutorial(true);
-            tutorialShownRef.current = true;
-        }
-    }, [difficulty, currentScene, isFinished]);
-
     // ==================== 輔助函數 ====================
     const saveScore = async (score: number) => {
         if (!token || !difficulty) return;
         setIsSaving(true);
         try {
-            await axios.post('http://localhost:8080/api/user/game/score', {
+            const gameData = {
                 gameName: "Writing Game",
                 scores: score,
-                difficulty: difficulty === 'easy' ? 'EASY' : 'HARD',
-                "metadata": {}
-            }, {
+                gameType: "ENGLISH",
+                gameDifficulty: difficulty === 'easy' ? 'EASY' : 'HARD'
+            };
+            
+            const questionsData = [{
+                id: 1,
+                question: currentScene?.prompt || 'Write about the scene',
+                correctAnswer: 'User writing response',
+                userAnswer: writing,
+                isCorrect: score > 0,
+                questionType: 'writing',
+                timeSpent: 0
+            }];
+
+            const metadata: GameMetadata = createGameMetadata(
+                gameData.gameType,
+                gameData.gameDifficulty,
+                score,
+                {
+                    totalWords: wordCount,
+                    correctWords: score // Assuming score represents correct words
+                },
+                questionsData
+            );
+
+            const backendRequest = {
+                gameName: gameData.gameName,
+                scores: gameData.scores,
+                metadata: metadata
+            };
+            
+            await axios.post('http://localhost:8080/api/user/game/score', backendRequest, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             console.log("Score synced to server!");
@@ -381,8 +399,6 @@ export default function WritingScreen() {
         setIsDrawingCard(false);
         setBonusEarned(false);
         setLastGrammarName('');
-        // 重置教學彈窗標誌，確保新遊戲會再次彈出
-        tutorialShownRef.current = false;
         // 重置計時器（將在 useEffect 中自動啟動）
         stopTimer();
         setElapsedSeconds(0);
@@ -508,8 +524,6 @@ export default function WritingScreen() {
         setIsDrawingCard(false);
         setBonusEarned(false);
         setLastGrammarName('');
-        // 重置教學彈窗標誌，讓新一輪再次顯示
-        tutorialShownRef.current = false;
         // 重置計時器
         resetAndStartTimer();
         setTimeout(() => textInputRef.current?.focus(), 100);
@@ -532,8 +546,6 @@ export default function WritingScreen() {
         setIsDrawingCard(false);
         setBonusEarned(false);
         setLastGrammarName('');
-        // 重置教學彈窗標誌
-        tutorialShownRef.current = false;
         stopTimer();
         setElapsedSeconds(0);
         setFinalElapsedSeconds(0);
@@ -911,37 +923,6 @@ export default function WritingScreen() {
                 </ScrollView>
                 {renderSceneSelector()}
             </KeyboardAvoidingView>
-
-            {/* 教學彈窗 Modal */}
-            <Modal
-                animationType="fade"
-                transparent={true}
-                visible={showTutorial}
-                onRequestClose={() => setShowTutorial(false)}
-            >
-                <View style={styles.tutorialOverlay}>
-                    <View style={styles.tutorialContainer}>
-                        <TouchableOpacity style={styles.tutorialCloseButton} onPress={() => setShowTutorial(false)}>
-                            <Ionicons name="close" size={24} color="#666" />
-                        </TouchableOpacity>
-                        <ScrollView showsVerticalScrollIndicator={false}>
-                            <Text style={styles.tutorialTitle}>📖 Game Guide</Text>
-                            <Text style={styles.tutorialText}>
-                                1. 🖼️ Observe the image and read the writing prompt.{'\n'}
-                                2. ✍️ Write a short description within the word limit (shown at top right).{'\n'}
-                                3. 🎯 Use the suggested keywords to enrich your writing.{'\n'}
-                                4. ✨ Click "AI Analysis" to get instant feedback on grammar, vocabulary, and structure.{'\n'}
-                                5. 🃏 Draw a Grammar Challenge card and try to use the grammar pattern to earn bonus points!{'\n'}
-                                6. ⏱️ Your writing time is recorded. Complete the task to see your final score.{'\n'}
-                                7. 🏆 The maximum score depends on difficulty level. Good luck!
-                            </Text>
-                            <TouchableOpacity style={styles.tutorialGotItButton} onPress={() => setShowTutorial(false)}>
-                                <Text style={styles.tutorialGotItText}>Got it</Text>
-                            </TouchableOpacity>
-                        </ScrollView>
-                    </View>
-                </View>
-            </Modal>
         </View>
     );
 }
@@ -1970,59 +1951,5 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
         color: 'white',
-    },
-    // 教學彈窗樣式
-    tutorialOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.6)',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    tutorialContainer: {
-        backgroundColor: 'white',
-        borderRadius: 28,
-        padding: 24,
-        width: screenWidth * 0.85,
-        maxHeight: '80%',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 8,
-    },
-    tutorialCloseButton: {
-        position: 'absolute',
-        top: 16,
-        right: 16,
-        zIndex: 1,
-        backgroundColor: '#f0f0f0',
-        borderRadius: 20,
-        padding: 6,
-    },
-    tutorialTitle: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#4b6cb7',
-        textAlign: 'center',
-        marginBottom: 20,
-        marginTop: 8,
-    },
-    tutorialText: {
-        fontSize: 16,
-        lineHeight: 26,
-        color: '#333',
-        marginBottom: 24,
-    },
-    tutorialGotItButton: {
-        backgroundColor: '#4b6cb7',
-        paddingVertical: 12,
-        borderRadius: 30,
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    tutorialGotItText: {
-        color: 'white',
-        fontSize: 18,
-        fontWeight: '600',
     },
 });
