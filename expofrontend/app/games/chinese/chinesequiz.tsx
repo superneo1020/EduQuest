@@ -3,6 +3,7 @@
 // 修正：3題模式，初級分數 30+30+40=100，高級 40+40+40=120
 
 import React, { useState, useEffect, useRef } from 'react';
+import { createGameMetadata, GameMetadata } from '../../../types/GameMetadata';
 import {
     View,
     Text,
@@ -262,7 +263,7 @@ const ChineseRestaurantGame = () => {
 
     // ========== 🕒 新增：計時器相關狀態 ==========
     const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
-    const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const timerIntervalRef = useRef<number | null>(null);
     const timerStartedRef = useRef<boolean>(false); // 確保計時器只啟動一次
 
     // 格式化時間 (MM:SS)
@@ -321,11 +322,41 @@ const ChineseRestaurantGame = () => {
         if (!token || !difficulty) return;
         setIsSaving(true);
         try {
-            await axios.post('http://localhost:8080/api/user/game/score', {
-                gameName: "ChineseGame",
+            const gameData = {
+                gameName: "Chinese Quiz Game",
                 scores: finalScore,
-                difficulty: difficulty === 'beginner' ? 'EASY' : 'MEDIUM'
-            }, {
+                gameType: "CHINESE",
+                gameDifficulty: difficulty === 'beginner' ? 'EASY' : 'MEDIUM'
+            };
+            
+            const questionsData = questions.map((q, index) => ({
+                id: index + 1,
+                question: q.question,
+                correctAnswer: q.answer,
+                userAnswer: q.userAnswer,
+                isCorrect: q.isAnsweredCorrectly,
+                questionType: 'multiple-choice',
+                options: q.options
+            }));
+
+            const metadata: GameMetadata = createGameMetadata(
+                gameData.gameType,
+                gameData.gameDifficulty,
+                finalScore,
+                {
+                    totalCharacters: questions.length,
+                    correctCharacters: score
+                },
+                questionsData
+            );
+
+            const backendRequest = {
+                gameName: gameData.gameName,
+                scores: gameData.scores,
+                metadata: metadata
+            };
+            
+            await axios.post('http://localhost:8080/api/user/game/score', backendRequest, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             console.log("Score synced to server!");

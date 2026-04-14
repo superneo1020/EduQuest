@@ -220,17 +220,17 @@ VALUES
     ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM games WHERE name = 'AI Math Adventure'), 75),
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM games WHERE name = 'AI Math Adventure'), 92),
 
-    -- Word matching game (EASY)
-    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM games WHERE name = 'Word matching game'), 98),
-    ((SELECT id FROM users WHERE username = 'student3'), (SELECT id FROM games WHERE name = 'Word matching game'), 70),
+    -- Writing Game (EASY)
+    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM games WHERE name = 'Writing Game'), 98),
+    ((SELECT id FROM users WHERE username = 'student3'), (SELECT id FROM games WHERE name = 'Writing Game'), 70),
 
-    -- Sentence Reordering Game (HARD)
-    ((SELECT id FROM users WHERE username = 'tech_teacher1'), (SELECT id FROM games WHERE name = 'Sentence Reordering Game'), 95),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM games WHERE name = 'Sentence Reordering Game'), 88),
+    -- Sentence Reorder (HARD)
+    ((SELECT id FROM users WHERE username = 'tech_teacher1'), (SELECT id FROM games WHERE name = 'Sentence Reorder'), 95),
+    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM games WHERE name = 'Sentence Reorder'), 88),
 
-    -- Animal sorting game (EASY)
-    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM games WHERE name = 'Animal sorting game'), 85),
-    ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM games WHERE name = 'Animal sorting game'), 92)
+    -- Animal Catcher (EASY)
+    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM games WHERE name = 'Animal Catcher'), 85),
+    ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM games WHERE name = 'Animal Catcher'), 92)
 ON CONFLICT DO NOTHING;
 ;;;
 

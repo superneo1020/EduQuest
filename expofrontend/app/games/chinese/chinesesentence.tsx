@@ -1,5 +1,6 @@
 // app/games/chinese/chinesesentence.tsx
 import React, { useState, useRef, useEffect } from 'react';
+import { createGameMetadata, GameMetadata } from '../../../types/GameMetadata';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, ActivityIndicator, Alert, StatusBar, Animated, Easing, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, Stack } from 'expo-router';
@@ -146,7 +147,7 @@ export default function ChineseSentenceGame() {
 
     // ========== 🕒 新增：计时器相关状态 ==========
     const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
-    const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const timerIntervalRef = useRef<number | null>(null);
     const timerStartedRef = useRef<boolean>(false);
 
     // 格式化时间 (MM:SS)
@@ -203,11 +204,42 @@ export default function ChineseSentenceGame() {
 
         setIsSaving(true);
         try {
-            await axios.post('http://localhost:8080/api/user/game/score', {
-                gameName: "ChineseSentenceGame",
+            const gameData = {
+                gameName: "Chinese Sentence Game",
                 scores: finalScore,
-                difficulty: difficulty === 'easy' ? 'EASY' : 'MEDIUM'
-            }, {
+                gameType: "CHINESE",
+                gameDifficulty: difficulty === 'easy' ? 'EASY' : 'MEDIUM'
+            };
+            
+            const questionsData = questions.map((q, index) => ({
+                id: index + 1,
+                question: q.sentence,
+                correctAnswer: q.correctAnswer,
+                userAnswer: q.userAnswer,
+                isCorrect: q.isCorrect,
+                questionType: 'sentence-completion',
+                score: q.score || 0,
+                maxScore: q.maxScore || (difficulty === 'easy' ? 30 : 40)
+            }));
+
+            const metadata: GameMetadata = createGameMetadata(
+                gameData.gameType,
+                gameData.gameDifficulty,
+                finalScore,
+                {
+                    totalSentences: questions.length,
+                    correctSentences: questions.filter(q => q.isCorrect).length
+                },
+                questionsData
+            );
+
+            const backendRequest = {
+                gameName: gameData.gameName,
+                scores: gameData.scores,
+                metadata: metadata
+            };
+            
+            await axios.post('http://localhost:8080/api/user/game/score', backendRequest, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             console.log("Score synced to server!");

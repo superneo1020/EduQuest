@@ -1,5 +1,6 @@
 // app/english/writing.tsx
 import React, { useState, useRef, useEffect } from 'react';
+import { createGameMetadata, GameMetadata } from '../../../types/GameMetadata';
 import {
     View,
     Text,
@@ -260,11 +261,41 @@ export default function WritingScreen() {
         if (!token || !difficulty) return;
         setIsSaving(true);
         try {
-            await axios.post('http://localhost:8080/api/user/game/score', {
+            const gameData = {
                 gameName: "Writing Game",
                 scores: score,
-                difficulty: difficulty === 'easy' ? 'EASY' : 'HARD'
-            }, {
+                gameType: "ENGLISH",
+                gameDifficulty: difficulty === 'easy' ? 'EASY' : 'HARD'
+            };
+            
+            const questionsData = [{
+                id: 1,
+                question: currentScene?.prompt || 'Write about the scene',
+                correctAnswer: 'User writing response',
+                userAnswer: writing,
+                isCorrect: score > 0,
+                questionType: 'writing',
+                timeSpent: 0
+            }];
+
+            const metadata: GameMetadata = createGameMetadata(
+                gameData.gameType,
+                gameData.gameDifficulty,
+                score,
+                {
+                    totalWords: wordCount,
+                    correctWords: score // Assuming score represents correct words
+                },
+                questionsData
+            );
+
+            const backendRequest = {
+                gameName: gameData.gameName,
+                scores: gameData.scores,
+                metadata: metadata
+            };
+            
+            await axios.post('http://localhost:8080/api/user/game/score', backendRequest, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             console.log("Score synced to server!");

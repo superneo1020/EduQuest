@@ -1,5 +1,6 @@
 // science/HumanBodyGame.tsx
 import React, { useState, useEffect, useMemo } from 'react';
+import { createGameMetadata, GameMetadata } from '../../../../types/GameMetadata';
 import {
     View,
     Text,
@@ -278,11 +279,47 @@ const HumanBodyGame = () => {
 
         setIsSaving(true);
         try {
-            await axios.post('http://localhost:8080/api/user/game/score', {
+            const gameData = {
                 gameName: "Human organs",
                 scores: finalScore,
-                difficulty: "ORGANS"
-            }, {
+                gameType: "SCIENCE",
+                gameDifficulty: "MEDIUM"
+            };
+            
+            const questionsData = organs.map((organ, index) => {
+                const placedPosition = placedOrgans[organ.id];
+                const isCorrect = placedPosition && 
+                    placedPosition.row === organ.gridPosition.row && 
+                    placedPosition.col === organ.gridPosition.col;
+                
+                return {
+                    id: index + 1,
+                    question: `Place ${organ.name} in the correct position`,
+                    correctAnswer: `Position: ${organ.gridPosition.row}, ${organ.gridPosition.col}`,
+                    userAnswer: placedPosition ? `Position: ${placedPosition.row}, ${placedPosition.col}` : undefined,
+                    isCorrect: isCorrect,
+                    questionType: 'organ-placement'
+                };
+            });
+
+            const metadata: GameMetadata = createGameMetadata(
+                gameData.gameType,
+                gameData.gameDifficulty,
+                finalScore,
+                {
+                    totalOrgans: organs.length,
+                    correctIdentifications: correctCount
+                },
+                questionsData
+            );
+
+            const backendRequest = {
+                gameName: gameData.gameName,
+                scores: gameData.scores,
+                metadata: metadata
+            };
+            
+            await axios.post('http://localhost:8080/api/user/game/score', backendRequest, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             console.log("Score synced to server!");

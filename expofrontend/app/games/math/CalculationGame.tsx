@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useLayoutEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert, ActivityIndicator, Dimensions, ScrollView, Image } from 'react-native';
+import { createGameMetadata, GameMetadata } from '../../../types/GameMetadata';
 import { ArrowLeft, Trophy, Clock, Zap, Heart, CheckCircle2, XCircle, Brain, Timer } from 'lucide-react-native';
 import { useRouter, useNavigation } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -78,8 +79,8 @@ const Projectile = ({
 
     // 根据类型设置不同的起始位置
     const containerStyle = type === 'spear'
-        ? { left: '20%' }  // 长矛从勇士位置（左侧）开始
-        : { left: '65%' }; // 火焰从哥斯拉位置（右侧）开始
+        ? { left: '20%' as const }  // TypeScript const assertion
+        : { left: '65%' as const };
 
     return (
         <Animated.View style={[styles.projectileContainer, containerStyle, animatedStyle]}>
@@ -431,9 +432,47 @@ export default function CalculationGame() {
     const saveScore = async () => {
         setIsSaving(true);
         try {
-            await axios.post('http://localhost:8080/api/user/game/score', { gameName: "Speed Calculation", scores: score, difficulty }, { headers: { 'Authorization': `Bearer ${token}` } });
+            const gameData = {
+                gameName: "Speed Calculation",
+                scores: score,
+                gameType: "MATH",
+                gameDifficulty: difficulty || "MEDIUM"
+            };
+            
+            const questions = userAnswers.map((answer, index) => ({
+                id: index + 1,
+                question: answer.question,
+                correctAnswer: answer.answer,
+                userAnswer: answer.userChoice,
+                isCorrect: answer.isCorrect,
+                questionType: 'calculation',
+                timeSpent: answer.timeSpent || 0
+            }));
+
+            const metadata: GameMetadata = createGameMetadata(
+                gameData.gameType,
+                gameData.gameDifficulty,
+                gameData.scores,
+                {
+                    totalTime: totalGameTime,
+                    correctAnswers: userAnswers.filter(a => a.isCorrect).length,
+                    totalQuestions: userAnswers.length
+                },
+                questions
+            );
+
+            const backendRequest = {
+                gameName: gameData.gameName,
+                scores: gameData.scores,
+                metadata: metadata
+            };
+            
+            await axios.post('http://localhost:8080/api/user/game/score', backendRequest, { headers: { 'Authorization': `Bearer ${token}` } });
             router.push('/rank/leaderboard');
-        } catch (e) { router.push('/'); }
+        } catch (e) { 
+            console.error('Failed to save score:', e);
+            router.push('/'); 
+        }
     };
 
     const handleBackToGames = () => {

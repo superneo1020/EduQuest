@@ -1,5 +1,6 @@
 // app/games/science/animal/ClawMachineGame.tsx
 import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
+import { createGameMetadata, GameMetadata } from '../../../../types/GameMetadata';
 import {
     View,
     Text,
@@ -250,11 +251,41 @@ const ClawMachineGame: React.FC = () => {
         if (!token) return;
         setIsSaving(true);
         try {
-            await axios.post('http://localhost:8080/api/user/game/score', {
-                gameName: "Animal Catcher",
+            const gameData = {
+                gameName: "Animal Classification",
                 scores: finalScore,
-                difficulty: "ANIMAL"
-            }, {
+                gameType: "SCIENCE",
+                gameDifficulty: "EASY"
+            };
+            
+            const questionsData = Array.from({ length: answerCount }, (_, index) => ({
+                id: index + 1,
+                question: currentQuestion?.question || 'Catch the correct animal',
+                correctAnswer: currentQuestion?.answer || 'Unknown',
+                userAnswer: index < correctCatches ? 'Correct catch' : 'Wrong catch',
+                isCorrect: index < correctCatches,
+                questionType: 'claw-machine',
+                timeSpent: 0
+            }));
+
+            const metadata: GameMetadata = createGameMetadata(
+                gameData.gameType,
+                gameData.gameDifficulty,
+                finalScore,
+                {
+                    totalAttempts: answerCount,
+                    caughtAnimals: correctCatches
+                },
+                questionsData
+            );
+
+            const backendRequest = {
+                gameName: gameData.gameName,
+                scores: gameData.scores,
+                metadata: metadata
+            };
+            
+            await axios.post('http://localhost:8080/api/user/game/score', backendRequest, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             console.log("Score synced to server!");

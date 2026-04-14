@@ -64,8 +64,17 @@ export default function Register() {
         setLoading(true);
 
         try {
+            // Direct registration for both student and teacher
+            await axios.post(`${getApiBaseUrl()}/api/auth/register`, {
+                username,
+                email,
+                password,
+                isEducator: userType === "teacher",
+                schoolName: userType === "teacher" ? schoolName : null
+            });
+
             if (userType === "teacher") {
-                // Create teacher registration request
+                // Also save the request reason for admin review
                 await TeacherRegistrationStorage.createRequest({
                     username,
                     email,
@@ -75,19 +84,12 @@ export default function Register() {
                 });
 
                 setErrorMsg(null);
-                alert("Teacher registration request submitted successfully! Please wait for admin approval.");
-                router.replace("/Profile/Login");
+                alert("Teacher registration submitted successfully! Your account is created and pending admin approval.");
             } else {
-                // Normal student registration
-                await axios.post(`${getApiBaseUrl()}/api/auth/register`, {
-                    username,
-                    email,
-                    password,
-                    isEducator: false,
-                    schoolName: null
-                });
-                router.replace("/Profile/Login");
+                setErrorMsg(null);
+                alert("Student registration successful!");
             }
+            router.replace("/Profile/Login");
         } catch (error: any) {
             const serverData = error.response?.data;
             let displayMsg = "Registration failed, please try again.";
