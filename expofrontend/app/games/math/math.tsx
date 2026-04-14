@@ -17,19 +17,19 @@ const MathGamesIndex: React.FC = () => {
     const games = [
         {
             id: 1,
-            title: '?? Speed Calculation',
+            title: ' Speed Calculation',
             component: 'CalculationGame',
             description: 'Challenge yourself with lightning-fast math! ??',
-            icon: '??',
+            icon: '☕',
             color: '#FF6B6B',
             bgColor: '#FFE5E5'
         },
         {
             id: 2,
-            title: '?? AI Math Adventures',
+            title: ' AI Math Adventures',
             component: 'AppliedMath',
             description: 'Solve fun puzzles and become a math hero! ??',
-            icon: '??',
+            icon: '🍵',
             color: '#4ECDC4',
             bgColor: '#E5F9F6'
         },
@@ -44,7 +44,7 @@ const MathGamesIndex: React.FC = () => {
             <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
                 <View style={styles.header}>
                     <View style={styles.titleContainer}>
-                        <Text style={styles.title}>?? Math Games ??</Text>
+                        <Text style={styles.title}>Math Games</Text>
                         <View style={styles.starsContainer}>
                             <Star size={20} color="#FFD700" />
                             <Star size={20} color="#FFD700" />
@@ -99,7 +99,7 @@ const MathGamesIndex: React.FC = () => {
                 {/* Back to home link */}
                 <TouchableOpacity style={styles.backLink} onPress={handleBackToHome}>
                     <View style={styles.backButton}>
-                        <Text style={styles.backLinkText}>?? Back to Home ??</Text>
+                        <Text style={styles.backLinkText}> Back to Home </Text>
                     </View>
                 </TouchableOpacity>
             </ScrollView>

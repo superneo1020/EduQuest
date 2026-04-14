@@ -15,7 +15,7 @@ import java.util.List;
 public interface UserGameScoreRepository extends JpaRepository<UserGameScore,Long> {
 
     @Query(value = "SELECT g.name, g.type, g.difficulty, g.icon, g.description, " +
-            "ugs.scores, ugs.metadata, ugs.created_at AS createdAt " +
+            "ugs.scores, CAST(ugs.metadata AS TEXT) AS metadata, ugs.created_at AS createdAt " +
             "FROM user_game_scores ugs " +
             "JOIN games g ON ugs.game_id = g.id " +
             "WHERE ugs.user_id = :userId " +

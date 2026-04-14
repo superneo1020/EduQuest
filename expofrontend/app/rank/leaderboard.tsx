@@ -12,11 +12,16 @@ import { Trophy, Crown, Medal, Star, User, Award } from 'lucide-react-native';
 const GAME_CATEGORIES = [
     "Speed Calculation",
     "AI Math Adventure",
-    "Listening multiple choice questions",
-    "Word matching game",
-    "Sentence Reordering Game",
-    "Animal sorting game",
-    "Human Body Puzzle"
+    "Listening Game",
+    "Writing Game",
+    "Sentence Reorder",
+    "Animal Catcher",
+    "Animal Classification",
+    "Body Parts Matching",
+    "Human organs",
+    "ChineseGame",
+    "ChineseSentenceGame"
+
 ].sort();
 
 const { width } = Dimensions.get('window');

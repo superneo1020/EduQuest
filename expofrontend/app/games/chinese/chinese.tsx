@@ -8,19 +8,19 @@ export default function ChineseGamesIndex() {
     const games = [
         {
             id: 'chinesequiz',
-            title: '?? Chinese Quiz',
+            title: ' Chinese Quiz',
             description: 'Match the Chinese characters and learn! ??',
             route: '/games/chinese/chinesequiz' as const,
-            icon: '??',
+            icon: '🍩',
             color: '#FF6B6B',
             bgColor: '#FFE5E5'
         },
         {
             id: 'chinesesentence',
-            title: '?? Chinese Sentence',
+            title: ' Chinese Sentence',
             description: 'Build correct sentences and have fun! ??',
             route: '/games/chinese/chinesesentence' as const,
-            icon: '??',
+            icon: '🍪',
             color: '#9C27B0',
             bgColor: '#F3E5F5'
         },
@@ -53,7 +53,7 @@ export default function ChineseGamesIndex() {
 
             <View style={styles.header}>
                 <View style={styles.titleContainer}>
-                    <Text style={styles.title}>?? Chinese Games ??</Text>
+                    <Text style={styles.title}> Chinese Games </Text>
                     <View style={styles.starsContainer}>
                         <Star size={20} color="#FFD700" />
                         <Star size={20} color="#FFD700" />
@@ -99,7 +99,7 @@ export default function ChineseGamesIndex() {
             {/* Back to home link */}
             <TouchableOpacity style={styles.backLink} onPress={handleBackToHome}>
                 <View style={styles.backButton}>
-                    <Text style={styles.backLinkText}>?? Back to Home ??</Text>
+                    <Text style={styles.backLinkText}> Back to Home </Text>
                 </View>
             </TouchableOpacity>
         </ScrollView>

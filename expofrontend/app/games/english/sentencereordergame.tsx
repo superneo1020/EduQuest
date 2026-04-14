@@ -782,7 +782,7 @@ export default function SentenceReorderScreen() {
                             </View>
                         </LinearGradient>
 
-                        <Text style={styles.headerSubtitle}>Arrange the words to form correct sentences</Text>
+                        <Text style={styles.headerSubtitle}>Arrange the words to form correct sentences, Please press the "check" button to check your answers.</Text>
 
                         {/* 倒數覆蓋層 */}
                         {prepText && (

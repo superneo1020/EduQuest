@@ -1050,16 +1050,16 @@ export default function ProfileScreen() {
                             <View style={{ flex: 1, marginLeft: 12 }}>
                                 <Text style={styles.activityName}>{record.name}</Text>
                                 <View style={styles.row}>
-                                    <Text style={[styles.activityDifficulty, { color: getDifficultyColor(record.gameDifficulty) }]}>{record.gameDifficulty}</Text>
+                                    <Text style={[styles.activityDifficulty, { color: getDifficultyColor(record.gameDifficulty) }]}>{record.gameDifficulty || 'N/A'}</Text>
                                     <Text style={styles.dot}> • </Text>
                                     <Text style={styles.activityDate}>{new Date(record.createdAt).toLocaleDateString()}</Text>
                                 </View>
                             </View>
                             <View style={styles.scoreContainer}>
                                 <Text style={[styles.activityScore, recordMode === 'best' && { color: '#F1C40F' }]}>
-                                    {recordMode === 'best' ? 'BEST' : `+${record.points} XP`}
+                                    {recordMode === 'best' ? 'BEST' : `+${record.points || 0} XP`}
                                 </Text>
-                                <Text style={styles.activityScoreValue}>Score: {record.scores}</Text>
+                                <Text style={styles.activityScoreValue}>Score: {record.scores || 0}</Text>
                             </View>
                         </View>
                     )) : <Text style={styles.emptyText}>No records found.</Text>}

@@ -19,19 +19,19 @@ const ScienceGamesIndex: React.FC = () => {
     const games = [
         {
             id: 1,
-            title: '?? Animal Games',
+            title: ' Animal Games',
             component: 'AnimalGamesIndex',
             description: 'Explore amazing animals and have fun! ??',
-            icon: '??',
+            icon: '🍕',
             color: '#4CAF50',
             bgColor: '#E8F5E8'
         },
         {
             id: 2,
-            title: '?? Human Body',
+            title: ' Human Body',
             component: 'HumanBody',
             description: 'Discover how your body works! ?',
-            icon: '??',
+            icon: '🌭',
             color: '#FF6B6B',
             bgColor: '#FFE5E5'
         },
@@ -45,7 +45,7 @@ const ScienceGamesIndex: React.FC = () => {
         <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
             <View style={styles.header}>
                 <View style={styles.titleContainer}>
-                    <Text style={styles.title}>?? Science Games ??</Text>
+                    <Text style={styles.title}> Science Games </Text>
                     <View style={styles.starsContainer}>
                         <Star size={20} color="#FFD700" />
                         <Star size={20} color="#FFD700" />
@@ -100,7 +100,7 @@ const ScienceGamesIndex: React.FC = () => {
             {/* Back to home link */}
             <TouchableOpacity style={styles.backLink} onPress={handleBackToHome}>
                 <View style={styles.backButton}>
-                    <Text style={styles.backLinkText}>?? Back to Home ??</Text>
+                    <Text style={styles.backLinkText}>Back to Home </Text>
                 </View>
             </TouchableOpacity>
         </ScrollView>

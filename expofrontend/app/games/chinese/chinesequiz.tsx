@@ -1376,10 +1376,10 @@ const styles = StyleSheet.create({
         textAlign: 'center',
     },
     correctText: {
-        color: '#4CAF50',
+        color: '#000000',
     },
     wrongText: {
-        color: '#F44336',
+        color: '#000000',
     },
     conveyorHint: {
         position: 'absolute',
