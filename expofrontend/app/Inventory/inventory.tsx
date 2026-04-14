@@ -147,7 +147,7 @@ export default function InventoryScreen() {
             );
         }
 
-        if (userItems.length === 0) {
+        if (!Array.isArray(userItems) || userItems.length === 0) {
             return (
                 <View style={styles.emptyInventory}>
                     <Backpack size={80} color="#C0C0C0" />
@@ -165,7 +165,7 @@ export default function InventoryScreen() {
 
         return (
             <View style={styles.inventoryGrid}>
-                {userItems.map((item: any, index: number) => {
+                {(Array.isArray(userItems) ? userItems : []).map((item: any, index: number) => {
                     const itemData = getItemData(item);
                     const rarity = getItemRarity(itemData.type);
                     const backgroundColor = getItemBackground(itemData.type);
@@ -218,7 +218,7 @@ export default function InventoryScreen() {
                 })}
 
                 {/* Empty slots for game-like appearance */}
-                {[...Array(Math.max(0, 12 - userItems.length))].map((_, index) => (
+                {[...Array(Math.max(0, 12 - (Array.isArray(userItems) ? userItems.length : 0)))].map((_, index) => (
                     <View key={`empty-${index}`} style={styles.emptySlot}>
                         <View style={styles.emptySlotInner} />
                     </View>
@@ -242,7 +242,7 @@ export default function InventoryScreen() {
                         <Text style={styles.headerTitle}>My Backpack</Text>
                     </View>
                     <View style={styles.itemCount}>
-                        <Text style={styles.itemCountText}>{userItems.length}</Text>
+                        <Text style={styles.itemCountText}>{Array.isArray(userItems) ? userItems.length : 0}</Text>
                     </View>
                 </View>
             </View>

@@ -13,7 +13,10 @@ import {
     RefreshControl,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Plus, BookOpen, Users2, TrendingUp, Target, UserPlus, X, Edit2, Trash2, Gamepad2, Trophy, ChevronLeft, RefreshCw } from 'lucide-react-native';
+import {
+    Plus, BookOpen, Users2, TrendingUp, Target, UserPlus, X, Edit2, Trash2, Gamepad2, Trophy, ChevronLeft, RefreshCw,
+    Clock, Award, CheckCircle, ChevronRight, Brain, Atom, Languages, Calculator
+} from 'lucide-react-native';
 import educatorService, {Course, CourseRequest, UserMini, CourseMemberRequest, CourseMember, GameScore, BestGameScore, StudentProfile} from './educatorService';
 import { getApiBaseUrl } from '@/src/api/client';
 import { useAuth } from '@/src/auth/AuthContext';
@@ -498,6 +501,33 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
         }
     };
 
+    const getPerformanceColor = (score: number) => {
+        if (score >= 80) return '#4CAF50';
+        if (score >= 60) return '#FF9800';
+        return '#FF4757';
+    };
+
+    const calculateStudentStats = (gameHistory: GameScore[]) => {
+        if (!gameHistory || gameHistory.length === 0) {
+            return { averageScore: 0, accuracy: 0, totalTimeSpent: 0, completedQuests: 0 };
+        }
+
+        const totalScore = gameHistory.reduce((sum, game) => sum + (game.scores || 0), 0);
+        const averageScore = Math.round(totalScore / gameHistory.length);
+        
+        // Simple accuracy calculation based on score percentage
+        const accuracy = Math.min(100, Math.round((averageScore / 100) * 100));
+        
+        const completedQuests = gameHistory.length;
+        
+        return {
+            averageScore,
+            accuracy,
+            totalTimeSpent: 0, // Could be calculated if time data is available
+            completedQuests
+        };
+    };
+
     const getDifficultyColor = (diff: string) => {
         switch (diff?.toUpperCase()) {
             case 'HARD': return '#FF4757';
@@ -653,9 +683,11 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
     // Render function for student list view (used in Students tab)
     const renderStudentListItem = ({ item }: { item: UserMini }) => {
         // Check which classes this student belongs to
-        const studentClasses = classesResponse?.items.filter(classItem => 
-            classMembers.some(member => member.userId === item.id && member.courseId === classItem.id)
-        ) || [];
+        // Since classMembers only contains members for the currently selected class,
+        // we'll show the class if the student is in classMembers and a class is selected
+        const studentClasses = selectedClass && classMembers.some(member => member.userId === item.id) 
+            ? [selectedClass] 
+            : [];
 
         // Safety checks for undefined properties - prioritize username over name
         const displayName = item.username || item.name || `User ${item.id}`;
@@ -906,9 +938,13 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                                 data={classMembers}
                                 renderItem={({ item }) => {
                                     const isStudent = item.roleInClass === 'STUDENT';
+                                    const gameData = memberGameData[item.userId] || [];
+                                    const subjectScores = calculateSubjectScores(gameData);
+                                    const studentStats = isStudent ? calculateStudentStats(gameData) : { averageScore: 0, accuracy: 0, totalTimeSpent: 0, completedQuests: 0 };
+
                                     return (
                                         <View style={styles.memberCard}>
-                                            {/* 頭部和基本信息 */}
+                                            {/* 卡片頭部：頭像 + 姓名 + 操作按鈕 */}
                                             <View style={styles.memberCardHeader}>
                                                 <View style={styles.memberAvatar}>
                                                     <Text style={styles.memberAvatarText}>
@@ -927,60 +963,70 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                                                         <Text style={styles.roleBadgeText}>{item.roleInClass}</Text>
                                                     </View>
                                                 </View>
-                                            </View>
-
-                                            {/* 如果是學生，顯示學科進度條 */}
-                                            {isStudent && (
-                                                <View style={styles.subjectPerformanceSection}>
-                                                    <Text style={styles.sectionLabel}>Subject Performance</Text>
-                                                    {loadingMemberData ? (
-                                                        <ActivityIndicator size="small" color="#9C27B0" />
-                                                    ) : (
-                                                        <View style={styles.subjectBars}>
-                                                            {(() => {
-                                                                const gameData = memberGameData[item.userId] || [];
-                                                                const subjectScores = calculateSubjectScores(gameData);
-                                                                return subjectScores.map((subject, index) => (
-                                                                    <View key={index} style={styles.subjectBarContainer}>
-                                                                        <Text style={styles.subjectLabel}>{subject.label}</Text>
-                                                                        <View style={styles.subjectBarBg}>
-                                                                            <View style={[styles.subjectBarFill, { width: `${subject.percentage}%`, backgroundColor: subject.color }]} />
-                                                                        </View>
-                                                                        <Text style={[styles.subjectPercentage, { color: subject.color }]}>
-                                                                            {subject.percentage > 0 ? `${subject.percentage}%` : 'N/A'}
-                                                                        </Text>
-                                                                    </View>
-                                                                ));
-                                                            })()}
-                                                        </View>
+                                                <View style={styles.memberCardActions}>
+                                                    <TouchableOpacity onPress={() => openRoleManagement(item)} style={styles.memberActionIcon}>
+                                                        <Edit2 size={18} color="#6C5CE7" />
+                                                    </TouchableOpacity>
+                                                    {isStudent && (
+                                                        <TouchableOpacity onPress={() => viewStudentScores(item.userId, item.username)} style={styles.memberActionIcon}>
+                                                            <TrendingUp size={18} color="#4CAF50" />
+                                                        </TouchableOpacity>
+                                                    )}
+                                                    {isStudent && (
+                                                        <TouchableOpacity onPress={() => confirmRemoveStudent(item.userId, item.username)} style={styles.memberActionIcon}>
+                                                            <Trash2 size={18} color="#FF4757" />
+                                                        </TouchableOpacity>
                                                     )}
                                                 </View>
+                                            </View>
+
+                                            {/* 學生成績區塊（僅學生顯示） */}
+                                            {isStudent && (
+                                                <>
+                                                    <View style={styles.progressSection}>
+                                                        <View style={styles.subjectProgress}>
+                                                            {subjectScores.map((subject, idx) => (
+                                                                <View key={idx} style={styles.subjectItem}>
+                                                                    {subject.label === 'Math' && <Calculator size={14} color="#4CAF50" />}
+                                                                    {subject.label === 'English' && <Languages size={14} color="#2196F3" />}
+                                                                    {subject.label === 'Science' && <Atom size={14} color="#FF9800" />}
+                                                                    {subject.label === 'Chinese' && <Brain size={14} color="#9C27B0" />}
+                                                                    <Text style={styles.subjectLabel}>{subject.label}</Text>
+                                                                    <View style={styles.progressBar}>
+                                                                        <View style={[styles.progressFill, { width: `${subject.percentage}%`, backgroundColor: subject.color }]} />
+                                                                    </View>
+                                                                    <Text style={styles.progressPercent}>{subject.percentage}%</Text>
+                                                                </View>
+                                                            ))}
+                                                        </View>
+                                                    </View>
+
+                                                    <View style={styles.performanceRow}>
+                                                        <View style={styles.performanceBadge}>
+                                                            <Award size={16} color={getPerformanceColor(studentStats.averageScore)} />
+                                                            <Text style={[styles.performanceScore, { color: getPerformanceColor(studentStats.averageScore) }]}>
+                                                                {studentStats.averageScore}%
+                                                            </Text>
+                                                        </View>
+                                                        <View style={styles.performanceBadge}>
+                                                            <CheckCircle size={16} color="#4CAF50" />
+                                                            <Text style={styles.performanceText}>{studentStats.accuracy}% Acc.</Text>
+                                                        </View>
+                                                        <View style={styles.performanceBadge}>
+                                                            <Clock size={16} color="#FF9800" />
+                                                            <Text style={styles.performanceText}>{studentStats.completedQuests} games</Text>
+                                                        </View>
+                                                    </View>
+                                                </>
                                             )}
 
-                                            {/* 操作按鈕區域 */}
-                                            <View style={styles.memberActions}>
-                                                {/* 編輯角色按鈕（所有人） */}
-                                                <TouchableOpacity style={styles.actionButton} onPress={() => openRoleManagement(item)}>
-                                                    <Edit2 size={16} color="#007AFF" />
-                                                    <Text style={styles.actionButtonText}>Edit</Text>
+                                            {/* 底部按鈕（原本的操作按鈕已移到右上角，這裡可保留查看詳細報告的按鈕，非必須） */}
+                                            {isStudent && (
+                                                <TouchableOpacity style={styles.viewDetailsBtn} onPress={() => viewStudentScores(item.userId, item.username)}>
+                                                    <Text style={styles.viewDetailsText}>View Full Report</Text>
+                                                    <ChevronRight size={16} color="#6C5CE7" />
                                                 </TouchableOpacity>
-
-                                                {/* 學生成績按鈕 */}
-                                                {isStudent && (
-                                                    <TouchableOpacity style={styles.actionButton} onPress={() => viewStudentScores(item.userId, item.username)}>
-                                                        <TrendingUp size={16} color="#4CAF50" />
-                                                        <Text style={styles.actionButtonText}>Scores</Text>
-                                                    </TouchableOpacity>
-                                                )}
-
-                                                {/* 移除學生按鈕 */}
-                                                {isStudent && (
-                                                    <TouchableOpacity style={[styles.actionButton, styles.deleteButton]} onPress={() => confirmRemoveStudent(item.userId, item.username)}>
-                                                        <Trash2 size={16} color="#FF4757" />
-                                                        <Text style={[styles.actionButtonText, styles.deleteButtonText]}>Remove</Text>
-                                                    </TouchableOpacity>
-                                                )}
-                                            </View>
+                                            )}
                                         </View>
                                     );
                                 }}
@@ -995,7 +1041,7 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
             {/* 自定義確認刪除 Modal - 修正 visible 為 showConfirmModal */}
             <Modal
                 visible={showConfirmModal}
-                transparent={true}
+                transparent
                 animationType="fade"
                 onRequestClose={() => setShowConfirmModal(false)}
             >
@@ -1176,7 +1222,7 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
             {/* Role Management Modal */}
             <Modal
                 visible={showRoleManagementModal}
-                transparent={true}
+                transparent
                 animationType="fade"
                 onRequestClose={() => setShowRoleManagementModal(false)}
             >
@@ -1344,6 +1390,125 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         width: 35,
         textAlign: 'right',
+    },
+    memberAvatar: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: '#6C5CE7',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    memberAvatarText: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#FFF',
+    },
+    memberInfo: {
+        flex: 1,
+    },
+    memberName: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#2D3436',
+    },
+    memberEmail: {
+        fontSize: 12,
+        color: '#999',
+        marginTop: 2,
+    },
+    memberCardActions: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    memberActionIcon: {
+        padding: 6,
+    },
+    progressSection: {
+        marginVertical: 12,
+    },
+    subjectProgress: {
+        gap: 8,
+    },
+    subjectItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    subjectLabel: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#666',
+        width: 50,
+    },
+    progressBar: {
+        flex: 1,
+        height: 6,
+        backgroundColor: '#E0E0E0',
+        borderRadius: 3,
+        overflow: 'hidden',
+    },
+    progressFill: {
+        height: '100%',
+        borderRadius: 3,
+    },
+    progressPercent: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: '#666',
+        width: 35,
+        textAlign: 'right',
+    },
+    performanceRow: {
+        flexDirection: 'row',
+        gap: 12,
+        marginVertical: 12,
+    },
+    performanceBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: '#F8F9FA',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+    },
+    performanceScore: {
+        fontSize: 14,
+        fontWeight: '700',
+    },
+    performanceText: {
+        fontSize: 12,
+        color: '#666',
+    },
+    viewDetailsBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 4,
+        marginTop: 8,
+        paddingVertical: 8,
+    },
+    viewDetailsText: {
+        color: '#6C5CE7',
+        fontSize: 13,
+        fontWeight: '600',
+    },
+    roleBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        alignSelf: 'flex-start',
+        marginTop: 6,
+    },
+    teacherBadge: { backgroundColor: '#FF6B6B' },
+    assistantBadge: { backgroundColor: '#4ECDC4' },
+    studentBadge: { backgroundColor: '#95E1D3' },
+    roleBadgeText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#FFF',
     },
 // 操作按鈕區域
     memberActions: {
@@ -1588,17 +1753,19 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     studentItem: {
-        backgroundColor: '#fff',
+        backgroundColor: '#F8FAFF',
         borderRadius: 8,
         padding: 12,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
+        borderWidth: 1,
+        borderColor: '#E3F2FD',
     },
     studentItemSelected: {
-        backgroundColor: '#F0F4FF',
-        borderWidth: 1,
-        borderColor: '#6C5CE7',
+        backgroundColor: '#E3F2FD',
+        borderWidth: 2,
+        borderColor: '#2196F3',
     },
     studentInfo: {
         flex: 1,
@@ -1626,7 +1793,7 @@ const styles = StyleSheet.create({
         width: 12,
         height: 12,
         borderRadius: 6,
-        backgroundColor: '#6C5CE7',
+        backgroundColor: '#2196F3',
     },
     studentItemDisabled: {
         backgroundColor: '#F5F5F5',
@@ -1683,16 +1850,16 @@ const styles = StyleSheet.create({
         gap: 12,
     },
     studentListItem: {
-        backgroundColor: '#FFF',
-        borderRadius: 12,
-        padding: 16,
+        backgroundColor: '#F8FAFF',
+        borderRadius: 8,
+        padding: 12,
         borderWidth: 1,
-        borderColor: '#E5E5E5',
-        elevation: 2,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
+        borderColor: '#E3F2FD',
+        elevation: 1,
+        shadowColor: '#2196F3',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
     },
     studentListItemHeader: {
         flexDirection: 'row',
@@ -1702,7 +1869,7 @@ const styles = StyleSheet.create({
         width: 48,
         height: 48,
         borderRadius: 24,
-        backgroundColor: '#6C5CE7',
+        backgroundColor: '#2196F3',
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 12,
