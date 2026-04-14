@@ -44,6 +44,12 @@ public class ItemService {
     }
 
     @Transactional(readOnly = true)
+    public ItemDto findItemById(Long id) {
+        return itemRepo.findById(id).map(dtoMapper::toItemDto).orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Item not found"));
+    }
+
+    @Transactional(readOnly = true)
     public UtilPageResponse<ItemDto> findItemByFilter(ItemShopRequest req, Long userId, Pageable pageable) {
         Pageable cleanPageable = PageableUtils.filterSort(pageable, ITEM_DTO_FIELDS);
         List<Specification<Item>> specs = new ArrayList<>();
@@ -70,14 +76,7 @@ public class ItemService {
         // If the list is empty, it effectively returns 'findAll()'
         var items = itemRepo.findAll(Specification.allOf(specs), cleanPageable);
 
-        Page<ItemDto> dtoPage = items.map(item -> new ItemDto(
-                item.getId(),
-                item.getType(),
-                item.getName(),
-                item.getDescription(),
-                item.getIcon(),
-                item.getPrice()
-        ));
+        Page<ItemDto> dtoPage = items.map(dtoMapper::toItemDto);
 
         return dtoMapper.toPageResponse(dtoPage);
     }
