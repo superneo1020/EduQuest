@@ -271,14 +271,27 @@ export default function ProfileScreen() {
                     }
 
                     // 獲取遊戲記錄
-                    const gameHistoryResponse = await axios.get(`${getApiBaseUrl()}/api/user/game/score`, {
-                        params: { page: 0, size: 50 },
-                        headers: { Authorization: `Bearer ${token}` }
-                    });
+                    // 獲取遊戲記錄
+                    // 獲取遊戲記錄
+                    // 在 useFocusEffect 的 fetchLatestProfile 函數內，找到遊戲記錄的部分，替換為：
 
+                    let gameScores: any[] = [];
+                    try {
+                        console.log('Fetching game scores...');
+                        const gameHistoryResponse = await axios.get(`${getApiBaseUrl()}/api/user/game/score`, {
+                            params: { page: 0, size: 50 },
+                            headers: { Authorization: `Bearer ${token}` }
+                        });
+                        console.log('Game scores response:', gameHistoryResponse.data);
+                        gameScores = gameHistoryResponse.data.content || [];
+                        console.log('Game scores array:', gameScores);
+                    } catch (gameError: any) {
+                        console.error('Failed to fetch game scores:', gameError);
+                        // 如果失敗，保持 gameScores 為空陣列
+                    }
                     setProfileData((prev: any) => ({
                         ...profileResponse.data,
-                        userGameScores: gameHistoryResponse.data.content || []
+                        userGameScores: gameScores
                     }));
                 } catch (error) {
                     console.error("無法獲取最新資料", error);

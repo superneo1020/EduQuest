@@ -1,5 +1,6 @@
 // english/sentencereordergame.tsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createGameMetadata, GameMetadata } from '../../../types/GameMetadata';
 import {
     View,
     Text,
@@ -177,6 +178,15 @@ export default function SentenceReorderScreen() {
         gameStarted: false,
         gameFinished: false
     });
+    // Store all questions and user answers
+    const [questionsHistory, setQuestionsHistory] = useState<Array<{
+        id: number;
+        question: string;
+        correctAnswer: string[];
+        userAnswer: string[];
+        isCorrect: boolean;
+        questionType: string;
+    }>>([]);
 
     // 螢幕震動動畫樣式
     const animatedScreenStyle = useAnimatedStyle(() => ({
@@ -419,6 +429,22 @@ export default function SentenceReorderScreen() {
             const newScore = gameState.score + pointsEarned;
             const newCorrectAnswers = gameState.correctAnswers + 1;
 
+            // Record the question and user answer
+            const currentOrder = [...gameState.words]
+                .sort((a, b) => a.currentIndex - b.currentIndex)
+                .map(word => word.originalIndex);
+
+            const questionData = {
+                id: gameState.currentQuestionIndex + 1,
+                question: gameState.currentQuestion.sentence,
+                correctAnswer: Array.from({ length: currentOrder.length }, (_, i) => i), // Correct order is 0,1,2,3...
+                userAnswer: currentOrder,
+                isCorrect: isCorrect,
+                questionType: 'sentence-reorder'
+            };
+
+            setQuestionsHistory(prev => [...prev, questionData]);
+
             setGameState(prev => ({
                 ...prev,
                 score: newScore,
@@ -560,11 +586,31 @@ export default function SentenceReorderScreen() {
 
         setIsSaving(true);
         try {
-            await axios.post('http://localhost:8080/api/user/game/score', {
+            const gameData = {
                 gameName: "Sentence Reorder",
                 scores: gameState.score,
-                difficulty: getLevelLabel(gameState.difficulty).toUpperCase()
-            }, {
+                gameType: "ENGLISH",
+                gameDifficulty: getLevelLabel(gameState.difficulty).toUpperCase()
+            };
+            
+            const metadata: GameMetadata = createGameMetadata(
+                gameData.gameType,
+                gameData.gameDifficulty,
+                gameData.scores,
+                {
+                    totalSentences: gameState.totalQuestions,
+                    correctSentences: gameState.correctAnswers
+                },
+                questionsHistory
+            );
+
+            const backendRequest = {
+                gameName: gameData.gameName,
+                scores: gameData.scores,
+                metadata: metadata
+            };
+            
+            await axios.post('http://localhost:8080/api/user/game/score', backendRequest, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             console.log("Score synced to server!");

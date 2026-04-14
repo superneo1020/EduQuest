@@ -39,8 +39,12 @@ export default function GameRecordsScreen() {
         if (!token) return;
         try {
             setLoading(true);
-            const response = await axios.get(`${getApiBaseUrl()}/api/user/game/score`, {
-                params: { page, size: 20 },
+            // Try minimal parameters first
+            const params = new URLSearchParams({
+                page: page.toString(),
+                size: '20'
+            });
+            const response = await axios.get(`${getApiBaseUrl()}/api/user/game/score?${params.toString()}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setGameHistory(response.data.content || []);
@@ -108,7 +112,7 @@ export default function GameRecordsScreen() {
         }
     };
 
-    
+
     // 前端過濾與排序邏輯
     const filteredRecords = useMemo(() => {
         let filtered = gameHistory.filter(r => {
@@ -116,13 +120,13 @@ export default function GameRecordsScreen() {
             const gameType = r.gameType || r.type || r.game_category || r.gameCategory;
             const difficulty = r.gameDifficulty || r.difficulty || r.game_difficulty || r.gameDifficulty;
             const name = r.name || r.gameName || r.game_name;
-            
+
             const matchCat = selectedCategory === 'ALL' || gameType?.toString().toUpperCase() === selectedCategory;
             const matchDiff = selectedDifficulty === 'ALL' || difficulty?.toString().toUpperCase() === selectedDifficulty;
             const matchSearch = name?.toString().toLowerCase().includes(searchQuery.toLowerCase());
-            
-                        
-            
+
+
+
             return matchCat && matchDiff && matchSearch;
         });
 
@@ -298,7 +302,7 @@ export default function GameRecordsScreen() {
                                 </View>
                             </View>
 
-                            
+
                             <TouchableOpacity
                                 style={styles.clearFiltersBtn}
                                 onPress={() => {
