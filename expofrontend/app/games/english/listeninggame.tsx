@@ -1,5 +1,6 @@
 // games/english/listeninggame.tsx
 import React, { useState, useEffect, useRef } from 'react';
+import { createGameMetadata, GameMetadata } from '../../../types/GameMetadata';
 import {
     View,
     Text,
@@ -768,12 +769,42 @@ export default function ListeningScreen() {
         setIsSaving(true);
         try {
             const scoreToSave = Math.max(finalScore, 0);
-            await axios.post('http://localhost:8080/api/user/game/score', {
+            const gameData = {
                 gameName: "Listening Game",
                 scores: scoreToSave,
-                difficulty: getLevelLabel(gameState.currentLevel!).toUpperCase(),
-                "metadata": {}
-            }, {
+                gameType: "ENGLISH",
+                gameDifficulty: getLevelLabel(gameState.currentLevel!).toUpperCase()
+            };
+            
+            const questionsData = gameState.questions.map((q, index) => ({
+                id: index + 1,
+                question: q.question,
+                correctAnswer: q.answer,
+                userAnswer: q.userAnswer,
+                isCorrect: q.isCorrect,
+                questionType: 'listening-audio',
+                options: q.options,
+                earnedPoints: q.earnedPoints || 0
+            }));
+
+            const metadata: GameMetadata = createGameMetadata(
+                gameData.gameType,
+                gameData.gameDifficulty,
+                finalScore,
+                {
+                    audioClips: gameState.questions.length,
+                    correctAnswers: gameState.correctAnswers
+                },
+                questionsData
+            );
+
+            const backendRequest = {
+                gameName: gameData.gameName,
+                scores: gameData.scores,
+                metadata: metadata
+            };
+            
+            await axios.post('http://localhost:8080/api/user/game/score', backendRequest, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
         } catch (e) {

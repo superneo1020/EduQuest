@@ -43,6 +43,8 @@ import {
     ArrowLeft,
     X,
     Plus,
+    LogOut,
+    User, Trophy,
 } from 'lucide-react-native';
 import { ClassManagementPanel } from './ClassManagementPanel';
 import { ClassAnalyticsPanel } from './ClassAnalyticsPanel';
@@ -78,7 +80,7 @@ interface Student {
 export default function TeacherDashboard() {
     const router = useRouter();
     const { width: windowWidth } = useWindowDimensions();
-    const { user, token } = useAuth();
+    const { user, token, signOut } = useAuth();
     const [loading, setLoading] = useState(true);
     const [students, setStudents] = useState<Student[]>([]);
     const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
@@ -97,15 +99,25 @@ export default function TeacherDashboard() {
     const [classes, setClasses] = useState<Course[]>([]);
 
     // Navigation state
-    const [currentView, setCurrentView] = useState<'dashboard' | 'students' | 'classes' | 'analytics'>('dashboard');
+    type TeacherView = 'dashboard' | 'students' | 'classes' | 'analytics' | 'studentLeaderboard';
+    const [currentView, setCurrentView] = useState<TeacherView>('dashboard');
     const [selectedClass, setSelectedClass] = useState<Course | null>(null);
-
+    
+    // Preserve the full type for tab navigation to avoid TypeScript narrowing
+    const currentViewForTabs: TeacherView = currentView;
     const isLandscape = windowWidth > 800;
     const isTablet = windowWidth > 600;
 
     useEffect(() => {
         loadData();
     }, []);
+
+    // Navigation state updates - move router.push calls here
+    useEffect(() => {
+        if (currentView === 'studentLeaderboard') {
+            router.push('/teacher/studentLeaderboard');
+        }
+    }, [currentView, router]);
 
     // 在 TeacherDashboard.tsx 中修改 loadData 函數
 
@@ -140,26 +152,48 @@ export default function TeacherDashboard() {
     };
     const loadStudents = async () => {
         try {
-            // TODO: Replace with actual API call to get students
-            // For now, using mock data that matches backend structure
-            const mockStudents: Student[] = [
-                {
-                    id: 1,
-                    username: 'Alex Chen',
-                    email: 'alex.chen@example.com',
-                    points: 2450,
-                    level: 8,
-                    joinDate: '2024-01-15',
-                    lastActive: '2024-03-28',
-                    gameProgress: { math: 85, english: 72, science: 90, chinese: 68 },
-                    performance: { averageScore: 78.5, totalTimeSpent: 45, completedQuests: 32, accuracy: 82 },
-                },
-                // ... more students
-            ];
-            setStudents(mockStudents);
-            setFilteredStudents(mockStudents);
-        } catch (error) {
-            console.error('Error loading students:', error);
+            // Load real students from API
+            const response = await axios.get(`${getApiBaseUrl()}/api/educator/school/members`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            if (response.data && response.data.content) {
+                const realStudents = response.data.content.map((member: any) => ({
+                    id: member.id,
+                    username: member.username,
+                    email: member.email,
+                    points: member.points || 0,
+                    level: member.level || 1,
+                    joinDate: member.createdAt ? new Date(member.createdAt).toISOString().split('T')[0] : 'Unknown',
+                    lastActive: member.lastActiveAt ? new Date(member.lastActiveAt).toISOString().split('T')[0] : 'Unknown',
+                    gameProgress: { 
+                        math: member.mathProgress || 0, 
+                        english: member.englishProgress || 0, 
+                        science: member.scienceProgress || 0, 
+                        chinese: member.chineseProgress || 0 
+                    },
+                    performance: { 
+                        averageScore: member.averageScore || 0, 
+                        totalTimeSpent: member.totalTimeSpent || 0, 
+                        completedQuests: member.completedQuests || 0, 
+                        accuracy: member.accuracy || 0 
+                    },
+                }));
+                
+                setStudents(realStudents);
+                setFilteredStudents(realStudents);
+            } else {
+                setStudents([]);
+                setFilteredStudents([]);
+            }
+        } catch (error: any) {
+            console.error('TeacherDashboard - Error loading students:', error.response?.status, error.response?.data || error.message);
+            if (error.response?.status === 401) {
+                console.error('TeacherDashboard - Authentication failed for school members - token may be invalid or expired');
+            }
+            // Set empty array on error to avoid showing mock data
+            setStudents([]);
+            setFilteredStudents([]);
         }
     };
 
@@ -302,46 +336,115 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
                     text: 'Delete',
                     style: 'destructive',
                     onPress: async () => {
-                        // TODO: Call API to delete student
-                        setStudents(students.filter(s => s.id !== studentId));
-                        Alert.alert('Success', 'Student removed successfully');
+                        try {
+                            // Call API to remove student from school/class
+                            await axios.delete(`${getApiBaseUrl()}/api/admin/user/${studentId}`, {
+                                headers: { Authorization: `Bearer ${token}` }
+                            });
+                            
+                            setStudents(students.filter(s => s.id !== studentId));
+                            setFilteredStudents(filteredStudents.filter(s => s.id !== studentId));
+                            Alert.alert('Success', 'Student removed successfully');
+                        } catch (error) {
+                            console.error('Error removing student:', error);
+                            Alert.alert('Error', 'Failed to remove student. Please try again.');
+                        }
                     }
                 }
             ]
         );
     };
 
-    const updateStudent = (updatedStudent: Student) => {
-        setStudents(students.map(s =>
-            s.id === updatedStudent.id ? updatedStudent : s
-        ));
-        Alert.alert('Success', 'Student information updated');
-        setEditModalVisible(false);
-        setEditingStudent(null);
+    const updateStudent = async (updatedStudent: Student) => {
+        try {
+            // Call API to update student information
+            await axios.put(`${getApiBaseUrl()}/api/admin/user/${updatedStudent.id}`, {
+                username: updatedStudent.username,
+                email: updatedStudent.email,
+                points: updatedStudent.points,
+                level: updatedStudent.level,
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            
+            setStudents(students.map(s =>
+                s.id === updatedStudent.id ? updatedStudent : s
+            ));
+            setFilteredStudents(filteredStudents.map(s =>
+                s.id === updatedStudent.id ? updatedStudent : s
+            ));
+            Alert.alert('Success', 'Student information updated');
+            setEditModalVisible(false);
+            setEditingStudent(null);
+        } catch (error) {
+            console.error('Error updating student:', error);
+            Alert.alert('Error', 'Failed to update student information. Please try again.');
+        }
     };
 
-    const addStudent = () => {
+    const addStudent = async () => {
         if (!newStudent.username || !newStudent.email) {
             Alert.alert('Error', 'Please fill in all required fields');
             return;
         }
 
-        const student: Student = {
-            id: Date.now(),
-            username: newStudent.username || '',
-            email: newStudent.email || '',
-            points: newStudent.points || 0,
-            level: newStudent.level || 1,
-            joinDate: new Date().toISOString().split('T')[0],
-            lastActive: new Date().toISOString().split('T')[0],
-            gameProgress: { math: 0, english: 0, science: 0, chinese: 0 },
-            performance: { averageScore: 0, totalTimeSpent: 0, completedQuests: 0, accuracy: 0 },
-        };
+        try {
+            // Call API to register new student
+            const response = await axios.post(`${getApiBaseUrl()}/api/auth/register`, {
+                username: newStudent.username,
+                email: newStudent.email,
+                password: 'defaultPassword123', // You may want to generate or ask for this
+                isEducator: false, // This is a student, not educator
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
 
-        setStudents([student, ...students]);
-        setShowAddModal(false);
-        setNewStudent({});
-        Alert.alert('Success', 'Student added successfully');
+            if (response.data) {
+                const newStudentData: Student = {
+                    id: response.data.id,
+                    username: response.data.username,
+                    email: response.data.email,
+                    points: response.data.points || 0,
+                    level: response.data.level || 1,
+                    joinDate: response.data.createdAt ? new Date(response.data.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+                    lastActive: new Date().toISOString().split('T')[0],
+                    gameProgress: { math: 0, english: 0, science: 0, chinese: 0 },
+                    performance: { averageScore: 0, totalTimeSpent: 0, completedQuests: 0, accuracy: 0 },
+                };
+
+                setStudents([newStudentData, ...students]);
+                setFilteredStudents([newStudentData, ...filteredStudents]);
+                setShowAddModal(false);
+                setNewStudent({});
+                Alert.alert('Success', 'Student added successfully');
+            }
+        } catch (error) {
+            console.error('Error adding student:', error);
+            Alert.alert('Error', 'Failed to add student. Please try again.');
+        }
+    };
+
+    const handleLogout = async () => {
+        Alert.alert(
+            'Logout',
+            'Are you sure you want to logout?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Logout',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await signOut();
+                            router.replace('/Profile/Login');
+                        } catch (error) {
+                            console.error('Logout error:', error);
+                            Alert.alert('Error', 'Failed to logout. Please try again.');
+                        }
+                    }
+                }
+            ]
+        );
     };
 
     const StatCard = ({ title, value, icon: Icon, color }: any) => (
@@ -389,6 +492,10 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
         );
     }
 
+    if (currentView === 'studentLeaderboard') {
+        return null;
+    }
+
     return (
         <SafeAreaView style={styles.container}>
             <ScrollView
@@ -404,24 +511,33 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
                         <Text style={styles.headerTitle}>Teacher Dashboard</Text>
                         <Text style={styles.headerSubtitle}>Welcome back, {user?.username || 'Teacher'}</Text>
                     </View>
-                    <TouchableOpacity style={styles.refreshBtn} onPress={onRefresh}>
-                        <RefreshCw size={22} color="#6C5CE7" />
-                    </TouchableOpacity>
+                    <View style={styles.headerActions}>
+                        <TouchableOpacity style={styles.refreshBtn} onPress={onRefresh}>
+                            <RefreshCw size={22} color="#6C5CE7" />
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.profileBtn} onPress={() => router.push('/teacher/teacherProfile')}>
+                            <User size={22} color="#4CAF50" />
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+                            <LogOut size={22} color="#FF4757" />
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
                 {/* Navigation Tabs */}
                 <View style={styles.tabContainer}>
-                    {(['dashboard', 'students', 'classes', 'analytics'] as const).map((tab) => (
+                    {(['dashboard', 'students', 'classes', 'analytics', 'studentLeaderboard'] as TeacherView[]).map((tab) => (
                         <TouchableOpacity
                             key={tab}
-                            style={[styles.tab, currentView === tab && styles.tabActive]}
+                            style={[styles.tab, currentViewForTabs === tab && styles.tabActive]}
                             onPress={() => setCurrentView(tab)}
                         >
-                            {tab === 'dashboard' && <TrendingUp size={18} color={currentView === tab ? '#6C5CE7' : '#666'} />}
-                            {tab === 'students' && <Users size={18} color={currentView === tab ? '#6C5CE7' : '#666'} />}
-                            {tab === 'classes' && <BookOpen size={18} color={currentView === tab ? '#6C5CE7' : '#666'} />}
-                            {tab === 'analytics' && <BarChart3 size={18} color={currentView === tab ? '#6C5CE7' : '#666'} />}
-                            <Text style={[styles.tabText, currentView === tab && styles.tabTextActive]}>
+                            {tab === 'dashboard' && <TrendingUp size={18} color={currentViewForTabs === tab ? '#6C5CE7' : '#666'} />}
+                            {tab === 'students' && <Users size={18} color={currentViewForTabs === tab ? '#6C5CE7' : '#666'} />}
+                            {tab === 'classes' && <BookOpen size={18} color={currentViewForTabs === tab ? '#6C5CE7' : '#666'} />}
+                            {tab === 'analytics' && <BarChart3 size={18} color={currentViewForTabs === tab ? '#6C5CE7' : '#666'} />}
+                            {tab === 'studentLeaderboard' && <Award size={18} color={currentViewForTabs === tab ? '#6C5CE7' : '#666'} />}
+                            <Text style={[styles.tabText, currentViewForTabs === tab && styles.tabTextActive]}>
                                 {tab.charAt(0).toUpperCase() + tab.slice(1)}
                             </Text>
                         </TouchableOpacity>
@@ -830,7 +946,10 @@ const styles = StyleSheet.create({
     headerTextContainer: { flex: 1, marginLeft: 12 },
     headerTitle: { fontSize: 28, fontWeight: '900', color: '#2D3436' },
     headerSubtitle: { fontSize: 14, color: '#666', marginTop: 4 },
+    headerActions: { flexDirection: 'row', gap: 8 },
     refreshBtn: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#F0E6FF', justifyContent: 'center', alignItems: 'center' },
+    profileBtn: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#E8F5E8', justifyContent: 'center', alignItems: 'center' },
+    logoutBtn: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#FFE6E6', justifyContent: 'center', alignItems: 'center' },
     statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 24 },
     statsGridTablet: { flexDirection: 'row' },
     statCard: { flex: 1, minWidth: 120, padding: 16, borderRadius: 16, alignItems: 'center' },

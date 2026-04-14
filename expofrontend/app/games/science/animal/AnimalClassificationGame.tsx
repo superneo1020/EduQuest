@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import { createGameMetadata, GameMetadata } from '../../../../types/GameMetadata';
 import {
     View,
     Text,
@@ -122,12 +123,40 @@ const AnimalClassificationGame: React.FC = () => {
 
         setIsSaving(true);
         try {
-            await axios.post('http://localhost:8080/api/user/game/score', {
-                gameName: "Animal Classification",
+            const gameData = {
+                gameName: "Animal Catcher",
                 scores: finalScore,
-                difficulty: "ANIMALS",
-                "metadata": {}
-            }, {
+                gameType: "SCIENCE",
+                gameDifficulty: "EASY"
+            };
+            
+            const questionsData = ANIMALS.map((animal, index) => ({
+                id: index + 1,
+                question: `Classify ${animal.name}`,
+                correctAnswer: animal.type,
+                userAnswer: categoryAssignments[animal.id] || undefined,
+                isCorrect: categoryAssignments[animal.id] === animal.type,
+                questionType: 'classification'
+            }));
+
+            const metadata: GameMetadata = createGameMetadata(
+                gameData.gameType,
+                gameData.gameDifficulty,
+                finalScore,
+                {
+                    totalAnimals: ANIMALS.length,
+                    correctClassifications: score
+                },
+                questionsData
+            );
+
+            const backendRequest = {
+                gameName: gameData.gameName,
+                scores: gameData.scores,
+                metadata: metadata
+            };
+            
+            await axios.post('http://localhost:8080/api/user/game/score', backendRequest, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             console.log("Score synced to server!");

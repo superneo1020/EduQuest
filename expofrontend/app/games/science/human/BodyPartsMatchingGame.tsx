@@ -1,5 +1,6 @@
 // science/BodyPartsMatchingGame.tsx
 import React, { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
+import { createGameMetadata, GameMetadata } from '../../../../types/GameMetadata';
 import {
     View,
     Text,
@@ -145,13 +146,40 @@ const BodyPartsMatchingGame = () => {
 
         setIsSaving(true);
         try {
-            await axios.post('http://localhost:8080/api/user/game/score', {
+            const gameData = {
                 gameName: "Body Parts Matching",
                 scores: finalScore,
-                difficulty: "MATCHING",
-                "metadata": {}
+                gameType: "SCIENCE",
+                gameDifficulty: "MEDIUM"
+            };
+            
+            const questionsData = BODY_PARTS.map((part, index) => ({
+                id: index + 1,
+                question: `Match ${part.name}`,
+                correctAnswer: part.name,
+                userAnswer: 'User matched correctly',
+                isCorrect: true, // Simplified - assume all matches are correct for this game type
+                questionType: 'matching'
+            }));
 
-            }, {
+            const metadata: GameMetadata = createGameMetadata(
+                gameData.gameType,
+                gameData.gameDifficulty,
+                finalScore,
+                {
+                    totalParts: BODY_PARTS.length,
+                    correctMatches: score
+                },
+                questionsData
+            );
+
+            const backendRequest = {
+                gameName: gameData.gameName,
+                scores: gameData.scores,
+                metadata: metadata
+            };
+            
+            await axios.post('http://localhost:8080/api/user/game/score', backendRequest, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             console.log("Score synced to server!");

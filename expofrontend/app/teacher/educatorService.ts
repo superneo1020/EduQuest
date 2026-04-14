@@ -24,7 +24,8 @@ export interface CourseRequest {
 
 export interface UserMini {
     id: number;
-    name: string;
+    name?: string;
+    username?: string;
     email: string;
 }
 

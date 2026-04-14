@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { createGameMetadata, GameMetadata } from '../../../types/GameMetadata';
 import {
     View, Text, TextInput, TouchableOpacity, StyleSheet,
     ScrollView, ActivityIndicator, SafeAreaView
@@ -11,7 +12,7 @@ import axios from 'axios';
 import { useAuth } from "@/src/auth/AuthContext";
 import { useRouter, useNavigation } from 'expo-router';
 
-const MAX_STEPS = 2;
+const MAX_STEPS = 3;
 
 // 格式化時間為 mm:ss
 const formatTime = (seconds: number): string => {
@@ -184,8 +185,42 @@ const AppliedMath = () => {
             setFinalReport({ ...reportData, totalTime: finalTime });
 
             const finalScore = Math.round((reportData.accuracy / 100) * sessionHistory.length * 10);
-            await axios.post('http://localhost:8080/api/user/game/score',
-                { gameName: "AI Math Adventure", scores: finalScore ,"metadata": {}},
+            
+            const gameData = {
+                gameName: "AI Math Adventure",
+                scores: finalScore,
+                gameType: "MATH",
+                gameDifficulty: "HARD"
+            };
+            
+            const questionsData = sessionHistory.map((item, index) => ({
+                id: index + 1,
+                question: item.question,
+                correctAnswer: 'AI evaluated answer',
+                userAnswer: item.user_answer,
+                isCorrect: item.is_correct,
+                questionType: 'applied-math',
+                timeSpent: 0
+            }));
+
+            const metadata: GameMetadata = createGameMetadata(
+                gameData.gameType,
+                gameData.gameDifficulty,
+                finalScore,
+                {
+                    totalProblems: sessionHistory.length,
+                    correctProblems: Math.round(sessionHistory.length * reportData.accuracy / 100)
+                },
+                questionsData
+            );
+
+            const backendRequest = {
+                gameName: gameData.gameName,
+                scores: gameData.scores,
+                metadata: metadata
+            };
+            
+            await axios.post('http://localhost:8080/api/user/game/score', backendRequest,
                 { headers: { 'Authorization': `Bearer ${token}` } }
             );
             setIsFinished(true);

@@ -10,20 +10,24 @@ import {
     Modal,
     TextInput,
     FlatList,
+    RefreshControl,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Plus, BookOpen, Users2, TrendingUp, Target, UserPlus, X, Edit2, Trash2, Gamepad2 } from 'lucide-react-native';
+import { Plus, BookOpen, Users2, TrendingUp, Target, UserPlus, X, Edit2, Trash2, Gamepad2, Trophy, ChevronLeft, RefreshCw } from 'lucide-react-native';
 import educatorService, {Course, CourseRequest, UserMini, CourseMemberRequest, CourseMember, GameScore, BestGameScore, StudentProfile} from './educatorService';
 import { getApiBaseUrl } from '@/src/api/client';
 import { useAuth } from '@/src/auth/AuthContext';
 import { ApiListHandler, DetailedListResponse } from './ApiListHandler';
+import axios from 'axios';
+import { useRouter } from 'expo-router';
 
 interface ClassManagementPanelProps {
     onBack?: () => void;
 }
 
 export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBack }) => {
-    const { signOut } = useAuth();
+    const router = useRouter();
+    const { signOut, token } = useAuth();
     const [classesResponse, setClassesResponse] = useState<DetailedListResponse<Course> | null>(null);
     const [schoolMembers, setSchoolMembers] = useState<UserMini[]>([]);
     const [classMembers, setClassMembers] = useState<CourseMember[]>([]);
@@ -57,6 +61,7 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
     const [memberGameData, setMemberGameData] = useState<Record<number, GameScore[]>>({});
     const [loadingMemberData, setLoadingMemberData] = useState(false);
 
+    
     useEffect(() => {
         loadData();
     }, []);
@@ -520,7 +525,8 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
             // 確保外層點擊明確觸發查看成員
             onPress={() => {
                 console.log('Outer card pressed for:', classItem.id);
-                viewClassMembers(classItem);
+                // Navigate to class leaderboard with selected class
+                router.push(`/teacher/classLeaderboard?classId=${classItem.id}&className=${encodeURIComponent(`${classItem.grade} ${classItem.suffix}`)}`);
             }}
             activeOpacity={0.7}
         >
@@ -596,25 +602,101 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
         </TouchableOpacity>
     );
 
-    const renderStudentItem = ({ item }: { item: UserMini }) => (
-        <TouchableOpacity
-            style={[
-                styles.studentItem,
-                selectedStudents.includes(item.id) && styles.studentItemSelected
-            ]}
-            onPress={() => toggleStudentSelection(item.id)}
-        >
-            <View style={styles.studentInfo}>
-                <Text style={styles.studentName}>{item.name}</Text>
-                <Text style={styles.studentEmail}>{item.email}</Text>
+    
+    // Render function for student selection (used in Add Students modal)
+    const renderStudentSelectionItem = ({ item }: { item: UserMini }) => {
+        const isAlreadyInClass = selectedClass && classMembers.some(member => member.userId === item.id);
+        
+        // Safety checks for undefined properties - prioritize username over name
+        const displayName = item.username || item.name || `User ${item.id}`;
+        const displayEmail = item.email || 'No email provided';
+        
+        return (
+            <TouchableOpacity
+                style={[
+                    styles.studentItem,
+                    selectedStudents.includes(item.id) && styles.studentItemSelected,
+                    isAlreadyInClass && styles.studentItemDisabled
+                ]}
+                onPress={() => !isAlreadyInClass && toggleStudentSelection(item.id)}
+                disabled={isAlreadyInClass}
+            >
+                <View style={styles.studentInfo}>
+                    <Text style={[
+                        styles.studentName,
+                        isAlreadyInClass && styles.studentNameDisabled
+                    ]}>
+                        {displayName}
+                    </Text>
+                    <Text style={[
+                        styles.studentEmail,
+                        isAlreadyInClass && styles.studentEmailDisabled
+                    ]}>
+                        {displayEmail}
+                    </Text>
+                    {isAlreadyInClass && (
+                        <Text style={styles.alreadyInClassText}>Already in class</Text>
+                    )}
+                </View>
+                <View style={styles.studentCheckbox}>
+                    {!isAlreadyInClass && selectedStudents.includes(item.id) && (
+                        <View style={styles.checkboxChecked} />
+                    )}
+                    {isAlreadyInClass && (
+                        <Text style={styles.checkmarkDisabled}>×</Text>
+                    )}
+                </View>
+            </TouchableOpacity>
+        );
+    };
+
+    // Render function for student list view (used in Students tab)
+    const renderStudentListItem = ({ item }: { item: UserMini }) => {
+        // Check which classes this student belongs to
+        const studentClasses = classesResponse?.items.filter(classItem => 
+            classMembers.some(member => member.userId === item.id && member.courseId === classItem.id)
+        ) || [];
+
+        // Safety checks for undefined properties - prioritize username over name
+        const displayName = item.username || item.name || `User ${item.id}`;
+        const displayEmail = item.email || 'No email provided';
+        const primaryName = item.username || item.name;
+        const avatarText = primaryName ? primaryName.charAt(0).toUpperCase() : '?';
+
+        return (
+            <View style={styles.studentListItem}>
+                <View style={styles.studentListItemHeader}>
+                    <View style={styles.studentListItemAvatar}>
+                        <Text style={styles.studentListItemAvatarText}>
+                            {avatarText}
+                        </Text>
+                    </View>
+                    <View style={styles.studentListInfo}>
+                        <Text style={styles.studentListItemName}>{displayName}</Text>
+                        <Text style={styles.studentListItemEmail}>{displayEmail}</Text>
+                        <View style={styles.classBadgesContainer}>
+                            {studentClasses.length > 0 ? (
+                                studentClasses.map(classItem => (
+                                    <View key={classItem.id} style={styles.classBadge}>
+                                        <Text style={styles.classBadgeText}>
+                                            {classItem.grade} {classItem.suffix}
+                                        </Text>
+                                    </View>
+                                ))
+                            ) : (
+                                <Text style={styles.noClassesText}>Not enrolled in any class</Text>
+                            )}
+                        </View>
+                    </View>
+                    <View style={styles.studentListItemActions}>
+                        <TouchableOpacity style={styles.viewStudentBtn}>
+                            <Text style={styles.viewStudentBtnText}>View Details</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
             </View>
-            <View style={styles.studentCheckbox}>
-                {selectedStudents.includes(item.id) && (
-                    <View style={styles.checkboxChecked} />
-                )}
-            </View>
-        </TouchableOpacity>
-    );
+        );
+    };
 
     if (loading && !classesResponse) {
         return (
@@ -683,15 +765,23 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
 
             {currentView === 'students' && (
                 <View style={styles.content}>
+                    <View style={styles.studentsHeader}>
+                        <Text style={styles.studentsHeaderTitle}>All Students</Text>
+                        <Text style={styles.studentsHeaderSubtitle}>
+                            Total: {schoolMembers.length} students
+                        </Text>
+                    </View>
                     <FlatList
                         data={schoolMembers}
-                        renderItem={renderStudentItem}
+                        renderItem={renderStudentListItem}
                         keyExtractor={item => item.id.toString()}
-                        contentContainerStyle={styles.studentList}
+                        contentContainerStyle={styles.studentListContainer}
+                        showsVerticalScrollIndicator={false}
                     />
                 </View>
             )}
 
+            
             {/* Modals remain the same... */}
             {/* Create Class Modal */}
             <Modal
@@ -770,7 +860,7 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
 
                         <FlatList
                             data={schoolMembers}
-                            renderItem={renderStudentItem}
+                            renderItem={renderStudentSelectionItem}
                             keyExtractor={item => item.id.toString()}
                             contentContainerStyle={styles.modalStudentList}
                         />
@@ -1538,6 +1628,144 @@ const styles = StyleSheet.create({
         borderRadius: 6,
         backgroundColor: '#6C5CE7',
     },
+    studentItemDisabled: {
+        backgroundColor: '#F5F5F5',
+        opacity: 0.6,
+    },
+    studentNameDisabled: {
+        color: '#999',
+    },
+    studentEmailDisabled: {
+        color: '#BBB',
+    },
+    alreadyInClassText: {
+        fontSize: 12,
+        color: '#FF4757',
+        fontWeight: '600',
+        marginTop: 4,
+    },
+    checkmarkDisabled: {
+        fontSize: 16,
+        color: '#999',
+        fontWeight: 'bold',
+    },
+    emptyStateContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: 40,
+    },
+    emptyStateText: {
+        fontSize: 16,
+        color: '#999',
+        textAlign: 'center',
+    },
+    // Student list view styles
+    studentsHeader: {
+        padding: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E5E5E5',
+        backgroundColor: '#F8F9FA',
+    },
+    studentsHeaderTitle: {
+        fontSize: 24,
+        fontWeight: '700',
+        color: '#2D3436',
+        marginBottom: 4,
+    },
+    studentsHeaderSubtitle: {
+        fontSize: 14,
+        color: '#666',
+        fontWeight: '500',
+    },
+    studentListContainer: {
+        padding: 16,
+        gap: 12,
+    },
+    studentListItem: {
+        backgroundColor: '#FFF',
+        borderRadius: 12,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: '#E5E5E5',
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+    },
+    studentListItemHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    studentListItemAvatar: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: '#6C5CE7',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    studentListItemAvatarText: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#FFF',
+        textTransform: 'uppercase',
+    },
+    studentListInfo: {
+        flex: 1,
+    },
+    studentListItemName: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#2D3436',
+        marginBottom: 2,
+    },
+    studentListItemEmail: {
+        fontSize: 14,
+        color: '#666',
+        marginBottom: 8,
+    },
+    classBadgesContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 6,
+    },
+    classBadge: {
+        backgroundColor: '#E3F2FD',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#BBDEFB',
+    },
+    classBadgeText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#2196F3',
+    },
+    noClassesText: {
+        fontSize: 12,
+        color: '#999',
+        fontStyle: 'italic',
+    },
+    studentListItemActions: {
+        alignItems: 'flex-end',
+    },
+    viewStudentBtn: {
+        backgroundColor: '#F0F4FF',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: '#D1D5FF',
+    },
+    viewStudentBtnText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#6C5CE7',
+    },
     modalContainer: {
         flex: 1,
         backgroundColor: '#fff',
@@ -1989,5 +2217,187 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
         color: '#333',
+    },
+    // Leaderboard styles
+    leaderboardPlaceholder: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 40,
+    },
+    placeholderTitle: {
+        fontSize: 20,
+        fontWeight: '600',
+        color: '#333',
+        marginTop: 16,
+        textAlign: 'center',
+    },
+    placeholderText: {
+        fontSize: 14,
+        color: '#666',
+        marginTop: 8,
+        textAlign: 'center',
+        lineHeight: 20,
+    },
+    leaderboardContainer: {
+        flex: 1,
+    },
+    leaderboardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        backgroundColor: '#fff',
+        borderBottomWidth: 1,
+        borderBottomColor: '#E0E0E0',
+    },
+    leaderboardBackBtn: {
+        padding: 8,
+        marginRight: 12,
+    },
+    leaderboardHeaderTitle: {
+        flex: 1,
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#2D3436',
+    },
+    leaderboardRefreshBtn: {
+        padding: 8,
+    },
+    leaderboardSelectionContainer: {
+        backgroundColor: '#fff',
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E0E0E0',
+    },
+    leaderboardSelectionGroup: {
+        marginBottom: 8,
+    },
+    leaderboardSelectionLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#333',
+        marginBottom: 8,
+    },
+    leaderboardGameChip: {
+        backgroundColor: '#F5F5F5',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
+        marginRight: 8,
+        borderWidth: 1,
+        borderColor: '#E0E0E0',
+    },
+    leaderboardGameChipActive: {
+        backgroundColor: '#6C5CE7',
+        borderColor: '#6C5CE7',
+    },
+    leaderboardGameChipText: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: '#666',
+    },
+    leaderboardGameChipTextActive: {
+        color: '#fff',
+    },
+    leaderboardScrollView: {
+        flex: 1,
+        backgroundColor: '#F8F9FA',
+    },
+    leaderboardLoadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: 40,
+    },
+    leaderboardLoadingText: {
+        fontSize: 16,
+        color: '#666',
+        marginTop: 12,
+    },
+    leaderboardEmptyContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: 40,
+        paddingHorizontal: 40,
+    },
+    leaderboardEmptyTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#333',
+        marginTop: 16,
+        textAlign: 'center',
+    },
+    leaderboardEmptyText: {
+        fontSize: 14,
+        color: '#666',
+        marginTop: 8,
+        textAlign: 'center',
+        lineHeight: 20,
+    },
+    leaderboardList: {
+        padding: 20,
+    },
+    leaderboardEntry: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#fff',
+        padding: 16,
+        borderRadius: 12,
+        marginBottom: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    leaderboardRank: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#6C5CE7',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 16,
+    },
+    leaderboardRankText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#fff',
+    },
+    leaderboardInfo: {
+        flex: 1,
+    },
+    leaderboardUsername: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#333',
+        marginBottom: 4,
+    },
+    leaderboardScore: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: '#6C5CE7',
+        marginBottom: 2,
+    },
+    leaderboardDate: {
+        fontSize: 12,
+        color: '#666',
+    },
+    leaderboardTrophy: {
+        marginLeft: 12,
+    },
+    leaderboardLoadingMore: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 20,
+    },
+    leaderboardLoadingMoreText: {
+        fontSize: 14,
+        color: '#666',
+        marginLeft: 8,
     },
 });
