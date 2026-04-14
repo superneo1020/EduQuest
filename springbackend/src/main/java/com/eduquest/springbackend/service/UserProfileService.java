@@ -2,6 +2,7 @@ package com.eduquest.springbackend.service;
 
 import com.eduquest.springbackend.dao.UserProfileRepository;
 import com.eduquest.springbackend.dto.*;
+import com.eduquest.springbackend.enums.ItemType;
 import com.eduquest.springbackend.exception.ResourceNotFoundException;
 import com.eduquest.springbackend.model.UserProfile;
 import org.springframework.lang.NonNull;
@@ -9,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
+import java.util.function.Function;
 
 @Service
 public class UserProfileService {
@@ -16,12 +18,24 @@ public class UserProfileService {
     private final UserProfileRepository userProfileRepo;
 
     private final UserItemService userItemService;
+    private final ItemService itemService;
+
+    private static final Map<ItemType, Function<ProfileEquippedItemsDto, Long>> ACCESSORS = Map.of(
+            ItemType.AVATAR,     ProfileEquippedItemsDto::AVATAR,
+            ItemType.BADGE,      ProfileEquippedItemsDto::BADGE,
+            ItemType.BACKGROUND, ProfileEquippedItemsDto::BACKGROUND
+    );
 
     public UserProfileService(
             UserProfileRepository userProfileRepo,
-            UserItemService userItemService) {
+            UserItemService userItemService, ItemService itemService) {
         this.userProfileRepo = userProfileRepo;
         this.userItemService = userItemService;
+        this.itemService = itemService;
+    }
+
+    public Long getItemIdByType(ProfileEquippedItemsDto dto, ItemType type) {
+        return ACCESSORS.get(type).apply(dto);
     }
 
     @Transactional(readOnly = true)
@@ -37,6 +51,38 @@ public class UserProfileService {
                 userProfile.getCreatedAt(),
                 userProfile.getUpdatedAt()
         );
+    }
+
+    @Transactional(readOnly = true)
+    public ProfileEquippedItemsDto getEquippedItems(@NonNull Long userId) {
+        UserProfile userProfile = userProfileRepo.findByUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        return userProfile.getEquippedItems();
+    }
+
+    @Transactional(readOnly = true)
+    public ItemDto getEquippedItems(@NonNull Long userId, @NonNull ItemType type) {
+        UserProfile userProfile = userProfileRepo.findByUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        Long itemId = ACCESSORS.get(type).apply(userProfile.getEquippedItems());
+        if (itemId == null) return null;
+
+        return itemService.findItemById(itemId);
+    }
+
+    @Transactional(readOnly = true)
+    public ProfilePreferencesDto getPreferences(@NonNull Long userId) {
+        UserProfile userProfile = userProfileRepo.findByUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        return userProfile.getPreferences();
+    }
+
+    @Transactional(readOnly = true)
+    public ProfilePrivacySettingsDto getPrivacySettings(@NonNull Long userId) {
+        UserProfile userProfile = userProfileRepo.findByUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        return userProfile.getPrivacySettings();
     }
 
     @Transactional
