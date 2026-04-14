@@ -10,20 +10,24 @@ import {
     Modal,
     TextInput,
     FlatList,
+    RefreshControl,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Plus, BookOpen, Users2, TrendingUp, Target, UserPlus, X, Edit2, Trash2, Gamepad2 } from 'lucide-react-native';
+import { Plus, BookOpen, Users2, TrendingUp, Target, UserPlus, X, Edit2, Trash2, Gamepad2, Trophy, ChevronLeft, RefreshCw } from 'lucide-react-native';
 import educatorService, {Course, CourseRequest, UserMini, CourseMemberRequest, CourseMember, GameScore, BestGameScore, StudentProfile} from './educatorService';
 import { getApiBaseUrl } from '@/src/api/client';
 import { useAuth } from '@/src/auth/AuthContext';
 import { ApiListHandler, DetailedListResponse } from './ApiListHandler';
+import axios from 'axios';
+import { useRouter } from 'expo-router';
 
 interface ClassManagementPanelProps {
     onBack?: () => void;
 }
 
 export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBack }) => {
-    const { signOut } = useAuth();
+    const router = useRouter();
+    const { signOut, token } = useAuth();
     const [classesResponse, setClassesResponse] = useState<DetailedListResponse<Course> | null>(null);
     const [schoolMembers, setSchoolMembers] = useState<UserMini[]>([]);
     const [classMembers, setClassMembers] = useState<CourseMember[]>([]);
@@ -57,6 +61,7 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
     const [memberGameData, setMemberGameData] = useState<Record<number, GameScore[]>>({});
     const [loadingMemberData, setLoadingMemberData] = useState(false);
 
+    
     useEffect(() => {
         loadData();
     }, []);
@@ -520,7 +525,8 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
             // 確保外層點擊明確觸發查看成員
             onPress={() => {
                 console.log('Outer card pressed for:', classItem.id);
-                viewClassMembers(classItem);
+                // Navigate to class leaderboard with selected class
+                router.push(`/teacher/classLeaderboard?classId=${classItem.id}&className=${encodeURIComponent(`${classItem.grade} ${classItem.suffix}`)}`);
             }}
             activeOpacity={0.7}
         >
@@ -775,6 +781,7 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                 </View>
             )}
 
+            
             {/* Modals remain the same... */}
             {/* Create Class Modal */}
             <Modal
@@ -2210,5 +2217,187 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
         color: '#333',
+    },
+    // Leaderboard styles
+    leaderboardPlaceholder: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 40,
+    },
+    placeholderTitle: {
+        fontSize: 20,
+        fontWeight: '600',
+        color: '#333',
+        marginTop: 16,
+        textAlign: 'center',
+    },
+    placeholderText: {
+        fontSize: 14,
+        color: '#666',
+        marginTop: 8,
+        textAlign: 'center',
+        lineHeight: 20,
+    },
+    leaderboardContainer: {
+        flex: 1,
+    },
+    leaderboardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        backgroundColor: '#fff',
+        borderBottomWidth: 1,
+        borderBottomColor: '#E0E0E0',
+    },
+    leaderboardBackBtn: {
+        padding: 8,
+        marginRight: 12,
+    },
+    leaderboardHeaderTitle: {
+        flex: 1,
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#2D3436',
+    },
+    leaderboardRefreshBtn: {
+        padding: 8,
+    },
+    leaderboardSelectionContainer: {
+        backgroundColor: '#fff',
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E0E0E0',
+    },
+    leaderboardSelectionGroup: {
+        marginBottom: 8,
+    },
+    leaderboardSelectionLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#333',
+        marginBottom: 8,
+    },
+    leaderboardGameChip: {
+        backgroundColor: '#F5F5F5',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
+        marginRight: 8,
+        borderWidth: 1,
+        borderColor: '#E0E0E0',
+    },
+    leaderboardGameChipActive: {
+        backgroundColor: '#6C5CE7',
+        borderColor: '#6C5CE7',
+    },
+    leaderboardGameChipText: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: '#666',
+    },
+    leaderboardGameChipTextActive: {
+        color: '#fff',
+    },
+    leaderboardScrollView: {
+        flex: 1,
+        backgroundColor: '#F8F9FA',
+    },
+    leaderboardLoadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: 40,
+    },
+    leaderboardLoadingText: {
+        fontSize: 16,
+        color: '#666',
+        marginTop: 12,
+    },
+    leaderboardEmptyContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: 40,
+        paddingHorizontal: 40,
+    },
+    leaderboardEmptyTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#333',
+        marginTop: 16,
+        textAlign: 'center',
+    },
+    leaderboardEmptyText: {
+        fontSize: 14,
+        color: '#666',
+        marginTop: 8,
+        textAlign: 'center',
+        lineHeight: 20,
+    },
+    leaderboardList: {
+        padding: 20,
+    },
+    leaderboardEntry: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#fff',
+        padding: 16,
+        borderRadius: 12,
+        marginBottom: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    leaderboardRank: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#6C5CE7',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 16,
+    },
+    leaderboardRankText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#fff',
+    },
+    leaderboardInfo: {
+        flex: 1,
+    },
+    leaderboardUsername: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#333',
+        marginBottom: 4,
+    },
+    leaderboardScore: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: '#6C5CE7',
+        marginBottom: 2,
+    },
+    leaderboardDate: {
+        fontSize: 12,
+        color: '#666',
+    },
+    leaderboardTrophy: {
+        marginLeft: 12,
+    },
+    leaderboardLoadingMore: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 20,
+    },
+    leaderboardLoadingMoreText: {
+        fontSize: 14,
+        color: '#666',
+        marginLeft: 8,
     },
 });

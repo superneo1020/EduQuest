@@ -44,7 +44,7 @@ import {
     X,
     Plus,
     LogOut,
-    User,
+    User, Trophy,
 } from 'lucide-react-native';
 import { ClassManagementPanel } from './ClassManagementPanel';
 import { ClassAnalyticsPanel } from './ClassAnalyticsPanel';
@@ -99,15 +99,25 @@ export default function TeacherDashboard() {
     const [classes, setClasses] = useState<Course[]>([]);
 
     // Navigation state
-    const [currentView, setCurrentView] = useState<'dashboard' | 'students' | 'classes' | 'analytics'>('dashboard');
+    type TeacherView = 'dashboard' | 'students' | 'classes' | 'analytics' | 'studentLeaderboard';
+    const [currentView, setCurrentView] = useState<TeacherView>('dashboard');
     const [selectedClass, setSelectedClass] = useState<Course | null>(null);
-
+    
+    // Preserve the full type for tab navigation to avoid TypeScript narrowing
+    const currentViewForTabs: TeacherView = currentView;
     const isLandscape = windowWidth > 800;
     const isTablet = windowWidth > 600;
 
     useEffect(() => {
         loadData();
     }, []);
+
+    // Navigation state updates - move router.push calls here
+    useEffect(() => {
+        if (currentView === 'studentLeaderboard') {
+            router.push('/teacher/studentLeaderboard');
+        }
+    }, [currentView, router]);
 
     // 在 TeacherDashboard.tsx 中修改 loadData 函數
 
@@ -176,8 +186,11 @@ export default function TeacherDashboard() {
                 setStudents([]);
                 setFilteredStudents([]);
             }
-        } catch (error) {
-            console.error('Error loading students:', error);
+        } catch (error: any) {
+            console.error('TeacherDashboard - Error loading students:', error.response?.status, error.response?.data || error.message);
+            if (error.response?.status === 401) {
+                console.error('TeacherDashboard - Authentication failed for school members - token may be invalid or expired');
+            }
             // Set empty array on error to avoid showing mock data
             setStudents([]);
             setFilteredStudents([]);
@@ -479,6 +492,10 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
         );
     }
 
+    if (currentView === 'studentLeaderboard') {
+        return null;
+    }
+
     return (
         <SafeAreaView style={styles.container}>
             <ScrollView
@@ -509,17 +526,18 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
 
                 {/* Navigation Tabs */}
                 <View style={styles.tabContainer}>
-                    {(['dashboard', 'students', 'classes', 'analytics'] as const).map((tab) => (
+                    {(['dashboard', 'students', 'classes', 'analytics', 'studentLeaderboard'] as TeacherView[]).map((tab) => (
                         <TouchableOpacity
                             key={tab}
-                            style={[styles.tab, currentView === tab && styles.tabActive]}
+                            style={[styles.tab, currentViewForTabs === tab && styles.tabActive]}
                             onPress={() => setCurrentView(tab)}
                         >
-                            {tab === 'dashboard' && <TrendingUp size={18} color={currentView === tab ? '#6C5CE7' : '#666'} />}
-                            {tab === 'students' && <Users size={18} color={currentView === tab ? '#6C5CE7' : '#666'} />}
-                            {tab === 'classes' && <BookOpen size={18} color={currentView === tab ? '#6C5CE7' : '#666'} />}
-                            {tab === 'analytics' && <BarChart3 size={18} color={currentView === tab ? '#6C5CE7' : '#666'} />}
-                            <Text style={[styles.tabText, currentView === tab && styles.tabTextActive]}>
+                            {tab === 'dashboard' && <TrendingUp size={18} color={currentViewForTabs === tab ? '#6C5CE7' : '#666'} />}
+                            {tab === 'students' && <Users size={18} color={currentViewForTabs === tab ? '#6C5CE7' : '#666'} />}
+                            {tab === 'classes' && <BookOpen size={18} color={currentViewForTabs === tab ? '#6C5CE7' : '#666'} />}
+                            {tab === 'analytics' && <BarChart3 size={18} color={currentViewForTabs === tab ? '#6C5CE7' : '#666'} />}
+                            {tab === 'studentLeaderboard' && <Award size={18} color={currentViewForTabs === tab ? '#6C5CE7' : '#666'} />}
+                            <Text style={[styles.tabText, currentViewForTabs === tab && styles.tabTextActive]}>
                                 {tab.charAt(0).toUpperCase() + tab.slice(1)}
                             </Text>
                         </TouchableOpacity>
