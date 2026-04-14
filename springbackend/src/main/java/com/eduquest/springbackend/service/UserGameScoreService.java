@@ -9,8 +9,10 @@ import com.eduquest.springbackend.model.AppUser;
 import com.eduquest.springbackend.model.Game;
 import com.eduquest.springbackend.model.UserGameScore;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Set;
@@ -69,6 +71,24 @@ public class UserGameScoreService {
         Pageable cleanPageable = PageableUtils.filterSort(pageable, LEADERBOARD_SCORE_DTO_FIELD);
         Long gameId = gameService.checkIdByName(gameName);
         var slice = userGameScoreRepo.findAllHighestScoresByGameId(gameId, cleanPageable);
+        return dtoMapper.toSliceResponse(slice);
+    }
+
+    @Transactional(readOnly = true)
+    public UtilSliceResponse<LeaderboardScoreDto> showLeaderboardBySchool(Long userId, String gameName, Pageable pageable) {
+        Pageable cleanPageable = PageableUtils.filterSort(pageable, LEADERBOARD_SCORE_DTO_FIELD);
+        Long schoolId = userRepo.findSchoolIdById(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "School not found"));
+        Long gameId = gameService.checkIdByName(gameName);
+        var slice = userGameScoreRepo.findAllHighestScoresByGameIdAndSchoolId(gameId, schoolId, cleanPageable);
+        return dtoMapper.toSliceResponse(slice);
+    }
+
+    @Transactional(readOnly = true)
+    public UtilSliceResponse<LeaderboardScoreDto> showLeaderboardByClass(Long classId, String gameName, Pageable pageable) {
+        Pageable cleanPageable = PageableUtils.filterSort(pageable, LEADERBOARD_SCORE_DTO_FIELD);
+        Long gameId = gameService.checkIdByName(gameName);
+        var slice = userGameScoreRepo.findAllHighestScoresByGameIdAndClassId(gameId, classId, cleanPageable);
         return dtoMapper.toSliceResponse(slice);
     }
 

@@ -72,4 +72,41 @@ public interface UserGameScoreRepository extends JpaRepository<UserGameScore,Lon
             @Param("gameId") Long gameId,
             Pageable pageable
     );
+
+    @Query(value = "SELECT u.username, ugs.scores, ugs.created_at AS createdAt " +
+            "FROM user_game_scores ugs " +
+            "JOIN users u ON ugs.user_id = u.id " +
+            "WHERE ugs.game_id = :gameId " +
+            "AND u.school_id = :schoolId " +
+            "AND ugs.id IN ( " +
+            "   SELECT DISTINCT ON (user_id) id FROM user_game_scores " +
+            "   WHERE game_id = ugs.game_id " +
+            "   ORDER BY user_id, scores DESC, created_at " +
+            ") " +
+            "ORDER BY ugs.scores DESC, ugs.created_at",
+            nativeQuery = true)
+    Slice<LeaderboardScoreDto> findAllHighestScoresByGameIdAndSchoolId(
+            @Param("gameId") Long gameId,
+            @Param("schoolId") Long schoolId,
+            Pageable pageable
+    );
+
+    @Query(value = "SELECT u.username, ugs.scores, ugs.created_at AS createdAt " +
+            "FROM user_game_scores ugs " +
+            "JOIN users u ON ugs.user_id = u.id " +
+            "JOIN class_members cm on ugs.user_id = cm.user_id " +
+            "WHERE ugs.game_id = :gameId " +
+            "AND cm.class_id = :classId " +
+            "AND ugs.id IN ( " +
+            "   SELECT DISTINCT ON (user_id) id FROM user_game_scores " +
+            "   WHERE game_id = ugs.game_id " +
+            "   ORDER BY user_id, scores DESC, created_at " +
+            ") " +
+            "ORDER BY ugs.scores DESC, ugs.created_at",
+            nativeQuery = true)
+    Slice<LeaderboardScoreDto> findAllHighestScoresByGameIdAndClassId(
+            @Param("gameId") Long gameId,
+            @Param("classId") Long classId,
+            Pageable pageable
+    );
 }
