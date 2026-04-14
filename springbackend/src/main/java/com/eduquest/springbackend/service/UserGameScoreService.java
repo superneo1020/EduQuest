@@ -1,6 +1,5 @@
 package com.eduquest.springbackend.service;
 
-import com.eduquest.springbackend.util.PageableUtils;
 import com.eduquest.springbackend.dao.GameRepository;
 import com.eduquest.springbackend.dao.UserGameScoreRepository;
 import com.eduquest.springbackend.dao.UserRepository;
@@ -8,6 +7,7 @@ import com.eduquest.springbackend.dto.*;
 import com.eduquest.springbackend.model.AppUser;
 import com.eduquest.springbackend.model.Game;
 import com.eduquest.springbackend.model.UserGameScore;
+import com.eduquest.springbackend.util.PageableUtils;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -56,7 +57,12 @@ public class UserGameScoreService {
         AppUser user = userRepo.getReferenceById(userId);
         Game game = gameRepo.getReferenceById(gameId);
 
-        UserGameScore userGameScore = new UserGameScore(user, game, req.scores(), req.metadata());
+        GameMetadata cleanMetadata = new GameMetadata(
+                req.metadata().questions() != null ? req.metadata().questions() : List.of(),
+                req.metadata().extraData() != null ? req.metadata().extraData() : Map.of()
+        );
+
+        UserGameScore userGameScore = new UserGameScore(user, game, req.scores(), cleanMetadata);
         UserGameScore savedScore = userGameScoreRepo.save(userGameScore);
 
         return new UserGameScoreResponse(
