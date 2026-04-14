@@ -73,40 +73,27 @@ export const AvatarSelector: React.FC<AvatarSelectorProps> = ({
     // Debug: Log the userItems to see the actual structure
     console.log('UserItems data:', userItems);
 
-    // 2. 遍歷用戶已購買的物品，收集所有 AVATAR 類型的頭像
-    // 包括硬編碼的 avatarOptions 和從商店購買的任何頭像
-    userItems.forEach(userItem => {
+        // 2. 遍歷用戶已購買的物品
+    // 在 AvatarSelector.tsx 中修改
+    const itemsArray = Array.isArray(userItems) ? userItems : [];
+    itemsArray.forEach(userItem => {
         // 確保物品類型是 AVATAR，並使用 icon 欄位來匹配
         if (userItem.type === 'AVATAR' && userItem.icon) {
             const backendIcon = userItem.icon;
-            if (!ownedAvatarIds.includes(backendIcon)) {
+            const exists = avatarOptions.some(opt => opt.id === backendIcon);
+            if (exists && !ownedAvatarIds.includes(backendIcon)) {
                 ownedAvatarIds.push(backendIcon);
             }
         }
     });
-
+    
     // Debug: Log the final results
     console.log('Owned avatar IDs:', ownedAvatarIds);
+    
 
-    // 3. 構建頭像列表：包含硬編碼選項和動態購買的頭像
-    const ownedAvatars = ownedAvatarIds.map(avatarId => {
-        // 先檢查是否在硬編碼選項中
-        const predefinedAvatar = avatarOptions.find(opt => opt.id === avatarId);
-        if (predefinedAvatar) {
-            return predefinedAvatar;
-        }
-        // 如果是動態購買的頭像（如 sports_jersey.png），創建動態頭像數據
-        // 從 item 名稱生成顯示名稱，或直接使用 icon 名稱
-        const displayName = userItems.find(item => item.icon === avatarId)?.name
-            || avatarId.replace(/[_\.]/g, ' ').replace(/\.png$/i, '').replace(/\b\w/g, l => l.toUpperCase());
-        return {
-            id: avatarId,
-            name: displayName,
-            color: '#FF6B6B' // 默認顏色，可以根據需要調整
-        };
-    });
-
-    console.log('Owned avatars after mapping:', ownedAvatars);
+    
+    const ownedAvatars = avatarOptions.filter(avatar => ownedAvatarIds.includes(avatar.id));
+    console.log('Owned avatars after filtering:', ownedAvatars);
 
     return (
         <Modal
