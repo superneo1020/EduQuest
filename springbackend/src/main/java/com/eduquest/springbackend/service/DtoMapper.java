@@ -1,10 +1,8 @@
 package com.eduquest.springbackend.service;
 
-import com.eduquest.springbackend.dto.UserDto;
-import com.eduquest.springbackend.dto.UtilDetailedListResponse;
-import com.eduquest.springbackend.dto.UtilPageResponse;
-import com.eduquest.springbackend.dto.UtilSliceResponse;
+import com.eduquest.springbackend.dto.*;
 import com.eduquest.springbackend.model.AppUser;
+import com.eduquest.springbackend.model.Item;
 import com.eduquest.springbackend.model.Role;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Slice;
@@ -48,6 +46,17 @@ public class DtoMapper {
                 slice.getPageable().getPageNumber(),
                 slice.hasNext(),
                 slice.hasPrevious()
+        );
+    }
+
+    public ItemDto toItemDto(Item item) {
+        return  new ItemDto(
+                item.getId(),
+                item.getType(),
+                item.getName(),
+                item.getDescription(),
+                item.getIcon(),
+                item.getPrice()
         );
     }
 }
