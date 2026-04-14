@@ -14,7 +14,7 @@ export default function RootLayout() {
                 <Stack.Screen
                     name="games/math/math"
                     options={{
-                        headerShown: false,  // 改为 false
+                        headerShown: true,  // 改为 false
                     }}
                 />
                 <Stack.Screen
