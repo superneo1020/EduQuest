@@ -9,28 +9,28 @@ export default function EnglishGamesIndex() {
     const games = [
         {
             id: 'listening',
-            title: '?? Listening Game',
+            title: ' Listening Game',
             description: 'Listen and learn with fun audio! ??',
             route: '/games/english/listeninggame' as const,
-            icon: '??',
+            icon: '🍎',
             color: '#4CAF50',
             bgColor: '#E8F5E8'
         },
         {
             id: 'writing',
-            title: '?? Writing Game',
+            title: ' Writing Game',
             description: 'Write stories and get feedback! ??',
             route: '/games/english/writing' as const,
-            icon: '??',
+            icon: '🍐',
             color: '#2196F3',
             bgColor: '#E3F2FD'
         },
         {
             id: 'sentencereorder',
-            title: '?? Sentence Reorder',
+            title: ' Sentence Reorder',
             description: 'Build sentences like a puzzle! ??',
             route: '/games/english/sentencereordergame' as const,
-            icon: '??',
+            icon: '🍋',
             color: '#FF9800',
             bgColor: '#FFF3E0'
         },
@@ -63,7 +63,7 @@ export default function EnglishGamesIndex() {
 
             <View style={styles.header}>
                 <View style={styles.titleContainer}>
-                    <Text style={styles.title}>?? English Games ??</Text>
+                    <Text style={styles.title}>English Games</Text>
                     <View style={styles.starsContainer}>
                         <Star size={20} color="#FFD700" />
                         <Star size={20} color="#FFD700" />
@@ -109,7 +109,7 @@ export default function EnglishGamesIndex() {
             {/* Back to home link */}
             <TouchableOpacity style={styles.backLink} onPress={handleBackToHome}>
                 <View style={styles.backButton}>
-                    <Text style={styles.backLinkText}>?? Back to Home ??</Text>
+                    <Text style={styles.backLinkText}> Back to Home </Text>
                 </View>
             </TouchableOpacity>
         </ScrollView>
