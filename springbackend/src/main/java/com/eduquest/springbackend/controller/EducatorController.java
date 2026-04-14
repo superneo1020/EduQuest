@@ -64,7 +64,7 @@ public class EducatorController {
 
     @DeleteMapping("/class/{courseId}")
     @PreAuthorize("@courseSecurity.isCourseExists(#courseId) && " +
-            "@courseMemberSecurity.isCourseMember(#courseId) && " +
+            "@courseMemberSecurity.canDeleteClass(#courseId) && " +
             "@courseSecurity.isCourseSameSchool(#courseId)")
     public ResponseEntity<OperationResult> removeCourse(@PathVariable Long courseId) {
         return ResponseEntity.ok(educatorService.removeCourse(courseId));
@@ -73,23 +73,21 @@ public class EducatorController {
     @PostMapping("/class/member")
     @PreAuthorize("@userSecurity.isBothUserSameSchool(#request.userId) && " +
             "!@courseMemberSecurity.isCourseMember(#request.courseId, #request.userId) && " +
-            "@courseMemberSecurity.isCourseMember(#request.courseId) && " +
             "@courseMemberSecurity.isCourseStaff(#request.courseId)")
     public ResponseEntity<CourseMemberResponse> addCourseMember(@Valid @RequestBody CourseMemberRequest request) {
         return ResponseEntity.ok(educatorService.addCourseMember(request));
     }
 
     @PatchMapping("/class/member")
-    @PreAuthorize("@courseMemberSecurity.isCourseMember(#request.courseId, #request.userId) && " +
-            "@courseMemberSecurity.isCourseMember(#request.courseId) && " +
+    @PreAuthorize("@courseMemberSecurity.canChangeRoles(#request.courseId, #request.role) && " +
+            "@courseMemberSecurity.isCourseMember(#request.courseId, #request.userId) && " +
             "@courseMemberSecurity.isCourseStaff(#request.courseId)")
     public ResponseEntity<OperationResult> updateCourseMember(@Valid @RequestBody CourseMemberRequest request) {
         return ResponseEntity.ok(educatorService.updateCourseMember(request));
     }
 
     @DeleteMapping("/class/{courseId}/member/{userId}")
-    @PreAuthorize("(@courseMemberSecurity.isAvailableModifyTeacher(#courseId) && " +
-            "@courseMemberSecurity.isCourseStaff(#courseId, #userId)) && " +
+    @PreAuthorize("@courseMemberSecurity.canDeleteMember(#courseId, #userId) && " +
             "@courseMemberSecurity.isCourseMember(#courseId, #userId) && " +
             "@courseMemberSecurity.isCourseStaff(#courseId)")
     public ResponseEntity<OperationResult> removeCourseMember(

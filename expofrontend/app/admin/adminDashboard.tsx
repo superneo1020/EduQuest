@@ -52,6 +52,11 @@ interface RecentActivity {
   timestamp: string;
 }
 
+interface User {
+  username: string;
+  createdAt: string;
+}
+
 const AdminDashboard: React.FC = () => {
   const { user, token } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -73,53 +78,50 @@ const AdminDashboard: React.FC = () => {
 
   const fetchDashboardData = async () => {
     try {
-      // Since we don't have admin-specific APIs, we'll use existing user APIs
-      // and simulate admin dashboard data
+      setLoading(true);
       
-      // Fetch basic user info to demonstrate admin access
-      const userInfo = await api.get('/api/user/');
-      console.log('Admin user info:', userInfo.data);
-      
-      // Mock dashboard stats (in real implementation, these would come from admin APIs)
-      const mockStats: DashboardStats = {
-        totalUsers: 150,
-        activeUsers: 120,
-        totalGamesPlayed: 2500,
-        totalMissionsCompleted: 800,
-        totalSchools: 5,
-        newUsersThisMonth: 15,
-        pendingTeacherRequests: 3,
+      // 获取总用户数
+      const totalUsersRes = await api.get('/api/admin/filter/user', { params: { page: 0, size: 1 } });
+      const totalUsers = totalUsersRes.data.totalElements;
+
+      // 获取活跃用户数
+      const activeRes = await api.get('/api/admin/filter/user', { params: { isActive: true, page: 0, size: 1 } });
+      const activeUsers = activeRes.data.totalElements;
+
+      // 获取教育者数量 (educatorStatus APPROVED 且 isEducator true)
+      const educatorRes = await api.get('/api/admin/filter/user', { params: { educatorStatus: 'APPROVED', page: 0, size: 1 } });
+      const educators = educatorRes.data.totalElements;
+
+      // 获取管理员数量 (roleId 假设为 ADMIN 的 roleId，需根据实际调整)
+      const adminRes = await api.get('/api/admin/filter/user', { params: { roleId: 3, page: 0, size: 1 } }); // 假设 roleId=3 是 ADMIN
+      const admins = adminRes.data.totalElements;
+
+      // 获取待审批教师 (educatorStatus PENDING)
+      const pendingRes = await api.get('/api/admin/filter/user', { params: { educatorStatus: 'PENDING', page: 0, size: 1 } });
+      const pendingTeachers = pendingRes.data.totalElements;
+
+      setStats({
+        totalUsers,
+        activeUsers,
+        totalGamesPlayed: 0,
+        totalMissionsCompleted: 0,
+        totalSchools: 0,
+        newUsersThisMonth: 0,
+        pendingTeacherRequests: pendingTeachers,
         usersByRole: {
-          admins: 3,
-          educators: 12,
-          students: 135
+          admins,
+          educators,
+          students: totalUsers - admins - educators
         }
-      };
-      
-      // Mock recent activities
-      const mockActivities: RecentActivity[] = [
-        {
-          type: 'GAME_SCORE',
-          username: 'student1',
-          gameName: 'Math Challenge',
-          score: 95,
-          timestamp: new Date().toISOString()
-        },
-        {
-          type: 'MISSION_COMPLETION',
-          username: 'student2',
-          missionName: 'Daily Reader',
-          timestamp: new Date(Date.now() - 3600000).toISOString()
-        },
-        {
-          type: 'USER_REGISTRATION',
-          username: 'newStudent',
-          timestamp: new Date(Date.now() - 7200000).toISOString()
-        }
-      ];
-      
-      setStats(mockStats);
-      setRecentActivities(mockActivities);
+      });
+
+      // 还可以获取最近注册的用户（分页取前5条）
+      const recentUsersRes = await api.get('/api/admin/filter/user', { params: { page: 0, size: 5, sort: 'createdAt,desc' } });
+      setRecentActivities(recentUsersRes.data.content.map((u: User) => ({
+        type: 'USER_REGISTRATION',
+        username: u.username,
+        timestamp: u.createdAt,
+      })));
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
