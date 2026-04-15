@@ -45,10 +45,12 @@ import {
     Plus,
     LogOut,
     User, Trophy,
+    Gamepad2,
 } from 'lucide-react-native';
 import { ClassManagementPanel } from './ClassManagementPanel';
 import { ClassAnalyticsPanel } from './ClassAnalyticsPanel';
 import educatorService, { Course, StudentAnalytics } from './educatorService';
+import StudentMetadataView from './StudentMetadataView';
 import { getApiBaseUrl } from '@/src/api/client';
 import axios from 'axios';
 
@@ -79,6 +81,7 @@ interface Student {
 
 export default function TeacherDashboard() {
     const router = useRouter();
+    const [showLogoutModal, setShowLogoutModal] = useState(false);
     const { width: windowWidth } = useWindowDimensions();
     const { user, token, signOut } = useAuth();
     const [loading, setLoading] = useState(true);
@@ -97,6 +100,7 @@ export default function TeacherDashboard() {
     const [showAddModal, setShowAddModal] = useState(false);
     const [newStudent, setNewStudent] = useState<Partial<Student>>({});
     const [classes, setClasses] = useState<Course[]>([]);
+    const [metadataModalVisible, setMetadataModalVisible] = useState(false);
 
     // Navigation state
     type TeacherView = 'dashboard' | 'students' | 'classes' | 'analytics' | 'studentLeaderboard';
@@ -158,7 +162,7 @@ export default function TeacherDashboard() {
             });
 
             if (response.data && response.data.content) {
-                const realStudents = response.data.content.map((member: any) => ({
+                const studentsData = response.data.content.map((member: any) => ({
                     id: member.id,
                     username: member.username,
                     email: member.email,
@@ -166,11 +170,11 @@ export default function TeacherDashboard() {
                     level: member.level || 1,
                     joinDate: member.createdAt ? new Date(member.createdAt).toISOString().split('T')[0] : 'Unknown',
                     lastActive: member.lastActiveAt ? new Date(member.lastActiveAt).toISOString().split('T')[0] : 'Unknown',
-                    gameProgress: { 
-                        math: member.mathProgress || 0, 
-                        english: member.englishProgress || 0, 
-                        science: member.scienceProgress || 0, 
-                        chinese: member.chineseProgress || 0 
+                    gameProgress: {
+                        math: member.mathProgress || 0,     // These fields don't exist
+                        english: member.englishProgress || 0,
+                        science: member.scienceProgress || 0,
+                        chinese: member.chineseProgress || 0
                     },
                     performance: { 
                         averageScore: member.averageScore || 0, 
@@ -180,8 +184,31 @@ export default function TeacherDashboard() {
                     },
                 }));
                 
-                setStudents(realStudents);
-                setFilteredStudents(realStudents);
+                // Enhance student data with progress analytics
+                const studentsWithProgress = await Promise.all(
+                    studentsData.map(async (student) => {
+                        try {
+                            const analytics = await educatorService.getStudentAnalytics(student.id);
+                            if (analytics && analytics.progressTrends && analytics.progressTrends.subjectPerformance) {
+                                const subjectPerformance = analytics.progressTrends.subjectPerformance;
+                                const gameProgress = {
+                                    math: subjectPerformance.find((s: any) => s.subject.toLowerCase() === 'math')?.average || 0,
+                                    english: subjectPerformance.find((s: any) => s.subject.toLowerCase() === 'english')?.average || 0,
+                                    science: subjectPerformance.find((s: any) => s.subject.toLowerCase() === 'science')?.average || 0,
+                                    chinese: subjectPerformance.find((s: any) => s.subject.toLowerCase() === 'chinese')?.average || 0
+                                };
+                                return { ...student, gameProgress };
+                            }
+                            return student;
+                        } catch (error) {
+                            console.error(`Error loading analytics for student ${student.id}:`, error);
+                            return student;
+                        }
+                    })
+                );
+                
+                setStudents(studentsWithProgress);
+                setFilteredStudents(studentsWithProgress);
             } else {
                 setStudents([]);
                 setFilteredStudents([]);
@@ -190,12 +217,23 @@ export default function TeacherDashboard() {
             console.error('TeacherDashboard - Error loading students:', error.response?.status, error.response?.data || error.message);
             if (error.response?.status === 401) {
                 console.error('TeacherDashboard - Authentication failed for school members - token may be invalid or expired');
+                Alert.alert(
+                    'Authentication Required',
+                    'Your session has expired. Please log in again.',
+                    [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Log In', onPress: () => signOut() }
+                    ]
+                );
             }
             // Set empty array on error to avoid showing mock data
             setStudents([]);
             setFilteredStudents([]);
         }
     };
+    
+
+
 
     const onRefresh = useCallback(() => {
         setRefreshing(true);
@@ -424,27 +462,28 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
         }
     };
 
-    const handleLogout = async () => {
-        Alert.alert(
-            'Logout',
-            'Are you sure you want to logout?',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Logout',
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            await signOut();
-                            router.replace('/Profile/Login');
-                        } catch (error) {
-                            console.error('Logout error:', error);
-                            Alert.alert('Error', 'Failed to logout. Please try again.');
-                        }
-                    }
-                }
-            ]
-        );
+    const handleLogout = () => {
+        setShowLogoutModal(true);
+    };
+
+    const handleConfirmLogout = async () => {
+        try {
+            await signOut();
+            router.replace('/Profile/Login');
+        } catch (error) {
+            console.error('Logout error:', error);
+        }
+        setShowLogoutModal(false);
+    };
+
+    const handleCancelLogout = () => {
+        setShowLogoutModal(false);
+    };
+
+
+    const handleViewMetadata = (student: Student) => {
+        setSelectedStudent(student);
+        setMetadataModalVisible(true);
     };
 
     const StatCard = ({ title, value, icon: Icon, color }: any) => (
@@ -581,32 +620,7 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
                             </TouchableOpacity>
                         </View>
 
-                        <View style={styles.recentSection}>
-                            <Text style={styles.sectionTitle}>Recent Students</Text>
-                            <View style={styles.recentStudentsList}>
-                                {students.slice(0, 3).map((student) => (
-                                    <View key={student.id} style={styles.recentStudentItem}>
-                                        <View style={styles.recentStudentAvatar}>
-                                            <Text style={styles.recentAvatarText}>{student.username.charAt(0)}</Text>
-                                        </View>
-                                        <View style={styles.recentStudentInfo}>
-                                            <Text style={styles.recentStudentName}>{student.username}</Text>
-                                            <Text style={styles.recentStudentScore}>{student.performance.averageScore}%</Text>
-                                        </View>
-                                        <TouchableOpacity onPress={() => {
-                                            setSelectedStudent(student);
-                                            setModalVisible(true);
-                                        }}>
-                                            <ChevronRight size={16} color="#6C5CE7" />
-                                        </TouchableOpacity>
-                                    </View>
-                                ))}
-                            </View>
-                            <TouchableOpacity style={styles.viewAllBtn} onPress={() => setCurrentView('students')}>
-                                <Text style={styles.viewAllBtnText}>View All Students</Text>
-                                <ChevronRight size={16} color="#6C5CE7" />
-                            </TouchableOpacity>
-                        </View>
+
                     </>
                 )}
 
@@ -685,7 +699,16 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
                                                             {subject === 'chinese' && <Brain size={14} color="#9C27B0" />}
                                                             <Text style={styles.subjectLabel}>{subject.charAt(0).toUpperCase() + subject.slice(1)}</Text>
                                                             <View style={styles.progressBar}>
-                                                                <View style={[styles.progressFill, { width: `${progress}%` }]} />
+                                                                <View style={[
+                                                                    styles.progressFill,
+                                                                    {
+                                                                        width: `${progress}%`,
+                                                                        backgroundColor: subject === 'math' ? '#4CAF50' :
+                                                                            subject === 'english' ? '#2196F3' :
+                                                                                subject === 'science' ? '#FF9800' :
+                                                                                    subject === 'chinese' ? '#9C27B0' : '#666'
+                                                                    }
+                                                                ]} />
                                                             </View>
                                                             <Text style={styles.progressPercent}>{progress}%</Text>
                                                         </View>
@@ -714,6 +737,12 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
                                                 <Brain size={18} color="#6C5CE7" />
                                                 <Text style={styles.aiAnalysisBtnText}>AI Performance Analysis</Text>
                                                 <Sparkles size={14} color="#6C5CE7" />
+                                            </TouchableOpacity>
+
+                                            <TouchableOpacity style={styles.metadataBtn} onPress={() => handleViewMetadata(student)}>
+                                                <Gamepad2 size={18} color="#4CAF50" />
+                                                <Text style={styles.metadataBtnText}>View Game Metadata</Text>
+                                                <ChevronRight size={16} color="#4CAF50" />
                                             </TouchableOpacity>
 
                                             <TouchableOpacity style={styles.viewDetailsBtn} onPress={() => {
@@ -924,6 +953,7 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
                                     onChangeText={(text) => setNewStudent({ ...newStudent, points: parseInt(text) || 0 })}
                                     keyboardType="numeric"
                                 />
+
                             </View>
                             <TouchableOpacity style={styles.saveBtn} onPress={addStudent}>
                                 <Text style={styles.saveBtnText}>Add Student</Text>
@@ -932,7 +962,42 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
                     </View>
                 </View>
             </Modal>
+            {/* Logout Confirmation Modal */}
+            <Modal
+                visible={showLogoutModal}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={handleCancelLogout}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.confirmModal}>
+                        <Text style={styles.confirmTitle}>Logout</Text>
+                        <Text style={styles.confirmMessage}>Are you sure you want to logout?</Text>
+                        <View style={styles.confirmButtons}>
+                            <TouchableOpacity
+                                style={[styles.confirmButton, styles.cancelButton]}
+                                onPress={handleCancelLogout}
+                            >
+                                <Text style={styles.cancelButtonText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.confirmButton, styles.logoutButton]}
+                                onPress={handleConfirmLogout}
+                            >
+                                <Text style={styles.logoutButtonText}>Logout</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+            <StudentMetadataView
+                visible={metadataModalVisible}
+                onClose={() => setMetadataModalVisible(false)}
+                student={selectedStudent || { id: 0, username: '', email: '' }}
+                token={token || ''}
+            />
         </SafeAreaView>
+
     );
 }
 
@@ -1038,6 +1103,21 @@ const styles = StyleSheet.create({
     aiLoadingText: { marginTop: 16, fontSize: 16, fontWeight: '600', color: '#2D3436' },
     aiAnalysisContent: { maxHeight: 500, marginVertical: 16 },
     aiAnalysisText: { fontSize: 14, lineHeight: 22, color: '#2D3436' },
+    metadataBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        backgroundColor: '#E8F5E8',
+        paddingVertical: 10,
+        borderRadius: 12,
+        marginTop: 8,
+    },
+    metadataBtnText: {
+        color: '#4CAF50',
+        fontWeight: '600',
+        fontSize: 14,
+    },
     downloadReportBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#4CAF50', paddingVertical: 12, borderRadius: 12, marginTop: 16 },
     downloadReportText: { color: 'white', fontWeight: '600', fontSize: 14 },
     editForm: { gap: 12, marginBottom: 20 },
@@ -1045,4 +1125,51 @@ const styles = StyleSheet.create({
     input: { borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 16, backgroundColor: '#F8F9FA' },
     saveBtn: { backgroundColor: '#6C5CE7', paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
     saveBtnText: { color: 'white', fontWeight: '700', fontSize: 16 },
+    confirmModal: {
+        backgroundColor: 'white',
+        borderRadius: 16,
+        padding: 24,
+        width: '80%',
+        maxWidth: 300,
+        alignItems: 'center',
+    },
+    confirmTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#2D3436',
+        marginBottom: 12,
+    },
+    confirmMessage: {
+        fontSize: 16,
+        color: '#666',
+        textAlign: 'center',
+        marginBottom: 24,
+    },
+    confirmButtons: {
+        flexDirection: 'row',
+        width: '100%',
+        gap: 12,
+    },
+    confirmButton: {
+        flex: 1,
+        paddingVertical: 12,
+        borderRadius: 8,
+        alignItems: 'center',
+    },
+    cancelButton: {
+        backgroundColor: '#F0F0F0',
+    },
+    logoutButton: {
+        backgroundColor: '#FF4757',
+    },
+    cancelButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#666',
+    },
+    logoutButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: 'white',
+    },
 });

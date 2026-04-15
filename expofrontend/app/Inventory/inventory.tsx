@@ -48,7 +48,10 @@ export default function InventoryScreen() {
         }
     };
 
+    // 獲取物品的實際資料（處理可能的巢狀結構）
     const getItemData = (item: any) => {
+        // 如果 item 有 item 屬性（巢狀結構），使用 item.item
+        // 否則直接使用 item
         const itemData = item.item || item;
         return {
             id: itemData?.id,
@@ -62,8 +65,10 @@ export default function InventoryScreen() {
     };
 
     const getItemIcon = (itemType: string, itemIcon?: string) => {
-        const iconProps = { size: 28, color: '#FFF' };
+        // 減小圖標大小，讓它不填滿整個容器
+        const iconProps = { size: 28, color: '#FFF' };  // 從 32 改為 28
 
+        // 如果是頭像類型，使用 AvatarIconRenderer
         if (itemType === 'AVATAR') {
             return (
                 <AvatarIconRenderer
@@ -74,6 +79,7 @@ export default function InventoryScreen() {
             );
         }
 
+        // 根據物品類型顯示不同圖標
         const typeMap: { [key: string]: any } = {
             'TROPHY': <Trophy {...iconProps} color="#FFD700" />,
             'STAR': <Star {...iconProps} color="#FFD700" />,
@@ -141,7 +147,7 @@ export default function InventoryScreen() {
             );
         }
 
-        if (userItems.length === 0) {
+        if (!Array.isArray(userItems) || userItems.length === 0) {
             return (
                 <View style={styles.emptyInventory}>
                     <Backpack size={80} color="#C0C0C0" />
@@ -159,7 +165,7 @@ export default function InventoryScreen() {
 
         return (
             <View style={styles.inventoryGrid}>
-                {userItems.map((item: any, index: number) => {
+                {(Array.isArray(userItems) ? userItems : []).map((item: any, index: number) => {
                     const itemData = getItemData(item);
                     const rarity = getItemRarity(itemData.type);
                     const backgroundColor = getItemBackground(itemData.type);
@@ -211,7 +217,8 @@ export default function InventoryScreen() {
                     );
                 })}
 
-                {[...Array(Math.max(0, 12 - userItems.length))].map((_, index) => (
+                {/* Empty slots for game-like appearance */}
+                {[...Array(Math.max(0, 12 - (Array.isArray(userItems) ? userItems.length : 0)))].map((_, index) => (
                     <View key={`empty-${index}`} style={styles.emptySlot}>
                         <View style={styles.emptySlotInner} />
                     </View>
@@ -224,6 +231,7 @@ export default function InventoryScreen() {
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="light-content" />
 
+            {/* Header with backpack design */}
             <View style={styles.headerContainer}>
                 <View style={styles.backpackHeader}>
                     <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -234,11 +242,12 @@ export default function InventoryScreen() {
                         <Text style={styles.headerTitle}>My Backpack</Text>
                     </View>
                     <View style={styles.itemCount}>
-                        <Text style={styles.itemCountText}>{userItems.length}</Text>
+                        <Text style={styles.itemCountText}>{Array.isArray(userItems) ? userItems.length : 0}</Text>
                     </View>
                 </View>
             </View>
 
+            {/* Inventory content */}
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
                 <View style={styles.inventoryContainer}>
                     <View style={styles.inventoryHeader}>
@@ -250,6 +259,7 @@ export default function InventoryScreen() {
                 </View>
             </ScrollView>
 
+            {/* Hover Tooltip for Desktop/Web */}
             {Platform.OS === 'web' && hoveredItem && (
                 <View style={[
                     styles.hoverTooltip,
@@ -279,6 +289,7 @@ export default function InventoryScreen() {
                 </View>
             )}
 
+            {/* Item Detail Modal */}
             <Modal
                 visible={showItemDetail}
                 transparent={true}
@@ -418,6 +429,9 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
+
+    // 修改圖標大小
+
     container: {
         flex: 1,
         backgroundColor: '#87CEEB',
@@ -488,6 +502,7 @@ const styles = StyleSheet.create({
         color: '#636E72',
         fontWeight: '600',
     },
+
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',
@@ -642,6 +657,7 @@ const styles = StyleSheet.create({
         borderWidth: 3,
         borderColor: '#4CAF50',
     },
+    // 修改 tooltip 相關樣式
     tooltipItemBackground: {
         width: 50,
         height: 50,
