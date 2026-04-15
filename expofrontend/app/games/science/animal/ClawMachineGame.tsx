@@ -252,7 +252,7 @@ const ClawMachineGame: React.FC = () => {
         setIsSaving(true);
         try {
             const gameData = {
-                gameName: "Animal Classification",
+                gameName: "Animal Catcher",
                 scores: finalScore,
                 gameType: "SCIENCE",
                 gameDifficulty: "EASY"

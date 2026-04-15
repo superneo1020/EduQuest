@@ -17,7 +17,6 @@ import SkillBarsChart from "@/app/Profile/SkillRadarChart";
 import { LineChart, BarChart, PieChart as RNPieChart } from 'react-native-chart-kit';
 import { AvatarSelector, renderAvatar, avatarOptions } from "@/app/Profile/AvatarSelector";
 
-
 const { width } = Dimensions.get('window');
 
 export default function ProfileScreen() {
@@ -42,9 +41,7 @@ export default function ProfileScreen() {
     const [showNicknameModal, setShowNicknameModal] = useState(false);
     const [newNickname, setNewNickname] = useState('');
 
-    // School change state
-    const [showSchoolModal, setShowSchoolModal] = useState(false);
-    const [newSchool, setNewSchool] = useState('');
+    // School change state (removed editing ability, only display)
     const [currentSchool, setCurrentSchool] = useState('');
 
     // Items state
@@ -63,7 +60,7 @@ export default function ProfileScreen() {
     const [errorContext, setErrorContext] = useState('');
     const [userFeedback, setUserFeedback] = useState('');
 
-    const [modalMessage, setModalMessage] = useState({ text: '', type: '' }); // type: 'error' | 'success'
+    const [modalMessage, setModalMessage] = useState({ text: '', type: '' });
 
     // AI Learning suggestions state
     const [aiSuggestions, setAiSuggestions] = useState<any[]>([]);
@@ -75,12 +72,11 @@ export default function ProfileScreen() {
     const [showTrends, setShowTrends] = useState(false);
     const [showSuggestions, setShowSuggestions] = useState(false);
 
-    // Edit Profile states
+    // Edit Profile states (removed school and avatar)
     const [showEditProfileModal, setShowEditProfileModal] = useState(false);
     const [editFormData, setEditFormData] = useState({
         nickname: '',
         email: '',
-        school: '',
         password: '',
         confirmPassword: '',
         oldPassword: ''
@@ -90,10 +86,8 @@ export default function ProfileScreen() {
     const [showAvatarModal, setShowAvatarModal] = useState(false);
     const [selectedAvatar, setSelectedAvatar] = useState<string>('default');
 
-
-
-
-    // 修改 ProfileScreen.tsx 中的 handleAvatarSelect 函數
+    // User points state
+    const [userPoints, setUserPoints] = useState<number>(0);
 
     const handleAvatarSelect = async (avatarId: string) => {
         try {
@@ -104,10 +98,13 @@ export default function ProfileScreen() {
             const itemsResponse = await axios.get(`${getApiBaseUrl()}/api/user/item`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            const userItemsList = itemsResponse.data || [];
+            const rawItems = itemsResponse.data?.items || itemsResponse.data || [];
+            const userItemsList = Array.isArray(rawItems) ? rawItems : [];
 
-            // 查找是否已經擁有該頭像
-            let existingItem = userItemsList.find((item: any) => item.name === avatarName);
+            let existingItem = userItemsList.find((item: any) => {
+                const itemData = item.item || item;
+                return itemData.name === avatarName;
+            });
 
             // 如果沒有，先獲取該物品
             if (!existingItem) {
@@ -128,8 +125,12 @@ export default function ProfileScreen() {
                     const newItemsResponse = await axios.get(`${getApiBaseUrl()}/api/user/item`, {
                         headers: { Authorization: `Bearer ${token}` }
                     });
-                    const newUserItemsList = newItemsResponse.data || [];
-                    existingItem = newUserItemsList.find((item: any) => item.name === avatarName);
+                    const newRawItems = newItemsResponse.data?.items || newItemsResponse.data || [];
+                    const newUserItemsList = Array.isArray(newRawItems) ? newRawItems : [];
+                    existingItem = newUserItemsList.find((item: any) => {
+                        const itemData = item.item || item;
+                        return itemData.name === avatarName;
+                    });
 
                     setUserItems(newUserItemsList);
                 } catch (itemError: any) {
@@ -144,10 +145,10 @@ export default function ProfileScreen() {
                 return;
             }
 
-            // 2. 更新用戶資料中的裝備頭像（使用實際的物品 ID）
+            const itemData = existingItem.item || existingItem;
             const updateData = {
                 equippedItems: {
-                    "AVATAR": existingItem.id  // 使用實際的物品 ID
+                    "AVATAR": itemData.itemId || itemData.id  // ✅ Try itemId first, fallback to id
                 }
             };
 
@@ -215,16 +216,24 @@ export default function ProfileScreen() {
                     setProfileData(profileResponse.data);
 
                     // 🔥 新增：從後端獲取裝備的頭像 ID，並更新 selectedAvatar
-                    const equippedAvatarId = profileResponse.data?.equipped_items?.AVATAR;
+                    const equippedAvatarId = profileResponse.data?.equipped_items?.AVATAR
+                        || profileResponse.data?.equippedItems?.AVATAR;
                     if (equippedAvatarId) {
                         // 根據物品 ID 找到對應的頭像 icon
                         const itemsResponse = await axios.get(`${getApiBaseUrl()}/api/user/item`, {
                             headers: { Authorization: `Bearer ${token}` }
                         });
-                        const userItemsList = itemsResponse.data || [];
-                        const equippedItem = userItemsList.find((item: any) => item.id === equippedAvatarId);
-                        if (equippedItem && equippedItem.icon) {
-                            setSelectedAvatar(equippedItem.icon);
+                        const rawItems = itemsResponse.data?.items || itemsResponse.data || [];
+                        const userItemsList = Array.isArray(rawItems) ? rawItems : [];
+                        const equippedItem = userItemsList.find((item: any) => {
+                            const itemData = item.item || item;
+                            return itemData.id === equippedAvatarId || itemData.itemId === equippedAvatarId;
+                        });
+                        if (equippedItem) {
+                            const itemData = equippedItem.item || equippedItem;
+                            if (itemData.icon) {
+                                setSelectedAvatar(itemData.icon);
+                            }
                         }
                     } else {
                         setSelectedAvatar('default');
@@ -245,9 +254,11 @@ export default function ProfileScreen() {
                         const itemsResponse = await axios.get(`${getApiBaseUrl()}/api/user/item`, {
                             headers: { Authorization: `Bearer ${token}` }
                         });
-                        setUserItems(itemsResponse.data || []);
+                        const items = itemsResponse.data?.items || itemsResponse.data || [];
+                        setUserItems(Array.isArray(items) ? items : []);
                     } catch (error) {
                         console.log("Items info not available");
+                        setUserItems([]);
                     }
 
                     // 獲取用戶任務
@@ -270,28 +281,29 @@ export default function ProfileScreen() {
                         console.log("Roles info not available");
                     }
 
-                    // 獲取遊戲記錄
-                    // 獲取遊戲記錄
-                    // 獲取遊戲記錄
-                    // 在 useFocusEffect 的 fetchLatestProfile 函數內，找到遊戲記錄的部分，替換為：
-
-                    let gameScores: any[] = [];
                     try {
-                        console.log('Fetching game scores...');
-                        const gameHistoryResponse = await axios.get(`${getApiBaseUrl()}/api/user/game/score`, {
-                            params: { page: 0, size: 50 },
+                        const pointsResponse = await axios.get(`${getApiBaseUrl()}/api/user/point`, {
                             headers: { Authorization: `Bearer ${token}` }
                         });
-                        console.log('Game scores response:', gameHistoryResponse.data);
-                        gameScores = gameHistoryResponse.data.content || [];
-                        console.log('Game scores array:', gameScores);
-                    } catch (gameError: any) {
-                        console.error('Failed to fetch game scores:', gameError);
-                        // 如果失敗，保持 gameScores 為空陣列
+                        if (pointsResponse.data !== undefined) {
+                            setUserPoints(pointsResponse.data);
+                        }
+                    } catch (error) {
+                        console.log("Points info not available");
                     }
+
+                    const gameHistoryResponse = await axios.get(`${getApiBaseUrl()}/api/user/game/score`, {
+                        params: { page: 0, size: 50 },
+                        headers: { Authorization: `Bearer ${token}` }
+
+
+                    });
+                    console.log(gameHistoryResponse);
+
                     setProfileData((prev: any) => ({
                         ...profileResponse.data,
-                        userGameScores: gameScores
+                        userGameScores: gameHistoryResponse.data.content || []
+
                     }));
                 } catch (error) {
                     console.error("無法獲取最新資料", error);
@@ -303,7 +315,7 @@ export default function ProfileScreen() {
         }, [token])
     );
 
-    const displayUser = profileData ? { ...user, ...profileData } : user;
+    const displayUser = profileData ? { ...user, ...profileData, points: userPoints } : { ...user, points: userPoints };
     const gameHistory = displayUser?.userGameScores || [];
 
     // Move calculateImprovementRate before calculateLearningStats
@@ -312,13 +324,13 @@ export default function ProfileScreen() {
 
         // 按時間排序遊戲記錄
         const sortedHistory = [...gameHistory].sort((a, b) =>
-            new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()
+            new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
         );
 
         // 使用加權平均：最近的遊戲權重更高
         const totalGames = sortedHistory.length;
-        const recentCount = Math.min(10, totalGames); // 最近10個遊戲
-        const earlierCount = Math.min(10, totalGames - recentCount); // 早期10個遊戲
+        const recentCount = Math.min(10, totalGames);
+        const earlierCount = Math.min(10, totalGames - recentCount);
 
         const recentGames = sortedHistory.slice(-recentCount);
         const earlierGames = sortedHistory.slice(0, earlierCount);
@@ -425,20 +437,19 @@ export default function ProfileScreen() {
     }, [gameHistory, calculateImprovementRate]);
 
     const getEquipmentStats = useMemo(() => {
-        const equipped = profileData?.equipped_items || {};
-        const itemsArray = Array.isArray(userItems) ? userItems : [];
-        const totalItems = itemsArray.length;
+        const equipped = profileData?.equipped_items || profileData?.equippedItems || {};
+        const totalItems = Array.isArray(userItems) ? userItems.length : 0;
         const equippedCount = Object.values(equipped).filter(item => item !== null).length;
+        const rareItems = Array.isArray(userItems)
+            ? userItems.filter(item => item.price > 100)
+            : [];
 
         return {
             equipped,
             totalItems,
             equippedCount,
             collectionProgress: Math.round((equippedCount / Math.max(totalItems, 1)) * 100),
-            rareItems: itemsArray.filter(item => {
-                const itemData = item;
-                return itemData.price > 100; // 假設價格超過100的為稀有物品
-            })
+            rareItems
         };
     }, [profileData, userItems]);
 
@@ -458,8 +469,8 @@ export default function ProfileScreen() {
                 suggestions.push({
                     type: 'weakness',
                     icon: <Target size={16} color="#FF6B6B" />,
-                    title: `重點加強${weakestSubject[0]}`,
-                    description: `你的${weakestSubject[0]}平均${weakestSubject[1]}分，與最強項${strongestSubject[0]}相差${gap}分。建議每天專注練習15-20分鐘。`
+                    title: `Key areas to strengthen${weakestSubject[0]}`,
+                    description: `your${weakestSubject[0]}average${weakestSubject[1]}points, The difference between ${strongestSubject[0]} and the strongest subject is ${gap} points.It is recommended to practice for 15-20 minutes each day.`
                 });
             }
         }
@@ -474,15 +485,15 @@ export default function ProfileScreen() {
             suggestions.push({
                 type: 'challenge',
                 icon: <Zap size={16} color="#FFA500" />,
-                title: '突破舒適區',
-                description: `你${Math.round(easyRatio * 100)}%的時間都在簡單模式。AI分析顯示你已經掌握基礎，建議嘗試中等難度來刺激大腦發展。`
+                title: 'Break out of your comfort zone',
+                description: `You spent${Math.round(easyRatio * 100)}%of your time on easy mode. AI analysis shows you have mastered the basics; we recommend trying medium difficulty to stimulate brain development.`
             });
         } else if (hardRatio > 0.4 && stats.averageScore < 80) {
             suggestions.push({
                 type: 'balance',
                 icon: <BarChart3 size={16} color="#9C27B0" />,
-                title: '平衡難度選擇',
-                description: `你經常挑戰困難模式但平均分數較低。建議先在中等難度鞏固基礎，再挑戰高難度。`
+                title: 'Balanced difficulty selection',
+                description: `You frequently attempt the hard mode but your average score is low. It's recommended that you first solidify your foundation on the medium difficulty before tackling the higher difficulties.`
             });
         }
 
@@ -498,8 +509,8 @@ export default function ProfileScreen() {
                 suggestions.push({
                     type: 'consistency',
                     icon: <TrendingUp size={16} color="#4ECDC4" />,
-                    title: '提升學習穩定性',
-                    description: `AI分析顯示你的分數波動較大。建議建立固定的學習時間，保持規律的練習節奏。`
+                    title: 'Improve learning stability',
+                    description: `AI analysis shows your score fluctuates significantly. We recommend establishing a fixed study schedule and maintaining a consistent practice rhythm.`
                 });
             }
         }
@@ -513,8 +524,8 @@ export default function ProfileScreen() {
                 suggestions.push({
                     type: 'momentum',
                     icon: <Star size={16} color="#FFD93D" />,
-                    title: '保持學習勢頭',
-                    description: `你最近的表現超出平均水平${Math.round(((avgRecentScore - stats.averageScore) / stats.averageScore) * 100)}%！這是學習的黃金時期，建議增加練習頻率。`
+                    title: 'Maintain the momentum of learning',
+                    description: `Your recent performance has been above average${Math.round(((avgRecentScore - stats.averageScore) / stats.averageScore) * 100)}%！This is the golden period for learning, and it is recommended to increase the frequency of practice.`
                 });
             }
         }
@@ -526,23 +537,23 @@ export default function ProfileScreen() {
                 suggestions.push({
                     type: 'advanced',
                     icon: <Award size={16} color="#4CAF50" />,
-                    title: '進階學習建議',
-                    description: `你在多個科目都表現優秀！AI建議你可以開始嘗試跨科目綜合練習，或參與更具挑戰性的任務。`
+                    title: 'Advanced learning suggestions',
+                    description: `You're excelling in multiple subjects! AI suggests you start trying cross-subject integrated practice or take on more challenging tasks.`
                 });
             }
         }
 
         // AI 分析 6: 學習習慣優化
         const daysSinceFirstGame = gameHistory.length > 0 ?
-            Math.ceil((Date.now() - new Date(gameHistory[0].created_at).getTime()) / (1000 * 60 * 60 * 24)) : 0;
+            Math.ceil((Date.now() - new Date(gameHistory[0].createdAt).getTime()) / (1000 * 60 * 60 * 24)) : 0;
         const gamesPerDay = daysSinceFirstGame > 0 ? gameHistory.length / daysSinceFirstGame : 0;
 
         if (gamesPerDay < 0.5 && gameHistory.length < 10) {
             suggestions.push({
                 type: 'habit',
                 icon: <Calendar size={16} color="#2196F3" />,
-                title: '建立學習習慣',
-                description: `AI分析建議每天至少完成1-2個遊戲，保持學習連續性。研究表明規律的學習比間歇學習效果更好。`
+                title: 'Develop learning habits',
+                description: `AI analysis suggests completing at least 1-2 games daily to maintain learning continuity. Research indicates that consistent learning is more effective than intermittent learning.`
             });
         }
 
@@ -561,6 +572,17 @@ export default function ProfileScreen() {
         });
         return Array.from(scoresMap.values());
     }, [gameHistory]);
+
+    const processedUserItems = useMemo(() => {
+        return userItems.map(item => {
+            const itemData = item.item || item;  // Extract nested item data
+            return {
+                ...itemData,
+                icon: itemData.icon?.replace(/\.png$/i, '') || itemData.icon,
+                quantity: item.quantity || itemData.quantity || 1
+            };
+        });
+    }, [userItems]);
 
     const getDifficultyColor = (diff: string) => {
         switch (diff?.toUpperCase()) {
@@ -718,6 +740,7 @@ export default function ProfileScreen() {
             // 更新 profileData，保留遊戲記錄
             setProfileData((prev: any) => ({
                 ...profileResponse.data,
+                email: newEmail.trim() || profileResponse.data.email,
                 userGameScores: prev?.userGameScores || []
             }));
 
@@ -760,57 +783,6 @@ export default function ProfileScreen() {
         }
     };
 
-    // School change function
-    const handleChangeSchool = async () => {
-        if (!newSchool || newSchool.trim() === '') {
-            setModalMessage({ text: 'Please enter a school name', type: 'error' });
-            showErrorWithFeedback('Please enter a school name', 'School Change - Empty Field');
-            return;
-        }
-
-        if (newSchool.trim().length > 100) {
-            setModalMessage({ text: 'School name must be 100 characters or less', type: 'error' });
-            showErrorWithFeedback('School name must be 100 characters or less', 'School Change - Too Long');
-            return;
-        }
-
-        try {
-            setLoading(true);
-            await axios.post(`${getApiBaseUrl()}/api/user/school`,
-                { newSchoolName: newSchool.trim() },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
-
-            Alert.alert('Success', 'School updated successfully');
-            setModalMessage({ text: 'School updated successfully!', type: 'success' });
-            setTimeout(() => {
-                setShowSchoolModal(false);
-                setModalMessage({ text: '', type: '' });
-            }, 1500);
-            setNewSchool('');
-            setCurrentSchool(newSchool.trim());
-        } catch (error: any) {
-            console.error('School change error:', error);
-            let errorMessage = 'Failed to update school';
-            let context = 'School Change - Unknown Error';
-
-            if (error.response?.data?.message) {
-                errorMessage = error.response.data.message;
-                context = `School Change - Server: ${error.response.data.message}`;
-            } else if (error.response?.status === 400) {
-                errorMessage = 'Invalid school name format';
-                context = 'School Change - Validation Error';
-            } else if (error.response?.status === 401) {
-                errorMessage = 'Authentication failed. Please log in again';
-                context = 'School Change - Auth Error';
-            }
-
-            setModalMessage({ text: errorMessage, type: 'error' });
-            showErrorWithFeedback(errorMessage, context);
-        } finally {
-            setLoading(false);
-        }
-    };
     const handleChangeNickname = async () => {
         if (!newNickname || newNickname.trim() === '') {
             setModalMessage({ text: 'Please enter a nickname', type: 'error' });
@@ -841,6 +813,7 @@ export default function ProfileScreen() {
             // 更新 profileData，保留遊戲記錄
             setProfileData((prev: any) => ({
                 ...profileResponse.data,
+                nickname: newNickname.trim() || profileResponse.data.nickname,
                 userGameScores: prev?.userGameScores || []
             }));
 
@@ -924,13 +897,13 @@ export default function ProfileScreen() {
                     game_name: game.name || 'Unknown Game',
                     score: game.scores || 0,
                     difficulty: game.gameDifficulty || 'MEDIUM',
-                    created_at: game.createdAt
+                    createdAt: game.createdAt
                 }))
             };
 
             // Call Python backend API
             const response = await axios.post('http://localhost:8000/api/learning/suggestions', gameScoreData, {
-                timeout: 30000, // 30 seconds timeout
+                timeout: 30000,
                 headers: {
                     'Content-Type': 'application/json'
                 }
@@ -962,11 +935,15 @@ export default function ProfileScreen() {
                     <View style={styles.profileCover}>
                         <View style={styles.profileCoverGradient} />
                         <View style={styles.profileContent}>
-                            <View style={styles.avatarContainer}>
+                            <TouchableOpacity
+                                style={styles.avatarContainer}
+                                onPress={() => setShowAvatarModal(true)}
+                                activeOpacity={0.7}
+                            >
                                 <View style={styles.avatarCircle}>
                                     {renderAvatar(selectedAvatar, 50)}
                                 </View>
-                            </View>
+                            </TouchableOpacity>
                             <View style={styles.profileInfo}>
                                 <Text style={styles.userName}>{displayUser?.nickname || displayUser?.username || 'Learner'}</Text>
                                 <Text style={styles.userTitle}>🎓 Learning Explorer</Text>
@@ -1058,7 +1035,7 @@ export default function ProfileScreen() {
                                 <View style={styles.infoContent}>
                                     <Text style={styles.infoLabel}>Member Since</Text>
                                     <Text style={styles.infoValue}>
-                                        {displayUser?.created_at ? new Date(displayUser.created_at).toLocaleDateString() : 'N/A'}
+                                        {displayUser?.createdAt ? new Date(displayUser.createdAt).toLocaleDateString() : 'N/A'}
                                     </Text>
                                 </View>
                             </View>
@@ -1073,48 +1050,9 @@ export default function ProfileScreen() {
                     </View>
                 </View>
 
-
-
                 {/* Enhanced Features Section */}
                 <View style={styles.enhancedFeaturesContainer}>
                     <Text style={styles.sectionTitle}>Enhanced Analytics</Text>
-
-
-                    <TouchableOpacity
-                        style={styles.featureItem}
-                        onPress={() => setShowLearningStats(true)}
-                    >
-                        <BarChart3 size={20} color="#FF9800" />
-                        <View style={styles.featureContent}>
-                            <Text style={styles.featureTitle}>Learning Statistics</Text>
-                            <Text style={styles.featureDescription}>Analyze your learning performance</Text>
-                        </View>
-                        <ChevronRight size={20} color="#BDC3C7" />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={styles.featureItem}
-                        onPress={() => setShowEquipment(true)}
-                    >
-                        <Award size={20} color="#9C27B0" />
-                        <View style={styles.featureContent}>
-                            <Text style={styles.featureTitle}>Equipment & Collection</Text>
-                            <Text style={styles.featureDescription}>View your equipped items and collection</Text>
-                        </View>
-                        <ChevronRight size={20} color="#BDC3C7" />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={styles.featureItem}
-                        onPress={() => setShowTrends(true)}
-                    >
-                        <TrendingUp size={20} color="#4CAF50" />
-                        <View style={styles.featureContent}>
-                            <Text style={styles.featureTitle}>Learning Trends</Text>
-                            <Text style={styles.featureDescription}>Track your progress over time</Text>
-                        </View>
-                        <ChevronRight size={20} color="#BDC3C7" />
-                    </TouchableOpacity>
 
                     <TouchableOpacity
                         style={styles.featureItem}
@@ -1130,56 +1068,7 @@ export default function ProfileScreen() {
                         </View>
                         <ChevronRight size={20} color="#BDC3C7" />
                     </TouchableOpacity>
-
-
                 </View>
-
-                {/* Personal Achievements Section */}
-                <View style={styles.achievementsContainer}>
-                    <Text style={styles.sectionTitle}>🏆 My Achievements</Text>
-                    <View style={styles.achievementsGrid}>
-                        <View style={styles.achievementCard}>
-                            <View style={styles.achievementIcon}>
-                                <Trophy size={28} color="#FFD700" />
-                            </View>
-                            <Text style={styles.achievementNumber}>{displayUser?.points || 0}</Text>
-                            <Text style={styles.achievementLabel}>Total Points</Text>
-                            <Text style={styles.achievementSubLabel}>Proof of hard work</Text>
-                        </View>
-                        <View style={styles.achievementCard}>
-                            <View style={styles.achievementIcon}>
-                                <Gamepad2 size={28} color="#FF6B6B" />
-                            </View>
-                            <Text style={styles.achievementNumber}>{gameHistory.length}</Text>
-                            <Text style={styles.achievementLabel}>Games Played</Text>
-                            <Text style={styles.achievementSubLabel}>Result of continuous learning</Text>
-                        </View>
-                        <TouchableOpacity
-                            style={styles.achievementCard}
-                            onPress={() => setShowMissionsModal(true)}
-                        >
-                            <View style={styles.achievementIcon}>
-                                <Target size={28} color="#9C27B0" />
-                            </View>
-                            <Text style={styles.achievementNumber}>{userMissions.filter(m => m.completed).length}</Text>
-                            <Text style={styles.achievementLabel}>Missions Done</Text>
-                            <Text style={styles.achievementSubLabel}>Achievement of challenging yourself</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={styles.achievementCard}
-                            onPress={() => router.push('/Inventory/inventory')}
-                        >
-                            <View style={styles.achievementIcon}>
-                                <Star size={28} color="#FF9800" />
-                            </View>
-                            <Text style={styles.achievementNumber}>{userItems.length}</Text>
-                            <Text style={styles.achievementLabel}>Items Collected</Text>
-                            <Text style={styles.achievementSubLabel}>Rewards on the learning journey</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-
-
 
                 {/* Learning Progress Section */}
                 <View style={styles.learningProgressContainer}>
@@ -1191,35 +1080,10 @@ export default function ProfileScreen() {
                                 <SkillBarsChart gameHistory={gameHistory} />
                             </View>
                         </View>
-                        <View style={styles.progressCard}>
-                            <Text style={styles.progressTitle}>Learning Statistics</Text>
-                            <View style={styles.learningStatsList}>
-                                <View style={styles.learningStatItem}>
-                                    <Text style={styles.learningStatLabel}>Average Score</Text>
-                                    <Text style={styles.learningStatValue}>{calculateLearningStats.averageScore}</Text>
-                                </View>
-                                <View style={styles.learningStatItem}>
-                                    <Text style={styles.learningStatLabel}>Best Subject</Text>
-                                    <Text style={styles.learningStatValue}>{calculateLearningStats.bestSubject || 'N/A'}</Text>
-                                </View>
-                                <View style={styles.learningStatItem}>
-                                    <Text style={styles.learningStatLabel}>Study Time</Text>
-                                    <Text style={styles.learningStatValue}>{calculateLearningStats.totalPlayTime} minutes</Text>
-                                </View>
-                                <View style={styles.learningStatItem}>
-                                    <Text style={styles.learningStatLabel}>Improvement Rate</Text>
-                                    <Text style={[styles.learningStatValue, { color: calculateLearningStats.improvementRate >= 0 ? '#4CAF50' : '#FF4757' }]}>
-                                        {calculateLearningStats.improvementRate >= 0 ? '+' : ''}{calculateLearningStats.improvementRate}%
-                                    </Text>
-                                </View>
-                            </View>
-                        </View>
                     </View>
                 </View>
 
-
-                {/* 切換標籤 */}
-                {/* 在 return 裡替換原有的 tabContainer */}
+                {/* Segmented Control */}
                 <View style={styles.segmentedControl}>
                     <TouchableOpacity
                         onPress={() => setRecordMode('recent')}
@@ -1244,16 +1108,16 @@ export default function ProfileScreen() {
                             <View style={{ flex: 1, marginLeft: 12 }}>
                                 <Text style={styles.activityName}>{record.name}</Text>
                                 <View style={styles.row}>
-                                    <Text style={[styles.activityDifficulty, { color: getDifficultyColor(record.gameDifficulty) }]}>{record.gameDifficulty}</Text>
+                                    <Text style={[styles.activityDifficulty, { color: getDifficultyColor(record.gameDifficulty) }]}>{record.gameDifficulty || 'N/A'}</Text>
                                     <Text style={styles.dot}> • </Text>
                                     <Text style={styles.activityDate}>{new Date(record.createdAt).toLocaleDateString()}</Text>
                                 </View>
                             </View>
                             <View style={styles.scoreContainer}>
                                 <Text style={[styles.activityScore, recordMode === 'best' && { color: '#F1C40F' }]}>
-                                    {recordMode === 'best' ? 'BEST' : `+${record.points} XP`}
+                                    {recordMode === 'best' ? 'BEST' : `+${record.points || 0} XP`}
                                 </Text>
-                                <Text style={styles.activityScoreValue}>Score: {record.scores}</Text>
+                                <Text style={styles.activityScoreValue}>Score: {record.scores || 0}</Text>
                             </View>
                         </View>
                     )) : <Text style={styles.emptyText}>No records found.</Text>}
@@ -1423,6 +1287,7 @@ export default function ProfileScreen() {
                     </View>
                 </View>
             </Modal>
+
             {/* Nickname Change Modal */}
             <Modal
                 visible={showNicknameModal}
@@ -1582,69 +1447,6 @@ export default function ProfileScreen() {
                                 onPress={() => setShowItemsModal(false)}
                             >
                                 <Text style={styles.confirmBtnText}>Close</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </View>
-            </Modal>
-
-            {/* School Change Modal */}
-            <Modal
-                visible={showSchoolModal}
-                transparent={true}
-                animationType="slide"
-                onRequestClose={() => setShowSchoolModal(false)}
-            >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Change School</Text>
-
-                        <View style={styles.inputContainer}>
-                            <Text style={styles.inputLabel}>New School Name</Text>
-                            <TextInput
-                                style={styles.textInput}
-                                placeholder="Enter your school name"
-                                value={newSchool}
-                                onChangeText={setNewSchool}
-                                maxLength={100}
-                            />
-                        </View>
-
-                        {modalMessage.text ? (
-                            <Text style={{
-                                color: modalMessage.type === 'success' ? '#4CAF50' : '#FF4757',
-                                textAlign: 'center',
-                                marginBottom: 15,
-                                fontSize: 16,
-                                fontWeight: '600'
-                            }}>
-                                {modalMessage.text}
-                            </Text>
-                        ) : null}
-
-                        <View style={styles.modalButtons}>
-                            <TouchableOpacity
-                                style={[styles.modalBtn, styles.cancelBtn]}
-                                onPress={() => {
-                                    setShowSchoolModal(false);
-                                    setNewSchool('');
-                                }}
-                            >
-                                <Text style={styles.cancelBtnText}>Cancel</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[styles.modalBtn, styles.confirmBtn]}
-                                onPress={handleChangeSchool}
-                                disabled={loading}
-                            >
-                                {loading ? (
-                                    <View style={styles.loadingContainer}>
-                                        <ActivityIndicator size="small" color="#FFF" />
-                                        <Text style={[styles.confirmBtnText, { marginLeft: 8 }]}>Updating...</Text>
-                                    </View>
-                                ) : (
-                                    <Text style={styles.confirmBtnText}>Update</Text>
-                                )}
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -2020,12 +1822,12 @@ export default function ProfileScreen() {
                             )}
 
                             <View style={styles.statsCard}>
-                                <Text style={styles.statsCardTitle}>AI 學習策略建議</Text>
-                                <Text style={styles.statsLabel}>🧠 **認知科學原理**：間隔重複比集中學習更有效</Text>
-                                <Text style={styles.statsLabel}>⏰ **最佳學習時長**：每次25-30分鐘，之後休息5分鐘</Text>
-                                <Text style={styles.statsLabel}>🎯 **目標設定**：設定具體可衡量的學習目標</Text>
-                                <Text style={styles.statsLabel}>🔄 **多樣化學習**：結合不同難度和科目提升綜合能力</Text>
-                                <Text style={styles.statsLabel}>📊 **數據驅動**：定期檢查學習數據，調整學習策略</Text>
+                                <Text style={styles.statsCardTitle}>AI Learning Strategy Suggestions</Text>
+                                <Text style={styles.statsLabel}>🧠 **Principles of Cognitive Science**: Spaced repetition is more effective than massed learning</Text>
+                                <Text style={styles.statsLabel}>⏰ **Optimal Study Duration**: 25-30 minutes each session, followed by a 5-minute break</Text>
+                                <Text style={styles.statsLabel}>🎯 **Goal Setting**: Set specific and measurable learning objectives</Text>
+                                <Text style={styles.statsLabel}>🔄 **Diverse Learning**: Combining different levels of difficulty and subjects to enhance overall abilities</Text>
+                                <Text style={styles.statsLabel}>📊 **Data-Driven**: Regularly check learning data and adjust learning strategies</Text>
                             </View>
                         </ScrollView>
 
@@ -2041,7 +1843,7 @@ export default function ProfileScreen() {
                 </View>
             </Modal>
 
-            {/* Edit Profile Modal */}
+            {/* Edit Profile Modal - only nickname, email, password fields */}
             <Modal
                 visible={showEditProfileModal}
                 transparent={true}
@@ -2055,22 +1857,6 @@ export default function ProfileScreen() {
                         <ScrollView style={{ flex: 1, maxHeight: 400 }}>
                             <View style={styles.editSection}>
                                 <Text style={styles.editSectionTitle}>👤 Personal Information</Text>
-
-                                {/* Avatar Selection */}
-                                <View style={styles.inputGroup}>
-                                    <Text style={styles.inputLabel}>Avatar</Text>
-                                    <TouchableOpacity
-                                        style={styles.avatarSelector}
-                                        onPress={() => setShowAvatarModal(true)}
-                                    >
-                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                            {renderAvatar(selectedAvatar, 40)}
-                                            <Text style={styles.changeAvatarText}>Change Avatar</Text>
-                                        </View>
-                                    </TouchableOpacity>
-                                </View>
-
-                                {/* Edit Profile Modal 中的 TextInput 全部改用這個模式 */}
                                 <View style={styles.inputGroup}>
                                     <Text style={styles.inputLabel}>Nickname</Text>
                                     <TextInput
@@ -2150,26 +1936,15 @@ export default function ProfileScreen() {
                                 style={[styles.modalBtn, styles.confirmBtn]}
                                 onPress={async () => {
                                     try {
-                                        // Prepare update data
+                                        // 1. Update nickname (always send current nickname)
                                         const updateData: any = {
                                             nickname: editFormData.nickname || displayUser?.nickname || '',
-                                            equippedItems: {
-                                                AVATAR: (() => {
-                                                    const avatarItem = userItems.find(item => item.icon === selectedAvatar);
-                                                    return avatarItem?.id || null;
-                                                })()
-                                            },
-                                            preferences: {},
-                                            privacySettings: {}
                                         };
+                                        await axios.post(`${getApiBaseUrl()}/api/user/profile`, updateData, {
+                                            headers: { Authorization: `Bearer ${token}` }
+                                        });
 
-                                        // Call API to update profile
-                                        await axios.post(`${getApiBaseUrl()}/api/user/profile`,
-                                            updateData,
-                                            { headers: { Authorization: `Bearer ${token}` } }
-                                        );
-
-                                        // Update email if changed
+                                        // 2. Update email if changed
                                         if (editFormData.email && editFormData.email !== displayUser?.email) {
                                             await axios.post(`${getApiBaseUrl()}/api/user/email`,
                                                 { newEmail: editFormData.email.trim() },
@@ -2177,18 +1952,10 @@ export default function ProfileScreen() {
                                             );
                                         }
 
-                                        // Update school if changed
-                                        if (editFormData.school && editFormData.school !== currentSchool) {
-                                            await axios.post(`${getApiBaseUrl()}/api/user/school`,
-                                                { newSchoolName: editFormData.school.trim() },
-                                                { headers: { Authorization: `Bearer ${token}` } }
-                                            );
-                                        }
-
-                                        // Update password if provided
+                                        // 3. Update password if provided
                                         if (editFormData.password && editFormData.password.trim() !== '') {
                                             if (!editFormData.oldPassword || editFormData.oldPassword.trim() === '') {
-                                                Alert.alert('Error', 'Current password is required');
+                                                Alert.alert('Error', 'Current password is required to change password');
                                                 return;
                                             }
                                             if (editFormData.password !== editFormData.confirmPassword) {
@@ -2199,7 +1966,6 @@ export default function ProfileScreen() {
                                                 Alert.alert('Error', 'Password must be at least 8 characters');
                                                 return;
                                             }
-
                                             await axios.post(`${getApiBaseUrl()}/api/user/password`,
                                                 { oldPassword: editFormData.oldPassword, newPassword: editFormData.password },
                                                 { headers: { Authorization: `Bearer ${token}` } }
@@ -2208,22 +1974,33 @@ export default function ProfileScreen() {
 
                                         Alert.alert('Success', 'Profile updated successfully!');
                                         setShowEditProfileModal(false);
-                                        setEditFormData({ nickname: '', email: '', school: '', password: '', confirmPassword: '' });
+                                        setEditFormData({
+                                            nickname: '',
+                                            email: '',
+                                            password: '',
+                                            confirmPassword: '',
+                                            oldPassword: ''
+                                        });
 
                                         // Refresh profile data
                                         const profileResponse = await axios.get(`${getApiBaseUrl()}/api/user/profile`, {
                                             headers: { Authorization: `Bearer ${token}` }
-                                    });
-                                    setProfileData(profileResponse.data);
+                                        });
+                                        setProfileData((prev: any) => ({
+                                            ...profileResponse.data,
+                                            email: editFormData.email?.trim() || profileResponse.data.email,
+                                            nickname: editFormData.nickname?.trim() || profileResponse.data.nickname,
+                                            userGameScores: prev?.userGameScores || []
+                                        }));
 
-                                } catch (error: any) {
-                                    console.error('Profile update error:', error);
-                                    let errorMessage = 'Failed to update profile';
-                                    if (error.response?.data?.message) {
-                                    errorMessage = error.response.data.message;
-                                }
-                                    Alert.alert('Error', errorMessage);
-                                }
+                                    } catch (error: any) {
+                                        console.error('Profile update error:', error);
+                                        let errorMessage = 'Failed to update profile';
+                                        if (error.response?.data?.message) {
+                                            errorMessage = error.response.data.message;
+                                        }
+                                        Alert.alert('Error', errorMessage);
+                                    }
                                 }}
                             >
                                 <Text style={styles.confirmBtnText}>Save Changes</Text>
@@ -2232,12 +2009,13 @@ export default function ProfileScreen() {
                     </View>
                 </View>
             </Modal>
+
             <AvatarSelector
                 visible={showAvatarModal}
                 onClose={() => setShowAvatarModal(false)}
                 onSelect={handleAvatarSelect}
                 selectedAvatar={selectedAvatar}
-                userItems={userItems}
+                userItems={processedUserItems}
                 onGoToShop={() => router.push('/shop')}
             />
 
@@ -2245,552 +2023,54 @@ export default function ProfileScreen() {
     );
 }
 
+// Styles (unchanged, omitted for brevity - keep existing styles)
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#F8F9FA' },
-
-    // Unified Profile Container
-    unifiedProfileContainer: {
-        marginHorizontal: 20,
-        marginTop: 20,
-    },
-    profileCover: {
-        height: 200,
-        borderRadius: 24,
-        overflow: 'hidden',
-        position: 'relative',
-        elevation: 8,
-        marginBottom: 20,
-    },
-    profileCoverGradient: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: '#4CAF50',
-    },
-    profileContent: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 25,
-        paddingTop: 30,
-    },
-    avatarContainer: {
-        position: 'relative',
-        marginRight: 20,
-    },
-    avatarCircle: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        backgroundColor: 'rgba(255, 255, 255, 0.2)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 3,
-        borderColor: 'rgba(255, 255, 255, 0.3)',
-    },
-    profileInfo: {
-        flex: 1,
-    },
-    userName: {
-        fontSize: 28,
-        fontWeight: '900',
-        color: '#FFF',
-        marginBottom: 4,
-    },
-    profileActions: {
-        flexDirection: 'row',
-        gap: 10,
-    },
-    inventoryBtn: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: 'rgba(255, 255, 255, 0.2)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 2,
-        borderColor: 'rgba(255, 255, 255, 0.3)',
-        position: 'relative',
-    },
-    inventoryBadge: {
-        position: 'absolute',
-        top: -5,
-        right: -5,
-        backgroundColor: '#FF6B6B',
-        borderRadius: 10,
-        minWidth: 18,
-        height: 18,
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 2,
-        borderColor: '#FFF',
-    },
-    inventoryBadgeText: {
-        fontSize: 10,
-        fontWeight: '700',
-        color: '#FFF',
-    },
-    editProfileBtn: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        backgroundColor: 'rgba(255, 255, 255, 0.2)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 2,
-        borderColor: 'rgba(255, 255, 255, 0.3)',
-    },
-
-    // Unified User Information Section
-    unifiedInfoSection: {
-        backgroundColor: '#FFF',
-        borderRadius: 12,
-        padding: 18,
-        marginTop: 20,
-        elevation: 2,
-    },
-    infoSectionTitle: {
-        fontSize: 18,
-        fontWeight: '800',
-        color: '#2D3436',
-        marginBottom: 12,
-    },
-    infoList: {
-        gap: 10,
-    },
-    infoItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#F8F9FA',
-        borderRadius: 8,
-        padding: 12,      // 原來是 10
-        marginVertical: 4,
-    },
-    infoContent: {
-        marginLeft: 12,
-        flex: 1,
-    },
-    infoLabel: {
-        fontSize: 12,
-        color: '#636E72',
-        marginBottom: 2,
-    },
-    infoValue: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: '#2D3436',
-    },
-
-    // Edit Profile Modal Styles
-    editSection: {
-        marginBottom: 20,
-    },
-    editSectionTitle: {
-        fontSize: 16,
-        fontWeight: '800',
-        color: '#2D3436',
-        marginBottom: 12,
-    },
-    inputGroup: {
-        marginBottom: 15,
-    },
-    inputLabel: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#2D3436',
-        marginBottom: 5,
-    },
-    textInput: {
-        backgroundColor: '#F8F9FA',
-        borderRadius: 8,
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        fontSize: 16,
-        color: '#2D3436',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-    },
-    userTitle: {
-        fontSize: 14,
-        color: 'rgba(255, 255, 255, 0.8)',
-        marginBottom: 15,
-    },
-    profileStats: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: 'rgba(255, 255, 255, 0.15)',
-        borderRadius: 16,
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-    },
-    statItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
-        paddingVertical: 4,
-    },
-    statDivider: {
-        width: 1,
-        height: 24,
-        backgroundColor: 'rgba(255, 255, 255, 0.3)',
-        marginHorizontal: 12,
-    },
-    statValue: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: '#FFF',
-        marginLeft: 4,
-    },
-    statLabel: {
-        fontSize: 12,
-        color: 'rgba(255, 255, 255, 0.7)',
-        marginLeft: 4,
-    },
-
-    // Info Cards
-    infoCardsContainer: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 10,
-    },
-    infoCard: {
-        flex: 1,
-        minWidth: '45%',
-        backgroundColor: '#FFF',
-        borderRadius: 16,
-        padding: 15,
-        flexDirection: 'row',
-        alignItems: 'center',
-        elevation: 3,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-    },
-    infoCardContent: {
-        marginLeft: 12,
-        flex: 1,
-    },
-    infoCardLabel: {
-        fontSize: 12,
-        color: '#636E72',
-        marginBottom: 2,
-    },
-    infoCardValue: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: '#2D3436',
-    },
-    statsContainer: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        marginTop: 10 // Reduced from 20 for tighter layout
-    },
-
-    // Achievements Section
-    achievementsContainer: {
-        backgroundColor: '#FFF',
-        marginHorizontal: 20,
-        marginTop: 20,
-        borderRadius: 24,
-        padding: 20,
-        elevation: 2,
-    },
-    achievementsGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 15,
-        marginTop: 15,
-    },
-    achievementCard: {
-        width: '48%',
-        backgroundColor: '#FFF',
-        borderRadius: 12,
-        padding: 15,
-        alignItems: 'center',
-        elevation: 2,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-    },
-    achievementIcon: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
-        backgroundColor: '#FFF',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 12,
-        elevation: 2,
-    },
-    achievementNumber: {
-        fontSize: 22,
-        fontWeight: '900',
-        color: '#2D3436',
-        marginBottom: 4,
-    },
-    achievementLabel: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: '#636E72',
-        marginBottom: 2,
-    },
-    achievementSubLabel: {
-        fontSize: 10,
-        color: '#A0A0A0',
-        textAlign: 'center',
-    },
-
-    // Learning Progress Section
-    learningProgressContainer: {
-        backgroundColor: '#FFF',
-        marginHorizontal: 20,
-        marginTop: 20,
-        borderRadius: 24,
-        padding: 20,
-        elevation: 2,
-    },
-    progressCards: {
-        flexDirection: 'row',
-        gap: 15,
-        marginTop: 15,
-    },
-    progressCard: {
-        flex: 1,
-        backgroundColor: '#F8F9FA',
-        borderRadius: 12,
-        padding: 15,
-        elevation: 2,
-    },
-    progressTitle: {
-        fontSize: 16,
-        fontWeight: '800',
-        color: '#2D3436',
-        marginBottom: 15,
-        textAlign: 'center',
-    },
-    learningStatsList: {
-        gap: 12,
-    },
-    learningStatItem: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        backgroundColor: '#FFF',
-        borderRadius: 12,
-        paddingHorizontal: 15,
-        paddingVertical: 10,
-    },
-    learningStatLabel: {
-        fontSize: 13,
-        color: '#636E72',
-        fontWeight: '600',
-    },
-    learningStatValue: {
-        fontSize: 14,
-        fontWeight: '800',
-        color: '#2D3436',
-    },
-
-    // Profile Settings Section
-    profileSettingsContainer: {
-        backgroundColor: '#FFF',
-        marginHorizontal: 20,
-        marginTop: 20,
-        borderRadius: 24,
-        padding: 20,
-        elevation: 2,
-    },
-    settingsGrid: {
-        gap: 12,
-        marginBottom: 20,
-    },
-    profileSettingCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#F8F9FA',
-        borderRadius: 12,
-        padding: 15,
-        elevation: 2,
-    },
-    settingIconContainer: {
-        width: 45,
-        height: 45,
-        borderRadius: 12,
-        backgroundColor: '#FFF',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 15,
-        elevation: 2,
-    },
-    settingCardContent: {
-        flex: 1,
-    },
-    settingCardTitle: {
-        fontSize: 16,
-        fontWeight: '800',
-        color: '#2D3436',
-        marginBottom: 2,
-    },
-    settingCardValue: {
-        fontSize: 13,
-        color: '#636E72',
-    },
-    accountDetailsCard: {
-        backgroundColor: '#F8F9FA',
-        borderRadius: 12,
-        padding: 15,
-    },
-    accountDetailsTitle: {
-        fontSize: 16,
-        fontWeight: '800',
-        color: '#2D3436',
-        marginBottom: 12,
-    },
-    accountDetailsList: {
-        gap: 8,
-    },
-    accountDetailItem: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        backgroundColor: '#FFF',
-        borderRadius: 12,
-        paddingHorizontal: 15,
-        paddingVertical: 10,
-    },
-    accountDetailLabel: {
-        fontSize: 13,
-        color: '#636E72',
-        fontWeight: '600',
-    },
-    accountDetailValue: {
-        fontSize: 13,
-        fontWeight: '700',
-        color: '#2D3436',
-    },
-
-    // Legacy styles for compatibility
-    statsAndSkillsContainer: {
-        flexDirection: 'row',
-        marginHorizontal: 20,
-        marginTop: 20,
-        justifyContent: 'space-between'
-    },
-    statsColumn: {
-        flex: 1,
-        marginRight: 10
-    },
-    skillsColumn: {
-        flex: 1,
-        marginLeft: 10
-    },
-    radarSection: {
-        marginTop: 10,
-        borderRadius: 24,
-        padding: 12,
-        alignItems: 'center',
-        elevation: 2,
-        flex: 1
-    },
-    sectionTitle: {
-        fontSize: 16,
-        fontWeight: '800',
-        color: '#2D3436',
-        alignSelf: 'flex-start',
-        marginBottom: 10,
-    },
-    statCard: {
-        width: '48%', // Adjusted from 31% to fit in column layout
-        padding: 12, // Reduced from default
-        borderRadius: 20,
-        alignItems: 'center',
-        borderWidth: 1,
-        marginBottom: 8 // Reduced from default
-    },
-    statNumber: {
-        fontSize: 20,
-        fontWeight: '900',
-        color: '#2D3436',
-        marginTop: 8
-    },
-    statTitle: {
-        fontSize: 11,
-        color: '#636E72',
-        fontWeight: '700',
-        marginTop: 2
-    },
-    segmentedControl: {
-        flexDirection: 'row',
-        backgroundColor: '#E2E8F0',
-        marginHorizontal: 20,
-        marginTop: 25,
-        padding: 4,
-        borderRadius: 16,
-    },
-    segmentBtn: {
-        flex: 1,
-        paddingVertical: 10,
-        borderRadius: 12,
-        alignItems: 'center',
-    },
-    activeSegment: {
-        backgroundColor: '#FFF',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-        elevation: 2,
-    },
-    segmentText: {
-        fontSize: 12,
-        fontWeight: '800',
-        color: '#64748B',
-    },
-    activeSegmentText: {
-        color: '#4CAF50',
-    },
-
-    // 列表樣式微調
-    activityList: {
-        marginHorizontal: 20,
-        backgroundColor: '#FFF',
-        borderRadius: 24,
-        paddingHorizontal: 20, // 增加內距
-        paddingVertical: 5,
-        marginTop: 15,
-        elevation: 2
-    },
-    activityCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 18, // 增加高度更舒適
-        borderBottomWidth: 1,
-        borderBottomColor: '#F1F2F6'
-    },
-    scrollContent: {
-        paddingHorizontal: 20,
-        paddingBottom: 20
-    },
-    emailBadge: { flexDirection: 'row', alignItems: 'center', marginTop: 5 },
-    emailText: { fontSize: 14, color: '#636E72', marginLeft: 5 },
-    schoolBadge: { flexDirection: 'row', alignItems: 'center', marginTop: 5 },
-    schoolText: { fontSize: 14, color: '#636E72', marginLeft: 5 },
-    rolesBadge: { flexDirection: 'row', alignItems: 'center', marginTop: 5 },
-    rolesText: { fontSize: 14, color: '#636E72', marginLeft: 5 },
-    tabContainer: { flexDirection: 'row', marginLeft: 25, marginTop: 20, gap: 20 },
-    tabBtn: { paddingBottom: 5, borderBottomWidth: 2, borderBottomColor: 'transparent' },
-    activeTab: { borderBottomColor: '#4CAF50' },
-    tabText: { fontSize: 13, fontWeight: '800', color: '#A0A0A0' },
-    activeTabText: { color: '#4CAF50' },
-
+    unifiedProfileContainer: { marginHorizontal: 20, marginTop: 20 },
+    profileCover: { height: 200, borderRadius: 24, overflow: 'hidden', position: 'relative', elevation: 8, marginBottom: 20 },
+    profileCoverGradient: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#4CAF50' },
+    profileContent: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 25, paddingTop: 30 },
+    avatarContainer: { position: 'relative', marginRight: 20 },
+    avatarCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255, 255, 255, 0.2)', justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: 'rgba(255, 255, 255, 0.3)' },
+    profileInfo: { flex: 1 },
+    userName: { fontSize: 28, fontWeight: '900', color: '#FFF', marginBottom: 4 },
+    userTitle: { fontSize: 14, color: 'rgba(255, 255, 255, 0.8)', marginBottom: 15 },
+    profileStats: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.15)', borderRadius: 16, paddingHorizontal: 16, paddingVertical: 12 },
+    statItem: { flexDirection: 'row', alignItems: 'center', flex: 1, paddingVertical: 4 },
+    statDivider: { width: 1, height: 24, backgroundColor: 'rgba(255, 255, 255, 0.3)', marginHorizontal: 12 },
+    statValue: { fontSize: 16, fontWeight: '700', color: '#FFF', marginLeft: 4 },
+    statLabel: { fontSize: 12, color: 'rgba(255, 255, 255, 0.7)', marginLeft: 4 },
+    profileActions: { flexDirection: 'row', gap: 10 },
+    inventoryBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255, 255, 255, 0.2)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'rgba(255, 255, 255, 0.3)', position: 'relative' },
+    inventoryBadge: { position: 'absolute', top: -5, right: -5, backgroundColor: '#FF6B6B', borderRadius: 10, minWidth: 18, height: 18, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFF' },
+    inventoryBadgeText: { fontSize: 10, fontWeight: '700', color: '#FFF' },
+    editProfileBtn: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255, 255, 255, 0.2)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'rgba(255, 255, 255, 0.3)' },
+    unifiedInfoSection: { backgroundColor: '#FFF', borderRadius: 12, padding: 18, marginTop: 20, elevation: 2 },
+    infoSectionTitle: { fontSize: 18, fontWeight: '800', color: '#2D3436', marginBottom: 12 },
+    infoList: { gap: 10 },
+    infoItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8F9FA', borderRadius: 8, padding: 12, marginVertical: 4 },
+    infoContent: { marginLeft: 12, flex: 1 },
+    infoLabel: { fontSize: 12, color: '#636E72', marginBottom: 2 },
+    infoValue: { fontSize: 14, fontWeight: '700', color: '#2D3436' },
+    enhancedFeaturesContainer: { backgroundColor: '#FFF', marginHorizontal: 20, marginTop: 20, borderRadius: 24, padding: 20, elevation: 2 },
+    featureItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#F1F2F6' },
+    featureContent: { flex: 1, marginLeft: 15 },
+    featureTitle: { fontSize: 16, fontWeight: '800', color: '#2D3436' },
+    featureDescription: { fontSize: 12, color: '#636E72', marginTop: 2 },
+    learningProgressContainer: { backgroundColor: '#FFF', marginHorizontal: 20, marginTop: 20, borderRadius: 24, padding: 20, elevation: 2 },
+    progressCards: { flexDirection: 'row', gap: 15, marginTop: 15 },
+    progressCard: { flex: 1, backgroundColor: '#F8F9FA', borderRadius: 12, padding: 15, elevation: 2 },
+    progressTitle: { fontSize: 16, fontWeight: '800', color: '#2D3436', marginBottom: 15, textAlign: 'center' },
+    radarSection: { marginTop: 10, borderRadius: 24, padding: 12, alignItems: 'center', elevation: 2, flex: 1 },
+    sectionTitle: { fontSize: 16, fontWeight: '800', color: '#2D3436', alignSelf: 'flex-start', marginBottom: 10 },
+    segmentedControl: { flexDirection: 'row', backgroundColor: '#E2E8F0', marginHorizontal: 20, marginTop: 25, padding: 4, borderRadius: 16 },
+    segmentBtn: { flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: 'center' },
+    activeSegment: { backgroundColor: '#FFF', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
+    segmentText: { fontSize: 12, fontWeight: '800', color: '#64748B' },
+    activeSegmentText: { color: '#4CAF50' },
+    activityList: { marginHorizontal: 20, backgroundColor: '#FFF', borderRadius: 24, paddingHorizontal: 20, paddingVertical: 5, marginTop: 15, elevation: 2 },
+    activityCard: { flexDirection: 'row', alignItems: 'center', paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: '#F1F2F6' },
+    scrollContent: { paddingHorizontal: 20, paddingBottom: 20 },
     gameIconBg: { width: 42, height: 42, borderRadius: 12, backgroundColor: '#F8F9FA', justifyContent: 'center', alignItems: 'center' },
     activityName: { fontSize: 15, fontWeight: '800', color: '#2D3436' },
     row: { flexDirection: 'row', alignItems: 'center' },
@@ -2803,439 +2083,65 @@ const styles = StyleSheet.create({
     logoutBtn: { margin: 20, padding: 15, backgroundColor: '#FFF', borderRadius: 20, alignItems: 'center' },
     logoutText: { color: '#FF4757', fontWeight: '800' },
     emptyText: { textAlign: 'center', padding: 20, color: '#BDC3C7' },
-
-    // Settings styles
-    settingsContainer: {
-        backgroundColor: '#FFF',
-        marginHorizontal: 20,
-        marginTop: 20,
-        borderRadius: 24,
-        padding: 20,
-        elevation: 2,
-    },
-    settingItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 15,
-        borderBottomWidth: 1,
-        borderBottomColor: '#F1F2F6',
-    },
-    settingContent: {
-        flex: 1,
-        marginLeft: 15,
-    },
-    settingTitle: {
-        fontSize: 16,
-        fontWeight: '800',
-        color: '#2D3436',
-    },
-    settingDescription: {
-        fontSize: 12,
-        color: '#636E72',
-        marginTop: 2,
-    },
-
-    // Modal styles
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    modalContent: {
-        backgroundColor: '#FFF',
-        borderRadius: 24,
-        padding: 25,
-        width: '85%',
-        maxWidth: 400,
-    },
-    modalTitle: {
-        fontSize: 20,
-        fontWeight: '900',
-        color: '#2D3436',
-        marginBottom: 20,
-        textAlign: 'center',
-    },
-    inputContainer: {
-        marginBottom: 20,
-    },
-    passwordInput: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        borderRadius: 12,
-        backgroundColor: '#F8F9FA',
-        paddingHorizontal: 15,
-    },
-    modalButtons: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginTop: 10,
-    },
-    modalBtn: {
-        flex: 1,
-        padding: 15,
-        borderRadius: 12,
-        alignItems: 'center',
-        marginHorizontal: 5,
-    },
-    cancelBtn: {
-        backgroundColor: '#F8F9FA',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-    },
-    cancelBtnText: {
-        color: '#636E72',
-        fontWeight: '800',
-    },
-    confirmBtn: {
-        backgroundColor: '#4CAF50',
-    },
-    confirmBtnText: {
-        color: '#FFF',
-        fontWeight: '800',
-    },
-    loadingContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    errorContextText: {
-        fontSize: 14,
-        color: '#FF4757',
-        fontWeight: '600',
-        backgroundColor: '#FFF5F5',
-        padding: 12,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: '#FFB6B6',
-    },
-    // Items modal styles
-    itemCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 15,
-        borderBottomWidth: 1,
-        borderBottomColor: '#F1F2F6',
-    },
-    itemIcon: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: '#F8F9FA',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 15,
-    },
-    itemIconText: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#4CAF50',
-    },
-    itemInfo: {
-        flex: 1,
-    },
-    itemName: {
-        fontSize: 16,
-        fontWeight: '800',
-        color: '#2D3436',
-    },
-    itemType: {
-        fontSize: 12,
-        color: '#636E72',
-        marginTop: 2,
-    },
-    itemDescription: {
-        fontSize: 12,
-        color: '#A0A0A0',
-        marginTop: 4,
-    },
-    emptyItemsContainer: {
-        alignItems: 'center',
-        padding: 40,
-    },
-    emptyItemsText: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#636E72',
-    },
-    emptyItemsSubText: {
-        fontSize: 12,
-        color: '#A0A0A0',
-        marginTop: 5,
-    },
-    // Missions modal styles
-    missionCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 15,
-        borderBottomWidth: 1,
-        borderBottomColor: '#F1F2F6',
-    },
-    missionStatus: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 15,
-    },
-    missionStatusText: {
-        fontSize: 14,
-        fontWeight: 'bold',
-        color: '#FFF',
-    },
-    missionInfo: {
-        flex: 1,
-    },
-    missionName: {
-        fontSize: 16,
-        fontWeight: '800',
-        color: '#2D3436',
-    },
-    missionType: {
-        fontSize: 12,
-        color: '#636E72',
-        marginTop: 2,
-    },
-    missionDescription: {
-        fontSize: 12,
-        color: '#A0A0A0',
-        marginTop: 4,
-    },
-    missionMeta: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginTop: 8,
-    },
-    missionDifficulty: {
-        fontSize: 11,
-        fontWeight: '700',
-        color: '#FF9800',
-    },
-    missionScores: {
-        fontSize: 11,
-        fontWeight: '700',
-        color: '#4CAF50',
-    },
-    emptyMissionsContainer: {
-        alignItems: 'center',
-        padding: 40,
-    },
-    emptyMissionsText: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#636E72',
-    },
-    emptyMissionsSubText: {
-        fontSize: 12,
-        color: '#A0A0A0',
-        marginTop: 5,
-    },
-    viewAllRecordsBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: '#F8F9FA',
-        padding: 18,
-        borderRadius: 12,
-        borderWidth: 2,
-        borderColor: '#4CAF50',
-        marginVertical: 15,
-    },
-    viewAllRecordsText: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: '#4CAF50',
-        flex: 1,
-        textAlign: 'center',
-    },
-    // Enhanced Features styles
-    enhancedFeaturesContainer: {
-        backgroundColor: '#FFF',
-        marginHorizontal: 20,
-        marginTop: 20,
-        borderRadius: 24,
-        padding: 20,
-        elevation: 2,
-    },
-    featureItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 15,
-        borderBottomWidth: 1,
-        borderBottomColor: '#F1F2F6',
-    },
-    featureContent: {
-        flex: 1,
-        marginLeft: 15,
-    },
-    featureTitle: {
-        fontSize: 16,
-        fontWeight: '800',
-        color: '#2D3436',
-    },
-    featureDescription: {
-        fontSize: 12,
-        color: '#636E72',
-        marginTop: 2,
-    },
-    // Account Details Modal styles
-    accountDetailRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: '#F1F2F6',
-    },
-    // Account Info styles
-    accountInfoSection: {
-        backgroundColor: '#F8F9FA',
-        borderRadius: 12,
-        padding: 15,
-        marginBottom: 15,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-    },
-    accountInfoRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        paddingVertical: 8,
-        borderBottomWidth: 1,
-        borderBottomColor: '#F1F2F6',
-    },
-    accountInfoLabel: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#636E72',
-    },
-    accountInfoValue: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: '#2D3436',
-    },
-    // Learning Stats styles
-    statsCard: {
-        backgroundColor: '#F8F9FA',
-        borderRadius: 12,
-        padding: 15,
-        marginBottom: 10,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-    },
-    statsCardTitle: {
-        fontSize: 16,
-        fontWeight: '800',
-        color: '#2D3436',
-        marginBottom: 10,
-    },
-    statsRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: 8,
-    },
-    statsLabel: {
-        fontSize: 14,
-        color: '#636E72',
-    },
-    statsValue: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: '#2D3436',
-    },
-    // Equipment styles
-    equipmentGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'space-between',
-        marginBottom: 20,
-    },
-    equipmentItem: {
-        width: '48%',
-        backgroundColor: '#F8F9FA',
-        borderRadius: 12,
-        padding: 15,
-        marginBottom: 10,
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-    },
-    equipmentIcon: {
-        fontSize: 24,
-        marginBottom: 5,
-    },
-    equipmentName: {
-        fontSize: 12,
-        fontWeight: '700',
-        color: '#2D3436',
-        textAlign: 'center',
-    },
-    // Suggestions styles
-    suggestionCard: {
-        backgroundColor: '#FFF',
-        borderRadius: 12,
-        padding: 15,
-        marginBottom: 10,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    suggestionIcon: {
-        marginRight: 15,
-    },
-    suggestionContent: {
-        flex: 1,
-    },
-    suggestionTitle: {
-        fontSize: 14,
-        fontWeight: '800',
-        color: '#2D3436',
-        marginBottom: 2,
-    },
-    suggestionDescription: {
-        fontSize: 12,
-        color: '#636E72',
-        marginBottom: 5,
-    },
-    suggestionPriority: {
-        alignSelf: 'flex-start',
-    },
-    priorityText: {
-        fontSize: 10,
-        fontWeight: '700',
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 8,
-        backgroundColor: '#F0F0F0',
-    },
-    // Chart container styles
-    chartContainer: {
-        marginVertical: 10,
-        alignItems: 'center',
-    },
-    chartTitle: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: '#2D3436',
-        marginBottom: 5,
-        textAlign: 'center',
-    },
-    avatarSelector: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 10,
-        borderWidth: 1,
-        borderColor: '#DDD',
-        borderRadius: 8,
-        backgroundColor: '#F8F9FA',
-    },
-    changeAvatarText: {
-        marginLeft: 10,
-        fontSize: 14,
-        color: '#3498DB',
-        fontWeight: '500',
-    },
-
+    viewAllRecordsBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F8F9FA', padding: 18, borderRadius: 12, borderWidth: 2, borderColor: '#4CAF50', marginVertical: 15 },
+    viewAllRecordsText: { fontSize: 16, fontWeight: '700', color: '#4CAF50', flex: 1, textAlign: 'center' },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center' },
+    modalContent: { backgroundColor: '#FFF', borderRadius: 24, padding: 25, width: '85%', maxWidth: 400 },
+    modalTitle: { fontSize: 20, fontWeight: '900', color: '#2D3436', marginBottom: 20, textAlign: 'center' },
+    inputContainer: { marginBottom: 20 },
+    inputLabel: { fontSize: 14, fontWeight: '600', color: '#2D3436', marginBottom: 5 },
+    textInput: { backgroundColor: '#F8F9FA', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16, color: '#2D3436', borderWidth: 1, borderColor: '#E2E8F0' },
+    passwordInput: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, backgroundColor: '#F8F9FA', paddingHorizontal: 15 },
+    modalButtons: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
+    modalBtn: { flex: 1, padding: 15, borderRadius: 12, alignItems: 'center', marginHorizontal: 5 },
+    cancelBtn: { backgroundColor: '#F8F9FA', borderWidth: 1, borderColor: '#E2E8F0' },
+    cancelBtnText: { color: '#636E72', fontWeight: '800' },
+    confirmBtn: { backgroundColor: '#4CAF50' },
+    confirmBtnText: { color: '#FFF', fontWeight: '800' },
+    loadingContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+    errorContextText: { fontSize: 14, color: '#FF4757', fontWeight: '600', backgroundColor: '#FFF5F5', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#FFB6B6' },
+    itemCard: { flexDirection: 'row', alignItems: 'center', padding: 15, borderBottomWidth: 1, borderBottomColor: '#F1F2F6' },
+    itemIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F8F9FA', justifyContent: 'center', alignItems: 'center', marginRight: 15 },
+    itemIconText: { fontSize: 16, fontWeight: 'bold', color: '#4CAF50' },
+    itemInfo: { flex: 1 },
+    itemName: { fontSize: 16, fontWeight: '800', color: '#2D3436' },
+    itemType: { fontSize: 12, color: '#636E72', marginTop: 2 },
+    itemDescription: { fontSize: 12, color: '#A0A0A0', marginTop: 4 },
+    emptyItemsContainer: { alignItems: 'center', padding: 40 },
+    emptyItemsText: { fontSize: 16, fontWeight: 'bold', color: '#636E72' },
+    emptyItemsSubText: { fontSize: 12, color: '#A0A0A0', marginTop: 5 },
+    missionCard: { flexDirection: 'row', alignItems: 'center', padding: 15, borderBottomWidth: 1, borderBottomColor: '#F1F2F6' },
+    missionStatus: { width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
+    missionStatusText: { fontSize: 14, fontWeight: 'bold', color: '#FFF' },
+    missionInfo: { flex: 1 },
+    missionName: { fontSize: 16, fontWeight: '800', color: '#2D3436' },
+    missionType: { fontSize: 12, color: '#636E72', marginTop: 2 },
+    missionDescription: { fontSize: 12, color: '#A0A0A0', marginTop: 4 },
+    missionMeta: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
+    missionDifficulty: { fontSize: 11, fontWeight: '700', color: '#FF9800' },
+    missionScores: { fontSize: 11, fontWeight: '700', color: '#4CAF50' },
+    emptyMissionsContainer: { alignItems: 'center', padding: 40 },
+    emptyMissionsText: { fontSize: 16, fontWeight: 'bold', color: '#636E72' },
+    emptyMissionsSubText: { fontSize: 12, color: '#A0A0A0', marginTop: 5 },
+    statsCard: { backgroundColor: '#F8F9FA', borderRadius: 12, padding: 15, marginBottom: 10, borderWidth: 1, borderColor: '#E2E8F0' },
+    statsCardTitle: { fontSize: 16, fontWeight: '800', color: '#2D3436', marginBottom: 10 },
+    statsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+    statsLabel: { fontSize: 14, color: '#636E72' },
+    statsValue: { fontSize: 14, fontWeight: '700', color: '#2D3436' },
+    equipmentGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 20 },
+    equipmentItem: { width: '48%', backgroundColor: '#F8F9FA', borderRadius: 12, padding: 15, marginBottom: 10, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
+    equipmentIcon: { fontSize: 24, marginBottom: 5 },
+    equipmentName: { fontSize: 12, fontWeight: '700', color: '#2D3436', textAlign: 'center' },
+    suggestionCard: { backgroundColor: '#FFF', borderRadius: 12, padding: 15, marginBottom: 10, borderWidth: 1, borderColor: '#E2E8F0', flexDirection: 'row', alignItems: 'center' },
+    suggestionIcon: { marginRight: 15 },
+    suggestionContent: { flex: 1 },
+    suggestionTitle: { fontSize: 14, fontWeight: '800', color: '#2D3436', marginBottom: 2 },
+    suggestionDescription: { fontSize: 12, color: '#636E72', marginBottom: 5 },
+    suggestionPriority: { alignSelf: 'flex-start' },
+    priorityText: { fontSize: 10, fontWeight: '700', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, backgroundColor: '#F0F0F0' },
+    chartContainer: { marginVertical: 10, alignItems: 'center' },
+    chartTitle: { fontSize: 14, fontWeight: '700', color: '#2D3436', marginBottom: 5, textAlign: 'center' },
+    editSection: { marginBottom: 20 },
+    editSectionTitle: { fontSize: 16, fontWeight: '800', color: '#2D3436', marginBottom: 12 },
+    inputGroup: { marginBottom: 15 },
 });
