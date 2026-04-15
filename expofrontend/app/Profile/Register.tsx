@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
     View,
     Text,
@@ -9,11 +9,12 @@ import {
     ScrollView,
     SafeAreaView,
     KeyboardAvoidingView,
-    Platform
+    Platform,
+    Animated
 } from "react-native";
 import { router } from "expo-router";
 import axios from "axios";
-import { User, Lock, Mail, GraduationCap } from "lucide-react-native";
+import { User, Lock, Mail, GraduationCap, Sparkles } from "lucide-react-native";
 import { getApiBaseUrl } from "../../src/api/client";
 import { TeacherRegistrationStorage } from "../../src/utils/teacherRegistrationStorage";
 
@@ -27,23 +28,46 @@ export default function Register() {
     const [userType, setUserType] = useState<"student" | "teacher">("student");
     const [schoolName, setSchoolName] = useState("");
     const [teacherReason, setTeacherReason] = useState("");
+    
+    // Animation values
+    const logoScale = useRef(new Animated.Value(1)).current;
+    
+    useEffect(() => {
+        const pulseAnimation = Animated.sequence([
+            Animated.timing(logoScale, {
+                toValue: 1.05,
+                duration: 1000,
+                useNativeDriver: true,
+            }),
+            Animated.timing(logoScale, {
+                toValue: 1,
+                duration: 1000,
+                useNativeDriver: true,
+            }),
+        ]);
+        
+        const loopAnimation = Animated.loop(pulseAnimation);
+        loopAnimation.start();
+        
+        return () => loopAnimation.stop();
+    }, []);
 
     const handleRegister = async () => {
         setErrorMsg(null);
 
-        // 檢查欄位是否填齊
+        // Check if all fields are filled
         if (!username || !email || !password || !confirmPassword) {
             setErrorMsg("Please fill in all fields");
             return;
         }
 
-        // 改為檢查密碼是否一致
+        // Check if passwords match
         if (password !== confirmPassword) {
             setErrorMsg("Passwords do not match");
             return;
         }
 
-        // 檢查密碼長度 (後端要求最少8個字符)
+        // Check password length (backend requires minimum 8 characters)
         if (password.length < 8) {
             setErrorMsg("Password must be at least 8 characters long");
             return;
@@ -110,8 +134,13 @@ export default function Register() {
             >
                 <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
                     <View style={styles.header}>
-                        <Text style={styles.title}>Join Us</Text>
-                        <Text style={styles.subtitle}>Create an account to start your journey</Text>
+                        <Animated.View style={[styles.logoCircle, { transform: [{ scale: logoScale }] }]}>
+                            <View style={styles.logoIcon}>
+                                <Sparkles size={24} color="white" fill="white" />
+                            </View>
+                        </Animated.View>
+                        <Text style={styles.title}>Create Account</Text>
+                        <Text style={styles.subtitle}>Join EduQuest today</Text>
                     </View>
 
                     <View style={styles.card}>
@@ -123,7 +152,7 @@ export default function Register() {
                                     style={[styles.userTypeButton, userType === "student" && styles.userTypeButtonActive]}
                                     onPress={() => setUserType("student")}
                                 >
-                                    <User size={20} color={userType === "student" ? "#FFF" : "#888"} />
+                                    <User size={20} color={userType === "student" ? "#FFF" : "#64748B"} />
                                     <Text style={[styles.userTypeButtonText, userType === "student" && styles.userTypeButtonTextActive]}>
                                         Student
                                     </Text>
@@ -132,7 +161,7 @@ export default function Register() {
                                     style={[styles.userTypeButton, userType === "teacher" && styles.userTypeButtonActive]}
                                     onPress={() => setUserType("teacher")}
                                 >
-                                    <GraduationCap size={20} color={userType === "teacher" ? "#FFF" : "#888"} />
+                                    <GraduationCap size={20} color={userType === "teacher" ? "#FFF" : "#64748B"} />
                                     <Text style={[styles.userTypeButtonText, userType === "teacher" && styles.userTypeButtonTextActive]}>
                                         Teacher
                                     </Text>
@@ -142,20 +171,24 @@ export default function Register() {
 
                         {/* Username Input */}
                         <View style={styles.inputWrapper}>
-                            <User size={20} color="#888" style={styles.icon} />
+                            <View style={styles.iconContainer}>
+                                <User size={20} color="#64748B" />
+                            </View>
                             <TextInput
                                 style={styles.input}
                                 placeholder="Username"
                                 value={username}
                                 onChangeText={(t) => { setUsername(t); setErrorMsg(null); }}
                                 autoCapitalize="none"
-                                placeholderTextColor="#AAA"
+                                placeholderTextColor="#94A3B8"
                             />
                         </View>
 
                         {/* Email Input */}
                         <View style={styles.inputWrapper}>
-                            <Mail size={20} color="#888" style={styles.icon} />
+                            <View style={styles.iconContainer}>
+                                <Mail size={20} color="#64748B" />
+                            </View>
                             <TextInput
                                 style={styles.input}
                                 placeholder="Email"
@@ -163,33 +196,37 @@ export default function Register() {
                                 onChangeText={(t) => { setEmail(t); setErrorMsg(null); }}
                                 keyboardType="email-address"
                                 autoCapitalize="none"
-                                placeholderTextColor="#AAA"
+                                placeholderTextColor="#94A3B8"
                             />
                         </View>
 
                         {/* Password Input */}
                         <View style={styles.inputWrapper}>
-                            <Lock size={20} color="#888" style={styles.icon} />
+                            <View style={styles.iconContainer}>
+                                <Lock size={20} color="#64748B" />
+                            </View>
                             <TextInput
                                 style={styles.input}
                                 placeholder="Password (min 8 characters)"
                                 value={password}
                                 onChangeText={(t) => { setPassword(t); setErrorMsg(null); }}
                                 secureTextEntry
-                                placeholderTextColor="#AAA"
+                                placeholderTextColor="#94A3B8"
                             />
                         </View>
 
                         {/* Confirm Password Input */}
                         <View style={styles.inputWrapper}>
-                            <Lock size={20} color="#888" style={styles.icon} />
+                            <View style={styles.iconContainer}>
+                                <Lock size={20} color="#64748B" />
+                            </View>
                             <TextInput
                                 style={styles.input}
                                 placeholder="Confirm Password"
                                 value={confirmPassword}
                                 onChangeText={(t) => { setConfirmPassword(t); setErrorMsg(null); }}
                                 secureTextEntry
-                                placeholderTextColor="#AAA"
+                                placeholderTextColor="#94A3B8"
                             />
                         </View>
 
@@ -197,18 +234,22 @@ export default function Register() {
                         {userType === "teacher" && (
                             <>
                                 <View style={styles.inputWrapper}>
-                                    <GraduationCap size={20} color="#888" style={styles.icon} />
+                                    <View style={styles.iconContainer}>
+                                        <GraduationCap size={20} color="#64748B" />
+                                    </View>
                                     <TextInput
                                         style={styles.input}
                                         placeholder="School Name"
                                         value={schoolName}
                                         onChangeText={(t) => { setSchoolName(t); setErrorMsg(null); }}
-                                        placeholderTextColor="#AAA"
+                                        placeholderTextColor="#94A3B8"
                                     />
                                 </View>
 
                                 <View style={styles.inputWrapper}>
-                                    <User size={20} color="#888" style={styles.icon} />
+                                    <View style={styles.iconContainer}>
+                                        <User size={20} color="#64748B" />
+                                    </View>
                                     <TextInput
                                         style={[styles.input, styles.textArea]}
                                         placeholder="Why do you want to become a teacher?"
@@ -216,7 +257,7 @@ export default function Register() {
                                         onChangeText={(t) => { setTeacherReason(t); setErrorMsg(null); }}
                                         multiline
                                         numberOfLines={3}
-                                        placeholderTextColor="#AAA"
+                                        placeholderTextColor="#94A3B8"
                                     />
                                 </View>
                             </>
@@ -229,15 +270,19 @@ export default function Register() {
                             onPress={handleRegister}
                             disabled={loading}
                         >
-                            {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.registerText}>
-                                {userType === "teacher" ? "Submit Teacher Request" : "Create Account"}
-                            </Text>}
+                            {loading ? (
+                                <ActivityIndicator color="#FFF" size="large" />
+                            ) : (
+                                <Text style={styles.registerText}>
+                                    {userType === "teacher" ? "Submit Teacher Request" : "Create Account"}
+                                </Text>
+                            )}
                         </TouchableOpacity>
                     </View>
 
                     <TouchableOpacity onPress={() => router.push("/Profile/Login")}>
                         <Text style={styles.loginLink}>
-                            Already have an account? <Text style={{ color: '#4CAF50', fontWeight: '800' }}>Login</Text>
+                            Already have an account? <Text style={styles.loginLinkText}>Sign In</Text>
                         </Text>
                     </TouchableOpacity>
                 </ScrollView>
@@ -247,38 +292,149 @@ export default function Register() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: "#F7F9FB" },
+    container: { flex: 1, backgroundColor: '#F8F9FA' },
     scrollContent: { padding: 30, justifyContent: "center", flexGrow: 1 },
     header: { marginBottom: 30, alignItems: 'center' },
-    title: { fontSize: 32, fontWeight: "800", color: "#2D3436" },
-    subtitle: { fontSize: 16, color: "#636E72", marginTop: 5, textAlign: 'center' },
-    card: { backgroundColor: "#FFF", borderRadius: 24, padding: 25, shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
+    logoCircle: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: '#4CAF50',
+        justifyContent: "center",
+        alignItems: "center",
+        marginBottom: 20,
+    },
+    logoIcon: {
+        width: 32,
+        height: 32,
+        backgroundColor: '#4CAF50',
+        borderRadius: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    title: { 
+        fontSize: 28, 
+        fontWeight: "800", 
+        color: '#4CAF50',
+        marginBottom: 8
+    },
+    subtitle: { 
+        fontSize: 16, 
+        color: '#64748B', 
+        fontWeight: "500"
+    },
+    card: { 
+        backgroundColor: "white", 
+        borderRadius: 16, 
+        padding: 24, 
+        shadowColor: "#000", 
+        shadowOpacity: 0.1, 
+        shadowRadius: 4, 
+        elevation: 3,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
 
     // User Type Selection Styles
-    userTypeContainer: { marginBottom: 20 },
-    userTypeLabel: { fontSize: 16, fontWeight: "600", color: "#2D3436", marginBottom: 10 },
-    userTypeButtons: { flexDirection: "row", gap: 10 },
+    userTypeContainer: { marginBottom: 24 },
+    userTypeLabel: { 
+        fontSize: 16, 
+        fontWeight: "700", 
+        color: '#1E293B', 
+        marginBottom: 12,
+        textAlign: "center"
+    },
+    userTypeButtons: { flexDirection: "row", gap: 12 },
     userTypeButton: {
         flex: 1,
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: "#F1F3F5",
+        backgroundColor: '#F8FAFC',
         padding: 12,
         borderRadius: 12,
-        borderWidth: 2,
-        borderColor: "transparent"
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        height: 56
     },
-    userTypeButtonActive: { backgroundColor: "#4CAF50", borderColor: "#4CAF50" },
-    userTypeButtonText: { fontSize: 14, fontWeight: "600", color: "#888", marginLeft: 8 },
-    userTypeButtonTextActive: { color: "#FFF" },
+    userTypeButtonActive: { 
+        backgroundColor: '#4CAF50', 
+        borderColor: '#4CAF50'
+    },
+    userTypeButtonText: { 
+        fontSize: 14, 
+        fontWeight: "600", 
+        color: "#64748B", 
+        marginLeft: 8 
+    },
+    userTypeButtonTextActive: { 
+        color: "#FFF",
+        fontWeight: "700"
+    },
 
-    inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F3F5', borderRadius: 12, marginBottom: 15, paddingHorizontal: 15 },
-    icon: { marginRight: 10 },
-    input: { flex: 1, paddingVertical: 14, fontSize: 16, color: '#2D3436' },
-    textArea: { height: 80, textAlignVertical: 'top' },
-    registerBtn: { backgroundColor: "#4CAF50", paddingVertical: 16, borderRadius: 12, marginTop: 10 },
-    registerText: { color: "#FFF", fontWeight: "700", textAlign: "center", fontSize: 18 },
-    errorText: { color: "#FF5252", textAlign: "center", marginVertical: 10, fontWeight: "600" },
-    loginLink: { marginTop: 25, textAlign: "center", color: "#636E72", fontSize: 15, fontWeight: '600' }
+    inputWrapper: { 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        backgroundColor: '#F8FAFC', 
+        borderRadius: 12, 
+        marginBottom: 16, 
+        paddingHorizontal: 16,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        height: 56
+    },
+    iconContainer: {
+        width: 32,
+        height: 32,
+        borderRadius: 8,
+        backgroundColor: "#F8FAFC",
+        justifyContent: "center",
+        alignItems: "center",
+        marginRight: 12,
+    },
+    input: { 
+        flex: 1, 
+        paddingVertical: 12, 
+        fontSize: 16, 
+        color: '#1E293B',
+        fontWeight: "500"
+    },
+    textArea: { 
+        height: 80, 
+        textAlignVertical: 'top',
+        paddingTop: 12
+    },
+    registerBtn: { 
+        backgroundColor: '#4CAF50', 
+        paddingVertical: 14, 
+        borderRadius: 12, 
+        marginTop: 8
+    },
+    registerText: { 
+        color: "#FFF", 
+        fontWeight: "700", 
+        textAlign: "center", 
+        fontSize: 16
+    },
+    errorText: { 
+        color: '#EF4444', 
+        textAlign: "center", 
+        marginVertical: 12, 
+        fontWeight: "600",
+        fontSize: 14,
+        backgroundColor: '#FEF2F2',
+        padding: 8,
+        borderRadius: 8
+    },
+    loginLink: { 
+        marginTop: 24, 
+        textAlign: "center", 
+        color: '#64748B', 
+        fontSize: 14, 
+        fontWeight: '500' 
+    },
+    loginLinkText: {
+        color: '#4CAF50',
+        fontWeight: '700'
+    }
 });
