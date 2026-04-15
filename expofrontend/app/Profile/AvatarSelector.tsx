@@ -4,8 +4,7 @@ import { AvatarIcons } from './AvatarIcons';
 
 // 扩展 avatarOptions，包含商城可购买的四种头像
 export const avatarOptions = [
-    { id: 'default', name: 'Default', color: '#636E72' },
-    { id: 'happy_cat', name: 'Happy Cat', color: '#FFD93D' },
+        { id: 'happy_cat', name: 'Happy Cat', color: '#FFD93D' },
     { id: 'cool_dog', name: 'Cool Dog', color: '#4ECDC4' },
     { id: 'smart_owl', name: 'Smart Owl', color: '#9B59B6' },
     { id: 'sporty_rabbit', name: 'Sporty Rabbit', color: '#FF6B6B' },
@@ -27,17 +26,13 @@ export const avatarOptions = [
     // 新增商城可购买的头像
     { id: 'cool_hat', name: 'Cool Hat', color: '#4B0082' },
     { id: 'superhero_cape', name: 'Superhero Cape', color: '#DC143C' },
-    { id: 'science_glasses', name: 'Science Glasses', color: '#4169E1' },
-    { id: 'sports_jersey', name: 'Sports Jersey', color: '#FF6B6B' },
 ];
 
 // 图标名映射表：后端 icon 字段 -> avatarOptions 中的 id
 const iconNameMapping: Record<string, string> = {
     'Hat': 'cool_hat',
     'Cape': 'superhero_cape',
-    'Glasses': 'science_glasses',
-    'Jersey': 'sports_jersey',
-};
+        };
 
 // Function to render avatar based on selection
 export const renderAvatar = (avatarId: string, size: number = 50) => {
@@ -79,7 +74,7 @@ export const AvatarSelector: React.FC<AvatarSelectorProps> = ({
                                                                   onGoToShop
                                                               }) => {
     // 1. 始终包含默认头像
-    const ownedAvatarIds: string[] = ['default'];
+    const ownedAvatarIds: string[] = [];
 
     console.log('=== AvatarSelector Debug ===');
     console.log('Raw userItems:', JSON.stringify(userItems, null, 2));

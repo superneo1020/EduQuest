@@ -445,7 +445,17 @@ export const AvatarIcons = {
         </Svg>
     ),
 
-    'sports_jersey': ({ size = 50, color = '#FF6B6B' }) => (
+    // Database icon name mappings for BADGE items
+    'ScienceGlasses': ({ size = 50, color = '#4169E1' }) => (
+        <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
+            <Circle cx="50" cy="50" r="40" fill={color} />
+            <Circle cx="35" cy="50" r="12" stroke="#87CEEB" strokeWidth="3" fill="none" />
+            <Circle cx="65" cy="50" r="12" stroke="#87CEEB" strokeWidth="3" fill="none" />
+            <Path d="M 47 50 L 53 50" stroke="#87CEEB" strokeWidth="3" />
+        </Svg>
+    ),
+
+    'SportsJersey': ({ size = 50, color = '#FF6B6B' }) => (
         <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
             <Circle cx="50" cy="50" r="40" fill={color} />
             <Path d="M 30 35 L 70 35 L 75 50 L 65 50 L 65 70 L 35 70 L 35 50 L 25 50 Z" fill="#FFF" />
@@ -455,12 +465,5 @@ export const AvatarIcons = {
         </Svg>
     ),
 
-    'science_glasses': ({ size = 50, color = '#4169E1' }) => (
-        <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
-            <Circle cx="50" cy="50" r="40" fill={color} />
-            <Circle cx="35" cy="50" r="12" stroke="#87CEEB" strokeWidth="3" fill="none" />
-            <Circle cx="65" cy="50" r="12" stroke="#87CEEB" strokeWidth="3" fill="none" />
-            <Path d="M 47 50 L 53 50" stroke="#87CEEB" strokeWidth="3" />
-        </Svg>
-    )
-};
+    
+    };
