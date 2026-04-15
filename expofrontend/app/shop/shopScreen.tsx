@@ -9,13 +9,20 @@ import { ShoppingBag, Coins, Package, CheckCircle2, AlertCircle, Star, Sparkles,
 import { getApiBaseUrl } from '@/src/api/client';
 import { useAuth } from '@/src/auth/AuthContext';
 import AvatarIconRenderer from '@/components/AvatarIconRenderer';
+import { BackgroundIcons } from '@/app/Profile/BackgroundIcons';
+import { BadgeIcons } from '@/app/Profile/BadgeIcons';
 // Import all item images
 // Create image mapping for dynamic loading with proper types
-const itemImages: { [key: string]: any } = {
-    'cool_hat.png': require('../../assets/images/item/cool_hat.png'),
-    'superhero_cape.png': require('../../assets/images/item/superhero_cape.png'),
-    'science_glasses.png': require('../../assets/images/item/science_glasses.png'),
-    'sports_jersey.png': require('../../assets/images/item/sports_jersey.png'),
+
+// Helper functions to render icons properly
+const renderBackgroundIcon = (iconName: string, size: number) => {
+    const BackgroundComponent = (BackgroundIcons as any)[iconName] || BackgroundIcons.default;
+    return <BackgroundComponent size={size} />;
+};
+
+const renderBadgeIcon = (iconName: string, size: number) => {
+    const BadgeComponent = (BadgeIcons as any)[iconName] || BadgeIcons.default;
+    return <BadgeComponent size={size} color="#FFF" />;
 };
 
 const { width } = Dimensions.get('window');
@@ -280,14 +287,12 @@ export default function ShopScreen() {
                                             size={50} 
                                             color="#FFF" 
                                         />
-                                    ) : item.icon ? (
+                                    ) : item.type === 'BACKGROUND' ? renderBackgroundIcon(item.icon, 50)
+                                    : item.type === 'BADGE' ? renderBadgeIcon(item.icon, 40)
+                                    : item.icon ? (
                                         <>
-                                            {console.log('Debug - Item:', item.name, 'Icon:', item.icon)}
-                                            <Image
-                                                source={itemImages[item.icon] || itemImages['cool_hat.png']}
-                                                style={styles.itemImage}
-                                                resizeMode="contain"
-                                            />
+                                            {console.log('Debug - Item:', item.name, 'Type:', item.type, 'Icon:', item.icon)}
+                                            <Package size={32} color="#FFF" strokeWidth={2} />
                                         </>
                                     ) : (
                                         <Package size={32} color="#FFF" strokeWidth={2} />
