@@ -11,7 +11,8 @@ import {
     Animated,
     Dimensions,
     Platform,
-    StatusBar
+    StatusBar,
+    Modal
 } from 'react-native';
 import { Calculator, Languages, Atom, Brain, LogOut, User, Trophy, Clock, Target, Sparkles, Star, Zap, GraduationCap, Rocket, ShoppingCart } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
@@ -21,10 +22,30 @@ import {Bot} from "lucide-react-native/icons";
 
 export default function LandscapeOptimizedHome() {
     const router = useRouter();
+    const [showLogoutModal, setShowLogoutModal] = useState(false);
     const { width, height } = useWindowDimensions();
 
 
     const { token, loading, signOut, user } = useAuth();
+
+    // 替換現有的 onPress 邏輯
+    const handleLogout = () => {
+        setShowLogoutModal(true);
+    };
+
+    const handleConfirmLogout = async () => {
+        try {
+            await signOut();
+            router.replace('/Profile/Login');
+        } catch (error) {
+            console.error("Logout Error:", error);
+        }
+        setShowLogoutModal(false);
+    };
+
+    const handleCancelLogout = () => {
+        setShowLogoutModal(false);
+    };
 
     useEffect(() => {
 
@@ -101,17 +122,10 @@ export default function LandscapeOptimizedHome() {
 
                     <TouchableOpacity
                         style={styles.logoutBtn}
-                        onPress={async () => {
-                            try {
-                                await signOut();
-                                router.replace('/Profile/Login');
-                            } catch (error) {
-                                console.error("Logout Error:", error);
-                            }
-                        }}
+                        onPress={handleLogout}
                     >
                         <LogOut size={22} color="#FF4757" />
-                        <Text style={styles.logoutText}>Exit</Text>
+                        <Text style={styles.logoutText}>Logout</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -199,6 +213,34 @@ export default function LandscapeOptimizedHome() {
                     </TouchableOpacity>
                 </View>
             </View>
+            {/* Logout Confirmation Modal */}
+            <Modal
+                visible={showLogoutModal}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={handleCancelLogout}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.confirmModal}>
+                        <Text style={styles.confirmTitle}>Logout</Text>
+                        <Text style={styles.confirmMessage}>Are you sure you want to logout?</Text>
+                        <View style={styles.confirmButtons}>
+                            <TouchableOpacity
+                                style={[styles.confirmButton, styles.cancelButton]}
+                                onPress={handleCancelLogout}
+                            >
+                                <Text style={styles.cancelButtonText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.confirmButton, styles.logoutButton]}
+                                onPress={handleConfirmLogout}
+                            >
+                                <Text style={styles.logoutButtonText}>Logout</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -472,5 +514,58 @@ const styles = StyleSheet.create({
         marginTop: 10,
         fontSize: 18,
         color: '#666',
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    confirmModal: {
+        backgroundColor: 'white',
+        borderRadius: 16,
+        padding: 24,
+        width: '80%',
+        maxWidth: 300,
+        alignItems: 'center',
+    },
+    confirmTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#2D3436',
+        marginBottom: 12,
+    },
+    confirmMessage: {
+        fontSize: 16,
+        color: '#666',
+        textAlign: 'center',
+        marginBottom: 24,
+    },
+    confirmButtons: {
+        flexDirection: 'row',
+        width: '100%',
+        gap: 12,
+    },
+    confirmButton: {
+        flex: 1,
+        paddingVertical: 12,
+        borderRadius: 8,
+        alignItems: 'center',
+    },
+    cancelButton: {
+        backgroundColor: '#F0F0F0',
+    },
+    logoutButton: {
+        backgroundColor: '#FF4757',
+    },
+    cancelButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#666',
+    },
+    logoutButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: 'white',
     }
 });
