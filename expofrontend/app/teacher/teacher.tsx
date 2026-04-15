@@ -44,7 +44,8 @@ import {
     X,
     Plus,
     LogOut,
-    User, Trophy,
+    User,
+    Trophy,
     Gamepad2,
 } from 'lucide-react-native';
 import { ClassManagementPanel } from './ClassManagementPanel';
@@ -102,13 +103,11 @@ export default function TeacherDashboard() {
     const [classes, setClasses] = useState<Course[]>([]);
     const [metadataModalVisible, setMetadataModalVisible] = useState(false);
 
-    // Navigation state
-    type TeacherView = 'dashboard' | 'students' | 'classes' | 'analytics' | 'studentLeaderboard';
+    // Navigation state (移除 studentLeaderboard)
+    type TeacherView = 'dashboard' | 'students' | 'classes' | 'analytics';
     const [currentView, setCurrentView] = useState<TeacherView>('dashboard');
     const [selectedClass, setSelectedClass] = useState<Course | null>(null);
-    
-    // Preserve the full type for tab navigation to avoid TypeScript narrowing
-    const currentViewForTabs: TeacherView = currentView;
+
     const isLandscape = windowWidth > 800;
     const isTablet = windowWidth > 600;
 
@@ -116,27 +115,25 @@ export default function TeacherDashboard() {
         loadData();
     }, []);
 
-    // Navigation state updates - move router.push calls here
-    useEffect(() => {
-        if (currentView === 'studentLeaderboard') {
-            router.push('/teacher/studentLeaderboard');
-        }
-    }, [currentView, router]);
-
-    // 在 TeacherDashboard.tsx 中修改 loadData 函數
+    // 移除之前错误的 useEffect 导航副作用
 
     const loadData = async () => {
         try {
             setLoading(true);
 
-            // Load classes from backend - 提取 items 數組
+            if (!token) {
+                console.log('TeacherDashboard - No authentication token');
+                setLoading(false);
+                return;
+            }
+
+            // Load classes from backend
             const classesResponse = await educatorService.getClasses();
-            // 從 DetailedListResponse 中提取 items 數組
             const classesData = classesResponse.items || [];
             setClasses(classesData);
             console.log('Loaded classes:', classesData.length);
 
-            // Load school members - 如果失敗，使用空陣列而不是拋出錯誤
+            // Load school members
             try {
                 const membersData = await educatorService.getSchoolMembers();
                 console.log('Loaded school members:', membersData.length);
@@ -154,8 +151,15 @@ export default function TeacherDashboard() {
             setLoading(false);
         }
     };
+
     const loadStudents = async () => {
         try {
+            if (!token) {
+                console.log('TeacherDashboard - No token available, skipping student load');
+                setStudents([]);
+                setFilteredStudents([]);
+                return;
+            }
             // Load real students from API
             const response = await axios.get(`${getApiBaseUrl()}/api/educator/school/members`, {
                 headers: { Authorization: `Bearer ${token}` }
@@ -171,19 +175,19 @@ export default function TeacherDashboard() {
                     joinDate: member.createdAt ? new Date(member.createdAt).toISOString().split('T')[0] : 'Unknown',
                     lastActive: member.lastActiveAt ? new Date(member.lastActiveAt).toISOString().split('T')[0] : 'Unknown',
                     gameProgress: {
-                        math: member.mathProgress || 0,     // These fields don't exist
+                        math: member.mathProgress || 0,
                         english: member.englishProgress || 0,
                         science: member.scienceProgress || 0,
                         chinese: member.chineseProgress || 0
                     },
-                    performance: { 
-                        averageScore: member.averageScore || 0, 
-                        totalTimeSpent: member.totalTimeSpent || 0, 
-                        completedQuests: member.completedQuests || 0, 
-                        accuracy: member.accuracy || 0 
+                    performance: {
+                        averageScore: member.averageScore || 0,
+                        totalTimeSpent: member.totalTimeSpent || 0,
+                        completedQuests: member.completedQuests || 0,
+                        accuracy: member.accuracy || 0
                     },
                 }));
-                
+
                 // Enhance student data with progress analytics
                 const studentsWithProgress = await Promise.all(
                     studentsData.map(async (student) => {
@@ -206,7 +210,7 @@ export default function TeacherDashboard() {
                         }
                     })
                 );
-                
+
                 setStudents(studentsWithProgress);
                 setFilteredStudents(studentsWithProgress);
             } else {
@@ -216,24 +220,17 @@ export default function TeacherDashboard() {
         } catch (error: any) {
             console.error('TeacherDashboard - Error loading students:', error.response?.status, error.response?.data || error.message);
             if (error.response?.status === 401) {
-                console.error('TeacherDashboard - Authentication failed for school members - token may be invalid or expired');
-                Alert.alert(
-                    'Authentication Required',
-                    'Your session has expired. Please log in again.',
-                    [
-                        { text: 'Cancel', style: 'cancel' },
-                        { text: 'Log In', onPress: () => signOut() }
-                    ]
-                );
+                console.error('TeacherDashboard - Authentication failed - token may be invalid');
+                setStudents([]);
+                setFilteredStudents([]);
+                // 强制登出并跳转登录页
+                signOut();
+                router.replace('/Profile/Login');
+                return;
             }
-            // Set empty array on error to avoid showing mock data
-            setStudents([]);
-            setFilteredStudents([]);
+            throw error;
         }
     };
-    
-
-
 
     const onRefresh = useCallback(() => {
         setRefreshing(true);
@@ -253,6 +250,11 @@ export default function TeacherDashboard() {
     const handleBackToClasses = () => {
         setCurrentView('classes');
         setSelectedClass(null);
+    };
+
+    // 新增：跳转至独立 Leaderboard 页面
+    const navigateToLeaderboard = () => {
+        router.push('/teacher/studentLeaderboard');
     };
 
     useEffect(() => {
@@ -379,7 +381,7 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
                             await axios.delete(`${getApiBaseUrl()}/api/admin/user/${studentId}`, {
                                 headers: { Authorization: `Bearer ${token}` }
                             });
-                            
+
                             setStudents(students.filter(s => s.id !== studentId));
                             setFilteredStudents(filteredStudents.filter(s => s.id !== studentId));
                             Alert.alert('Success', 'Student removed successfully');
@@ -404,7 +406,7 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
             }, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            
+
             setStudents(students.map(s =>
                 s.id === updatedStudent.id ? updatedStudent : s
             ));
@@ -480,7 +482,6 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
         setShowLogoutModal(false);
     };
 
-
     const handleViewMetadata = (student: Student) => {
         setSelectedStudent(student);
         setMetadataModalVisible(true);
@@ -531,10 +532,6 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
         );
     }
 
-    if (currentView === 'studentLeaderboard') {
-        return null;
-    }
-
     return (
         <SafeAreaView style={styles.container}>
             <ScrollView
@@ -565,22 +562,29 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
 
                 {/* Navigation Tabs */}
                 <View style={styles.tabContainer}>
-                    {(['dashboard', 'students', 'classes', 'analytics', 'studentLeaderboard'] as TeacherView[]).map((tab) => (
+                    {(['dashboard', 'students', 'classes', 'analytics'] as TeacherView[]).map((tab) => (
                         <TouchableOpacity
                             key={tab}
-                            style={[styles.tab, currentViewForTabs === tab && styles.tabActive]}
+                            style={[styles.tab, currentView === tab && styles.tabActive]}
                             onPress={() => setCurrentView(tab)}
                         >
-                            {tab === 'dashboard' && <TrendingUp size={18} color={currentViewForTabs === tab ? '#6C5CE7' : '#666'} />}
-                            {tab === 'students' && <Users size={18} color={currentViewForTabs === tab ? '#6C5CE7' : '#666'} />}
-                            {tab === 'classes' && <BookOpen size={18} color={currentViewForTabs === tab ? '#6C5CE7' : '#666'} />}
-                            {tab === 'analytics' && <BarChart3 size={18} color={currentViewForTabs === tab ? '#6C5CE7' : '#666'} />}
-                            {tab === 'studentLeaderboard' && <Award size={18} color={currentViewForTabs === tab ? '#6C5CE7' : '#666'} />}
-                            <Text style={[styles.tabText, currentViewForTabs === tab && styles.tabTextActive]}>
+                            {tab === 'dashboard' && <TrendingUp size={18} color={currentView === tab ? '#6C5CE7' : '#666'} />}
+                            {tab === 'students' && <Users size={18} color={currentView === tab ? '#6C5CE7' : '#666'} />}
+                            {tab === 'classes' && <BookOpen size={18} color={currentView === tab ? '#6C5CE7' : '#666'} />}
+                            {tab === 'analytics' && <BarChart3 size={18} color={currentView === tab ? '#6C5CE7' : '#666'} />}
+                            <Text style={[styles.tabText, currentView === tab && styles.tabTextActive]}>
                                 {tab.charAt(0).toUpperCase() + tab.slice(1)}
                             </Text>
                         </TouchableOpacity>
                     ))}
+                    {/* 独立 Leaderboard 标签按钮 */}
+                    <TouchableOpacity
+                        style={styles.tab}
+                        onPress={navigateToLeaderboard}
+                    >
+                        <Award size={18} color="#666" />
+                        <Text style={styles.tabText}>Leaderboard</Text>
+                    </TouchableOpacity>
                 </View>
 
                 {/* Dashboard View */}
@@ -619,8 +623,6 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
                                 <Text style={styles.quickActionSubtitle}>View performance</Text>
                             </TouchableOpacity>
                         </View>
-
-
                     </>
                 )}
 
@@ -953,7 +955,6 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
                                     onChangeText={(text) => setNewStudent({ ...newStudent, points: parseInt(text) || 0 })}
                                     keyboardType="numeric"
                                 />
-
                             </View>
                             <TouchableOpacity style={styles.saveBtn} onPress={addStudent}>
                                 <Text style={styles.saveBtnText}>Add Student</Text>
@@ -962,6 +963,7 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
                     </View>
                 </View>
             </Modal>
+
             {/* Logout Confirmation Modal */}
             <Modal
                 visible={showLogoutModal}
@@ -990,6 +992,7 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
                     </View>
                 </View>
             </Modal>
+
             <StudentMetadataView
                 visible={metadataModalVisible}
                 onClose={() => setMetadataModalVisible(false)}
@@ -997,7 +1000,6 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
                 token={token || ''}
             />
         </SafeAreaView>
-
     );
 }
 
