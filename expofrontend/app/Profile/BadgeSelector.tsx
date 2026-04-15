@@ -1,4 +1,5 @@
-import React from 'react';
+// BadgeSelector.tsx
+import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Modal, StyleSheet, ScrollView } from 'react-native';
 import { BadgeIcons } from './BadgeIcons';
 
@@ -12,7 +13,7 @@ export const badgeOptions = [
 ];
 
 // Icon name mapping: backend icon field -> badgeOptions id
-const iconNameMapping: Record<string, string> = {
+export const badgeIconNameMapping: Record<string, string> = {
     'Trophy': 'Trophy',
     'Book': 'Book',
     'Microscope': 'Microscope',
@@ -22,8 +23,10 @@ const iconNameMapping: Record<string, string> = {
 // Function to render badge based on selection
 export const renderBadge = (badgeId: string, size: number = 50) => {
     const badge = badgeOptions.find(opt => opt.id === badgeId);
-    // Use mapped icon component or default
-    const IconComponent = (BadgeIcons as any)[badgeId] || BadgeIcons.default;
+    // Use mapped icon component or fallback to a simple circle
+    const IconComponent = (BadgeIcons as any)[badgeId] || BadgeIcons.default || (() => (
+        <View style={{ width: size * 0.8, height: size * 0.8, backgroundColor: '#FFF', borderRadius: size * 0.4 }} />
+    ));
 
     return (
         <View style={[
@@ -48,31 +51,28 @@ export const renderBadge = (badgeId: string, size: number = 50) => {
 // Badge selector modal component
 interface BadgeSelectorProps {
     visible: boolean;
-    selectedBadge: string;
-    onSelect: (badgeId: string) => void;
+    selectedBadges: string[];
+    onSelect: (badgeIds: string[]) => void;
     onClose: () => void;
     userItems: any[];
     onGoToShop: () => void;
 }
 
 export const BadgeSelector: React.FC<BadgeSelectorProps> = ({
-    visible,
-    selectedBadge,
-    onSelect,
-    onClose,
-    userItems,
-    onGoToShop
-}) => {
+                                                                visible,
+                                                                selectedBadges,
+                                                                onSelect,
+                                                                onClose,
+                                                                userItems,
+                                                                onGoToShop
+                                                            }) => {
     // Always include default badge
     const ownedBadgeIds: string[] = ['default'];
-
-    console.log('=== BadgeSelector Debug ===');
-    console.log('Raw userItems:', JSON.stringify(userItems, null, 2));
 
     // Process user items to find badge types
     const itemsArray = Array.isArray(userItems) ? userItems : [];
 
-    itemsArray.forEach((userItem, index) => {
+    itemsArray.forEach((userItem) => {
         const itemData = userItem.item || userItem;
         const rawType = itemData.type || itemData.category || itemData.itemType || '';
         const itemType = rawType.toUpperCase();
@@ -84,25 +84,16 @@ export const BadgeSelector: React.FC<BadgeSelectorProps> = ({
         }
         iconId = iconId.replace(/\.(png|jpg|jpeg|svg|webp)$/i, '');
 
-        console.log(`Item ${index}: rawType="${rawType}", itemType="${itemType}", rawIcon="${rawIcon}", iconId="${iconId}"`);
-
         if (itemType === 'BADGE' && iconId) {
-            // Apply mapping to convert backend icon name to badgeOptions id
-            const mappedId = iconNameMapping[iconId] || iconId;
+            const mappedId = badgeIconNameMapping[iconId] || iconId;
             const existsInOptions = badgeOptions.some(opt => opt.id === mappedId);
-            console.log(`  -> iconId "${iconId}" mapped to "${mappedId}", exists in badgeOptions? ${existsInOptions}`);
-
             if (existsInOptions && !ownedBadgeIds.includes(mappedId)) {
                 ownedBadgeIds.push(mappedId);
             }
         }
     });
 
-    console.log('Owned badge IDs:', ownedBadgeIds);
-
     const ownedBadges = badgeOptions.filter(badge => ownedBadgeIds.includes(badge.id));
-    console.log('Owned badges (filtered):', ownedBadges.map(b => b.id));
-    console.log('========================');
 
     return (
         <Modal
@@ -113,7 +104,7 @@ export const BadgeSelector: React.FC<BadgeSelectorProps> = ({
         >
             <View style={styles.modalOverlay}>
                 <View style={styles.modalContent}>
-                    <Text style={styles.modalTitle}>Your Badges</Text>
+                    <Text style={styles.modalTitle}>Select Your Badges</Text>
 
                     <ScrollView style={styles.badgeGrid}>
                         <View style={styles.gridContainer}>
@@ -122,9 +113,14 @@ export const BadgeSelector: React.FC<BadgeSelectorProps> = ({
                                     key={badge.id}
                                     style={[
                                         styles.badgeOption,
-                                        selectedBadge === badge.id && styles.selectedBadge
+                                        selectedBadges.includes(badge.id) && styles.selectedBadge
                                     ]}
-                                    onPress={() => onSelect(badge.id)}
+                                    onPress={() => {
+                                    const newSelection = selectedBadges.includes(badge.id)
+                                        ? selectedBadges.filter(id => id !== badge.id)
+                                        : [...selectedBadges, badge.id];
+                                    onSelect(newSelection);
+                                }}
                                 >
                                     {renderBadge(badge.id, 55)}
                                     <Text style={styles.badgeName}>{badge.name}</Text>

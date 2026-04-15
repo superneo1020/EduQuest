@@ -2,13 +2,36 @@ import React from 'react';
 import { View } from 'react-native';
 import Svg, { Circle, Path, Ellipse, Rect, Polygon } from 'react-native-svg';
 
+
 // Badge icons using SVG with achievement-focused designs
 export const BadgeIcons = {
-    default: ({ size = 50, color = '#FFD700' }) => (
+    ScienceGlasses: ({ size = 50, color = '#4169E1' }) => (
         <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
-            <Circle cx="50" cy="50" r="40" fill={color} stroke="#FFA500" strokeWidth="3" />
-            <Path d="M 50 30 L 55 40 L 65 40 L 57 47 L 60 57 L 50 50 L 40 57 L 43 47 L 35 40 L 45 40 Z" fill="#fff" stroke="#FFA500" strokeWidth="2" />
-            <Circle cx="50" cy="50" r="8" fill="#FF6B6B" />
+            <Circle cx="50" cy="50" r="40" fill={color} stroke="#1E90FF" strokeWidth="3" />
+            <Circle cx="35" cy="45" r="12" fill="#87CEEB" stroke="#4682B4" strokeWidth="2" />
+            <Circle cx="65" cy="45" r="12" fill="#87CEEB" stroke="#4682B4" strokeWidth="2" />
+            <Path d="M 47 45 L 53 45" stroke="#708090" strokeWidth="3" />
+            <Path d="M 35 33 L 35 57" stroke="#708090" strokeWidth="2" />
+            <Path d="M 65 33 L 65 57" stroke="#708090" strokeWidth="2" />
+            <Path d="M 23 45 L 35 45" stroke="#708090" strokeWidth="2" />
+            <Path d="M 65 45 L 77 45" stroke="#708090" strokeWidth="2" />
+            <Circle cx="35" cy="45" r="4" fill="#fff" />
+            <Circle cx="65" cy="45" r="4" fill="#fff" />
+            <Circle cx="35" cy="45" r="2" fill="#000" />
+            <Circle cx="65" cy="45" r="2" fill="#000" />
+            <Path d="M 50 19 L 53 25 L 59 25 L 54 29 L 56 35 L 50 31 L 44 35 L 46 29 L 41 25 L 47 25 Z" fill="#FFD700" />
+        </Svg>
+    ),
+
+    SportsJersey: ({ size = 50, color = '#FF6B6B' }) => (
+        <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
+            <Circle cx="50" cy="50" r="40" fill={color} stroke="#FF0000" strokeWidth="3" />
+            <Path d="M 40 30 L 40 45 L 35 50 L 35 65 L 65 65 L 65 50 L 60 45 L 60 30 Z" fill="#fff" stroke="#FF0000" strokeWidth="2" />
+            <Path d="M 40 35 L 60 35 L 60 40 L 40 40 Z" fill="#FF6B6B" />
+            <Path d="M 45 45 L 55 45 L 55 50 L 45 50 Z" fill="#FF6B6B" />
+            <Path d="M 42 52 L 58 52 L 58 57 L 42 57 Z" fill="#FF6B6B" />
+            <Circle cx="50" cy="47" r="2" fill="#fff" />
+            <Path d="M 50 18 L 53 24 L 59 24 L 54 28 L 56 34 L 50 30 L 44 34 L 46 28 L 41 24 L 47 24 Z" fill="#FFD700" />
         </Svg>
     ),
 
@@ -211,6 +234,44 @@ export const BadgeIcons = {
             <Circle cx="35" cy="50" r="2" fill="#000" />
             <Circle cx="65" cy="50" r="2" fill="#000" />
             <Path d="M 50 44 L 52 48 L 56 48 L 53 51 L 54 55 L 50 52 L 46 55 L 47 51 L 44 48 L 48 48 Z" fill="#FFD700" />
+        </Svg>
+    ),
+
+    'ScienceGlasses': ({ size = 50, color = '#4169E1' }) => (
+        <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
+            <Circle cx="50" cy="50" r="40" fill={color} stroke="#1E90FF" strokeWidth="3" />
+            <Circle cx="35" cy="45" r="12" fill="#87CEEB" stroke="#4682B4" strokeWidth="2" />
+            <Circle cx="65" cy="45" r="12" fill="#87CEEB" stroke="#4682B4" strokeWidth="2" />
+            <Path d="M 47 45 L 53 45" stroke="#708090" strokeWidth="3" />
+            <Path d="M 35 33 L 35 57" stroke="#708090" strokeWidth="2" />
+            <Path d="M 65 33 L 65 57" stroke="#708090" strokeWidth="2" />
+            <Path d="M 23 45 L 35 45" stroke="#708090" strokeWidth="2" />
+            <Path d="M 65 45 L 77 45" stroke="#708090" strokeWidth="2" />
+            <Circle cx="35" cy="45" r="4" fill="#fff" />
+            <Circle cx="65" cy="45" r="4" fill="#fff" />
+            <Circle cx="35" cy="45" r="2" fill="#000" />
+            <Circle cx="65" cy="45" r="2" fill="#000" />
+            <Path d="M 50 19 L 53 25 L 59 25 L 54 29 L 56 35 L 50 31 L 44 35 L 46 29 L 41 25 L 47 25 Z" fill="#FFD700" />
+        </Svg>
+    ),
+
+    'SportsJersey': ({ size = 50, color = '#FF6B6B' }) => (
+        <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
+            <Circle cx="50" cy="50" r="40" fill={color} stroke="#FF0000" strokeWidth="3" />
+            <Path d="M 40 30 L 40 45 L 35 50 L 35 65 L 65 65 L 65 50 L 60 45 L 60 30 Z" fill="#fff" stroke="#FF0000" strokeWidth="2" />
+            <Path d="M 40 35 L 60 35 L 60 40 L 40 40 Z" fill="#FF6B6B" />
+            <Path d="M 45 45 L 55 45 L 55 50 L 45 50 Z" fill="#FF6B6B" />
+            <Path d="M 42 52 L 58 52 L 58 57 L 42 57 Z" fill="#FF6B6B" />
+            <Circle cx="50" cy="47" r="2" fill="#fff" />
+            <Path d="M 50 18 L 53 24 L 59 24 L 54 28 L 56 34 L 50 30 L 44 34 L 46 28 L 41 24 L 47 24 Z" fill="#FFD700" />
+        </Svg>
+    ),
+
+    // Default badge icon
+    default: ({ size = 50, color = '#FFD700' }) => (
+        <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
+            <Circle cx="50" cy="50" r="40" fill={color} stroke="#FFA500" strokeWidth="3" />
+            <Path d="M 50 38 L 52 42 L 56 42 L 53 45 L 54 49 L 50 46 L 46 49 L 47 45 L 44 42 L 48 42 Z" fill="#fff" />
         </Svg>
     )
 };

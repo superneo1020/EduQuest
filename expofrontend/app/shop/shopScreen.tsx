@@ -16,15 +16,16 @@ import { BadgeIcons } from '@/app/Profile/BadgeIcons';
 
 // Helper functions to render icons properly
 const renderBackgroundIcon = (iconName: string, size: number) => {
-    const BackgroundComponent = (BackgroundIcons as any)[iconName] || BackgroundIcons.default;
+    const BackgroundComponent = (BackgroundIcons as any)[iconName];
+    if (!BackgroundComponent) return null;
     return <BackgroundComponent size={size} />;
 };
 
 const renderBadgeIcon = (iconName: string, size: number) => {
-    const BadgeComponent = (BadgeIcons as any)[iconName] || BadgeIcons.default;
+    const BadgeComponent = (BadgeIcons as any)[iconName];
+    if (!BadgeComponent) return null;
     return <BadgeComponent size={size} color="#FFF" />;
 };
-
 const { width } = Dimensions.get('window');
 // 物品類型定義
 const ITEM_TYPES = ['ALL', 'AVATAR', 'BACKGROUND', 'BADGE'];
@@ -277,26 +278,17 @@ export default function ShopScreen() {
                                 !canAfford && styles.itemCardDisabled
                             ]}>
                                 {/* 可愛的物品圖標 */}
-                                <View style={[
-                                    styles.itemIconContainer,
-                                    { backgroundColor: itemColor }
-                                ]}>
+                                {/* 原本的圖標區塊 */}
+                                <View style={[styles.itemIconContainer, { backgroundColor: itemColor }]}>
                                     {item.type === 'AVATAR' ? (
-                                        <AvatarIconRenderer 
-                                            iconName={item.icon} 
-                                            size={50} 
-                                            color="#FFF" 
-                                        />
+                                        <AvatarIconRenderer iconName={item.icon} size={50} color="#FFF" />
                                     ) : item.type === 'BACKGROUND' ? renderBackgroundIcon(item.icon, 50)
-                                    : item.type === 'BADGE' ? renderBadgeIcon(item.icon, 40)
-                                    : item.icon ? (
-                                        <>
-                                            {console.log('Debug - Item:', item.name, 'Type:', item.type, 'Icon:', item.icon)}
-                                            <Package size={32} color="#FFF" strokeWidth={2} />
-                                        </>
-                                    ) : (
-                                        <Package size={32} color="#FFF" strokeWidth={2} />
-                                    )}
+                                        : item.type === 'BADGE' ? renderBadgeIcon(item.icon, 40)
+                                            : item.icon ? (
+                                                // 此處原本顯示 Package 圖標，改為 null
+                                                null
+                                            ) : null}
+                                    {/* 稀有標記仍可保留 */}
                                     {item.price > 100 && (
                                         <View style={styles.rareBadge}>
                                             <Star size={10} color="#FFF" fill="#FFF" />

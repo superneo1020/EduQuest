@@ -13,8 +13,8 @@ export const BackgroundIcons = {
         </Svg>
     ),
 
-    Space: ({ size = 50, color = '#0F172A' }) => (
-        <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
+    Space: ({ size = '100%' }) => (
+        <Svg width={size} height={size} viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">
             <Defs>
                 <LinearGradient id="spaceGradient" x1="0%" y1="0%" x2="100%" y2="100%">
                     <Stop offset="0%" stopColor="#0F172A" />
@@ -34,8 +34,8 @@ export const BackgroundIcons = {
         </Svg>
     ),
 
-    Ocean: ({ size = 50, color = '#006994' }) => (
-        <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
+    Ocean: ({ size = '100%' }) => (
+        <Svg width={size} height={size} viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">
             <Defs>
                 <LinearGradient id="oceanGradient" x1="0%" y1="0%" x2="0%" y2="100%">
                     <Stop offset="0%" stopColor="#006994" />
@@ -54,6 +54,7 @@ export const BackgroundIcons = {
             <Ellipse cx="25" cy="25" rx="8" ry="4" fill="#FFD700" opacity="0.9" />
         </Svg>
     ),
+
 
     Forest: ({ size = 50, color = '#228B22' }) => (
         <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
