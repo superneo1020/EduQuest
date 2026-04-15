@@ -14,44 +14,47 @@ import java.util.List;
 
 public interface UserGameScoreRepository extends JpaRepository<UserGameScore,Long> {
 
-    @Query(value = "SELECT g.name, g.type, g.difficulty, g.icon, g.description, " +
-            "ugs.scores, CAST(ugs.metadata AS TEXT) AS metadata, ugs.created_at AS createdAt " +
-            "FROM user_game_scores ugs " +
-            "JOIN games g ON ugs.game_id = g.id " +
-            "WHERE ugs.user_id = :userId " +
-            "AND ugs.game_id = :gameId ",
-            nativeQuery = true)
+    @Query("SELECT new com.eduquest.springbackend.dto.UserGameScoreDto(" +
+            "g.name, g.type, g.difficulty, g.icon, g.description, " +
+            "ugs.scores, ugs.metadata, ugs.createdAt) " +
+            "FROM UserGameScore ugs JOIN ugs.game g " +
+            "WHERE ugs.user.id = :userId " +
+            "AND ugs.game.id = :gameId")
     Page<UserGameScoreDto> findUserGameScoresByUserIdAndGameId(
             @Param("userId") Long userId,
             @Param("gameId") Long gameId,
             Pageable pageable
     );
 
-    @Query(value = "SELECT g.name, g.type, g.difficulty, g.icon, g.description, " +
-            "ugs.scores, ugs.metadata, ugs.created_at AS createdAt " +
-            "FROM user_game_scores ugs " +
-            "JOIN games g ON ugs.game_id = g.id " +
-            "WHERE ugs.user_id = :userId ",
-            nativeQuery = true)
+    @Query("SELECT new com.eduquest.springbackend.dto.UserGameScoreDto(" +
+            "g.name, g.type, g.difficulty, g.icon, g.description, " +
+            "ugs.scores, ugs.metadata, ugs.createdAt) " +
+            "FROM UserGameScore ugs JOIN ugs.game g " +
+            "WHERE ugs.user.id = :userId")
     Page<UserGameScoreDto> findUserGameScoresByUserId(@Param("userId") Long userId, Pageable pageable);
 
-    @Query(value = "SELECT DISTINCT ON (g.id) g.name, g.type, g.difficulty, g.icon, g.description, " +
-            "ugs.scores, ugs.metadata, ugs.created_at AS createdAt " +
-            "FROM user_game_scores ugs " +
-            "JOIN games g ON ugs.game_id = g.id " +
-            "WHERE ugs.user_id = :userId " +
-            "ORDER BY g.id, ugs.scores DESC, ugs.created_at",
-            nativeQuery = true)
+    @Query("SELECT new com.eduquest.springbackend.dto.UserGameScoreDto(" +
+            "g.name, g.type, g.difficulty, g.icon, g.description, " +
+            "ugs.scores, ugs.metadata, ugs.createdAt) " +
+            "FROM UserGameScore ugs " +
+            "JOIN ugs.game g " +
+            "WHERE ugs.user.id = :userId " +
+            "AND ugs.scores = (SELECT MAX(ugs2.scores) " +
+            "   FROM UserGameScore ugs2 " +
+            "   WHERE ugs2.user.id = :userId " +
+            "   AND ugs2.game.id = g.id) " +
+            "ORDER BY ugs.scores DESC, ugs.createdAt")
     List<UserGameScoreDto> findAllHighestScoresByUserId(@Param("userId") Long userId);
 
-    @Query(value = "SELECT DISTINCT ON (g.id) g.name, g.type, g.difficulty, g.icon, g.description, " +
-            "ugs.scores, ugs.metadata, ugs.created_at AS createdAt " +
-            "FROM user_game_scores ugs " +
-            "JOIN games g ON ugs.game_id = g.id " +
-            "WHERE ugs.user_id = :userId " +
-            "AND ugs.game_id = :gameId " +
-            "ORDER BY g.id, ugs.scores DESC, ugs.created_at",
-            nativeQuery = true)
+    @Query("SELECT new com.eduquest.springbackend.dto.UserGameScoreDto(" +
+            "g.name, g.type, g.difficulty, g.icon, g.description, " +
+            "ugs.scores, ugs.metadata, ugs.createdAt) " +
+            "FROM UserGameScore ugs " +
+            "JOIN ugs.game g " +
+            "WHERE ugs.user.id = :userId " +
+            "AND g.id = :gameId " +
+            "ORDER BY ugs.scores DESC, ugs.createdAt " +
+            "LIMIT 1")
     UserGameScoreDto findHighestScoresByUserIdAndGameId(
             @Param("userId") Long userId,
             @Param("gameId") Long gameId

@@ -9,7 +9,7 @@ public record UserGameScoreDto(
         String icon,
         String description,
         Integer scores,
-        String metadata,
+        GameMetadata metadata,
         Instant createdAt
 ) {
 }

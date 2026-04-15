@@ -1,5 +1,6 @@
 package com.eduquest.springbackend.model;
 
+import com.eduquest.springbackend.dto.GameMetadata;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Min;
 import org.hibernate.annotations.Generated;
@@ -8,8 +9,6 @@ import org.hibernate.generator.EventType;
 import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
-import java.util.HashMap;
-import java.util.Map;
 
 @Entity
 @Table(name = "user_game_scores")
@@ -32,7 +31,7 @@ public class UserGameScore {
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
-    private Map<String, Object> metadata = new HashMap<>();
+    private GameMetadata metadata;
 
     @Column(nullable = false,
             insertable = false,
@@ -43,7 +42,7 @@ public class UserGameScore {
 
     public UserGameScore() {}
 
-    public UserGameScore(AppUser user, Game game, Integer scores, Map<String, Object> metadata) {
+    public UserGameScore(AppUser user, Game game, Integer scores, GameMetadata metadata) {
         this.user = user;
         this.game = game;
         this.scores = scores;
@@ -82,11 +81,11 @@ public class UserGameScore {
         this.scores = scores;
     }
 
-    public Map<String, Object> getMetadata() {
+    public GameMetadata getMetadata() {
         return metadata;
     }
 
-    public void setMetadata(Map<String, Object> metadata) {
+    public void setMetadata(GameMetadata metadata) {
         this.metadata = metadata;
     }
 
