@@ -16,6 +16,8 @@ import { getApiBaseUrl } from '@/src/api/client';
 import SkillBarsChart from "@/app/Profile/SkillRadarChart";
 import { LineChart, BarChart, PieChart as RNPieChart } from 'react-native-chart-kit';
 import { AvatarSelector, renderAvatar, avatarOptions } from "@/app/Profile/AvatarSelector";
+import { BackgroundSelector, renderBackground, backgroundOptions } from "@/app/Profile/BackgroundSelector";
+import { BadgeSelector, renderBadge, badgeOptions } from "@/app/Profile/BadgeSelector";
 
 const { width } = Dimensions.get('window');
 
@@ -85,6 +87,14 @@ export default function ProfileScreen() {
     // Profile Icon selection states
     const [showAvatarModal, setShowAvatarModal] = useState(false);
     const [selectedAvatar, setSelectedAvatar] = useState<string>('default');
+
+    // Background selection states
+    const [showBackgroundModal, setShowBackgroundModal] = useState(false);
+    const [selectedBackground, setSelectedBackground] = useState<string>('default');
+
+    // Badge selection states
+    const [showBadgeModal, setShowBadgeModal] = useState(false);
+    const [selectedBadge, setSelectedBadge] = useState<string>('default');
 
     // User points state
     const [userPoints, setUserPoints] = useState<number>(0);
@@ -181,6 +191,189 @@ export default function ProfileScreen() {
             Alert.alert('Error', error.response?.data?.detail || 'Update failed. Please try again.');
         }
     };
+
+    const handleBackgroundSelect = async (backgroundId: string) => {
+        try {
+            const backgroundOption = backgroundOptions.find(opt => opt.id === backgroundId);
+            const backgroundName = backgroundOption?.name || backgroundId;
+
+            // Get user items and find the corresponding item
+            const itemsResponse = await axios.get(`${getApiBaseUrl()}/api/user/item`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const rawItems = itemsResponse.data?.items || itemsResponse.data || [];
+            const userItemsList = Array.isArray(rawItems) ? rawItems : [];
+
+            let existingItem = userItemsList.find((item: any) => {
+                const itemData = item.item || item;
+                return itemData.name === backgroundName;
+            });
+
+            // If item doesn't exist, grant it first
+            if (!existingItem) {
+                try {
+                    await axios.post(`${getApiBaseUrl()}/api/user/item`, {
+                        itemName: backgroundName
+                    }, {
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Bearer ${token}`
+                        }
+                    });
+
+                    // Wait for backend processing
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+
+                    // Re-fetch items
+                    const newItemsResponse = await axios.get(`${getApiBaseUrl()}/api/user/item`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+                    const newRawItems = newItemsResponse.data?.items || newItemsResponse.data || [];
+                    const newUserItemsList = Array.isArray(newRawItems) ? newRawItems : [];
+                    existingItem = newUserItemsList.find((item: any) => {
+                        const itemData = item.item || item;
+                        return itemData.name === backgroundName;
+                    });
+
+                    setUserItems(newUserItemsList);
+                } catch (itemError: any) {
+                    console.error('Failed to grant item:', itemError);
+                    Alert.alert('Error', 'Failed to get background item. Please try again.');
+                    return;
+                }
+            }
+
+            if (!existingItem) {
+                Alert.alert('Error', 'Background item not found in system');
+                return;
+            }
+
+            const itemData = existingItem.item || existingItem;
+            const updateData = {
+                equippedItems: {
+                    "BACKGROUND": itemData.itemId || itemData.id
+                }
+            };
+
+            // Include nickname if it exists
+            if (displayUser?.nickname) {
+                Object.assign(updateData, { nickname: displayUser.nickname });
+            }
+
+            await axios.post(`${getApiBaseUrl()}/api/user/profile`, updateData, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`
+                }
+            });
+
+            setSelectedBackground(backgroundId);
+            setShowBackgroundModal(false);
+            Alert.alert('Success', 'Background updated successfully!');
+
+            // Re-fetch profile data
+            const profileResponse = await axios.get(`${getApiBaseUrl()}/api/user/profile`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setProfileData(profileResponse.data);
+
+        } catch (error: any) {
+            console.error("Background update failed", error.response?.data);
+            Alert.alert('Error', error.response?.data?.detail || 'Background update failed. Please try again.');
+        }
+    };
+
+    const handleBadgeSelect = async (badgeId: string) => {
+        try {
+            const badgeOption = badgeOptions.find(opt => opt.id === badgeId);
+            const badgeName = badgeOption?.name || badgeId;
+
+            // Get user items and find the corresponding item
+            const itemsResponse = await axios.get(`${getApiBaseUrl()}/api/user/item`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const rawItems = itemsResponse.data?.items || itemsResponse.data || [];
+            const userItemsList = Array.isArray(rawItems) ? rawItems : [];
+
+            let existingItem = userItemsList.find((item: any) => {
+                const itemData = item.item || item;
+                return itemData.name === badgeName;
+            });
+
+            // If item doesn't exist, grant it first
+            if (!existingItem) {
+                try {
+                    await axios.post(`${getApiBaseUrl()}/api/user/item`, {
+                        itemName: badgeName
+                    }, {
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Bearer ${token}`
+                        }
+                    });
+
+                    // Wait for backend processing
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+
+                    // Re-fetch items
+                    const newItemsResponse = await axios.get(`${getApiBaseUrl()}/api/user/item`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+                    const newRawItems = newItemsResponse.data?.items || newItemsResponse.data || [];
+                    const newUserItemsList = Array.isArray(newRawItems) ? newRawItems : [];
+                    existingItem = newUserItemsList.find((item: any) => {
+                        const itemData = item.item || item;
+                        return itemData.name === badgeName;
+                    });
+
+                    setUserItems(newUserItemsList);
+                } catch (itemError: any) {
+                    console.error('Failed to grant item:', itemError);
+                    Alert.alert('Error', 'Failed to get badge item. Please try again.');
+                    return;
+                }
+            }
+
+            if (!existingItem) {
+                Alert.alert('Error', 'Badge item not found in system');
+                return;
+            }
+
+            const itemData = existingItem.item || existingItem;
+            const updateData = {
+                equippedItems: {
+                    "BADGE": itemData.itemId || itemData.id
+                }
+            };
+
+            // Include nickname if it exists
+            if (displayUser?.nickname) {
+                Object.assign(updateData, { nickname: displayUser.nickname });
+            }
+
+            await axios.post(`${getApiBaseUrl()}/api/user/profile`, updateData, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`
+                }
+            });
+
+            setSelectedBadge(badgeId);
+            setShowBadgeModal(false);
+            Alert.alert('Success', 'Badge updated successfully!');
+
+            // Re-fetch profile data
+            const profileResponse = await axios.get(`${getApiBaseUrl()}/api/user/profile`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setProfileData(profileResponse.data);
+
+        } catch (error: any) {
+            console.error("Badge update failed", error.response?.data);
+            Alert.alert('Error', error.response?.data?.detail || 'Badge update failed. Please try again.');
+        }
+    };
+
     // Function to show error with feedback option
     const showErrorWithFeedback = (errorMessage: string, context: string) => {
         Alert.alert(
@@ -316,6 +509,18 @@ export default function ProfileScreen() {
     );
 
     const displayUser = profileData ? { ...user, ...profileData, points: userPoints } : { ...user, points: userPoints };
+    
+    // Ensure we have a valid user ID from multiple sources
+    const getUserId = () => {
+        const userId = displayUser?.id || user?.id || profileData?.id || 'N/A';
+        console.log('User ID Debug:', {
+            displayUserId: displayUser?.id,
+            authUserId: user?.id,
+            profileDataId: profileData?.id,
+            finalUserId: userId
+        });
+        return userId;
+    };
     const gameHistory = displayUser?.userGameScores || [];
 
     // Move calculateImprovementRate before calculateLearningStats
@@ -1023,13 +1228,7 @@ export default function ProfileScreen() {
                                     </View>
                                 </View>
                             )}
-                            <View style={styles.infoItem}>
-                                <Trophy size={16} color="#636E72" />
-                                <View style={styles.infoContent}>
-                                    <Text style={styles.infoLabel}>User ID</Text>
-                                    <Text style={styles.infoValue}>#{displayUser?.id || 'N/A'}</Text>
-                                </View>
-                            </View>
+
                             <View style={styles.infoItem}>
                                 <Calendar size={16} color="#636E72" />
                                 <View style={styles.infoContent}>

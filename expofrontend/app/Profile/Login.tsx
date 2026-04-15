@@ -7,13 +7,14 @@ import {
     SafeAreaView,
     ActivityIndicator,
     KeyboardAvoidingView,
-    Platform
+    Platform,
+    Animated
 } from "react-native";
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/src/auth/AuthContext";
-import { User, Lock } from "lucide-react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage"; // 建議加上圖標
+import { User, Lock, Sparkles } from "lucide-react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function Login() {
     const router = useRouter();
@@ -22,6 +23,29 @@ export default function Login() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const { signIn } = useAuth();
+    
+    // Animation values
+    const logoScale = useRef(new Animated.Value(1)).current;
+    
+    useEffect(() => {
+        const pulseAnimation = Animated.sequence([
+            Animated.timing(logoScale, {
+                toValue: 1.05,
+                duration: 1000,
+                useNativeDriver: true,
+            }),
+            Animated.timing(logoScale, {
+                toValue: 1,
+                duration: 1000,
+                useNativeDriver: true,
+            }),
+        ]);
+        
+        const loopAnimation = Animated.loop(pulseAnimation);
+        loopAnimation.start();
+        
+        return () => loopAnimation.stop();
+    }, []);
 
     const handleLogin = async () => {
         setLoading(true);
@@ -33,16 +57,12 @@ export default function Login() {
             const storedToken = await AsyncStorage.getItem('auth_token');
             console.log('Login: Stored token after signIn:', storedToken ? storedToken.substring(0, 20) + '...' : 'missing');
 
-            // 注意：因為 setUser 是異步的，直接拿剛剛 signIn 存入的數據最保險
-            // 或者在 AuthContext 的 signIn 裡 return userData
-
-            // 獲取存儲在 AsyncStorage 的用戶資訊來判斷
+            // Get stored user info to determine role
             const storedUser = await AsyncStorage.getItem('auth_user');
             const user = JSON.parse(storedUser || '{}');
             console.log('Login: User roles:', user.roles);
 
-            // 檢查 roles 陣列中是否包含 ADMIN 權限
-            // 這裡要對應你後端回傳的字串，通常是 'ROLE_ADMIN' 或 'ADMIN'
+            // Check if roles array contains ADMIN permission
             const isAdmin = user.roles?.some((role: string) =>
                 role === 'ROLE_ADMIN' || role === 'ADMIN'
             );
@@ -52,17 +72,16 @@ export default function Login() {
 
             if (isAdmin) {
                 console.log("Welcome Admin!");
-                router.replace("/admin"); // 導向你的 Admin 面板路徑
+                router.replace("/admin");
             }
             else if (isEducator) {
                 console.log("Welcome Educator!");
-                router.replace("/teacher/teacher"); // 導向你的 Admin 面板路徑
+                router.replace("/teacher/teacher");
             }
             else {
                 console.log("Welcome Student!");
-                router.replace("/"); // 導向一般學生首頁
+                router.replace("/");
             }
-
 
         } catch (err: any) {
             setError(err.response?.status === 401 ? "Account or password incorrect" : "Login failed");
@@ -71,41 +90,49 @@ export default function Login() {
             setLoading(false);
         }
     };
+    
     return (
         <SafeAreaView style={styles.container}>
             <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{flex: 1}}>
                 <View style={styles.inner}>
                     {/* Header Section */}
                     <View style={styles.header}>
-                        <View style={styles.logoCircle}>
-                            <Text style={styles.logoEmoji}>🎓</Text>
-                        </View>
+                        <Animated.View style={[styles.logoCircle, { transform: [{ scale: logoScale }] }]}>
+                            <View style={styles.logoIcon}>
+                                <Sparkles size={24} color="white" fill="white" />
+                            </View>
+                        </Animated.View>
                         <Text style={styles.title}>EduQuest</Text>
-                        <Text style={styles.subtitle}>Adventure starts with learning</Text>
+                        <Text style={styles.subtitle}>Welcome Back</Text>
                     </View>
 
                     {/* Form Section */}
                     <View style={styles.form}>
                         <View style={styles.inputWrapper}>
-                            <User size={20} color="#888" style={styles.inputIcon} />
+                            <View style={styles.iconContainer}>
+                                <User size={20} color="#64748B" />
+                            </View>
                             <TextInput
                                 placeholder="Username"
                                 value={username}
                                 onChangeText={setUsername}
                                 style={styles.input}
-                                placeholderTextColor="#AAA"
+                                placeholderTextColor="#94A3B8"
+                                autoCapitalize="none"
                             />
                         </View>
 
                         <View style={styles.inputWrapper}>
-                            <Lock size={20} color="#888" style={styles.inputIcon} />
+                            <View style={styles.iconContainer}>
+                                <Lock size={20} color="#64748B" />
+                            </View>
                             <TextInput
                                 placeholder="Password"
                                 value={password}
                                 onChangeText={setPassword}
                                 style={styles.input}
                                 secureTextEntry
-                                placeholderTextColor="#AAA"
+                                placeholderTextColor="#94A3B8"
                             />
                         </View>
 
@@ -116,13 +143,17 @@ export default function Login() {
                             onPress={handleLogin}
                             disabled={!username || !password || loading}
                         >
-                            {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.loginText}>Sign In</Text>}
+                            {loading ? (
+                                <ActivityIndicator color="#FFF" size="large" />
+                            ) : (
+                                <Text style={styles.loginText}>Sign In</Text>
+                            )}
                         </TouchableOpacity>
                     </View>
 
                     <TouchableOpacity onPress={() => router.push("/Profile/Register")}>
                         <Text style={styles.registerText}>
-                            New here? <Text style={styles.registerLink}>Create Account</Text>
+                            New to EduQuest? <Text style={styles.registerLink}>Create Account</Text>
                         </Text>
                     </TouchableOpacity>
                 </View>
@@ -134,27 +165,119 @@ export default function Login() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: "#F7F9FB"
+        backgroundColor: '#F8F9FA',
     },
     inner: {
         flex: 1,
         paddingHorizontal: 30,
-        justifyContent: "center" },
+        justifyContent: "center"
+    },
     header: {
         alignItems: "center",
-        marginBottom: 40 },
-    logoCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: "#E8F5E9", justifyContent: "center", alignItems: "center", marginBottom: 15 },
-    logoEmoji: { fontSize: 40 },
-    title: { fontSize: 32, fontWeight: "800", color: "#2D3436" },
-    subtitle: { fontSize: 16, color: "#636E72", marginTop: 5 },
-    form: { backgroundColor: "#FFF", padding: 25, borderRadius: 24, elevation: 4, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10 },
-    inputWrapper: { flexDirection: "row", alignItems: "center", backgroundColor: "#F1F3F5", borderRadius: 12, marginBottom: 15, paddingHorizontal: 15 },
-    inputIcon: { marginRight: 10 },
-    input: { flex: 1, paddingVertical: 14, fontSize: 16, color: "#2D3436" },
-    loginButton: { backgroundColor: "#4CAF50", paddingVertical: 16, borderRadius: 12, marginTop: 10, alignItems: "center" },
-    disabledBtn: { backgroundColor: "#A5D6A7" },
-    loginText: { color: "#FFF", fontSize: 18, fontWeight: "700" },
-    errorText: { color: "#FF5252", textAlign: "center", marginBottom: 10, fontWeight: "600" },
-    registerText: { textAlign: "center", marginTop: 25, color: "#636E72", fontSize: 15 },
-    registerLink: { color: "#4CAF50", fontWeight: "700" }
+        marginBottom: 40
+    },
+    logoCircle: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: '#4CAF50',
+        justifyContent: "center",
+        alignItems: "center",
+        marginBottom: 20,
+    },
+    logoIcon: {
+        width: 32,
+        height: 32,
+        backgroundColor: '#4CAF50',
+        borderRadius: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    title: {
+        fontSize: 28,
+        fontWeight: "800",
+        color: '#4CAF50',
+        marginBottom: 8
+    },
+    subtitle: {
+        fontSize: 16,
+        color: '#64748B',
+        fontWeight: "500"
+    },
+    form: {
+        backgroundColor: "white",
+        padding: 24,
+        borderRadius: 16,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    inputWrapper: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: '#F8FAFC',
+        borderRadius: 12,
+        marginBottom: 16,
+        paddingHorizontal: 16,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        height: 56
+    },
+    iconContainer: {
+        width: 32,
+        height: 32,
+        borderRadius: 8,
+        backgroundColor: "#F8FAFC",
+        justifyContent: "center",
+        alignItems: "center",
+        marginRight: 12,
+    },
+    input: {
+        flex: 1,
+        paddingVertical: 12,
+        fontSize: 16,
+        color: '#1E293B',
+        fontWeight: "500"
+    },
+    loginButton: {
+        backgroundColor: '#4CAF50',
+        paddingVertical: 14,
+        borderRadius: 12,
+        marginTop: 8,
+        alignItems: "center",
+    },
+    disabledBtn: {
+        backgroundColor: '#94A3B8',
+        opacity: 0.6
+    },
+    loginText: {
+        color: "white",
+        fontSize: 16,
+        fontWeight: "700"
+    },
+    errorText: {
+        color: '#EF4444',
+        textAlign: "center",
+        marginBottom: 12,
+        fontWeight: "600",
+        fontSize: 14,
+        backgroundColor: '#FEF2F2',
+        padding: 8,
+        borderRadius: 8
+    },
+    registerText: {
+        textAlign: "center",
+        marginTop: 24,
+        color: '#64748B',
+        fontSize: 14,
+        fontWeight: "500"
+    },
+    registerLink: {
+        color: '#4CAF50',
+        fontWeight: "700"
+    }
 });
