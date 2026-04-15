@@ -124,7 +124,7 @@ const AnimalClassificationGame: React.FC = () => {
         setIsSaving(true);
         try {
             const gameData = {
-                gameName: "Animal Catcher",
+                gameName: "Animal Classification",
                 scores: finalScore,
                 gameType: "SCIENCE",
                 gameDifficulty: "EASY"

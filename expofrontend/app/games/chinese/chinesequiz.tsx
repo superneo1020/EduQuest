@@ -323,7 +323,7 @@ const ChineseRestaurantGame = () => {
         setIsSaving(true);
         try {
             const gameData = {
-                gameName: "Chinese Quiz Game",
+                gameName: "ChineseGame",
                 scores: finalScore,
                 gameType: "CHINESE",
                 gameDifficulty: difficulty === 'beginner' ? 'EASY' : 'MEDIUM'

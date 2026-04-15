@@ -89,7 +89,7 @@ export default function ShopScreen() {
         }
 
         if (userPoints < item.price) {
-            Alert.alert("積分不足", `需要 ${item.price} 積分才能兌換這個道具！`);
+             Alert.alert("Insufficient points", `need ${item.price} points to redeem this item!`);
             return;
         }
 
@@ -140,13 +140,13 @@ export default function ShopScreen() {
                 }
             }
 
-            const successMsg = `成功兌換 ${item.name}！`;
-            Platform.OS === 'web' ? alert(successMsg) : Alert.alert("成功", successMsg);
+            const successMsg = `Successful redemption ${item.name}！`;
+            Platform.OS === 'web' ? alert(successMsg) : Alert.alert("success", successMsg);
 
             fetchData();
         } catch (error: any) {
             console.error("Purchase Error:", error);
-            Alert.alert("購買失敗", error.response?.data?.message || "請稍後再試");
+            Alert.alert("Purchase failed", error.response?.data?.message || "Please try again later.");
         } finally {
             setBuyingId(null);
         }
@@ -167,7 +167,7 @@ export default function ShopScreen() {
             <SafeAreaView style={styles.container}>
                 <View style={styles.center}>
                     <ActivityIndicator size="large" color="#4CAF50" />
-                    <Text style={styles.loadingText}>載入中...</Text>
+                    <Text style={styles.loadingText}>loading...</Text>
                 </View>
             </SafeAreaView>
         );
@@ -184,8 +184,8 @@ export default function ShopScreen() {
                         <ShoppingBag size={24} color="#FFF" />
                     </View>
                     <View>
-                        <Text style={styles.headerTitle}>道具商城</Text>
-                        <Text style={styles.headerSubtitle}>用積分兌換精美道具！</Text>
+                        <Text style={styles.headerTitle}>Item Shop</Text>
+                        <Text style={styles.headerSubtitle}>Redeem exquisite items with your points!</Text>
                     </View>
                 </View>
 
@@ -196,7 +196,7 @@ export default function ShopScreen() {
                     </View>
                     <View style={styles.pointsInfo}>
                         <Text style={styles.pointsValue}>{userPoints}</Text>
-                        <Text style={styles.pointsLabel}>我的積分</Text>
+                        <Text style={styles.pointsLabel}>My points</Text>
                     </View>
                     <View style={styles.pointsDecoration}>
                         <Sparkles size={16} color="#FFD700" />
@@ -250,7 +250,7 @@ export default function ShopScreen() {
                 <View style={styles.categorySection}>
                     <View style={styles.categoryHeader}>
                         <Gift size={20} color="#4CAF50" />
-                        <Text style={styles.categoryTitle}>精選道具</Text>
+                        <Text style={styles.categoryTitle}>Selected Props</Text>
                         <View style={styles.categoryBadge}>
                             <Text style={styles.badgeText}>{items.length}</Text>
                         </View>
@@ -302,7 +302,7 @@ export default function ShopScreen() {
                                 {/* 物品信息 */}
                                 <View style={styles.itemInfo}>
                                     <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
-                                    <Text style={styles.itemDesc} numberOfLines={2}>{item.description || "超酷的道具！"}</Text>
+                                    <Text style={styles.itemDesc} numberOfLines={2}>{item.description || "Super cool props!"}</Text>
                                 </View>
 
                                 {/* 價格和購買按鈕 */}
@@ -333,7 +333,7 @@ export default function ShopScreen() {
                                                     styles.buyButtonText,
                                                     !canAfford && styles.buyButtonTextDisabled
                                                 ]}>
-                                                    {canAfford ? "兌換" : "積分不足"}
+                                                    {canAfford ? "exchange" : "Insufficient points"}
                                                 </Text>
                                                 {canAfford && <Sparkles size={12} color="#FFF" />}
                                             </View>

@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, Modal, StyleSheet, ScrollView } from 'react-native';
 import { AvatarIcons } from './AvatarIcons';
 
-// Elementary school style avatar options with cute icons and colors
+// 扩展 avatarOptions，包含商城可购买的四种头像
 export const avatarOptions = [
     { id: 'default', name: 'Default', color: '#636E72' },
     { id: 'happy_cat', name: 'Happy Cat', color: '#FFD93D' },
@@ -23,14 +23,26 @@ export const avatarOptions = [
     { id: 'cloud_sheep', name: 'Cloud Sheep', color: '#ECF0F1' },
     { id: 'apple_teacher', name: 'Apple Teacher', color: '#27AE60' },
     { id: 'pencil_wizard', name: 'Pencil Wizard', color: '#8E44AD' },
-    { id: 'crayon_dragon', name: 'Crayon Dragon', color: '#E74C3C' }
+    { id: 'crayon_dragon', name: 'Crayon Dragon', color: '#E74C3C' },
+    // 新增商城可购买的头像
+    { id: 'cool_hat', name: 'Cool Hat', color: '#4B0082' },
+    { id: 'superhero_cape', name: 'Superhero Cape', color: '#DC143C' },
+    { id: 'science_glasses', name: 'Science Glasses', color: '#4169E1' },
+    { id: 'sports_jersey', name: 'Sports Jersey', color: '#FF6B6B' },
 ];
+
+// 图标名映射表：后端 icon 字段 -> avatarOptions 中的 id
+const iconNameMapping: Record<string, string> = {
+    'Hat': 'cool_hat',
+    'Cape': 'superhero_cape',
+    'Glasses': 'science_glasses',
+    'Jersey': 'sports_jersey',
+};
 
 // Function to render avatar based on selection
 export const renderAvatar = (avatarId: string, size: number = 50) => {
     const avatar = avatarOptions.find(opt => opt.id === avatarId);
-
-    // 修正：如果找不到對應頭像，回傳預設組件避免 Crash
+    // 优先使用映射后的图标组件
     const IconComponent = AvatarIcons[avatarId as keyof typeof AvatarIcons] || AvatarIcons.default;
 
     return (
@@ -40,7 +52,6 @@ export const renderAvatar = (avatarId: string, size: number = 50) => {
                 width: size,
                 height: size,
                 borderRadius: size / 2,
-                // 給一個 fallback 顏色
                 backgroundColor: avatar?.color || '#636E72'
             }
         ]}>
@@ -60,40 +71,53 @@ interface AvatarSelectorProps {
 }
 
 export const AvatarSelector: React.FC<AvatarSelectorProps> = ({
-    visible,
-    selectedAvatar,
-    onSelect,
-    onClose,
-    userItems,
-    onGoToShop
-}) => {
-    // 1. 初始化，始終包含默認頭像
-    const ownedAvatarIds = ['default'];
+                                                                  visible,
+                                                                  selectedAvatar,
+                                                                  onSelect,
+                                                                  onClose,
+                                                                  userItems,
+                                                                  onGoToShop
+                                                              }) => {
+    // 1. 始终包含默认头像
+    const ownedAvatarIds: string[] = ['default'];
 
-    // Debug: Log the userItems to see the actual structure
-    console.log('UserItems data:', userItems);
+    console.log('=== AvatarSelector Debug ===');
+    console.log('Raw userItems:', JSON.stringify(userItems, null, 2));
 
-        // 2. 遍歷用戶已購買的物品
-    // 在 AvatarSelector.tsx 中修改
+    // 2. 遍历用户已拥有的物品，找出头像类型的道具
     const itemsArray = Array.isArray(userItems) ? userItems : [];
-    itemsArray.forEach(userItem => {
-        // 確保物品類型是 AVATAR，並使用 icon 欄位來匹配
-        if (userItem.type === 'AVATAR' && userItem.icon) {
-            const backendIcon = userItem.icon;
-            const exists = avatarOptions.some(opt => opt.id === backendIcon);
-            if (exists && !ownedAvatarIds.includes(backendIcon)) {
-                ownedAvatarIds.push(backendIcon);
+
+    itemsArray.forEach((userItem, index) => {
+        const itemData = userItem.item || userItem;
+        const rawType = itemData.type || itemData.category || itemData.itemType || '';
+        const itemType = rawType.toUpperCase();
+        const rawIcon = itemData.icon || itemData.image || itemData.avatarId || '';
+
+        let iconId = rawIcon;
+        if (iconId.includes('/')) {
+            iconId = iconId.split('/').pop() || '';
+        }
+        iconId = iconId.replace(/\.(png|jpg|jpeg|svg|webp)$/i, '');
+
+        console.log(`Item ${index}: rawType="${rawType}", itemType="${itemType}", rawIcon="${rawIcon}", iconId="${iconId}"`);
+
+        if (itemType === 'AVATAR' && iconId) {
+            // 应用映射表，将后端图标名转换为 avatarOptions 中的 id
+            const mappedId = iconNameMapping[iconId] || iconId;
+            const existsInOptions = avatarOptions.some(opt => opt.id === mappedId);
+            console.log(`  -> iconId "${iconId}" mapped to "${mappedId}", exists in avatarOptions? ${existsInOptions}`);
+
+            if (existsInOptions && !ownedAvatarIds.includes(mappedId)) {
+                ownedAvatarIds.push(mappedId);
             }
         }
     });
-    
-    // Debug: Log the final results
-    console.log('Owned avatar IDs:', ownedAvatarIds);
-    
 
-    
+    console.log('Owned avatar IDs:', ownedAvatarIds);
+
     const ownedAvatars = avatarOptions.filter(avatar => ownedAvatarIds.includes(avatar.id));
-    console.log('Owned avatars after filtering:', ownedAvatars);
+    console.log('Owned avatars (filtered):', ownedAvatars.map(a => a.id));
+    console.log('===========================');
 
     return (
         <Modal
@@ -105,7 +129,7 @@ export const AvatarSelector: React.FC<AvatarSelectorProps> = ({
             <View style={styles.modalOverlay}>
                 <View style={styles.modalContent}>
                     <Text style={styles.modalTitle}>Your Avatars</Text>
-                    
+
                     <ScrollView style={styles.avatarGrid}>
                         <View style={styles.gridContainer}>
                             {ownedAvatars.map((avatar) => (
@@ -122,12 +146,17 @@ export const AvatarSelector: React.FC<AvatarSelectorProps> = ({
                                 </TouchableOpacity>
                             ))}
                         </View>
+                        {ownedAvatars.length <= 1 && (
+                            <Text style={styles.noAvatarHint}>
+                                You haven't unlocked any other avatars yet. Visit the shop to get more!
+                            </Text>
+                        )}
                     </ScrollView>
-                    
+
                     <TouchableOpacity style={styles.shopButton} onPress={onGoToShop}>
                         <Text style={styles.shopButtonText}>🛍️ Get More Avatars</Text>
                     </TouchableOpacity>
-                    
+
                     <TouchableOpacity style={styles.closeButton} onPress={onClose}>
                         <Text style={styles.closeButtonText}>Close</Text>
                     </TouchableOpacity>
@@ -148,10 +177,6 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 4,
         elevation: 3,
-    },
-    avatarText: {
-        color: '#fff',
-        fontWeight: 'bold',
     },
     modalOverlay: {
         flex: 1,
@@ -188,18 +213,14 @@ const styles = StyleSheet.create({
     },
     avatarOption: {
         alignItems: 'center',
-        paddingVertical: 15, // 增加垂直內距，讓格子更高一點
-        borderRadius: 20,    // 圓角加大更顯活潑
+        paddingVertical: 15,
+        borderRadius: 20,
         backgroundColor: '#F8F9FA',
         borderWidth: 2,
         borderColor: 'transparent',
-
-        // 寬度稍微縮減，增加格子之間的空隙感
         width: '18%',
         marginHorizontal: '1%',
         marginVertical: 8,
-
-        // 增加陰影效果，讓頭像有「浮出來」的感覺，更吸引小朋友
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.05,
@@ -209,15 +230,22 @@ const styles = StyleSheet.create({
     selectedAvatar: {
         borderColor: '#3498DB',
         backgroundColor: '#EBF5FB',
-        transform: [{ scale: 1.1 }], // 被選中時稍微放大 10%
-        zIndex: 10, // 確保放大的時候不會被旁邊的擋住
+        transform: [{ scale: 1.1 }],
+        zIndex: 10,
     },
     avatarName: {
         fontSize: 10,
         textAlign: 'center',
-        marginTop: 8, // 增加文字與圖示的距離
+        marginTop: 8,
         color: '#475569',
         fontWeight: '600',
+    },
+    noAvatarHint: {
+        textAlign: 'center',
+        color: '#7F8C8D',
+        fontSize: 14,
+        marginTop: 20,
+        paddingHorizontal: 20,
     },
     closeButton: {
         backgroundColor: '#3498DB',

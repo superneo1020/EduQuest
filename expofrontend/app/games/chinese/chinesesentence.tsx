@@ -205,7 +205,7 @@ export default function ChineseSentenceGame() {
         setIsSaving(true);
         try {
             const gameData = {
-                gameName: "Chinese Sentence Game",
+                gameName: "ChineseSentenceGame",
                 scores: finalScore,
                 gameType: "CHINESE",
                 gameDifficulty: difficulty === 'easy' ? 'EASY' : 'MEDIUM'

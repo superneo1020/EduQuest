@@ -146,7 +146,7 @@ const LeaderboardScreen = () => {
                 {/* 分數 */}
                 <View style={styles.scoreContainer}>
                     <Text style={[styles.score, isTopThree && { color: '#FFA500' }]}>{score}</Text>
-                    <Text style={styles.ptText}>分</Text>
+                    <Text style={styles.ptText}>score</Text>
                 </View>
             </View>
         );
@@ -196,7 +196,7 @@ const LeaderboardScreen = () => {
                     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#FF6B6B']} />
                 }
                 ListEmptyComponent={
-                    !loading ? <Text style={styles.emptyText}>✨ 還沒有挑戰記錄，快去闖關吧 ✨</Text> : null
+                    !loading ? <Text style={styles.emptyText}>✨ No challenge record yet, go and try it! ✨</Text> : null
                 }
                 ListFooterComponent={
                     hasNext && loading ? <ActivityIndicator style={{ margin: 20 }} color="#FF6B6B" /> : <View style={{ height: 40 }} />

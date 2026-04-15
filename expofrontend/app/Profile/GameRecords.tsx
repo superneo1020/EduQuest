@@ -11,7 +11,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/src/auth/AuthContext';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/src/api/client';
-import { LinearGradient } from 'expo-linear-gradient'; // 建議安裝 expo-linear-gradient 增加質感
+import { LinearGradient } from 'expo-linear-gradient';
 
 const { width } = Dimensions.get('window');
 
@@ -25,26 +25,19 @@ export default function GameRecordsScreen() {
     const [hasNext, setHasNext] = useState(false);
     const [hasPrevious, setHasPrevious] = useState(false);
     const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
-    const [selectedDifficulty, setSelectedDifficulty] = useState<string>('ALL');
     const [sortBy, setSortBy] = useState<'date_desc' | 'date_asc' | 'score_desc' | 'score_asc'>('date_desc');
     const [showFilters, setShowFilters] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
 
-
     const categories = ['ALL', 'MATH', 'ENGLISH', 'SCIENCE', 'CHINESE'];
-    const difficulties = ['ALL', 'EASY', 'MEDIUM', 'HARD'];
     const sortOptions = ['date_desc', 'date_asc', 'score_desc', 'score_asc'];
 
     const fetchGameRecords = useCallback(async (page: number = 0) => {
         if (!token) return;
         try {
             setLoading(true);
-            // Try minimal parameters first
-            const params = new URLSearchParams({
-                page: page.toString(),
-                size: '20'
-            });
-            const response = await axios.get(`${getApiBaseUrl()}/api/user/game/score?${params.toString()}`, {
+            const response = await axios.get(`${getApiBaseUrl()}/api/user/game/score`, {
+                params: { page, size: 20 },
                 headers: { Authorization: `Bearer ${token}` }
             });
             setGameHistory(response.data.content || []);
@@ -67,7 +60,7 @@ export default function GameRecordsScreen() {
     React.useEffect(() => {
         setCurrentPage(0);
         fetchGameRecords(0);
-    }, [selectedCategory, selectedDifficulty, searchQuery, sortBy]);
+    }, [selectedCategory, searchQuery, sortBy]);
 
     const loadNextPage = () => {
         if (hasNext && !loading) {
@@ -87,7 +80,6 @@ export default function GameRecordsScreen() {
             console.log('Game record sample:', gameHistory[0]);
             console.log('All fields:', Object.keys(gameHistory[0]));
             console.log('Available game types:', [...new Set(gameHistory.map(g => g.gameType || g.type || g.game_category))]);
-            console.log('Available difficulties:', [...new Set(gameHistory.map(g => g.gameDifficulty || g.difficulty || g.game_difficulty))]);
         }
     }, [gameHistory]);
 
@@ -112,22 +104,16 @@ export default function GameRecordsScreen() {
         }
     };
 
-
-    // 前端過濾與排序邏輯
+    // 前端過濾與排序邏輯（移除了難度篩選）
     const filteredRecords = useMemo(() => {
         let filtered = gameHistory.filter(r => {
-            // 支持多種可能的字段名稱
             const gameType = r.gameType || r.type || r.game_category || r.gameCategory;
-            const difficulty = r.gameDifficulty || r.difficulty || r.game_difficulty || r.gameDifficulty;
             const name = r.name || r.gameName || r.game_name;
 
             const matchCat = selectedCategory === 'ALL' || gameType?.toString().toUpperCase() === selectedCategory;
-            const matchDiff = selectedDifficulty === 'ALL' || difficulty?.toString().toUpperCase() === selectedDifficulty;
             const matchSearch = name?.toString().toLowerCase().includes(searchQuery.toLowerCase());
 
-
-
-            return matchCat && matchDiff && matchSearch;
+            return matchCat && matchSearch;
         });
 
         // 排序邏輯
@@ -147,11 +133,10 @@ export default function GameRecordsScreen() {
         });
 
         return filtered;
-    }, [gameHistory, selectedCategory, selectedDifficulty, searchQuery, sortBy]);
+    }, [gameHistory, selectedCategory, searchQuery, sortBy]);
 
-    // 統計基於當前頁數據
+    // 統計（僅保留遊戲次數和最高分）
     const stats = useMemo(() => ({
-        totalPoints: gameHistory.reduce((sum, r) => sum + (r.points || 0), 0),
         totalGames: gameHistory.length,
         bestScore: gameHistory.length > 0 ? Math.max(...gameHistory.map(r => r.scores || r.score || 0)) : 0
     }), [gameHistory]);
@@ -194,30 +179,24 @@ export default function GameRecordsScreen() {
                 {/* Header Area */}
                 <View style={styles.header}>
                     <TouchableOpacity onPress={() => {
-                    if (router.canGoBack()) {
-                        router.back();
-                    } else {
-                        // Fallback to navigate back to profile if no history
-                        router.replace('/Profile/profile');
-                    }
-                }} style={styles.backBtn}>
+                        if (router.canGoBack()) {
+                            router.back();
+                        } else {
+                            router.replace('/Profile/profile');
+                        }
+                    }} style={styles.backBtn}>
                         <ArrowLeft size={24} color="#2D3436" />
                     </TouchableOpacity>
                     <Text style={styles.headerTitle}>Play History</Text>
                     <View style={styles.placeholder} />
                 </View>
 
-                {/* Stats Section */}
+                {/* Stats Section - 只有兩個卡片 */}
                 <View style={styles.statsContainer}>
                     <View style={styles.statCard}>
                         <Trophy size={22} color="#F1C40F" />
                         <Text style={styles.statNumber}>{stats.totalGames}</Text>
                         <Text style={styles.statTitle}>Games Played</Text>
-                    </View>
-                    <View style={styles.statCard}>
-                        <TrendingUp size={22} color="#4CAF50" />
-                        <Text style={styles.statNumber}>{stats.totalPoints.toLocaleString()}</Text>
-                        <Text style={styles.statTitle}>Total Points</Text>
                     </View>
                     <View style={styles.statCard}>
                         <Star size={22} color="#FF9800" />
@@ -244,7 +223,7 @@ export default function GameRecordsScreen() {
                     >
                         <Filter size={16} color="#FFF" />
                         <Text style={styles.filterToggleText}>Filter</Text>
-                        {(selectedCategory !== 'ALL' || selectedDifficulty !== 'ALL' || sortBy !== 'date_desc' || searchQuery !== '') && (
+                        {(selectedCategory !== 'ALL' || sortBy !== 'date_desc' || searchQuery !== '') && (
                             <View style={styles.activeFilterDot} />
                         )}
                     </TouchableOpacity>
@@ -269,23 +248,6 @@ export default function GameRecordsScreen() {
                             </View>
 
                             <View style={styles.filterSection}>
-                                <Text style={styles.filterSectionTitle}>Difficulty</Text>
-                                <View style={styles.filterOptions}>
-                                    {difficulties.map(diff => (
-                                        <TouchableOpacity
-                                            key={diff}
-                                            onPress={() => setSelectedDifficulty(diff)}
-                                            style={[styles.filterOption, selectedDifficulty === diff && { backgroundColor: getDifficultyColor(diff) }]}
-                                        >
-                                            <Text style={[styles.filterOptionText, selectedDifficulty === diff && styles.activeFilterOptionText]}>
-                                                {diff === 'ALL' ? 'All' : diff}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </View>
-                            </View>
-
-                            <View style={styles.filterSection}>
                                 <Text style={styles.filterSectionTitle}>Sort By</Text>
                                 <View style={styles.filterOptions}>
                                     {sortOptions.map(option => (
@@ -302,12 +264,10 @@ export default function GameRecordsScreen() {
                                 </View>
                             </View>
 
-
                             <TouchableOpacity
                                 style={styles.clearFiltersBtn}
                                 onPress={() => {
                                     setSelectedCategory('ALL');
-                                    setSelectedDifficulty('ALL');
                                     setSortBy('date_desc');
                                     setSearchQuery('');
                                 }}
@@ -324,7 +284,6 @@ export default function GameRecordsScreen() {
                         <ActivityIndicator style={{ marginVertical: 40 }} color="#4CAF50" />
                     ) : filteredRecords.length > 0 ? (
                         <>
-                            {/* 正確的列表渲染 */}
                             {filteredRecords.map((item: any, index: number) => {
                                 const gameType = item.gameType || item.type || item.game_category;
                                 const difficulty = item.gameDifficulty || item.difficulty;
@@ -356,7 +315,6 @@ export default function GameRecordsScreen() {
                                 );
                             })}
 
-                            {/* 分頁控制項放這裡（在 map 之外） */}
                             {(hasNext || hasPrevious) && (
                                 <View style={styles.paginationContainer}>
                                     <TouchableOpacity
@@ -408,21 +366,22 @@ const styles = StyleSheet.create({
     backBtn: { padding: 8 },
     placeholder: { width: 40 },
 
-    // Stats Section
+    // Stats Section - 调整为两个卡片
     statsContainer: {
         flexDirection: 'row',
-        flexWrap: 'wrap',
         justifyContent: 'space-between',
         paddingHorizontal: 20,
         marginTop: 10
     },
     statCard: {
-        width: '31%',
+        width: '48%',
         padding: 12,
         borderRadius: 20,
         alignItems: 'center',
         borderWidth: 1,
-        marginBottom: 10
+        borderColor: '#E1E4E8',
+        backgroundColor: '#FFF',
+        marginBottom: 10,
     },
     statNumber: {
         fontSize: 20,
@@ -513,10 +472,6 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#E1E4E8',
     },
-    activeSortOption: {
-        backgroundColor: '#4CAF50',
-        borderColor: '#4CAF50',
-    },
     filterOptionText: {
         fontSize: 14,
         fontWeight: '600',
@@ -550,7 +505,7 @@ const styles = StyleSheet.create({
         elevation: 2
     },
 
-    // Activity Cards (matching Profile style)
+    // Activity Cards
     activityCard: {
         flexDirection: 'row',
         alignItems: 'center',

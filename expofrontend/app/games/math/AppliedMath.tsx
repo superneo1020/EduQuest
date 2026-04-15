@@ -12,7 +12,9 @@ import axios from 'axios';
 import { useAuth } from "@/src/auth/AuthContext";
 import { useRouter, useNavigation } from 'expo-router';
 
-const MAX_STEPS = 3;
+const MAX_STEPS = 2;
+const MAX_SCORE = 100;          // 满分100分
+const SCORE_PER_QUESTION = MAX_SCORE / MAX_STEPS;  // 每题50分
 
 // 格式化時間為 mm:ss
 const formatTime = (seconds: number): string => {
@@ -83,6 +85,13 @@ const AppliedMath = () => {
     const [prepText, setPrepText] = useState<string | null>(null);
     const prepScale = useSharedValue(0);
     const prepAnimatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: prepScale.value }] }));
+
+    // 組件卸載時清理計時器
+    useEffect(() => {
+        return () => {
+            if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+        };
+    }, []);
 
     // 啟動計時器
     const startTimer = () => {
@@ -181,18 +190,22 @@ const AppliedMath = () => {
         try {
             const res = await axios.post('http://localhost:8000/api/math/final_report', { history: sessionHistory });
             const reportData = res.data;
-            // 直接使用 finalTime 確保總時間正確
-            setFinalReport({ ...reportData, totalTime: finalTime });
 
-            const finalScore = Math.round((reportData.accuracy / 100) * sessionHistory.length * 10);
-            
+            // 計算正確題數和分數（滿分100分，每題50分）
+            const totalCorrect = sessionHistory.filter(item => item.is_correct).length;
+            const finalScore = Math.round(totalCorrect * SCORE_PER_QUESTION);
+            const accuracy = (totalCorrect / sessionHistory.length) * 100 || 0;
+
+            // 保存最終報告（使用前端計算的準確率）
+            setFinalReport({ summary: reportData.summary, accuracy: accuracy, totalTime: finalTime });
+
             const gameData = {
                 gameName: "AI Math Adventure",
                 scores: finalScore,
                 gameType: "MATH",
-                gameDifficulty: "HARD"
+                gameDifficulty: difficulty?.toUpperCase() || "MEDIUM"  // 根據用戶選擇的難度動態設置
             };
-            
+
             const questionsData = sessionHistory.map((item, index) => ({
                 id: index + 1,
                 question: item.question,
@@ -209,7 +222,7 @@ const AppliedMath = () => {
                 finalScore,
                 {
                     totalProblems: sessionHistory.length,
-                    correctProblems: Math.round(sessionHistory.length * reportData.accuracy / 100)
+                    correctProblems: totalCorrect
                 },
                 questionsData
             );
@@ -219,7 +232,7 @@ const AppliedMath = () => {
                 scores: gameData.scores,
                 metadata: metadata
             };
-            
+
             await axios.post('http://localhost:8080/api/user/game/score', backendRequest,
                 { headers: { 'Authorization': `Bearer ${token}` } }
             );
@@ -249,11 +262,16 @@ const AppliedMath = () => {
 
     // 總結頁面
     if (isFinished) {
+        // 根據 sessionHistory 重新計算最終分數（用於顯示）
+        const totalCorrect = sessionHistory.filter(item => item.is_correct).length;
+        const finalScoreDisplay = Math.round(totalCorrect * SCORE_PER_QUESTION);
+
         return (
             <LinearGradient colors={['#F8FAFC', '#E2E8F0']} style={styles.centerContainer}>
                 <Award size={80} color="#F59E0B" />
                 <Text style={styles.title}>Session Report 🎓</Text>
                 <View style={styles.reportBox}>
+                    <Text style={styles.accuracyText}>Score: {finalScoreDisplay} / {MAX_SCORE}</Text>
                     <Text style={styles.accuracyText}>Accuracy: {finalReport.accuracy.toFixed(0)}%</Text>
                     <Text style={styles.timeText}>⏱️ Total Time: {formatTime(finalReport.totalTime)}</Text>
                     <Text style={styles.summaryText}>{finalReport.summary}</Text>
