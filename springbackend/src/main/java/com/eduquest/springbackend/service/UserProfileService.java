@@ -34,10 +34,6 @@ public class UserProfileService {
         this.itemService = itemService;
     }
 
-    public Long getItemIdByType(ProfileEquippedItemsDto dto, ItemType type) {
-        return ACCESSORS.get(type).apply(dto);
-    }
-
     @Transactional(readOnly = true)
     public UserProfileDto getUserProfile(@NonNull Long userId) {
         UserProfile userProfile = userProfileRepo.findByUserId(userId)

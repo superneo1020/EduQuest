@@ -5,8 +5,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
-import java.util.Map;
-
 public record UserGameScoreRequest(
         @NotBlank
         @Size(max = 50)
@@ -17,6 +15,6 @@ public record UserGameScoreRequest(
         Integer scores,
 
         @NotNull
-        Map<String, Object> metadata
+        GameMetadata metadata
 ) {
 }

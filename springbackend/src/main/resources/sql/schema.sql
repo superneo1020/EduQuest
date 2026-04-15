@@ -168,7 +168,7 @@ CREATE TABLE IF NOT EXISTS user_game_scores (
     user_id BIGINT NOT NULL,
     game_id BIGINT NOT NULL,
     scores INT NOT NULL DEFAULT 0 CHECK (scores >= 0),
-    metadata JSONB,
+    metadata JSONB DEFAULT '{"questions": [], "extraData": {}}',
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
