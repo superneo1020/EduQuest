@@ -1,6 +1,7 @@
 package com.eduquest.springbackend.service;
 
 import com.eduquest.springbackend.dao.RoleRepository;
+import com.eduquest.springbackend.dao.UserGameScoreRepository;
 import com.eduquest.springbackend.dao.UserRepository;
 import com.eduquest.springbackend.dto.AdminFilterForUserRequest;
 import com.eduquest.springbackend.dto.AdminFilterForUserResponse;
@@ -36,6 +37,7 @@ public class AdminService {
 
     private final UserRepository userRepo;
     private final RoleRepository roleRepo;
+    private final UserGameScoreRepository userGameScoreRepo;
 
     private final DtoMapper dtoMapper;
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
@@ -45,11 +47,17 @@ public class AdminService {
     );
 
     public AdminService(UserRepository userRepo,
-                        RoleRepository roleRepo,
+                        RoleRepository roleRepo, UserGameScoreRepository userGameScoreRepo,
                         DtoMapper dtoMapper) {
         this.userRepo = userRepo;
         this.roleRepo = roleRepo;
+        this.userGameScoreRepo = userGameScoreRepo;
         this.dtoMapper = dtoMapper;
+    }
+
+    @Transactional(readOnly = true)
+    public long countAllUserGameScore() {
+        return userGameScoreRepo.count();
     }
 
     @Transactional(readOnly = true)
