@@ -38,4 +38,9 @@ public class AdminController {
     public ResponseEntity<OperationResult> rejectEducator(@PathVariable Long id) {
         return ResponseEntity.ok(adminService.rejectEducator(id));
     }
+
+    @GetMapping("/user/game/count")
+    public ResponseEntity<Long> countAllUserGameScore() {
+        return ResponseEntity.ok(adminService.countAllUserGameScore());
+    }
 }
