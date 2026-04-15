@@ -199,18 +199,18 @@ export default function LandscapeOptimizedHome() {
 
                     <View style={styles.divider} />
 
-                    <Text style={styles.panelTitle}>Missions</Text>
-                    <TouchableOpacity 
-                        style={styles.questCard} 
-                        activeOpacity={0.8}
-                        onPress={() => router.push('/mission/missionScreen' as any)}
-                    >
-                        <Rocket size={28} color="#FF4757" />
-                        <View style={{marginLeft: 15, flex: 1}}>
-                            <Text style={styles.questTitle}>View Missions</Text>
-                            <Text style={styles.questSub}>Complete quests for rewards</Text>
-                        </View>
-                    </TouchableOpacity>
+                    {/*<Text style={styles.panelTitle}>Missions</Text>*/}
+                    {/*<TouchableOpacity */}
+                    {/*    style={styles.questCard} */}
+                    {/*    activeOpacity={0.8}*/}
+                    {/*    onPress={() => router.push('/mission/missionScreen' as any)}*/}
+                    {/*>*/}
+                    {/*    <Rocket size={28} color="#FF4757" />*/}
+                    {/*    <View style={{marginLeft: 15, flex: 1}}>*/}
+                    {/*        <Text style={styles.questTitle}>View Missions</Text>*/}
+                    {/*        <Text style={styles.questSub}>Complete quests for rewards</Text>*/}
+                    {/*    </View>*/}
+                    {/*</TouchableOpacity>*/}
                 </View>
             </View>
             {/* Logout Confirmation Modal */}
