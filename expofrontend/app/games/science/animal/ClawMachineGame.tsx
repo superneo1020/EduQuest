@@ -1032,18 +1032,14 @@ const ClawMachineGame: React.FC = () => {
                                         transform: [{
                                             scale: suctionItem?.id === item.id && isSuction ? suctionScale : 1
                                         }],
-                                        borderColor: item.isAnimal ? '#4caf50' : '#e74c3c',
-                                        backgroundColor: item.isAnimal ? 'rgba(76, 175, 80, 0.15)' : 'rgba(231, 76, 60, 0.1)',
+                                        borderColor: '#4caf50',
+                                        backgroundColor: 'rgba(76, 175, 80, 0.15)',
                                     }
                                 ]}
                             >
                                 <Text style={styles.itemIcon}>{item.type.icon}</Text>
                                 <Text style={styles.itemName}>{item.type.name}</Text>
-                                {!item.isAnimal && (
-                                    <View style={styles.warningBadge}>
-                                        <Text style={styles.warningText}>⚠️</Text>
-                                    </View>
-                                )}
+
                             </Animated.View>
                         ))}
                         <Animated.View

@@ -64,25 +64,27 @@ const AdminDashboard: React.FC = () => {
         try {
             // 实际 API 调用，同 adminDashboard.tsx
             const totalUsersRes = await api.get('/api/admin/filter/user', { params: { page: 0, size: 1 } });
-            const totalUsers = totalUsersRes.data.totalElements;
+            const totalUsers = totalUsersRes.data.totalItems;
+            console.log(totalUsers);
 
             let totalGames = 0;
             try {
-                const gamesRes = await api.get('/api/admin/stats/games');
-                totalGames = gamesRes.data.totalGames;
+                const gamesRes = await api.get('/api/admin/user/game/count');
+                totalGames = gamesRes.data;
             } catch (e) {
                 console.warn('Games API not available');
             }
 
             const educatorRes = await api.get('/api/admin/filter/user', { params: { educatorStatus: 'APPROVED', page: 0, size: 1 } });
-            const totalEducators = educatorRes.data.totalElements;
+            const totalEducators = educatorRes.data.totalItems;
 
-            const adminRes = await api.get('/api/admin/filter/user', { params: { roleId: 3, page: 0, size: 1 } });
-            const admins = adminRes.data.totalElements;
-            const totalStudents = totalUsers - admins - totalEducators;
+            const adminRes = await api.get('/api/admin/filter/user', { params: { roleId: 2, page: 0, size: 1 } });
+            const admins = adminRes.data.totalItems ?? 0;
+            const totalStudents = Math.max(0, totalUsers - admins - totalEducators);
+            console.log('Student calc debug:', { totalUsers, admins, totalEducators, totalStudents });
 
             const pendingRes = await api.get('/api/admin/filter/user', { params: { educatorStatus: 'PENDING', page: 0, size: 1 } });
-            const pendingTeachers = pendingRes.data.totalElements;
+            const pendingTeachers = pendingRes.data.totalItems;
 
             setStats({
                 totalUsers,
@@ -160,10 +162,10 @@ const AdminDashboard: React.FC = () => {
                 </View>
 
                 <View style={styles.quickActions}>
-                    <TouchableOpacity style={styles.actionButton} onPress={() => router.push('/admin/userManagement')}>
-                        <Users size={20} color="#FFF" />
-                        <Text style={styles.actionText}>User Management</Text>
-                    </TouchableOpacity>
+                    {/*<TouchableOpacity style={styles.actionButton} onPress={() => router.push('/admin/userManagement')}>*/}
+                    {/*    <Users size={20} color="#FFF" />*/}
+                    {/*    <Text style={styles.actionText}>User Management</Text>*/}
+                    {/*</TouchableOpacity>*/}
                     <TouchableOpacity style={styles.actionButton} onPress={() => router.push('/admin/teacherRequests')}>
                         <GraduationCap size={20} color="#FFF" />
                         <Text style={styles.actionText}>Teacher Requests</Text>

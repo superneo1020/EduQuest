@@ -46,6 +46,9 @@ const RoleManagement: React.FC = () => {
     const [modalVisible, setModalVisible] = useState(false);
     const [filterModalVisible, setFilterModalVisible] = useState(false);
     const [tempFilters, setTempFilters] = useState<FilterParams>({});
+    const [rejectModalVisible, setRejectModalVisible] = useState(false);
+    const [rejectUserId, setRejectUserId] = useState<number | null>(null);
+    const [rejectLoading, setRejectLoading] = useState(false);
 
     const api = axios.create({
         baseURL: getApiBaseUrl(),
@@ -63,7 +66,6 @@ const RoleManagement: React.FC = () => {
                 size: 20,
                 ...filters,
             };
-            // 移除 undefined 值
             Object.keys(params).forEach(key => params[key] === undefined && delete params[key]);
 
             const response = await api.get('/api/admin/filter/user', { params });
@@ -138,23 +140,25 @@ const RoleManagement: React.FC = () => {
         ]);
     };
 
-    const handleReject = async (userId: number) => {
-        Alert.alert('Confirm', 'Reject this educator? The user will be deactivated and educator role removed.', [
-            { text: 'Cancel', style: 'cancel' },
-            {
-                text: 'Reject',
-                style: 'destructive',
-                onPress: async () => {
-                    try {
-                        await api.patch(`/api/admin/user/${userId}/reject`);
-                        Alert.alert('Success', 'Educator rejected');
-                        fetchUsers();
-                    } catch (error: any) {
-                        Alert.alert('Error', error.response?.data?.message || 'Rejection failed');
-                    }
-                },
-            },
-        ]);
+    const handleReject = (userId: number) => {
+        setRejectUserId(userId);
+        setRejectModalVisible(true);
+    };
+
+    const executeReject = async () => {
+        if (!rejectUserId) return;
+        setRejectLoading(true);
+        try {
+            await api.patch(`/api/admin/user/${rejectUserId}/reject`);
+            setRejectModalVisible(false);
+            setRejectUserId(null);
+            Alert.alert('Success', 'Educator rejected');
+            fetchUsers();
+        } catch (error: any) {
+            Alert.alert('Error', error.response?.data?.message || 'Rejection failed');
+        } finally {
+            setRejectLoading(false);
+        }
     };
 
     const renderUserItem = ({ item }: { item: User }) => (
@@ -326,6 +330,41 @@ const RoleManagement: React.FC = () => {
                             </TouchableOpacity>
                             <TouchableOpacity style={styles.resetFilterBtn} onPress={resetFilters}>
                                 <Text style={styles.resetFilterText}>Reset</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Reject Confirm Modal */}
+            <Modal visible={rejectModalVisible} animationType="fade" transparent onRequestClose={() => setRejectModalVisible(false)}>
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { padding: 24 }]}>
+                        <Text style={{ fontSize: 48, textAlign: 'center', marginBottom: 16 }}>⚠️</Text>
+                        <Text style={{ fontSize: 20, fontWeight: 'bold', textAlign: 'center', marginBottom: 12, color: '#333' }}>
+                            Confirm Rejection
+                        </Text>
+                        <Text style={{ fontSize: 14, textAlign: 'center', marginBottom: 24, color: '#666', lineHeight: 20 }}>
+                            Reject this educator?{'\n'}The user will be deactivated and educator role removed.
+                        </Text>
+                        <View style={{ flexDirection: 'row', gap: 12 }}>
+                            <TouchableOpacity
+                                style={[styles.closeModalBtn, { flex: 1, backgroundColor: '#F0F0F0' }]}
+                                onPress={() => setRejectModalVisible(false)}
+                                disabled={rejectLoading}
+                            >
+                                <Text style={[styles.closeModalText, { color: '#333' }]}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.closeModalBtn, { flex: 1, backgroundColor: '#F44336' }]}
+                                onPress={executeReject}
+                                disabled={rejectLoading}
+                            >
+                                {rejectLoading ? (
+                                    <ActivityIndicator size="small" color="#FFF" />
+                                ) : (
+                                    <Text style={styles.closeModalText}>Reject</Text>
+                                )}
                             </TouchableOpacity>
                         </View>
                     </View>

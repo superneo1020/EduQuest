@@ -54,14 +54,14 @@ const AdminDashboard: React.FC = () => {
 
       // 1. 总用户数
       const totalUsersRes = await api.get('/api/admin/filter/user', { params: { page: 0, size: 1 } });
-      const totalUsers = totalUsersRes.data.totalElements;
+      const totalUsers = totalUsersRes.data.totalItems;
 
       // 2. 游戏数目（假设后端提供 /api/admin/stats/games 或类似接口）
       // 这里使用 mock 或真实接口，若无则先设为 0
       let totalGames = 0;
       try {
-        const gamesRes = await api.get('/api/admin/stats/games'); // 需后端实现
-        totalGames = gamesRes.data.totalGames;
+        const gamesRes = await api.get('/api/admin/user/game/count'); // 需后端实现
+        totalGames = gamesRes.data;
       } catch (e) {
         console.warn('Games stats API not implemented, using mock');
         totalGames = 0;
@@ -69,17 +69,17 @@ const AdminDashboard: React.FC = () => {
 
       // 3. 教师数目（已审批的教师）
       const educatorRes = await api.get('/api/admin/filter/user', { params: { educatorStatus: 'APPROVED', page: 0, size: 1 } });
-      const totalEducators = educatorRes.data.totalElements;
+      const totalEducators = educatorRes.data.totalItems;
 
       // 4. 学生数目（非教师、非管理员的普通用户）
       // 方法：总用户 - 管理员 - 教师（假设管理员数量很少，可单独查询）
-      const adminRes = await api.get('/api/admin/filter/user', { params: { roleId: 3, page: 0, size: 1 } });
-      const admins = adminRes.data.totalElements;
+      const adminRes = await api.get('/api/admin/filter/user', { params: { roleId: 2, page: 0, size: 1 } });
+      const admins = adminRes.data.totalItems;
       const totalStudents = totalUsers - admins - totalEducators;
 
       // 5. 待审批教师请求
       const pendingRes = await api.get('/api/admin/filter/user', { params: { educatorStatus: 'PENDING', page: 0, size: 1 } });
-      const pendingTeachers = pendingRes.data.totalElements;
+      const pendingTeachers = pendingRes.data.totalItems;
 
       setStats({
         totalUsers,
