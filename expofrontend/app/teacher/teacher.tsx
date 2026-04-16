@@ -166,7 +166,7 @@ export default function TeacherDashboard() {
             });
 
             if (response.data && response.data.content) {
-                const studentsData = response.data.content.map((member: any) => ({
+                const studentsData: Student[] = response.data.content.map((member: any) => ({
                     id: member.id,
                     username: member.username,
                     email: member.email,
@@ -540,7 +540,7 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
             >
                 {/* Header */}
                 <View style={styles.header}>
-                    <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+                    <TouchableOpacity style={styles.backBtn} onPress={() => router.push('/index_with_teacher')}>
                         <ArrowLeft size={24} color="#2D3436" />
                     </TouchableOpacity>
                     <View style={styles.headerTextContainer}>
