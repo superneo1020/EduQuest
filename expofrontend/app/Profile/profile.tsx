@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity,
     StatusBar, Dimensions, ActivityIndicator, TextInput, Modal, ImageBackground , Alert
@@ -176,7 +176,12 @@ export default function ProfileScreen() {
             const profileResponse = await axios.get(`${getApiBaseUrl()}/api/user/profile`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            setProfileData(profileResponse.data);
+            // Preserve points when updating profileData
+            setProfileData(prev => ({
+                ...profileResponse.data,
+                points: prev?.points ?? userPoints ?? profileResponse.data.points ?? userPoints ?? 0,
+                userGameScores: prev?.userGameScores || profileResponse.data.userGameScores || []
+            }));
 
         } catch (error: any) {
             console.error("Update failed", error.response?.data);
@@ -257,7 +262,12 @@ export default function ProfileScreen() {
             const profileResponse = await axios.get(`${getApiBaseUrl()}/api/user/profile`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            setProfileData(profileResponse.data);
+            // Preserve points when updating profileData
+            setProfileData(prev => ({
+                ...profileResponse.data,
+                points: prev?.points ?? userPoints ?? profileResponse.data.points ?? userPoints ?? 0,
+                userGameScores: prev?.userGameScores || profileResponse.data.userGameScores || []
+            }));
 
         } catch (error: any) {
             console.error("Background update failed", error.response?.data);
@@ -339,7 +349,12 @@ export default function ProfileScreen() {
             const profileResponse = await axios.get(`${getApiBaseUrl()}/api/user/profile`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            setProfileData(profileResponse.data);
+            // Preserve points when updating profileData
+            setProfileData(prev => ({
+                ...profileResponse.data,
+                points: prev?.points ?? userPoints ?? profileResponse.data.points ?? userPoints ?? 0,
+                userGameScores: prev?.userGameScores || profileResponse.data.userGameScores || []
+            }));
 
         } catch (error: any) {
             console.error("Badge update failed", error.response?.data);
@@ -479,6 +494,7 @@ export default function ProfileScreen() {
                         setUserRoles(rolesResponse.data || []);
                     } catch (error) { }
 
+
                     // Points
                     try {
                         const pointsResponse = await axios.get(`${getApiBaseUrl()}/api/user/point`, {
@@ -506,7 +522,9 @@ export default function ProfileScreen() {
         }, [token])
     );
 
-    const displayUser = profileData ? { ...user, ...profileData, points: userPoints } : { ...user, points: userPoints };
+    const displayUser = profileData
+        ? { ...user, ...profileData, points: userPoints ?? 0 }
+        : { ...user, points: userPoints ?? 0 };
 
     const gameHistory = displayUser?.userGameScores || [];
 
@@ -556,7 +574,7 @@ export default function ProfileScreen() {
         const subjectAverages: { [key: string]: number } = {};
         let bestSubject = null, bestAverage = 0;
         Object.entries(subjectScores).forEach(([subject, scores]) => {
-            const average = scores.reduce((a, b) => a + b, 0) / scores.length;
+            const average = scores.reduce((a: number, b: number) => a + b, 0) / scores.length;
             subjectAverages[subject] = Math.round(average);
             if (average > bestAverage) {
                 bestAverage = average;
@@ -606,7 +624,7 @@ export default function ProfileScreen() {
                 });
             }
         }
-        const totalGames = Object.values(stats.difficultyPreference).reduce((a, b) => a + b, 0);
+        const totalGames = Object.values(stats.difficultyPreference).reduce((a: number, b: number) => a + b, 0);
         const easyRatio = (stats.difficultyPreference['EASY'] || 0) / totalGames;
         const hardRatio = (stats.difficultyPreference['HARD'] || 0) / totalGames;
         if (easyRatio > 0.6) {
@@ -624,8 +642,8 @@ export default function ProfileScreen() {
         }
         if (gameHistory.length >= 5) {
             const recentScores = gameHistory.slice(-5).map(g => g.scores || 0);
-            const mean = recentScores.reduce((a, b) => a + b, 0) / recentScores.length;
-            const scoreVariance = Math.sqrt(recentScores.reduce((sum, score) => sum + Math.pow(score - mean, 2), 0) / recentScores.length);
+            const mean = recentScores.reduce((a: number, b: number) => a + b, 0) / recentScores.length;
+            const scoreVariance = Math.sqrt(recentScores.reduce((sum: number, score: number) => sum + Math.pow(score - mean, 2), 0) / recentScores.length);
             if (scoreVariance > 20) {
                 suggestions.push({
                     type: 'consistency', icon: <TrendingUp size={16} color="#4ECDC4" />,
@@ -636,7 +654,7 @@ export default function ProfileScreen() {
         }
         if (gameHistory.length >= 3) {
             const recentGames = gameHistory.slice(-3);
-            const avgRecentScore = recentGames.reduce((sum, game) => sum + (game.scores || 0), 0) / recentGames.length;
+            const avgRecentScore = recentGames.reduce((sum: number, game: any) => sum + (game.scores || 0), 0) / recentGames.length;
             if (avgRecentScore > stats.averageScore * 1.1) {
                 suggestions.push({
                     type: 'momentum', icon: <Star size={16} color="#FFD93D" />,
@@ -750,13 +768,13 @@ export default function ProfileScreen() {
         }
     };
 
-    const getBackgroundGradient = (backgroundId: string) => {
+    const getBackgroundGradient = (backgroundId: string): readonly [string, string] => {
         switch (backgroundId) {
-            case 'Space': return ['#0F172A', '#1E293B'];
-            case 'Ocean': return ['#006994', '#00CED1'];
-            case 'Forest': return ['#228B22', '#90EE90'];
-            case 'City': return ['#708090', '#2C3E50'];
-            default: return ['#4CAF50', '#4CAF50'];
+            case 'Space': return ['#0F172A', '#1E293B'] as const;
+            case 'Ocean': return ['#006994', '#00CED1'] as const;
+            case 'Forest': return ['#228B22', '#90EE90'] as const;
+            case 'City': return ['#708090', '#2C3E50'] as const;
+            default: return ['#4CAF50', '#4CAF50'] as const;
         }
     };
 
@@ -1070,6 +1088,55 @@ export default function ProfileScreen() {
         }
     };
 
+    const chartWidth = width - 96; // 根據 masterInfoCard 的邊距計算
+    
+    // 根據背景動態漸變色彩
+    const getCardGradientColors = (backgroundId: string) => {
+        switch (backgroundId) {
+            case 'Space': return [
+                'rgba(15, 23, 42, 0.85)',   // 深藍黑
+                'rgba(30, 41, 59, 0.85)',   // 中藍黑
+                'rgba(99, 102, 241, 0.85)'   // 紫藍色
+            ] as const;
+            case 'Ocean': return [
+                'rgba(0, 105, 148, 0.85)',   // 深海藍
+                'rgba(0, 206, 209, 0.85)',   // 淺海藍
+                'rgba(34, 197, 94, 0.85)'    // 海綠色
+            ] as const;
+            case 'Forest': return [
+                'rgba(34, 139, 34, 0.85)',    // 深森林綠
+                'rgba(144, 238, 144, 0.85)',  // 淺森林綠
+                'rgba(76, 175, 80, 0.85)'    // 草綠色
+            ] as const;
+            case 'City': return [
+                'rgba(112, 128, 144, 0.85)',  // 深灰
+                'rgba(44, 62, 80, 0.85)',    // 深藍灰
+                'rgba(59, 130, 246, 0.85)'   // 都市藍
+            ] as const;
+            default: return [
+                'rgba(99, 102, 241, 0.85)',  // 紫藍色
+                'rgba(139, 92, 246, 0.85)',  // 紫色
+                'rgba(236, 72, 153, 0.85)'   // 粉紅色
+            ] as const;
+        }
+    };
+    
+    // 根據背景決定文字顏色
+    const getTextColor = (backgroundId: string) => {
+        switch (backgroundId) {
+            case 'Space': return '#FFF';  // 深色背景用白色
+            case 'Ocean': return '#2D3436';  // 淺色背景用深色
+            case 'Forest': return '#2D3436';  // 淺色背景用深色
+            case 'City': return '#FFF';  // 深色背景用白色
+            default: return '#FFF';  // 預設用白色
+        }
+    };
+    
+    const cardTextColor = getTextColor(selectedBackground);
+    const iconColor = selectedBackground === 'Ocean' || selectedBackground === 'Forest' ? 'rgba(45, 52, 54, 0.7)' : 'rgba(255,255,255,0.7)';
+    
+    const gradientColors = getCardGradientColors(selectedBackground);
+
     return (
         <View style={{ flex: 1 }}>
             {/* 背景 SVG - 絕對定位填滿 */}
@@ -1169,199 +1236,260 @@ export default function ProfileScreen() {
                             </TouchableOpacity>
                         </View>
 
-                        {/* Unified User Information */}
-                        <View style={styles.unifiedInfoSection}>
-                            <Text style={styles.infoSectionTitle}>📋 User Information</Text>
-                            <View style={styles.infoList}>
-                                <View style={styles.infoItem}>
-                                    <UserIcon size={16} color="#636E72" />
-                                    <View style={styles.infoContent}>
-                                        <Text style={styles.infoLabel}>Username</Text>
-                                        <Text style={styles.infoValue}>{displayUser?.username || 'N/A'}</Text>
-                                    </View>
-                                </View>
-                                <View style={styles.infoItem}>
-                                    <Mail size={16} color="#636E72" />
-                                    <View style={styles.infoContent}>
-                                        <Text style={styles.infoLabel}>Email</Text>
-                                        <Text style={styles.infoValue}>{displayUser?.email || 'N/A'}</Text>
-                                    </View>
-                                </View>
-                                {currentSchool && (
-                                    <View style={styles.infoItem}>
-                                        <BookOpen size={16} color="#636E72" />
-                                        <View style={styles.infoContent}>
-                                            <Text style={styles.infoLabel}>School</Text>
-                                            <Text style={styles.infoValue}>{currentSchool}</Text>
-                                        </View>
-                                    </View>
-                                )}
-                                {userRoles.length > 0 && (
-                                    <View style={styles.infoItem}>
-                                        <Award size={16} color="#636E72" />
-                                        <View style={styles.infoContent}>
-                                            <Text style={styles.infoLabel}>Role</Text>
-                                            <Text style={styles.infoValue}>{userRoles.join(', ')}</Text>
-                                        </View>
-                                    </View>
-                                )}
-
-                                <View style={styles.infoItem}>
-                                    <Calendar size={16} color="#636E72" />
-                                    <View style={styles.infoContent}>
-                                        <Text style={styles.infoLabel}>Member Since</Text>
-                                        <Text style={styles.infoValue}>
-                                            {displayUser?.createdAt ? new Date(displayUser.createdAt).toLocaleDateString() : 'N/A'}
-                                        </Text>
-                                    </View>
-                                </View>
-                                <View style={styles.infoItem}>
-                                    <Trophy size={16} color="#636E72" />
-                                    <View style={styles.infoContent}>
-                                        <Text style={styles.infoLabel}>Current Points</Text>
-                                        <Text style={styles.infoValue}>{displayUser?.points || 0} XP</Text>
-                                    </View>
-                                </View>
-                            </View>
-                            {/* My Badges Collection */}
-                            {ownedBadges.length > 0 && (
-                                <View style={styles.badgesSection}>
-                                    <View style={styles.badgesHeader}>
-                                        <Award size={16} color="#636E72" />
-                                        <Text style={styles.badgesTitle}>My Badges</Text>
-                                        <Text style={styles.badgesCount}>({ownedBadges.length})</Text>
-                                        <TouchableOpacity
-                                            style={styles.editBadgesBtn}
-                                            onPress={() => setShowBadgeModal(true)}
-                                        >
-                                            <Text style={styles.editBadgesText}>Edit</Text>
-                                        </TouchableOpacity>
-                                    </View>
-                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.badgesScroll}>
-                                        {ownedBadges.map((badge) => (
-                                            <View key={badge.id} style={styles.badgeItem}>
-                                                {renderBadge(badge.iconId, 40)}
-                                                <Text style={styles.badgeItemName} numberOfLines={1}>{badge.name}</Text>
-                                            </View>
-                                        ))}
-                                    </ScrollView>
-                                </View>
-                            )}
-                            {/* My Backgrounds Collection */}
-                            {ownedBackgrounds.length > 0 && (
-                                <View style={styles.backgroundsSection}>
-                                    <View style={styles.backgroundsHeader}>
-                                        <BookOpen size={16} color="#636E72" />
-                                        <Text style={styles.backgroundsTitle}>My Backgrounds</Text>
-                                        <Text style={styles.backgroundsCount}>({ownedBackgrounds.length})</Text>
-                                        {/* 可選：保留一個「Get More」按鈕 */}
-                                        <TouchableOpacity
-                                            style={styles.editBackgroundsBtn}
-                                            onPress={() => router.push('/shop')}
-                                        >
-                                            <Text style={styles.editBackgroundsText}>Get More</Text>
-                                        </TouchableOpacity>
-                                    </View>
-                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.backgroundsScroll}>
-                                        {ownedBackgrounds.map((background) => (
-                                            <TouchableOpacity
-                                                key={background.id}
-                                                style={styles.backgroundItem}
-                                                onPress={() => handleBackgroundSelect(background.iconId)}
-                                            >
-                                                {renderBackground(background.iconId, 60)}
-                                                <Text style={styles.backgroundItemName} numberOfLines={1}>{background.name}</Text>
-                                            </TouchableOpacity>
-                                        ))}
-                                    </ScrollView>
-                                </View>
-                            )}
-                        </View>
-
-                    </View>
-
-                    {/* Enhanced Features Section */}
-                    <View style={styles.enhancedFeaturesContainer}>
-                        <Text style={styles.sectionTitle}>Enhanced Analytics</Text>
-
-                        <TouchableOpacity
-                            style={styles.featureItem}
-                            onPress={() => {
-                                setShowSuggestions(true);
-                                fetchAiLearningSuggestions();
-                            }}
+                        {/* 統一的大資訊卡片 - 包含所有用戶資訊 */}
+                        <LinearGradient
+                            colors={gradientColors}
+                            style={styles.masterInfoCard}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
                         >
-                            <Target size={20} color="#F44336" />
-                            <View style={styles.featureContent}>
-                                <Text style={styles.featureTitle}>Learning Suggestions</Text>
-                                <Text style={styles.featureDescription}>AI-powered learning recommendations</Text>
+                            {/* 卡片標題 */}
+                            <View style={styles.cardHeader}>
+                                <Text style={[styles.cardTitle, { color: cardTextColor }]}>👤 My Profile</Text>
+                                <TouchableOpacity
+                                    style={styles.editCardBtn}
+                                    onPress={() => setShowEditProfileModal(true)}
+                                >
+                                    <Settings size={16} color="#FFF" />
+                                </TouchableOpacity>
                             </View>
-                            <ChevronRight size={20} color="#BDC3C7" />
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Learning Progress Section */}
-                    <View style={styles.learningProgressContainer}>
-                        <Text style={styles.sectionTitle}>📊 Learning Progress</Text>
-                        <View style={styles.progressCards}>
-                            <View style={styles.progressCard}>
-                                <Text style={styles.progressTitle}>Skill Analysis</Text>
-                                <View style={styles.radarSection}>
+                            
+                            {/* 基本資訊區域 - 緊湊網格布局 */}
+                            <View style={styles.infoSection}>
+                                <Text style={[styles.sectionLabel, { color: cardTextColor }]}>Basic Info</Text>
+                                <View style={styles.compactInfoGrid}>
+                                    <View style={styles.infoRow}>
+                                        <View style={styles.compactInfoItem}>
+                                            <UserIcon size={12} color="rgba(255,255,255,0.7)" />
+                                            <View style={styles.compactInfoContent}>
+                                                <Text style={[styles.compactInfoLabel, { color: cardTextColor }]}>Username</Text>
+                                                <Text style={[styles.compactInfoValue, { color: cardTextColor }]}>{displayUser?.username || 'N/A'}</Text>
+                                            </View>
+                                        </View>
+                                        <View style={styles.compactInfoItem}>
+                                            <Trophy size={12} color="rgba(255,255,255,0.7)" />
+                                            <View style={styles.compactInfoContent}>
+                                                <Text style={[styles.compactInfoLabel, { color: cardTextColor }]}>Points</Text>
+                                                <Text style={[styles.compactInfoValue, { color: cardTextColor }]}>{displayUser?.points || 0} XP</Text>
+                                            </View>
+                                        </View>
+                                    </View>
+                                    <View style={styles.infoRow}>
+                                        <View style={styles.compactInfoItem}>
+                                            <Mail size={12} color="rgba(255,255,255,0.7)" />
+                                            <View style={styles.compactInfoContent}>
+                                                <Text style={[styles.compactInfoLabel, { color: cardTextColor }]}>Email</Text>
+                                                <Text style={[styles.compactInfoValue, { color: cardTextColor }]} numberOfLines={1}>{displayUser?.email || 'N/A'}</Text>
+                                            </View>
+                                        </View>
+                                        <View style={styles.compactInfoItem}>
+                                            <Gamepad2 size={12} color="rgba(255,255,255,0.7)" />
+                                            <View style={styles.compactInfoContent}>
+                                                <Text style={[styles.compactInfoLabel, { color: cardTextColor }]}>Games</Text>
+                                                <Text style={[styles.compactInfoValue, { color: cardTextColor }]}>{gameHistory.length}</Text>
+                                            </View>
+                                        </View>
+                                    </View>
+                                    {(currentSchool || userRoles.length > 0) && (
+                                        <View style={styles.infoRow}>
+                                            {currentSchool && (
+                                                <View style={styles.compactInfoItem}>
+                                                    <BookOpen size={12} color="rgba(255,255,255,0.7)" />
+                                                    <View style={styles.compactInfoContent}>
+                                                        <Text style={[styles.compactInfoLabel, { color: cardTextColor }]}>School</Text>
+                                                        <Text style={[styles.compactInfoValue, { color: cardTextColor }]}>{currentSchool}</Text>
+                                                    </View>
+                                                </View>
+                                            )}
+                                            {userRoles.length > 0 && (
+                                                <View style={styles.compactInfoItem}>
+                                                    <Award size={12} color="rgba(255,255,255,0.7)" />
+                                                    <View style={styles.compactInfoContent}>
+                                                        <Text style={[styles.compactInfoLabel, { color: cardTextColor }]}>Role</Text>
+                                                        <Text style={[styles.compactInfoValue, { color: cardTextColor }]}>{userRoles.join(', ')}</Text>
+                                                    </View>
+                                                </View>
+                                            )}
+                                        </View>
+                                    )}
+                                </View>
+                            </View>
+                            
+                            {/* 徽章和背景組合區域 - 善用空間 */}
+                            {(ownedBadges.length > 0 || ownedBackgrounds.length > 0) && (
+                                <View style={styles.collectionSection}>
+                                    {ownedBadges.length > 0 && (
+                                        <View style={styles.collectionSubsection}>
+                                            <View style={styles.miniSectionHeader}>
+                                                <Text style={[styles.miniSectionLabel, { color: cardTextColor }]}>Badges ({ownedBadges.length})</Text>
+                                                <TouchableOpacity
+                                                    style={styles.miniViewBtn}
+                                                    onPress={() => setShowBadgeModal(true)}
+                                                >
+                                                    <Text style={[styles.miniViewText, { color: cardTextColor }]}>Edit</Text>
+                                                </TouchableOpacity>
+                                            </View>
+                                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.miniBadgesScroll}>
+                                                {ownedBadges.slice(0, 5).map((badge) => (
+                                                    <View key={badge.id} style={styles.miniBadgeItem}>
+                                                        {renderBadge(badge.iconId, 28)}
+                                                    </View>
+                                                ))}
+                                                {ownedBadges.length > 5 && (
+                                                    <TouchableOpacity 
+                                                        style={styles.moreMiniBtn}
+                                                        onPress={() => setShowBadgeModal(true)}
+                                                    >
+                                                        <Text style={[styles.moreMiniText, { color: cardTextColor }]}>+{ownedBadges.length - 5}</Text>
+                                                    </TouchableOpacity>
+                                                )}
+                                            </ScrollView>
+                                        </View>
+                                    )}
+                                    
+                                    {ownedBackgrounds.length > 0 && (
+                                        <View style={styles.collectionSubsection}>
+                                            <View style={styles.miniSectionHeader}>
+                                                <Text style={[styles.miniSectionLabel, { color: cardTextColor }]}>Backgrounds ({ownedBackgrounds.length})</Text>
+                                                <TouchableOpacity
+                                                    style={styles.miniViewBtn}
+                                                    onPress={() => router.push('/shop')}
+                                                >
+                                                    <Text style={[styles.miniViewText, { color: cardTextColor }]}>Shop</Text>
+                                                </TouchableOpacity>
+                                            </View>
+                                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.miniBackgroundsScroll}>
+                                                {ownedBackgrounds.slice(0, 3).map((background) => (
+                                                    <TouchableOpacity
+                                                        key={background.id}
+                                                        style={styles.miniBackgroundItem}
+                                                        onPress={() => handleBackgroundSelect(background.iconId)}
+                                                    >
+                                                        {renderBackground(background.iconId, 40)}
+                                                    </TouchableOpacity>
+                                                ))}
+                                                {ownedBackgrounds.length > 3 && (
+                                                    <TouchableOpacity 
+                                                        style={styles.moreMiniBtn}
+                                                        onPress={() => setShowBackgroundModal(true)}
+                                                    >
+                                                        <Text style={[styles.moreMiniText, { color: cardTextColor }]}>+{ownedBackgrounds.length - 3}</Text>
+                                                    </TouchableOpacity>
+                                                )}
+                                            </ScrollView>
+                                        </View>
+                                    )}
+                                </View>
+                            )}
+                            
+                            {/* 快速操作區域 */}
+                            <View style={styles.actionsSection}>
+                                <Text style={[styles.sectionLabel, { color: cardTextColor }]}>Quick Actions</Text>
+                                <View style={styles.actionButtons}>
+                                    <TouchableOpacity
+                                        style={styles.actionBtn}
+                                        onPress={() => {
+                                            setShowSuggestions(true);
+                                            fetchAiLearningSuggestions();
+                                        }}
+                                    >
+                                        <Target size={16} color="#F44336" />
+                                        <Text style={[styles.actionBtnText, { color: cardTextColor }]}>AI Tips</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={styles.actionBtn}
+                                        onPress={() => router.push('/Inventory/inventory')}
+                                    >
+                                        <Package size={16} color="#4CAF50" />
+                                        <Text style={[styles.actionBtnText, { color: cardTextColor }]}>Inventory</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={styles.actionBtn}
+                                        onPress={() => router.push('/shop')}
+                                    >
+                                        <ShoppingCart size={16} color="#FF9800" />
+                                        <Text style={[styles.actionBtnText, { color: cardTextColor }]}>Shop</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                            
+                            {/* 技能分析區域 */}
+                            <View style={styles.skillsSection}>
+                                <Text style={[styles.sectionLabel, { color: cardTextColor }]}>📊 Skills Analysis</Text>
+                                <View style={{ width: chartWidth, alignSelf: 'center' }}>
                                     <SkillBarsChart gameHistory={gameHistory} />
                                 </View>
                             </View>
-                        </View>
+                        </LinearGradient>
+
                     </View>
 
                     {/* Segmented Control */}
-                    <View style={styles.segmentedControl}>
+                    <LinearGradient
+                        colors={gradientColors}
+                        style={styles.segmentedControl}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                    >
                         <TouchableOpacity
                             onPress={() => setRecordMode('recent')}
                             style={[styles.segmentBtn, recordMode === 'recent' && styles.activeSegment]}
                         >
-                            <Text style={[styles.segmentText, recordMode === 'recent' && styles.activeSegmentText]}>RECENT</Text>
+                            <Text style={[styles.segmentText, recordMode === 'recent' && styles.activeSegmentText, { color: cardTextColor }]}>RECENT</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                             onPress={() => setRecordMode('best')}
                             style={[styles.segmentBtn, recordMode === 'best' && styles.activeSegment]}
                         >
-                            <Text style={[styles.segmentText, recordMode === 'best' && styles.activeSegmentText]}>BEST</Text>
+                            <Text style={[styles.segmentText, recordMode === 'best' && styles.activeSegmentText, { color: cardTextColor }]}>BEST</Text>
                         </TouchableOpacity>
-                    </View>
+                    </LinearGradient>
 
-                    <View style={styles.activityList}>
+                    <LinearGradient
+                        colors={gradientColors}
+                        style={styles.activityList}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                    >
                         {displayList.length > 0 ? displayList.map((record: any, index: number) => (
                             <View key={index} style={styles.activityCard}>
                                 <View style={[styles.gameIconBg, recordMode === 'best' && { backgroundColor: '#FFF9E6' }]}>
                                     {recordMode === 'best' ? <Trophy size={18} color="#F1C40F" /> : renderGameIcon(record.gameType)}
                                 </View>
                                 <View style={{ flex: 1, marginLeft: 12 }}>
-                                    <Text style={styles.activityName}>{record.name}</Text>
+                                    <Text style={[styles.activityName, { color: cardTextColor }]}>{record.name}</Text>
                                     <View style={styles.row}>
                                         <Text style={[styles.activityDifficulty, { color: getDifficultyColor(record.gameDifficulty) }]}>{record.gameDifficulty || 'N/A'}</Text>
-                                        <Text style={styles.dot}> • </Text>
-                                        <Text style={styles.activityDate}>{new Date(record.createdAt).toLocaleDateString()}</Text>
+                                        <Text style={[styles.dot, { color: cardTextColor }]}> • </Text>
+                                        <Text style={[styles.activityDate, { color: cardTextColor }]}>{new Date(record.createdAt).toLocaleDateString()}</Text>
                                     </View>
                                 </View>
                                 <View style={styles.scoreContainer}>
                                     <Text style={[styles.activityScore, recordMode === 'best' && { color: '#F1C40F' }]}>
                                         {recordMode === 'best' ? 'BEST' : `+${record.points || 0} XP`}
                                     </Text>
-                                    <Text style={styles.activityScoreValue}>Score: {record.scores || 0}</Text>
+                                    <Text style={[styles.activityScoreValue, { color: cardTextColor }]}>Score: {record.scores || 0}</Text>
                                 </View>
                             </View>
-                        )) : <Text style={styles.emptyText}>No records found.</Text>}
-                    </View>
+                        )) : <Text style={[styles.emptyText, { color: cardTextColor }]}>No records found.</Text>}
+                    </LinearGradient>
 
                     {/* View All Game Records Button */}
-                    <TouchableOpacity
+                    <LinearGradient
+                        colors={gradientColors}
                         style={styles.viewAllRecordsBtn}
-                        onPress={() => router.push('/Profile/GameRecords')}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
                     >
+                        <TouchableOpacity
+                            style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16 }}
+                            onPress={() => router.push('/Profile/GameRecords')}
+                        >
                         <List size={20} color="#4CAF50" />
-                        <Text style={styles.viewAllRecordsText}>View All Game Records</Text>
-                        <ChevronRight size={20} color="#4CAF50" />
-                    </TouchableOpacity>
+                            <Text style={[styles.viewAllRecordsText, { color: cardTextColor }]}>View All Game Records</Text>
+                            <ChevronRight size={20} color={cardTextColor} />
+                        </TouchableOpacity>
+                    </LinearGradient>
 
                     <TouchableOpacity style={styles.logoutBtn} onPress={signOut}>
                         <Text style={styles.logoutText}>Sign Out</Text>
@@ -2267,6 +2395,27 @@ export default function ProfileScreen() {
 // Styles (unchanged, keep existing styles)
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: 'transparent' },
+    unifiedCard: {
+        backgroundColor: 'rgba(255, 255, 255, 0.92)',  // 半透明白色
+        borderRadius: 28,
+        marginHorizontal: 24,                         // 縮小寬度，左右留白更多
+        marginBottom: 24,
+        paddingVertical: 20,
+        paddingHorizontal: 20,
+        overflow: 'hidden',
+        elevation: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        borderWidth: 1,
+        borderColor: 'rgba(0,0,0,0.05)',
+    },
+    cardDivider: {
+        height: 1,
+        backgroundColor: 'rgba(0,0,0,0.08)',
+        marginVertical: 16,
+    },
     unifiedProfileContainer: { marginHorizontal: 20, marginTop: 20 },
     profileCover: {
         height: 200,
@@ -2325,36 +2474,67 @@ const styles = StyleSheet.create({
     inventoryBadge: { position: 'absolute', top: -5, right: -5, backgroundColor: '#FF6B6B', borderRadius: 10, minWidth: 18, height: 18, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFF' },
     inventoryBadgeText: { fontSize: 10, fontWeight: '700', color: '#FFF' },
     editProfileBtn: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255, 255, 255, 0.2)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'rgba(255, 255, 255, 0.3)' },
-    unifiedInfoSection: {
-        backgroundColor: 'rgba(255,255,255,0.92)',
-        borderRadius: 12,
-        padding: 18,
+    masterInfoCard: {
+        backgroundColor: 'rgba(255,255,255,0.85)',  // 提高不透明度，減少疊加問題
+        borderRadius: 20,
+        padding: 16,  // 減少padding，善用空間
         marginTop: 20,
-        elevation: 2, // 保留陰影
+        marginHorizontal: 32,  // 統一寬度
+        elevation: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.6)',
     },
-    infoSectionTitle: { fontSize: 18, fontWeight: '800', color: '#2D3436', marginBottom: 12 },
-    infoList: { gap: 10 },
-    infoItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8F9FA', borderRadius: 8, padding: 12, marginVertical: 4 },
-    infoContent: { marginLeft: 12, flex: 1 },
-    infoLabel: { fontSize: 12, color: '#636E72', marginBottom: 2 },
-    infoValue: { fontSize: 14, fontWeight: '700', color: '#2D3436' },
-    enhancedFeaturesContainer: { backgroundColor: 'rgba(255,255,255,0.92)', marginHorizontal: 20, marginTop: 20, borderRadius: 24, padding: 20, elevation: 2 },
-    featureItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#F1F2F6' },
-    featureContent: { flex: 1, marginLeft: 15 },
-    featureTitle: { fontSize: 16, fontWeight: '800', color: '#2D3436' },
-    featureDescription: { fontSize: 12, color: '#636E72', marginTop: 2 },
-    learningProgressContainer: { backgroundColor: 'rgba(255,255,255,0.92)', marginHorizontal: 20, marginTop: 20, borderRadius: 24, padding: 20, elevation: 2 },
-    progressCards: { flexDirection: 'row', gap: 15, marginTop: 15 },
-    progressCard: { flex: 1, backgroundColor: '#F8F9FA', borderRadius: 12, padding: 15, elevation: 2 },
-    progressTitle: { fontSize: 16, fontWeight: '800', color: '#2D3436', marginBottom: 15, textAlign: 'center' },
-    radarSection: { marginTop: 10, borderRadius: 24, padding: 12, alignItems: 'center', elevation: 2, flex: 1 },
+    // 移除的舊樣式 - 已合併到 masterInfoCard
+    // 主卡片內部樣式
+    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+    cardTitle: { fontSize: 20, fontWeight: '900' },
+    editCardBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.05)', justifyContent: 'center', alignItems: 'center' },
+    infoSection: { marginBottom: 16 },
+    sectionLabel: { fontSize: 13, fontWeight: '700', marginBottom: 8 },
+    // 緊湊布局樣式
+    compactInfoGrid: { gap: 6 },
+    infoRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
+    compactInfoItem: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(248,249,250,0.2)', borderRadius: 8, padding: 6 },
+    compactInfoContent: { marginLeft: 8, flex: 1 },
+    compactInfoLabel: { fontSize: 10, marginBottom: 1 },
+    compactInfoValue: { fontSize: 12, fontWeight: '700' },
+    // 收藏品區域樣式
+    collectionSection: { marginBottom: 16 },
+    collectionSubsection: { marginBottom: 12 },
+    miniSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+    miniSectionLabel: { fontSize: 12, fontWeight: '700' },
+    miniViewBtn: { paddingHorizontal: 8, paddingVertical: 2, backgroundColor: 'rgba(0,0,0,0.04)', borderRadius: 8 },
+    miniViewText: { fontSize: 10, fontWeight: '600' },
+    miniBadgesScroll: { flexDirection: 'row' },
+    miniBadgeItem: { alignItems: 'center', marginRight: 8 },
+    miniBackgroundsScroll: { flexDirection: 'row' },
+    miniBackgroundItem: { alignItems: 'center', marginRight: 8 },
+    moreMiniBtn: { width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.08)', justifyContent: 'center', alignItems: 'center' },
+    moreMiniText: { fontSize: 9, fontWeight: '700' },
+    actionsSection: { marginBottom: 16 },
+    actionButtons: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
+    actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
+    actionBtnText: { fontSize: 12, fontWeight: '700', marginLeft: 6 },
+    skillsSection: { marginBottom: 0 },
+    skillsChartContainer: {
+        backgroundColor: 'rgba(248,249,250,0.3)',
+        borderRadius: 12,
+        padding: 8,
+        alignItems: 'center',
+        minHeight: 120,   // 减小最小高度
+        maxHeight: 130,   // 减小最大高度
+    },
     sectionTitle: { fontSize: 16, fontWeight: '800', color: '#2D3436', alignSelf: 'flex-start', marginBottom: 10 },
-    segmentedControl: { flexDirection: 'row', backgroundColor: '#E2E8F0', marginHorizontal: 20, marginTop: 25, padding: 4, borderRadius: 16 },
+    segmentedControl: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.75)', marginHorizontal: 32, marginTop: 20, padding: 4, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
     segmentBtn: { flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: 'center' },
     activeSegment: { backgroundColor: '#FFF', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
     segmentText: { fontSize: 12, fontWeight: '800', color: '#64748B' },
     activeSegmentText: { color: '#4CAF50' },
-    activityList: { marginHorizontal: 20, backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 24, paddingHorizontal: 20, paddingVertical: 5, marginTop: 15, elevation: 2 },
+    activityList: { marginHorizontal: 32, backgroundColor: 'rgba(255,255,255,0.75)', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 16, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
     activityCard: { flexDirection: 'row', alignItems: 'center', paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: '#F1F2F6' },
     scrollContent: { paddingHorizontal: 20, paddingBottom: 20 },
     gameIconBg: { width: 42, height: 42, borderRadius: 12, backgroundColor: '#F8F9FA', justifyContent: 'center', alignItems: 'center' },
@@ -2540,4 +2720,16 @@ const styles = StyleSheet.create({
         marginRight: 8,
     },
     inputGroup: { marginBottom: 15 },
+    // 新增的簡化樣式
+    infoCardTitle: { fontSize: 16, fontWeight: '800', color: '#2D3436', marginBottom: 12 },
+    basicInfoRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
+    infoColumn: { flex: 1, paddingHorizontal: 8 },
+    miniBadgesSection: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.1)' },
+    miniSectionTitle: { fontSize: 13, fontWeight: '700', color: '#636E72', marginBottom: 8 },
+    miniBadgesScroll: { flexDirection: 'row' },
+    miniBadgeItem: { alignItems: 'center', marginRight: 12 },
+    moreBadgesBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.1)', justifyContent: 'center', alignItems: 'center' },
+    moreBadgesText: { fontSize: 10, fontWeight: '700', color: '#636E72' },
+    quickActionBtn: { alignItems: 'center', padding: 8 },
+    quickActionText: { fontSize: 11, fontWeight: '700', color: '#2D3436', marginTop: 4 },
 });
