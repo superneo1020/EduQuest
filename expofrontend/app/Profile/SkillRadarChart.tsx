@@ -1,11 +1,11 @@
-import React, {useMemo} from 'react';
+import React, { useMemo } from 'react';
 import { View, Dimensions } from 'react-native';
 import Svg, { Polygon, Line, Text as SvgText, Circle, G } from 'react-native-svg';
 
 const { width } = Dimensions.get('window');
-const CHART_SIZE = width * 0.5; // Reduced from 0.8 to 0.5
+const CHART_SIZE = width * 0.35; // 缩小尺寸 (原为 0.5)
 const CENTER = CHART_SIZE / 2;
-const RADIUS = CENTER * 0.7;
+const RADIUS = CENTER * 0.65; // 减小半径比例，使图形更紧凑
 
 interface RadarData {
     label: string;
@@ -14,12 +14,9 @@ interface RadarData {
 
 export default function SkillRadarChart({ gameHistory }: { gameHistory: any[] }) {
 
-    // 1. 邏輯：動態計算各科目熟練度 (0 ~ 100)
     const skills = useMemo(() => {
-        // 從遊戲歷史中動態提取所有遊戲類型
         const gameTypes = [...new Set(gameHistory.map(g => g.type?.toUpperCase()).filter(Boolean))];
 
-        // 如果沒有遊戲記錄，使用預設類型
         const categories = gameTypes.length > 0
             ? gameTypes.map(type => ({ key: type, label: type.charAt(0) + type.slice(1).toLowerCase() }))
             : [
@@ -34,13 +31,10 @@ export default function SkillRadarChart({ gameHistory }: { gameHistory: any[] })
                 .filter(g => g.type?.toUpperCase() === cat.key)
                 .map(g => g.scores || 0);
 
-            // 計算平均分，考慮難度加權
             let avg = 0;
             if (scores.length > 0) {
-                // 基礎平均分
                 avg = scores.reduce((a, b) => a + b, 0) / scores.length;
 
-                // 難度加權：HARD +10%, MEDIUM +5%, EASY 不變
                 const difficultyBonus = gameHistory
                     .filter(g => g.type?.toUpperCase() === cat.key)
                     .reduce((bonus, g) => {
@@ -58,7 +52,6 @@ export default function SkillRadarChart({ gameHistory }: { gameHistory: any[] })
         });
     }, [gameHistory]);
 
-    // 2. 座標計算函式
     const getCoordinates = (index: number, total: number, value: number) => {
         const angle = (Math.PI * 2 * index) / total - Math.PI / 2;
         return {
@@ -76,22 +69,22 @@ export default function SkillRadarChart({ gameHistory }: { gameHistory: any[] })
         <View style={{ alignItems: 'center', justifyContent: 'center' }}>
             <Svg height={CHART_SIZE} width={CHART_SIZE}>
                 <G>
-                    {/* 背景網格：三個圓圈 */}
+                    {/* 背景网格：三个圆圈 */}
                     {[0.3, 0.6, 1].map((r, i) => (
                         <Circle key={i} cx={CENTER} cy={CENTER} r={RADIUS * r}
-                                fill="none" stroke="#E2E8F0" strokeWidth="1" strokeDasharray="4" />
+                                fill="none" stroke="#E2E8F0" strokeWidth="1" strokeDasharray="3" />
                     ))}
 
-                    {/* 軸線與標籤 */}
+                    {/* 轴线和标签 */}
                     {skills.map((s, i) => {
                         const end = getCoordinates(i, skills.length, 1);
-                        const labelPos = getCoordinates(i, skills.length, 1.2);
+                        const labelPos = getCoordinates(i, skills.length, 1.15);
                         return (
                             <G key={i}>
-                                <Line x1={CENTER} y1={CENTER} x2={end.x} y2={end.y} stroke="#E2E8F0" strokeWidth="1" />
+                                <Line x1={CENTER} y1={CENTER} x2={end.x} y2={end.y} stroke="#E2E8F0" strokeWidth="0.8" />
                                 <SvgText
                                     x={labelPos.x} y={labelPos.y}
-                                    fill="#64748B" fontSize="12" fontWeight="bold"
+                                    fill="#64748B" fontSize="10" fontWeight="bold"
                                     textAnchor="middle" alignmentBaseline="middle"
                                 >
                                     {s.label}
@@ -100,18 +93,18 @@ export default function SkillRadarChart({ gameHistory }: { gameHistory: any[] })
                         );
                     })}
 
-                    {/* 雷達區域 */}
+                    {/* 雷达区域 */}
                     <Polygon
                         points={points}
                         fill="rgba(76, 175, 80, 0.2)"
                         stroke="#4CAF50"
-                        strokeWidth="3"
+                        strokeWidth="2"
                     />
 
-                    {/* 頂點小圓點 */}
+                    {/* 顶点小圆点 */}
                     {skills.map((s, i) => {
                         const p = getCoordinates(i, skills.length, s.value);
-                        return <Circle key={i} cx={p.x} cy={p.y} r="4" fill="#4CAF50" />;
+                        return <Circle key={i} cx={p.x} cy={p.y} r="3" fill="#4CAF50" />;
                     })}
                 </G>
             </Svg>
