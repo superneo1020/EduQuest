@@ -6,7 +6,7 @@ import {
 import {
     Trophy, Gamepad2, Mail, User as UserIcon, Settings, ChevronRight,
     LogOut, Calculator, BookOpen, Brain, FlaskConical, Eye, EyeOff, Key, ShoppingCart, List,
-    Calendar, Clock, TrendingUp, Award, Target, Zap, Star, BarChart3, PieChart, Package
+    Calendar, Clock, TrendingUp, Award, Target, Zap, Star, BarChart3, PieChart, Package, Edit
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -96,6 +96,7 @@ export default function ProfileScreen() {
     const [showBackgroundModal, setShowBackgroundModal] = useState(false);
     const [selectedBackground, setSelectedBackground] = useState<string>('default');
 
+    const isSpecialBackground = ['Space', 'Ocean', 'Forest', 'City'].includes(selectedBackground);
     // Badge selection states
     const [showBadgeModal, setShowBadgeModal] = useState(false);
     const [selectedBadges, setSelectedBadges] = useState<string[]>(['default']);
@@ -774,7 +775,7 @@ export default function ProfileScreen() {
             case 'Ocean': return ['#006994', '#00CED1'] as const;
             case 'Forest': return ['#228B22', '#90EE90'] as const;
             case 'City': return ['#708090', '#2C3E50'] as const;
-            default: return ['#4CAF50', '#4CAF50'] as const;
+            default: return ['#FFFFFF', '#FFFFFF'] as const;
         }
     };
 
@@ -1089,6 +1090,16 @@ export default function ProfileScreen() {
     };
 
     const chartWidth = width - 96; // 根據 masterInfoCard 的邊距計算
+
+    const getProfileCoverGradient = (backgroundId: string): readonly [string, string] => {
+        switch (backgroundId) {
+            case 'Space': return ['#0F172A', '#1E293B'] as const;
+            case 'Ocean': return ['#006994', '#00CED1'] as const;
+            case 'Forest': return ['#228B22', '#90EE90'] as const;
+            case 'City': return ['#708090', '#2C3E50'] as const;
+            default: return ['#4CAF50', '#4CAF50'] as const;   // 默认绿色
+        }
+    };
     
     // 根據背景動態漸變色彩
     const getCardGradientColors = (backgroundId: string) => {
@@ -1128,12 +1139,12 @@ export default function ProfileScreen() {
             case 'Ocean': return '#2D3436';  // 淺色背景用深色
             case 'Forest': return '#2D3436';  // 淺色背景用深色
             case 'City': return '#FFF';  // 深色背景用白色
-            default: return '#FFF';  // 預設用白色
+            default: return '#2D3436';  // 預設白色背景用深色
         }
     };
     
     const cardTextColor = getTextColor(selectedBackground);
-    const iconColor = selectedBackground === 'Ocean' || selectedBackground === 'Forest' ? 'rgba(45, 52, 54, 0.7)' : 'rgba(255,255,255,0.7)';
+    const iconColor = (selectedBackground === 'Ocean' || selectedBackground === 'Forest' || (!['Space','Ocean','Forest','City'].includes(selectedBackground))) ? 'rgba(45, 52, 54, 0.7)' : 'rgba(255,255,255,0.7)';
     
     const gradientColors = getCardGradientColors(selectedBackground);
 
@@ -1165,7 +1176,7 @@ export default function ProfileScreen() {
                                 style={styles.profileCover}
                             >
                                 <LinearGradient
-                                    colors={getBackgroundGradient(selectedBackground)}
+                                    colors={getProfileCoverGradient(selectedBackground)}
                                     style={styles.profileCoverGradient}
                                 />
 
@@ -1215,212 +1226,377 @@ export default function ProfileScreen() {
                                             </View>
                                         </View>
                                     </View>
-                                    <View style={styles.profileActions}>
-                                        <TouchableOpacity
-                                            style={styles.inventoryBtn}
-                                            onPress={() => router.push('/Inventory/inventory')}
-                                        >
-                                            <Package size={20} color="#FFF" />
-                                            <View style={styles.inventoryBadge}>
-                                                <Text style={styles.inventoryBadgeText}>{userItems.length}</Text>
-                                            </View>
-                                        </TouchableOpacity>
-                                        <TouchableOpacity
-                                            style={styles.editProfileBtn}
-                                            onPress={() => setShowEditProfileModal(true)}
-                                        >
-                                            <Settings size={20} color="#FFF" />
-                                        </TouchableOpacity>
-                                    </View>
-                                </View>
+                                                                    </View>
                             </TouchableOpacity>
                         </View>
 
                         {/* 統一的大資訊卡片 - 包含所有用戶資訊 */}
-                        <LinearGradient
-                            colors={gradientColors}
-                            style={styles.masterInfoCard}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
-                        >
-                            {/* 卡片標題 */}
-                            <View style={styles.cardHeader}>
-                                <Text style={[styles.cardTitle, { color: cardTextColor }]}>👤 My Profile</Text>
-                                <TouchableOpacity
-                                    style={styles.editCardBtn}
-                                    onPress={() => setShowEditProfileModal(true)}
-                                >
-                                    <Settings size={16} color="#FFF" />
-                                </TouchableOpacity>
-                            </View>
+                        {isSpecialBackground ? (
+                            <LinearGradient
+                                colors={gradientColors}
+                                style={styles.masterInfoCard}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                            >
+                                {/* 卡片標題 */}
+                                <View style={styles.cardHeader}>
+                                    <Text style={[styles.cardTitle, { color: cardTextColor }]}>👤 My Profile</Text>
+                                    <TouchableOpacity
+                                        style={styles.editCardBtn}
+                                        onPress={() => setShowEditProfileModal(true)}
+                                    >
+                                        <Edit size={16} color="#2D3436" />
+                                    </TouchableOpacity>
+                                </View>
                             
                             {/* 基本資訊區域 - 緊湊網格布局 */}
-                            <View style={styles.infoSection}>
-                                <Text style={[styles.sectionLabel, { color: cardTextColor }]}>Basic Info</Text>
-                                <View style={styles.compactInfoGrid}>
-                                    <View style={styles.infoRow}>
-                                        <View style={styles.compactInfoItem}>
-                                            <UserIcon size={12} color="rgba(255,255,255,0.7)" />
-                                            <View style={styles.compactInfoContent}>
-                                                <Text style={[styles.compactInfoLabel, { color: cardTextColor }]}>Username</Text>
-                                                <Text style={[styles.compactInfoValue, { color: cardTextColor }]}>{displayUser?.username || 'N/A'}</Text>
-                                            </View>
-                                        </View>
-                                        <View style={styles.compactInfoItem}>
-                                            <Trophy size={12} color="rgba(255,255,255,0.7)" />
-                                            <View style={styles.compactInfoContent}>
-                                                <Text style={[styles.compactInfoLabel, { color: cardTextColor }]}>Points</Text>
-                                                <Text style={[styles.compactInfoValue, { color: cardTextColor }]}>{displayUser?.points || 0} XP</Text>
-                                            </View>
-                                        </View>
-                                    </View>
-                                    <View style={styles.infoRow}>
-                                        <View style={styles.compactInfoItem}>
-                                            <Mail size={12} color="rgba(255,255,255,0.7)" />
-                                            <View style={styles.compactInfoContent}>
-                                                <Text style={[styles.compactInfoLabel, { color: cardTextColor }]}>Email</Text>
-                                                <Text style={[styles.compactInfoValue, { color: cardTextColor }]} numberOfLines={1}>{displayUser?.email || 'N/A'}</Text>
-                                            </View>
-                                        </View>
-                                        <View style={styles.compactInfoItem}>
-                                            <Gamepad2 size={12} color="rgba(255,255,255,0.7)" />
-                                            <View style={styles.compactInfoContent}>
-                                                <Text style={[styles.compactInfoLabel, { color: cardTextColor }]}>Games</Text>
-                                                <Text style={[styles.compactInfoValue, { color: cardTextColor }]}>{gameHistory.length}</Text>
-                                            </View>
-                                        </View>
-                                    </View>
-                                    {(currentSchool || userRoles.length > 0) && (
+                                <View style={styles.infoSection}>
+                                    <Text style={[styles.sectionLabel, { color: cardTextColor }]}>Basic Info</Text>
+                                    <View style={styles.compactInfoGrid}>
                                         <View style={styles.infoRow}>
-                                            {currentSchool && (
-                                                <View style={styles.compactInfoItem}>
-                                                    <BookOpen size={12} color="rgba(255,255,255,0.7)" />
-                                                    <View style={styles.compactInfoContent}>
-                                                        <Text style={[styles.compactInfoLabel, { color: cardTextColor }]}>School</Text>
-                                                        <Text style={[styles.compactInfoValue, { color: cardTextColor }]}>{currentSchool}</Text>
-                                                    </View>
+                                            <View style={styles.compactInfoItem}>
+                                                <UserIcon size={12} color="rgba(255,255,255,0.7)" />
+                                                <View style={styles.compactInfoContent}>
+                                                    <Text style={[styles.compactInfoLabel, { color: cardTextColor }]}>Username</Text>
+                                                    <Text style={[styles.compactInfoValue, { color: cardTextColor }]}>{displayUser?.username || 'N/A'}</Text>
                                                 </View>
-                                            )}
-                                            {userRoles.length > 0 && (
-                                                <View style={styles.compactInfoItem}>
-                                                    <Award size={12} color="rgba(255,255,255,0.7)" />
-                                                    <View style={styles.compactInfoContent}>
-                                                        <Text style={[styles.compactInfoLabel, { color: cardTextColor }]}>Role</Text>
-                                                        <Text style={[styles.compactInfoValue, { color: cardTextColor }]}>{userRoles.join(', ')}</Text>
-                                                    </View>
-                                                </View>
-                                            )}
-                                        </View>
-                                    )}
-                                </View>
-                            </View>
-                            
-                            {/* 徽章和背景組合區域 - 善用空間 */}
-                            {(ownedBadges.length > 0 || ownedBackgrounds.length > 0) && (
-                                <View style={styles.collectionSection}>
-                                    {ownedBadges.length > 0 && (
-                                        <View style={styles.collectionSubsection}>
-                                            <View style={styles.miniSectionHeader}>
-                                                <Text style={[styles.miniSectionLabel, { color: cardTextColor }]}>Badges ({ownedBadges.length})</Text>
-                                                <TouchableOpacity
-                                                    style={styles.miniViewBtn}
-                                                    onPress={() => setShowBadgeModal(true)}
-                                                >
-                                                    <Text style={[styles.miniViewText, { color: cardTextColor }]}>Edit</Text>
-                                                </TouchableOpacity>
                                             </View>
-                                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.miniBadgesScroll}>
-                                                {ownedBadges.slice(0, 5).map((badge) => (
-                                                    <View key={badge.id} style={styles.miniBadgeItem}>
-                                                        {renderBadge(badge.iconId, 28)}
+                                            <View style={styles.compactInfoItem}>
+                                                <Trophy size={12} color="rgba(255,255,255,0.7)" />
+                                                <View style={styles.compactInfoContent}>
+                                                    <Text style={[styles.compactInfoLabel, { color: cardTextColor }]}>Points</Text>
+                                                    <Text style={[styles.compactInfoValue, { color: cardTextColor }]}>{displayUser?.points || 0} XP</Text>
+                                                </View>
+                                            </View>
+                                        </View>
+                                        <View style={styles.infoRow}>
+                                            <View style={styles.compactInfoItem}>
+                                                <Mail size={12} color="rgba(255,255,255,0.7)" />
+                                                <View style={styles.compactInfoContent}>
+                                                    <Text style={[styles.compactInfoLabel, { color: cardTextColor }]}>Email</Text>
+                                                    <Text style={[styles.compactInfoValue, { color: cardTextColor }]} numberOfLines={1}>{displayUser?.email || 'N/A'}</Text>
+                                                </View>
+                                            </View>
+                                            <View style={styles.compactInfoItem}>
+                                                <Gamepad2 size={12} color="rgba(255,255,255,0.7)" />
+                                                <View style={styles.compactInfoContent}>
+                                                    <Text style={[styles.compactInfoLabel, { color: cardTextColor }]}>Games</Text>
+                                                    <Text style={[styles.compactInfoValue, { color: cardTextColor }]}>{gameHistory.length}</Text>
+                                                </View>
+                                            </View>
+                                        </View>
+                                        {(currentSchool || userRoles.length > 0) && (
+                                            <View style={styles.infoRow}>
+                                                {currentSchool && (
+                                                    <View style={styles.compactInfoItem}>
+                                                        <BookOpen size={12} color="rgba(255,255,255,0.7)" />
+                                                        <View style={styles.compactInfoContent}>
+                                                            <Text style={[styles.compactInfoLabel, { color: cardTextColor }]}>School</Text>
+                                                            <Text style={[styles.compactInfoValue, { color: cardTextColor }]}>{currentSchool}</Text>
+                                                        </View>
                                                     </View>
-                                                ))}
-                                                {ownedBadges.length > 5 && (
-                                                    <TouchableOpacity 
-                                                        style={styles.moreMiniBtn}
+                                                )}
+                                                {userRoles.length > 0 && (
+                                                    <View style={styles.compactInfoItem}>
+                                                        <Award size={12} color="rgba(255,255,255,0.7)" />
+                                                        <View style={styles.compactInfoContent}>
+                                                            <Text style={[styles.compactInfoLabel, { color: cardTextColor }]}>Role</Text>
+                                                            <Text style={[styles.compactInfoValue, { color: cardTextColor }]}>{userRoles.join(', ')}</Text>
+                                                        </View>
+                                                    </View>
+                                                )}
+                                            </View>
+                                        )}
+                                    </View>
+                                </View>
+                                
+                                {/* 徽章和背景組合區域 - 善用空間 */}
+                                {(ownedBadges.length > 0 || ownedBackgrounds.length > 0) && (
+                                    <View style={styles.collectionSection}>
+                                        {ownedBadges.length > 0 && (
+                                            <View style={styles.collectionSubsection}>
+                                                <View style={styles.miniSectionHeader}>
+                                                    <Text style={[styles.miniSectionLabel, { color: cardTextColor }]}>Badges ({ownedBadges.length})</Text>
+                                                    <TouchableOpacity
+                                                        style={styles.miniViewBtn}
                                                         onPress={() => setShowBadgeModal(true)}
                                                     >
-                                                        <Text style={[styles.moreMiniText, { color: cardTextColor }]}>+{ownedBadges.length - 5}</Text>
+                                                        <Text style={[styles.miniViewText, { color: cardTextColor }]}>Edit</Text>
                                                     </TouchableOpacity>
-                                                )}
-                                            </ScrollView>
-                                        </View>
-                                    )}
-                                    
-                                    {ownedBackgrounds.length > 0 && (
-                                        <View style={styles.collectionSubsection}>
-                                            <View style={styles.miniSectionHeader}>
-                                                <Text style={[styles.miniSectionLabel, { color: cardTextColor }]}>Backgrounds ({ownedBackgrounds.length})</Text>
-                                                <TouchableOpacity
-                                                    style={styles.miniViewBtn}
-                                                    onPress={() => router.push('/shop')}
-                                                >
-                                                    <Text style={[styles.miniViewText, { color: cardTextColor }]}>Shop</Text>
-                                                </TouchableOpacity>
+                                                </View>
+                                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.miniBadgesScroll}>
+                                                    {ownedBadges.slice(0, 5).map((badge) => (
+                                                        <View key={badge.id} style={styles.miniBadgeItem}>
+                                                            {renderBadge(badge.iconId, 28)}
+                                                        </View>
+                                                    ))}
+                                                    {ownedBadges.length > 5 && (
+                                                        <TouchableOpacity 
+                                                            style={styles.moreMiniBtn}
+                                                            onPress={() => setShowBadgeModal(true)}
+                                                        >
+                                                            <Text style={[styles.moreMiniText, { color: cardTextColor }]}>+{ownedBadges.length - 5}</Text>
+                                                        </TouchableOpacity>
+                                                    )}
+                                                </ScrollView>
                                             </View>
-                                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.miniBackgroundsScroll}>
-                                                {ownedBackgrounds.slice(0, 3).map((background) => (
+                                        )}
+                                        
+                                        {ownedBackgrounds.length > 0 && (
+                                            <View style={styles.collectionSubsection}>
+                                                <View style={styles.miniSectionHeader}>
+                                                    <Text style={[styles.miniSectionLabel, { color: cardTextColor }]}>Backgrounds ({ownedBackgrounds.length})</Text>
                                                     <TouchableOpacity
-                                                        key={background.id}
-                                                        style={styles.miniBackgroundItem}
-                                                        onPress={() => handleBackgroundSelect(background.iconId)}
+                                                        style={styles.miniViewBtn}
+                                                        onPress={() => router.push('/shop')}
                                                     >
-                                                        {renderBackground(background.iconId, 40)}
+                                                        <Text style={[styles.miniViewText, { color: cardTextColor }]}>Shop</Text>
                                                     </TouchableOpacity>
-                                                ))}
-                                                {ownedBackgrounds.length > 3 && (
-                                                    <TouchableOpacity 
-                                                        style={styles.moreMiniBtn}
-                                                        onPress={() => setShowBackgroundModal(true)}
-                                                    >
-                                                        <Text style={[styles.moreMiniText, { color: cardTextColor }]}>+{ownedBackgrounds.length - 3}</Text>
-                                                    </TouchableOpacity>
-                                                )}
-                                            </ScrollView>
+                                                </View>
+                                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.miniBackgroundsScroll}>
+                                                    {ownedBackgrounds.slice(0, 3).map((background) => (
+                                                        <TouchableOpacity
+                                                            key={background.id}
+                                                            style={styles.miniBackgroundItem}
+                                                            onPress={() => handleBackgroundSelect(background.iconId)}
+                                                        >
+                                                            {renderBackground(background.iconId, 40)}
+                                                        </TouchableOpacity>
+                                                    ))}
+                                                    {ownedBackgrounds.length > 3 && (
+                                                        <TouchableOpacity 
+                                                            style={styles.moreMiniBtn}
+                                                            onPress={() => setShowBackgroundModal(true)}
+                                                        >
+                                                            <Text style={[styles.moreMiniText, { color: cardTextColor }]}>+{ownedBackgrounds.length - 3}</Text>
+                                                        </TouchableOpacity>
+                                                    )}
+                                                </ScrollView>
+                                            </View>
+                                        )}
+                                    </View>
+                                )}
+                                
+                                                                
+                                {/* 技能分析區域 */}
+                                <View style={styles.skillsSection}>
+                                    <Text style={[styles.sectionLabel, { color: cardTextColor }]}>📊 Skills Analysis & AI Tips</Text>
+                                    <View style={{ width: chartWidth, alignSelf: 'center' }}>
+                                        <SkillBarsChart gameHistory={gameHistory} />
+                                    </View>
+                                    
+                                    {/* AI 建議直接顯示 */}
+                                    <View style={{ marginTop: 16 }}>
+                                        <Text style={[styles.sectionLabel, { color: cardTextColor, marginBottom: 8 }]}>🤖 AI Learning Suggestions</Text>
+                                        {loadingSuggestions ? (
+                                            <View style={{ alignItems: 'center', padding: 20 }}>
+                                                <ActivityIndicator size="small" color="#4CAF50" />
+                                                <Text style={{ marginTop: 8, color: '#636E72', fontSize: 12 }}>AI is analyzing your learning patterns...</Text>
+                                            </View>
+                                        ) : generateLearningSuggestions.length > 0 ? (
+                                            generateLearningSuggestions.slice(0, 3).map((suggestion: any, index: number) => (
+                                                <View key={index} style={[styles.suggestionCard, { backgroundColor: 'rgba(255,255,255,0.9)', marginBottom: 8 }]}>
+                                                    <View style={styles.suggestionIcon}>
+                                                        {suggestion.icon}
+                                                    </View>
+                                                    <View style={styles.suggestionContent}>
+                                                        <Text style={[styles.suggestionTitle, { color: cardTextColor }]}>{suggestion.title}</Text>
+                                                        <Text style={[styles.suggestionDescription, { color: cardTextColor }]}>{suggestion.description}</Text>
+                                                    </View>
+                                                </View>
+                                            ))
+                                        ) : (
+                                            <View style={[styles.statsCard, { alignItems: 'center', padding: 16 }]}>
+                                                <Text style={[styles.statsCardTitle, { color: cardTextColor, marginBottom: 8 }]}>Great Job! 🎉</Text>
+                                                <Text style={[styles.statsLabel, { textAlign: 'center', color: cardTextColor }]}>
+                                                    You're doing excellently! Keep up the good work and continue challenging yourself.
+                                                </Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                </View>
+                            </LinearGradient>
+                        ) : (
+                            <View style={styles.masterInfoCard}>
+                                {/* 卡片標題 */}
+                                <View style={styles.cardHeader}>
+                                    <Text style={[styles.cardTitle, { color: cardTextColor }]}>👤 My Profile</Text>
+                                    <TouchableOpacity
+                                        style={styles.editCardBtn}
+                                        onPress={() => setShowEditProfileModal(true)}
+                                    >
+                                        <Edit size={16} color="#2D3436" />
+                                    </TouchableOpacity>
+                                </View>
+                                
+                                {/* 基本資訊區域 - 緊湊網格布局 */}
+                                <View style={styles.infoSection}>
+                                    <Text style={[styles.sectionLabel, { color: cardTextColor }]}>Basic Info</Text>
+                                    <View style={styles.compactInfoGrid}>
+                                        <View style={styles.infoRow}>
+                                            <View style={styles.compactInfoItem}>
+                                                <UserIcon size={12} color="rgba(255,255,255,0.7)" />
+                                                <View style={styles.compactInfoContent}>
+                                                    <Text style={[styles.compactInfoLabel, { color: cardTextColor }]}>Username</Text>
+                                                    <Text style={[styles.compactInfoValue, { color: cardTextColor }]}>{displayUser?.username || 'N/A'}</Text>
+                                                </View>
+                                            </View>
+                                            <View style={styles.compactInfoItem}>
+                                                <Trophy size={12} color="rgba(255,255,255,0.7)" />
+                                                <View style={styles.compactInfoContent}>
+                                                    <Text style={[styles.compactInfoLabel, { color: cardTextColor }]}>Points</Text>
+                                                    <Text style={[styles.compactInfoValue, { color: cardTextColor }]}>{displayUser?.points || 0} XP</Text>
+                                                </View>
+                                            </View>
                                         </View>
-                                    )}
+                                        <View style={styles.infoRow}>
+                                            <View style={styles.compactInfoItem}>
+                                                <Mail size={12} color="rgba(255,255,255,0.7)" />
+                                                <View style={styles.compactInfoContent}>
+                                                    <Text style={[styles.compactInfoLabel, { color: cardTextColor }]}>Email</Text>
+                                                    <Text style={[styles.compactInfoValue, { color: cardTextColor }]} numberOfLines={1}>{displayUser?.email || 'N/A'}</Text>
+                                                </View>
+                                            </View>
+                                            <View style={styles.compactInfoItem}>
+                                                <Gamepad2 size={12} color="rgba(255,255,255,0.7)" />
+                                                <View style={styles.compactInfoContent}>
+                                                    <Text style={[styles.compactInfoLabel, { color: cardTextColor }]}>Games</Text>
+                                                    <Text style={[styles.compactInfoValue, { color: cardTextColor }]}>{gameHistory.length}</Text>
+                                                </View>
+                                            </View>
+                                        </View>
+                                        {(currentSchool || userRoles.length > 0) && (
+                                            <View style={styles.infoRow}>
+                                                {currentSchool && (
+                                                    <View style={styles.compactInfoItem}>
+                                                        <BookOpen size={12} color="rgba(255,255,255,0.7)" />
+                                                        <View style={styles.compactInfoContent}>
+                                                            <Text style={[styles.compactInfoLabel, { color: cardTextColor }]}>School</Text>
+                                                            <Text style={[styles.compactInfoValue, { color: cardTextColor }]}>{currentSchool}</Text>
+                                                        </View>
+                                                    </View>
+                                                )}
+                                                {userRoles.length > 0 && (
+                                                    <View style={styles.compactInfoItem}>
+                                                        <Award size={12} color="rgba(255,255,255,0.7)" />
+                                                        <View style={styles.compactInfoContent}>
+                                                            <Text style={[styles.compactInfoLabel, { color: cardTextColor }]}>Role</Text>
+                                                            <Text style={[styles.compactInfoValue, { color: cardTextColor }]}>{userRoles.join(', ')}</Text>
+                                                        </View>
+                                                    </View>
+                                                )}
+                                            </View>
+                                        )}
+                                    </View>
                                 </View>
-                            )}
-                            
-                            {/* 快速操作區域 */}
-                            <View style={styles.actionsSection}>
-                                <Text style={[styles.sectionLabel, { color: cardTextColor }]}>Quick Actions</Text>
-                                <View style={styles.actionButtons}>
-                                    <TouchableOpacity
-                                        style={styles.actionBtn}
-                                        onPress={() => {
-                                            setShowSuggestions(true);
-                                            fetchAiLearningSuggestions();
-                                        }}
-                                    >
-                                        <Target size={16} color="#F44336" />
-                                        <Text style={[styles.actionBtnText, { color: cardTextColor }]}>AI Tips</Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        style={styles.actionBtn}
-                                        onPress={() => router.push('/Inventory/inventory')}
-                                    >
-                                        <Package size={16} color="#4CAF50" />
-                                        <Text style={[styles.actionBtnText, { color: cardTextColor }]}>Inventory</Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        style={styles.actionBtn}
-                                        onPress={() => router.push('/shop')}
-                                    >
-                                        <ShoppingCart size={16} color="#FF9800" />
-                                        <Text style={[styles.actionBtnText, { color: cardTextColor }]}>Shop</Text>
-                                    </TouchableOpacity>
+                                
+                                {/* 徽章和背景組合區域 - 善用空間 */}
+                                {(ownedBadges.length > 0 || ownedBackgrounds.length > 0) && (
+                                    <View style={styles.collectionSection}>
+                                        {ownedBadges.length > 0 && (
+                                            <View style={styles.collectionSubsection}>
+                                                <View style={styles.miniSectionHeader}>
+                                                    <Text style={[styles.miniSectionLabel, { color: cardTextColor }]}>Badges ({ownedBadges.length})</Text>
+                                                    <TouchableOpacity
+                                                        style={styles.miniViewBtn}
+                                                        onPress={() => setShowBadgeModal(true)}
+                                                    >
+                                                        <Text style={[styles.miniViewText, { color: cardTextColor }]}>Edit</Text>
+                                                    </TouchableOpacity>
+                                                </View>
+                                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.miniBadgesScroll}>
+                                                    {ownedBadges.slice(0, 5).map((badge) => (
+                                                        <View key={badge.id} style={styles.miniBadgeItem}>
+                                                            {renderBadge(badge.iconId, 28)}
+                                                        </View>
+                                                    ))}
+                                                    {ownedBadges.length > 5 && (
+                                                        <TouchableOpacity 
+                                                            style={styles.moreMiniBtn}
+                                                            onPress={() => setShowBadgeModal(true)}
+                                                        >
+                                                            <Text style={[styles.moreMiniText, { color: cardTextColor }]}>+{ownedBadges.length - 5}</Text>
+                                                        </TouchableOpacity>
+                                                    )}
+                                                </ScrollView>
+                                            </View>
+                                        )}
+                                        
+                                        {ownedBackgrounds.length > 0 && (
+                                            <View style={styles.collectionSubsection}>
+                                                <View style={styles.miniSectionHeader}>
+                                                    <Text style={[styles.miniSectionLabel, { color: cardTextColor }]}>Backgrounds ({ownedBackgrounds.length})</Text>
+                                                    <TouchableOpacity
+                                                        style={styles.miniViewBtn}
+                                                        onPress={() => router.push('/shop')}
+                                                    >
+                                                        <Text style={[styles.miniViewText, { color: cardTextColor }]}>Shop</Text>
+                                                    </TouchableOpacity>
+                                                </View>
+                                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.miniBackgroundsScroll}>
+                                                    {ownedBackgrounds.slice(0, 3).map((background) => (
+                                                        <TouchableOpacity
+                                                            key={background.id}
+                                                            style={styles.miniBackgroundItem}
+                                                            onPress={() => handleBackgroundSelect(background.iconId)}
+                                                        >
+                                                            {renderBackground(background.iconId, 40)}
+                                                        </TouchableOpacity>
+                                                    ))}
+                                                    {ownedBackgrounds.length > 3 && (
+                                                        <TouchableOpacity 
+                                                            style={styles.moreMiniBtn}
+                                                            onPress={() => setShowBackgroundModal(true)}
+                                                        >
+                                                            <Text style={[styles.moreMiniText, { color: cardTextColor }]}>+{ownedBackgrounds.length - 3}</Text>
+                                                        </TouchableOpacity>
+                                                    )}
+                                                </ScrollView>
+                                            </View>
+                                        )}
+                                    </View>
+                                )}
+                                
+                                                                
+                                {/* 技能分析區域 */}
+                                <View style={styles.skillsSection}>
+                                    <Text style={[styles.sectionLabel, { color: cardTextColor }]}>📊 Skills Analysis & AI Tips</Text>
+                                    <View style={{ width: chartWidth, alignSelf: 'center' }}>
+                                        <SkillBarsChart gameHistory={gameHistory} />
+                                    </View>
+                                    
+                                    {/* AI 建議直接顯示 */}
+                                    <View style={{ marginTop: 16 }}>
+                                        <Text style={[styles.sectionLabel, { color: cardTextColor, marginBottom: 8 }]}>🤖 AI Learning Suggestions</Text>
+                                        {loadingSuggestions ? (
+                                            <View style={{ alignItems: 'center', padding: 20 }}>
+                                                <ActivityIndicator size="small" color="#4CAF50" />
+                                                <Text style={{ marginTop: 8, color: '#636E72', fontSize: 12 }}>AI is analyzing your learning patterns...</Text>
+                                            </View>
+                                        ) : generateLearningSuggestions.length > 0 ? (
+                                            generateLearningSuggestions.slice(0, 3).map((suggestion: any, index: number) => (
+                                                <View key={index} style={[styles.suggestionCard, { backgroundColor: 'rgba(255,255,255,0.9)', marginBottom: 8 }]}>
+                                                    <View style={styles.suggestionIcon}>
+                                                        {suggestion.icon}
+                                                    </View>
+                                                    <View style={styles.suggestionContent}>
+                                                        <Text style={[styles.suggestionTitle, { color: cardTextColor }]}>{suggestion.title}</Text>
+                                                        <Text style={[styles.suggestionDescription, { color: cardTextColor }]}>{suggestion.description}</Text>
+                                                    </View>
+                                                </View>
+                                            ))
+                                        ) : (
+                                            <View style={[styles.statsCard, { alignItems: 'center', padding: 16 }]}>
+                                                <Text style={[styles.statsCardTitle, { color: cardTextColor, marginBottom: 8 }]}>Great Job! 🎉</Text>
+                                                <Text style={[styles.statsLabel, { textAlign: 'center', color: cardTextColor }]}>
+                                                    You're doing excellently! Keep up the good work and continue challenging yourself.
+                                                </Text>
+                                            </View>
+                                        )}
+                                    </View>
                                 </View>
                             </View>
-                            
-                            {/* 技能分析區域 */}
-                            <View style={styles.skillsSection}>
-                                <Text style={[styles.sectionLabel, { color: cardTextColor }]}>📊 Skills Analysis</Text>
-                                <View style={{ width: chartWidth, alignSelf: 'center' }}>
-                                    <SkillBarsChart gameHistory={gameHistory} />
-                                </View>
-                            </View>
-                        </LinearGradient>
+                        )}
 
                     </View>
 
@@ -1445,34 +1621,29 @@ export default function ProfileScreen() {
                         </TouchableOpacity>
                     </LinearGradient>
 
-                    <LinearGradient
-                        colors={gradientColors}
-                        style={styles.activityList}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                    >
+                    <View style={styles.activityList}>
                         {displayList.length > 0 ? displayList.map((record: any, index: number) => (
                             <View key={index} style={styles.activityCard}>
-                                <View style={[styles.gameIconBg, recordMode === 'best' && { backgroundColor: '#FFF9E6' }]}>
+                                <View style={styles.gameIconBg}>
                                     {recordMode === 'best' ? <Trophy size={18} color="#F1C40F" /> : renderGameIcon(record.gameType)}
                                 </View>
                                 <View style={{ flex: 1, marginLeft: 12 }}>
-                                    <Text style={[styles.activityName, { color: cardTextColor }]}>{record.name}</Text>
+                                    <Text style={styles.activityName}>{record.name}</Text>
                                     <View style={styles.row}>
                                         <Text style={[styles.activityDifficulty, { color: getDifficultyColor(record.gameDifficulty) }]}>{record.gameDifficulty || 'N/A'}</Text>
-                                        <Text style={[styles.dot, { color: cardTextColor }]}> • </Text>
-                                        <Text style={[styles.activityDate, { color: cardTextColor }]}>{new Date(record.createdAt).toLocaleDateString()}</Text>
+                                        <Text style={styles.dot}> • </Text>
+                                        <Text style={styles.activityDate}>{new Date(record.createdAt).toLocaleDateString()}</Text>
                                     </View>
                                 </View>
                                 <View style={styles.scoreContainer}>
                                     <Text style={[styles.activityScore, recordMode === 'best' && { color: '#F1C40F' }]}>
                                         {recordMode === 'best' ? 'BEST' : `+${record.points || 0} XP`}
                                     </Text>
-                                    <Text style={[styles.activityScoreValue, { color: cardTextColor }]}>Score: {record.scores || 0}</Text>
+                                    <Text style={styles.activityScoreValue}>Score: {record.scores || 0}</Text>
                                 </View>
                             </View>
-                        )) : <Text style={[styles.emptyText, { color: cardTextColor }]}>No records found.</Text>}
-                    </LinearGradient>
+                        )) : <Text style={styles.emptyText}>No records found.</Text>}
+                    </View>
 
                     {/* View All Game Records Button */}
                     <LinearGradient
@@ -2416,7 +2587,7 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(0,0,0,0.08)',
         marginVertical: 16,
     },
-    unifiedProfileContainer: { marginHorizontal: 20, marginTop: 20 },
+    unifiedProfileContainer: { marginHorizontal: 32, marginTop: 20 },
     profileCover: {
         height: 200,
         borderRadius: 24,
@@ -2470,7 +2641,7 @@ const styles = StyleSheet.create({
     statValue: { fontSize: 16, fontWeight: '700', color: '#FFF', marginLeft: 4 },
     statLabel: { fontSize: 12, color: 'rgba(255, 255, 255, 0.7)', marginLeft: 4 },
     profileActions: { flexDirection: 'row', gap: 10 },
-    inventoryBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255, 255, 255, 0.2)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'rgba(255, 255, 255, 0.3)', position: 'relative' },
+    inventoryBtn: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'rgba(255, 255, 255, 0.3)', position: 'relative' },
     inventoryBadge: { position: 'absolute', top: -5, right: -5, backgroundColor: '#FF6B6B', borderRadius: 10, minWidth: 18, height: 18, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFF' },
     inventoryBadgeText: { fontSize: 10, fontWeight: '700', color: '#FFF' },
     editProfileBtn: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255, 255, 255, 0.2)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'rgba(255, 255, 255, 0.3)' },
@@ -2492,7 +2663,7 @@ const styles = StyleSheet.create({
     // 主卡片內部樣式
     cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
     cardTitle: { fontSize: 20, fontWeight: '900' },
-    editCardBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.05)', justifyContent: 'center', alignItems: 'center' },
+    editCardBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)', elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4 },
     infoSection: { marginBottom: 16 },
     sectionLabel: { fontSize: 13, fontWeight: '700', marginBottom: 8 },
     // 緊湊布局樣式
@@ -2517,7 +2688,7 @@ const styles = StyleSheet.create({
     moreMiniText: { fontSize: 9, fontWeight: '700' },
     actionsSection: { marginBottom: 16 },
     actionButtons: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
-    actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
+    actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 10, padding: 10 },
     actionBtnText: { fontSize: 12, fontWeight: '700', marginLeft: 6 },
     skillsSection: { marginBottom: 0 },
     skillsChartContainer: {
@@ -2529,12 +2700,12 @@ const styles = StyleSheet.create({
         maxHeight: 130,   // 减小最大高度
     },
     sectionTitle: { fontSize: 16, fontWeight: '800', color: '#2D3436', alignSelf: 'flex-start', marginBottom: 10 },
-    segmentedControl: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.75)', marginHorizontal: 32, marginTop: 20, padding: 4, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
+    segmentedControl: { flexDirection: 'row', backgroundColor: '#FFFFFF', marginHorizontal: 32, marginTop: 20, padding: 4, borderRadius: 16, borderWidth: 2, borderColor: '#4CAF50' },
     segmentBtn: { flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: 'center' },
-    activeSegment: { backgroundColor: '#FFF', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
+    activeSegment: { backgroundColor: '#4CAF50', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
     segmentText: { fontSize: 12, fontWeight: '800', color: '#64748B' },
     activeSegmentText: { color: '#4CAF50' },
-    activityList: { marginHorizontal: 32, backgroundColor: 'rgba(255,255,255,0.75)', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 16, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
+    activityList: { marginHorizontal: 32, backgroundColor: '#FFFFFF', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 16, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)' },
     activityCard: { flexDirection: 'row', alignItems: 'center', paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: '#F1F2F6' },
     scrollContent: { paddingHorizontal: 20, paddingBottom: 20 },
     gameIconBg: { width: 42, height: 42, borderRadius: 12, backgroundColor: '#F8F9FA', justifyContent: 'center', alignItems: 'center' },
@@ -2549,7 +2720,7 @@ const styles = StyleSheet.create({
     logoutBtn: { margin: 20, padding: 15, backgroundColor: '#FFF', borderRadius: 20, alignItems: 'center' },
     logoutText: { color: '#FF4757', fontWeight: '800' },
     emptyText: { textAlign: 'center', padding: 20, color: '#BDC3C7' },
-    viewAllRecordsBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F8F9FA', padding: 18, borderRadius: 12, borderWidth: 2, borderColor: '#4CAF50', marginVertical: 15 },
+    viewAllRecordsBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FFFFFF', padding: 18, borderRadius: 12, borderWidth: 2, borderColor: '#4CAF50', marginVertical: 15 },
     viewAllRecordsText: { fontSize: 16, fontWeight: '700', color: '#4CAF50', flex: 1, textAlign: 'center' },
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center' },
     modalContent: { backgroundColor: '#FFF', borderRadius: 24, padding: 25, width: '85%', maxWidth: 400 },
