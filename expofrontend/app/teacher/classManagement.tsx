@@ -669,11 +669,7 @@ const ClassManagement: React.FC = () => {
                                         <Sparkles size={14} color="#6C5CE7" />
                                     </TouchableOpacity>
 
-                                    <TouchableOpacity style={styles.studentMainViewDetailsBtn}>
-                                        <Text style={styles.studentMainViewDetailsText}>View Full Report</Text>
-                                        <ChevronRight size={16} color="#6C5CE7" />
-                                    </TouchableOpacity>
-                                </View>
+                                                                    </View>
                             ))}
                         </View>
                     )}

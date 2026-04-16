@@ -9,7 +9,7 @@ import {
     ActivityIndicator,
     SafeAreaView,
 } from 'react-native';
-import { X, Calendar, Gamepad2, Trophy, Target, Clock, TrendingUp } from 'lucide-react-native';
+import { X, Calendar, Gamepad2, Trophy, Target, Clock, TrendingUp, Brain } from 'lucide-react-native';
 import { getApiBaseUrl } from '@/src/api/client';
 import axios from 'axios';
 import { GameMetadata } from '@/types/GameMetadata';
@@ -38,6 +38,9 @@ export default function StudentMetadataView({ visible, onClose, student, token }
     const [gameRecords, setGameRecords] = useState<GameRecord[]>([]);
     const [selectedGame, setSelectedGame] = useState<GameRecord | null>(null);
     const [showGameDetails, setShowGameDetails] = useState(false);
+    const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
+    const [showAiAnalysis, setShowAiAnalysis] = useState(false);
+    const [analyzingWithAi, setAnalyzingWithAi] = useState(false);
 
     useEffect(() => {
         if (visible && student) {
@@ -55,9 +58,15 @@ export default function StudentMetadataView({ visible, onClose, student, token }
             if (response.data && response.data.content) {
                 const records = response.data.content.map((record: any) => ({
                     id: record.id,
-                    gameName: record.gameName,
+                    gameName: record.name,
                     scores: record.scores,
-                    metadata: record.metadata || {},
+                    metadata: {
+                        ...record.metadata,
+                        questions: record.metadata?.questions?.map((q: any) => ({
+                            ...q,
+                            question: q.content || q.question
+                        })) || []
+                    },
                     createdAt: record.createdAt
                 }));
                 setGameRecords(records);
@@ -67,6 +76,163 @@ export default function StudentMetadataView({ visible, onClose, student, token }
         } finally {
             setLoading(false);
         }
+    };
+
+    const analyzeWithAi = async () => {
+        setAnalyzingWithAi(true);
+        try {
+            const analysis = await callPythonBackendAPI(gameRecords, student.username);
+            setAiAnalysis(analysis);
+            setShowAiAnalysis(true);
+        } catch (error) {
+            console.error('Error calling Python backend API:', error);
+            // Fallback to local analysis if API fails
+            generateFallbackAnalysis();
+        } finally {
+            setAnalyzingWithAi(false);
+        }
+    };
+
+    const callPythonBackendAPI = async (records: GameRecord[], studentName: string): Promise<string> => {
+        // Prepare data for Python backend API /api/learning/suggestions
+        const gameScores = records.map(record => ({
+            game_type: record.metadata.gameType || 'Unknown',
+            game_name: record.gameName,
+            score: record.scores,
+            difficulty: record.metadata.gameDifficulty || 'unknown',
+            createdAt: record.createdAt
+        }));
+
+        const requestData = {
+            user_id: studentName,
+            game_scores: gameScores
+        };
+
+        try {
+            // Call existing Python backend API
+            const response = await fetch('http://localhost:8000/api/learning/suggestions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestData)
+            });
+
+            if (!response.ok) {
+                throw new Error(`Python backend API call failed: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+
+            // Format AI response to match our expected format
+            return formatAIResponse(data.suggestions, studentName, records);
+        } catch (error) {
+            console.error('Python backend API error:', error);
+            throw error;
+        }
+    };
+
+    const formatAIResponse = (aiResponse: string, studentName: string, records: GameRecord[]): string => {
+        // Calculate basic statistics
+        const totalScore = records.reduce((sum, r) => sum + r.scores, 0);
+        const averageScore = totalScore / records.length;
+        const allQuestions = records.flatMap(r => r.metadata.questions || []);
+        const correctAnswers = allQuestions.filter(q => q.isCorrect).length;
+        const accuracyRate = allQuestions.length > 0 ? (correctAnswers / allQuestions.length * 100) : 0;
+
+        // Game types analysis
+        const gameTypeStats = records.reduce((acc, record) => {
+            const type = record.metadata.gameType || 'Unknown';
+            if (!acc[type]) {
+                acc[type] = { count: 0, totalScore: 0 };
+            }
+            acc[type].count++;
+            acc[type].totalScore += record.scores;
+            return acc;
+        }, {} as Record<string, { count: number; totalScore: number }>);
+
+        let formattedResponse = `🧠 AI Intelligent Learning Analysis Report \n`;
+        formattedResponse += `👤 Student：${studentName}\n`;
+        formattedResponse += `📅 Analysis time：${new Date().toLocaleDateString('zh-TW')}\n\n`;
+
+        formattedResponse += `📈 Overall performance analysis\n`;
+        formattedResponse += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        formattedResponse += `🎮 Total number of games：${records.length} games\n`;
+        formattedResponse += `📊 average score：${averageScore.toFixed(1)} score\n`;
+        formattedResponse += `🎯 Answer accuracy：${accuracyRate.toFixed(1)}%\n\n`;
+
+        formattedResponse += `📚 Learning domain analysis\n`;
+        formattedResponse += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        Object.entries(gameTypeStats).forEach(([type, stats]) => {
+            const avgScore = stats.totalScore / stats.count;
+            formattedResponse += `🔹 ${type}：${stats.count} games，average ${avgScore.toFixed(1)} score\n`;
+        });
+        formattedResponse += `\n`;
+
+        formattedResponse += `💡 AI Learning suggestions\n`;
+        formattedResponse += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        formattedResponse += `${aiResponse}\n\n`;
+
+
+
+        return formattedResponse;
+    };
+
+    const generateFallbackAnalysis = () => {
+        if (gameRecords.length === 0) {
+            setAiAnalysis('📊 暫無足夠的遊戲數據進行分析\n\n建議學生多參與不同類型的學習遊戲，積累更多學習記錄。');
+            setShowAiAnalysis(true);
+            return;
+        }
+
+        // Basic statistics
+        const totalGames = gameRecords.length;
+        const totalScore = gameRecords.reduce((sum, record) => sum + record.scores, 0);
+        const averageScore = totalScore / totalGames;
+
+        // Game types analysis
+        const gameTypeStats = gameRecords.reduce((acc, record) => {
+            const type = record.metadata.gameType || 'Unknown';
+            if (!acc[type]) {
+                acc[type] = { count: 0, totalScore: 0 };
+            }
+            acc[type].count++;
+            acc[type].totalScore += record.scores;
+            return acc;
+        }, {} as Record<string, { count: number; totalScore: number }>);
+
+        // Question performance analysis
+        const allQuestions = gameRecords.flatMap(record => record.metadata.questions || []);
+        const totalQuestions = allQuestions.length;
+        const correctAnswers = allQuestions.filter(q => q.isCorrect).length;
+        const accuracyRate = totalQuestions > 0 ? (correctAnswers / totalQuestions * 100) : 0;
+
+        let analysis = `📊 學習表現分析報告\n\n`;
+        analysis += `🎮 遊戲總數：${totalGames} 場\n`;
+        analysis += `📈 平均分數：${averageScore.toFixed(1)} 分\n`;
+        analysis += `🎯 答題準確率：${accuracyRate.toFixed(1)}%\n\n`;
+        
+        analysis += `📚 學習領域：\n`;
+        Object.entries(gameTypeStats).forEach(([type, stats]) => {
+            const avgScore = stats.totalScore / stats.count;
+            analysis += `• ${type}: ${stats.count} 場，平均 ${avgScore.toFixed(1)} 分\n`;
+        });
+
+        analysis += `\n💡 學習建議：\n`;
+        
+        if (accuracyRate < 60) {
+            analysis += `• 建議加強基礎概念的理解\n`;
+            analysis += `• 可以嘗試較低難度的遊戲建立信心\n`;
+        } else if (accuracyRate > 80) {
+            analysis += `• 表現優秀！可以挑戰更高難度的內容\n`;
+            analysis += `• 建議探索新的學習領域\n`;
+        } else {
+            analysis += `• 繼續保持學習進度\n`;
+            analysis += `• 可以適度增加挑戰性\n`;
+        }
+
+        setAiAnalysis(analysis);
+        setShowAiAnalysis(true);
     };
 
     const formatDate = (dateString: string) => {
@@ -153,13 +319,13 @@ export default function StudentMetadataView({ visible, onClose, student, token }
                                         {question.isCorrect ? 'Correct' : 'Incorrect'}
                                     </Text>
                                 </View>
-                                <Text style={styles.questionText}>{question.content || question.question}</Text>
+                                <Text style={styles.questionText}>{question.question}</Text>
                                 
                                 {/*  Game Type and Time Info */}
                                 <View style={styles.questionMeta}>
                                     <View style={styles.metaItem}>
                                         <Text style={styles.metaLabel}>Game Type:</Text>
-                                        <Text style={styles.metaValue}>{metadata.extraData?.gameType || 'N/A'}</Text>
+                                        <Text style={styles.metaValue}>{metadata.gameType || 'N/A'}</Text>
                                     </View>
                                     {question.timeSpent !== undefined && question.timeSpent > 0 && (
                                         <View style={styles.metaItem}>
@@ -204,9 +370,27 @@ export default function StudentMetadataView({ visible, onClose, student, token }
             <SafeAreaView style={styles.container}>
                 <View style={styles.header}>
                     <Text style={styles.headerTitle}>Game Metadata - {student.username}</Text>
-                    <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                        <X size={24} color="#333" />
-                    </TouchableOpacity>
+                    <View style={styles.headerButtons}>
+                        {gameRecords.length > 0 && (
+                            <TouchableOpacity 
+                                onPress={analyzeWithAi} 
+                                style={[styles.aiAnalysisButton, analyzingWithAi && styles.aiAnalysisButtonDisabled]}
+                                disabled={analyzingWithAi}
+                            >
+                                {analyzingWithAi ? (
+                                    <ActivityIndicator size="small" color="#fff" />
+                                ) : (
+                                    <Brain size={20} color="#fff" />
+                                )}
+                                <Text style={styles.aiAnalysisButtonText}>
+                                    {analyzingWithAi ? '分析中...' : 'AI 分析'}
+                                </Text>
+                            </TouchableOpacity>
+                        )}
+                        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                            <X size={24} color="#333" />
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
                 {loading ? (
@@ -283,6 +467,30 @@ export default function StudentMetadataView({ visible, onClose, student, token }
                             </TouchableOpacity>
                         </View>
                         {selectedGame && renderGameDetails(selectedGame.metadata)}
+                    </SafeAreaView>
+                </Modal>
+
+                {/* AI Analysis Modal */}
+                <Modal
+                    visible={showAiAnalysis}
+                    animationType="slide"
+                    presentationStyle="pageSheet"
+                >
+                    <SafeAreaView style={styles.container}>
+                        <View style={styles.header}>
+                            <View style={styles.headerTitleContainer}>
+                                <Brain size={24} color="#6C5CE7" />
+                                <Text style={styles.headerTitle}>AI Learning Analysis Report</Text>
+                            </View>
+                            <TouchableOpacity onPress={() => setShowAiAnalysis(false)} style={styles.closeButton}>
+                                <X size={24} color="#333" />
+                            </TouchableOpacity>
+                        </View>
+                        <ScrollView style={styles.aiAnalysisContent}>
+                            <View style={styles.aiAnalysisCard}>
+                                <Text style={styles.aiAnalysisText}>{aiAnalysis}</Text>
+                            </View>
+                        </ScrollView>
                     </SafeAreaView>
                 </Modal>
             </SafeAreaView>
@@ -522,5 +730,52 @@ const styles = StyleSheet.create({
         color: '#666',
         fontStyle: 'italic',
         marginTop: 8,
+    },
+    headerButtons: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    aiAnalysisButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#6C5CE7',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 20,
+        gap: 6,
+    },
+    aiAnalysisButtonDisabled: {
+        backgroundColor: '#a29bfe',
+    },
+    aiAnalysisButtonText: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    headerTitleContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        flex: 1,
+    },
+    aiAnalysisContent: {
+        flex: 1,
+        padding: 20,
+    },
+    aiAnalysisCard: {
+        backgroundColor: 'white',
+        borderRadius: 12,
+        padding: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    aiAnalysisText: {
+        fontSize: 16,
+        lineHeight: 24,
+        color: '#2D3436',
     },
 });

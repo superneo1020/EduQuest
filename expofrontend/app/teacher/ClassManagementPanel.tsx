@@ -635,7 +635,7 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
     
     // Render function for student selection (used in Add Students modal)
     const renderStudentSelectionItem = ({ item }: { item: UserMini }) => {
-        const isAlreadyInClass = selectedClass && classMembers.some(member => member.userId === item.id);
+        const isAlreadyInClass = selectedClass ? classMembers.some(member => member.userId === item.id) : false;
         
         // Safety checks for undefined properties - prioritize username over name
         const displayName = item.username || item.name || `User ${item.id}`;
@@ -721,7 +721,10 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                         </View>
                     </View>
                     <View style={styles.studentListItemActions}>
-                        <TouchableOpacity style={styles.viewStudentBtn}>
+                        <TouchableOpacity 
+                            style={styles.viewStudentBtn}
+                            onPress={() => viewStudentScores(item.id, item.username || item.name || 'Unknown')}
+                        >
                             <Text style={styles.viewStudentBtnText}>View Details</Text>
                         </TouchableOpacity>
                     </View>
@@ -1021,13 +1024,7 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                                             )}
 
                                             {/* 底部按鈕（原本的操作按鈕已移到右上角，這裡可保留查看詳細報告的按鈕，非必須） */}
-                                            {isStudent && (
-                                                <TouchableOpacity style={styles.viewDetailsBtn} onPress={() => viewStudentScores(item.userId, item.username)}>
-                                                    <Text style={styles.viewDetailsText}>View Full Report</Text>
-                                                    <ChevronRight size={16} color="#6C5CE7" />
-                                                </TouchableOpacity>
-                                            )}
-                                        </View>
+                                                                                    </View>
                                     );
                                 }}
                                 keyExtractor={item => item.userId.toString()}
@@ -1391,33 +1388,6 @@ const styles = StyleSheet.create({
         width: 35,
         textAlign: 'right',
     },
-    memberAvatar: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        backgroundColor: '#6C5CE7',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 12,
-    },
-    memberAvatarText: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: '#FFF',
-    },
-    memberInfo: {
-        flex: 1,
-    },
-    memberName: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: '#2D3436',
-    },
-    memberEmail: {
-        fontSize: 12,
-        color: '#999',
-        marginTop: 2,
-    },
     memberCardActions: {
         flexDirection: 'row',
         gap: 12,
@@ -1435,12 +1405,6 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
-    },
-    subjectLabel: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: '#666',
-        width: 50,
     },
     progressBar: {
         flex: 1,
@@ -1495,21 +1459,7 @@ const styles = StyleSheet.create({
         fontSize: 13,
         fontWeight: '600',
     },
-    roleBadge: {
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 12,
-        alignSelf: 'flex-start',
-        marginTop: 6,
-    },
-    teacherBadge: { backgroundColor: '#FF6B6B' },
-    assistantBadge: { backgroundColor: '#4ECDC4' },
-    studentBadge: { backgroundColor: '#95E1D3' },
-    roleBadgeText: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: '#FFF',
-    },
+
 // 操作按鈕區域
     memberActions: {
         flexDirection: 'row',
@@ -2191,7 +2141,7 @@ const styles = StyleSheet.create({
         marginBottom: 12,
     },
     metadataTitle: {
-        fontSize: 14,
+        fontSize: 22,
         fontWeight: '600',
         color: '#2D3436',
         marginBottom: 8,
@@ -2201,13 +2151,13 @@ const styles = StyleSheet.create({
         marginBottom: 6,
     },
     metadataKey: {
-        fontSize: 12,
+        fontSize: 18,
         color: '#666',
         fontWeight: '500',
         width: 80,
     },
     metadataValue: {
-        fontSize: 12,
+        fontSize: 18,
         color: '#333',
         flex: 1,
     },

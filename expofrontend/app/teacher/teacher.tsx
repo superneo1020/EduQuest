@@ -102,6 +102,8 @@ export default function TeacherDashboard() {
     const [newStudent, setNewStudent] = useState<Partial<Student>>({});
     const [classes, setClasses] = useState<Course[]>([]);
     const [metadataModalVisible, setMetadataModalVisible] = useState(false);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [studentToDelete, setStudentToDelete] = useState<number | null>(null);
 
     // Navigation state (移除 studentLeaderboard)
     type TeacherView = 'dashboard' | 'students' | 'classes' | 'analytics';
@@ -156,20 +158,31 @@ export default function TeacherDashboard() {
         try {
             if (!token) {
                 console.log('TeacherDashboard - No token available, skipping student load');
-                setStudents([]);
-                setFilteredStudents([]);
-                return;
+                return; // 不要清空現有數據
             }
-            // Load real students from API
+
+            console.log('Loading students from API...');
             const response = await axios.get(`${getApiBaseUrl()}/api/educator/school/members`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
-            if (response.data && response.data.content) {
-                const studentsData: Student[] = response.data.content.map((member: any) => ({
+            // 處理不同的響應結構
+            let membersData = [];
+            if (response.data) {
+                if (response.data.content) {
+                    membersData = response.data.content;
+                } else if (Array.isArray(response.data)) {
+                    membersData = response.data;
+                } else if (response.data.items) {
+                    membersData = response.data.items;
+                }
+            }
+
+            if (membersData.length > 0) {
+                const studentsData: Student[] = membersData.map((member: any) => ({
                     id: member.id,
-                    username: member.username,
-                    email: member.email,
+                    username: member.username || member.name || 'Unknown',
+                    email: member.email || 'No email',
                     points: member.points || 0,
                     level: member.level || 1,
                     joinDate: member.createdAt ? new Date(member.createdAt).toISOString().split('T')[0] : 'Unknown',
@@ -188,8 +201,8 @@ export default function TeacherDashboard() {
                     },
                 }));
 
-                // Enhance student data with progress analytics
-                const studentsWithProgress = await Promise.all(
+                // 使用Promise.allSettled代替Promise.all
+                const studentsWithProgress = await Promise.allSettled(
                     studentsData.map(async (student) => {
                         try {
                             const analytics = await educatorService.getStudentAnalytics(student.id);
@@ -206,29 +219,35 @@ export default function TeacherDashboard() {
                             return student;
                         } catch (error) {
                             console.error(`Error loading analytics for student ${student.id}:`, error);
-                            return student;
+                            return student; // 返回原始數據
                         }
                     })
                 );
 
-                setStudents(studentsWithProgress);
-                setFilteredStudents(studentsWithProgress);
+                // 只保留成功的結果
+                const validStudents = studentsWithProgress
+                    .filter((result): result is PromiseFulfilledResult<any> => result.status === 'fulfilled')
+                    .map(result => result.value);
+
+                setStudents(validStudents);
+                setFilteredStudents(validStudents);
             } else {
-                setStudents([]);
-                setFilteredStudents([]);
+                console.log('No members data found, keeping existing students');
+                // 不要清空現有數據
             }
         } catch (error: any) {
             console.error('TeacherDashboard - Error loading students:', error.response?.status, error.response?.data || error.message);
+
+            // 只在認證錯誤時登出
             if (error.response?.status === 401) {
-                console.error('TeacherDashboard - Authentication failed - token may be invalid');
-                setStudents([]);
-                setFilteredStudents([]);
-                // 强制登出并跳转登录页
+                Alert.alert('Session Expired', 'Your session has expired. Please login again.');
                 signOut();
                 router.replace('/Profile/Login');
                 return;
             }
-            throw error;
+
+            // 其他錯誤不清空數據
+            Alert.alert('Error', 'Failed to load students. Please try again.');
         }
     };
 
@@ -367,32 +386,38 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
     };
 
     const deleteStudent = (studentId: number) => {
-        Alert.alert(
-            'Delete Student',
-            'Are you sure you want to remove this student? This action cannot be undone.',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Delete',
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            // Call API to remove student from school/class
-                            await axios.delete(`${getApiBaseUrl()}/api/admin/user/${studentId}`, {
-                                headers: { Authorization: `Bearer ${token}` }
-                            });
+        setStudentToDelete(studentId);
+        setShowDeleteModal(true);
+    };
 
-                            setStudents(students.filter(s => s.id !== studentId));
-                            setFilteredStudents(filteredStudents.filter(s => s.id !== studentId));
-                            Alert.alert('Success', 'Student removed successfully');
-                        } catch (error) {
-                            console.error('Error removing student:', error);
-                            Alert.alert('Error', 'Failed to remove student. Please try again.');
-                        }
-                    }
-                }
-            ]
-        );
+    const handleConfirmDelete = async () => {
+        if (!studentToDelete) return;
+
+        try {
+            // Use educator service to remove student from school
+            await educatorService.removeStudentFromSchool(studentToDelete);
+
+            setStudents(students.filter(s => s.id !== studentToDelete));
+            setFilteredStudents(filteredStudents.filter(s => s.id !== studentToDelete));
+            Alert.alert('Success', 'Student removed from school successfully');
+        } catch (error: any) {
+            console.error('Error removing student:', error);
+            if (error.response?.status === 401 || error.message?.includes('Permission denied')) {
+                Alert.alert('Permission Denied', 'You do not have permission to remove students from school. Please contact your administrator.');
+            } else if (error.response?.status === 404 || error.message?.includes('not found')) {
+                Alert.alert('Student Not Found', 'The student you are trying to remove does not exist.');
+            } else {
+                Alert.alert('Error', 'Failed to remove student. Please try again.');
+            }
+        } finally {
+            setShowDeleteModal(false);
+            setStudentToDelete(null);
+        }
+    };
+
+    const handleCancelDelete = () => {
+        setShowDeleteModal(false);
+        setStudentToDelete(null);
     };
 
     const updateStudent = async (updatedStudent: Student) => {
@@ -562,7 +587,7 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
 
                 {/* Navigation Tabs */}
                 <View style={styles.tabContainer}>
-                    {(['dashboard', 'students', 'classes', 'analytics'] as TeacherView[]).map((tab) => (
+                    {(['dashboard', 'students', 'classes', 'analytics'] as const).map((tab: TeacherView) => (
                         <TouchableOpacity
                             key={tab}
                             style={[styles.tab, currentView === tab && styles.tabActive]}
@@ -675,8 +700,8 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
                                                     <Text style={styles.avatarText}>{student.username.charAt(0)}</Text>
                                                 </View>
                                                 <View style={styles.studentInfo}>
-                                                    <Text style={styles.studentName}>{student.username}</Text>
-                                                    <Text style={styles.studentEmail}>{student.email}</Text>
+                                                    <Text style={styles.studentName} numberOfLines={1} ellipsizeMode="tail">{student.username}</Text>
+                                                    <Text style={styles.studentEmail} numberOfLines={1} ellipsizeMode="tail">{student.email}</Text>
                                                 </View>
                                                 <View style={styles.cardActions}>
                                                     <TouchableOpacity onPress={() => {
@@ -735,11 +760,7 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
                                                 </View>
                                             </View>
 
-                                            <TouchableOpacity style={styles.aiAnalysisBtn} onPress={() => generateAIAnalysis(student)}>
-                                                <Brain size={18} color="#6C5CE7" />
-                                                <Text style={styles.aiAnalysisBtnText}>AI Performance Analysis</Text>
-                                                <Sparkles size={14} color="#6C5CE7" />
-                                            </TouchableOpacity>
+
 
                                             <TouchableOpacity style={styles.metadataBtn} onPress={() => handleViewMetadata(student)}>
                                                 <Gamepad2 size={18} color="#4CAF50" />
@@ -751,9 +772,7 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
                                                 setSelectedStudent(student);
                                                 setModalVisible(true);
                                             }}>
-                                                <Text style={styles.viewDetailsText}>View Full Report</Text>
-                                                <ChevronRight size={16} color="#6C5CE7" />
-                                            </TouchableOpacity>
+                                                                                                                                            </TouchableOpacity>
                                         </View>
                                     ))}
                                 </View>
@@ -993,6 +1012,35 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
                 </View>
             </Modal>
 
+            {/* Delete Confirmation Modal */}
+            <Modal
+                visible={showDeleteModal}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={handleCancelDelete}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.confirmModal}>
+                        <Text style={styles.confirmTitle}>Delete Student</Text>
+                        <Text style={styles.confirmMessage}>Are you sure you want to delete this student? This action cannot be undone.</Text>
+                        <View style={styles.confirmButtons}>
+                            <TouchableOpacity
+                                style={[styles.confirmButton, styles.cancelButton]}
+                                onPress={handleCancelDelete}
+                            >
+                                <Text style={styles.cancelButtonText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.confirmButton, styles.deleteButton]}
+                                onPress={handleConfirmDelete}
+                            >
+                                <Text style={styles.deleteButtonText}>Delete</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
             <StudentMetadataView
                 visible={metadataModalVisible}
                 onClose={() => setMetadataModalVisible(false)}
@@ -1057,7 +1105,7 @@ const styles = StyleSheet.create({
     sectionSubtitle: { fontSize: 14, color: '#666', marginTop: 4, marginBottom: 20 },
     studentsGrid: { gap: 16 },
     studentsGridTablet: { flexDirection: 'row', flexWrap: 'wrap' },
-    studentCard: { backgroundColor: 'white', borderRadius: 20, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 3 },
+    studentCard: { backgroundColor: 'white', borderRadius: 20, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 3, minHeight: 280, },
     studentCardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
     studentAvatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#6C5CE7', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
     avatarText: { color: 'white', fontSize: 20, fontWeight: 'bold' },
@@ -1073,7 +1121,7 @@ const styles = StyleSheet.create({
     progressBar: { flex: 1, height: 6, backgroundColor: '#E0E0E0', borderRadius: 3, overflow: 'hidden' },
     progressFill: { height: '100%', borderRadius: 3 },
     progressPercent: { fontSize: 11, fontWeight: '600', color: '#666', width: 35, textAlign: 'right' },
-    performanceRow: { flexDirection: 'row', gap: 12, marginVertical: 12 },
+    performanceRow: { flexDirection: 'row', gap: 12, marginVertical: 12,  flexWrap: 'nowrap', },
     performanceBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F8F9FA', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
     performanceScore: { fontSize: 14, fontWeight: '700' },
     performanceText: { fontSize: 12, color: '#666' },
@@ -1170,6 +1218,14 @@ const styles = StyleSheet.create({
         color: '#666',
     },
     logoutButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: 'white',
+    },
+    deleteButton: {
+        backgroundColor: '#FF4757',
+    },
+    deleteButtonText: {
         fontSize: 16,
         fontWeight: '600',
         color: 'white',
