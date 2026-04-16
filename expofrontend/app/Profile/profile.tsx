@@ -3,6 +3,7 @@ import {
     View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity,
     StatusBar, Dimensions, ActivityIndicator, TextInput, Modal, ImageBackground , Alert
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
     Trophy, Gamepad2, Mail, User as UserIcon, Settings, ChevronRight,
     LogOut, Calculator, BookOpen, Brain, FlaskConical, Eye, EyeOff, Key, ShoppingCart, List,
@@ -72,6 +73,28 @@ export default function ProfileScreen() {
     const [aiSuggestions, setAiSuggestions] = useState<any[]>([]);
     const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
+    // Load AI suggestions from AsyncStorage
+    const loadAiSuggestions = useCallback(async () => {
+        try {
+            const storedSuggestions = await AsyncStorage.getItem('aiSuggestions');
+            if (storedSuggestions) {
+                setAiSuggestions(JSON.parse(storedSuggestions));
+            }
+        } catch (error) {
+            console.error('Failed to load AI suggestions:', error);
+        }
+    }, []);
+
+    // Save AI suggestions to AsyncStorage
+    const saveAiSuggestions = useCallback(async (suggestions: any[]) => {
+        try {
+            await AsyncStorage.setItem('aiSuggestions', JSON.stringify(suggestions));
+        } catch (error) {
+            console.error('Failed to save AI suggestions:', error);
+        }
+    }, []);
+
+    
     // Enhanced Profile states
     const [showLearningStats, setShowLearningStats] = useState(false);
     const [showEquipment, setShowEquipment] = useState(false);
@@ -386,6 +409,9 @@ export default function ProfileScreen() {
                 if (!token) return;
                 try {
                     setLoading(true);
+                    
+                    // Load AI suggestions from storage first
+                    loadAiSuggestions();
 
                     const profileResponse = await axios.get(`${getApiBaseUrl()}/api/user/profile`, {
                         headers: { Authorization: `Bearer ${token}` }
@@ -529,6 +555,79 @@ export default function ProfileScreen() {
 
     const gameHistory = displayUser?.userGameScores || [];
 
+    // Function to fetch AI learning suggestions
+    const fetchAiLearningSuggestions = useCallback(async () => {
+        // 如果正在加載，或者根本沒有遊戲紀錄，就不要浪費資源請求 AI
+        if (loadingSuggestions || !gameHistory || gameHistory.length === 0) {
+            console.log('Skip AI fetch: No game history or already loading.');
+            return;
+        }
+
+        console.log('Starting AI suggestions fetch for new user...');
+        try {
+            setLoadingSuggestions(true);
+
+            // 獲取當前用戶名 (轉小寫以確保一致性)
+            const currentUsername = (displayUser?.username || user?.username || 'Guest').toLowerCase();
+
+            // 構建發送給 Python 後端的數據
+            const gameScoreData = {
+                // 直接傳送 username，讓 Python 後端處理字符串
+                user_id: currentUsername,
+                game_scores: gameHistory.map((game: any) => ({
+                    game_type: game.gameType || 'GENERAL',
+                    game_name: game.name || game.gameName || 'Unknown Game',
+                    score: game.scores || 0,
+                    difficulty: game.gameDifficulty || 'MEDIUM',
+                    // 確保日期格式正確
+                    createdAt: game.createdAt || new Date().toISOString()
+                }))
+            };
+
+            console.log('Sending to AI backend (FastAPI):', gameScoreData);
+
+            // 注意：如果你在實機測試，localhost 可能需要換成你電腦的 IP
+            const response = await axios.post('http://localhost:8000/api/learning/suggestions', gameScoreData, {
+                timeout: 20000, // AI 運算可能較慢，給予 20 秒緩衝
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (response.data && response.data.suggestions) {
+                const suggestions = response.data.suggestions;
+                console.log('AI Analysis Success:', suggestions);
+
+                setAiSuggestions(suggestions);
+                // 如果你有本地持久化存儲，也可以存起來
+                if (typeof saveAiSuggestions === 'function') {
+                    saveAiSuggestions(suggestions);
+                }
+            }
+        } catch (error: any) {
+            console.error('AI Suggestion Error:', error);
+
+            // 如果是網絡錯誤或後端沒開，顯示提示
+            let errorTitle = 'AI 分析暫時不可用';
+            let errorMsg = '請確保 Python 後端 (Ollama) 已啟動。';
+
+            if (error.code === 'ECONNABORTED') {
+                errorMsg = 'AI 回應超時，請檢查 Ollama 運行狀態。';
+            }
+
+            Alert.alert(errorTitle, errorMsg, [{ text: '好的' }]);
+        } finally {
+            setLoadingSuggestions(false);
+        }
+    }, [gameHistory, user, displayUser, loadingSuggestions, saveAiSuggestions]);
+
+    // Fetch AI suggestions when game history changes
+    useEffect(() => {
+        if (gameHistory.length > 0 && !loadingSuggestions) {
+            fetchAiLearningSuggestions();
+        }
+    }, [gameHistory]);
+
     const calculateImprovementRate = useCallback(() => {
         if (gameHistory.length < 3) return 0;
         const sortedHistory = [...gameHistory].sort((a, b) =>
@@ -628,7 +727,7 @@ export default function ProfileScreen() {
         const totalGames = Object.values(stats.difficultyPreference).reduce((a: number, b: number) => a + b, 0);
         const easyRatio = (stats.difficultyPreference['EASY'] || 0) / totalGames;
         const hardRatio = (stats.difficultyPreference['HARD'] || 0) / totalGames;
-        if (easyRatio > 0.6) {
+        if (easyRatio > 0.9) {
             suggestions.push({
                 type: 'challenge', icon: <Zap size={16} color="#FFA500" />,
                 title: 'Break out of your comfort zone',
@@ -1050,44 +1149,8 @@ export default function ProfileScreen() {
             Alert.alert('Error', 'Failed to submit feedback. Please try again later.');
         }
     };
+                    // 即使没有游戏记录，也发送空数组，让后端返回通用建议
 
-    // Function to fetch AI learning suggestions
-    const fetchAiLearningSuggestions = async () => {
-        if (loadingSuggestions || gameHistory.length === 0) return;
-
-        try {
-            setLoadingSuggestions(true);
-
-            const gameScoreData = {
-                user_id: displayUser?.id || 1,
-                game_scores: gameHistory.map((game: any) => ({
-                    game_type: game.gameType || 'UNKNOWN',
-                    game_name: game.name || 'Unknown Game',
-                    score: game.scores || 0,
-                    difficulty: game.gameDifficulty || 'MEDIUM',
-                    createdAt: game.createdAt
-                }))
-            };
-
-            const response = await axios.post('http://localhost:8000/api/learning/suggestions', gameScoreData, {
-                timeout: 30000,
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            setAiSuggestions(response.data.suggestions || []);
-        } catch (error: any) {
-            console.error('Failed to fetch AI suggestions:', error);
-            Alert.alert(
-                'AI Analysis Unavailable',
-                'Using local analysis instead. Make sure Python backend is running.',
-                [{ text: 'OK' }]
-            );
-        } finally {
-            setLoadingSuggestions(false);
-        }
-    };
 
     const chartWidth = width - 96; // 根據 masterInfoCard 的邊距計算
 
@@ -1245,7 +1308,7 @@ export default function ProfileScreen() {
                                         style={styles.editCardBtn}
                                         onPress={() => setShowEditProfileModal(true)}
                                     >
-                                        <Edit size={16} color="#2D3436" />
+                                        <Edit size={16} color={cardTextColor} />
                                     </TouchableOpacity>
                                 </View>
                             
@@ -1384,20 +1447,24 @@ export default function ProfileScreen() {
                                     <View style={{ width: chartWidth, alignSelf: 'center' }}>
                                         <SkillBarsChart gameHistory={gameHistory} />
                                     </View>
-                                    
+
+
+                                    {/* AI 建議直接顯示 */}
                                     {/* AI 建議直接顯示 */}
                                     <View style={{ marginTop: 16 }}>
                                         <Text style={[styles.sectionLabel, { color: cardTextColor, marginBottom: 8 }]}>🤖 AI Learning Suggestions</Text>
                                         {loadingSuggestions ? (
-                                            <View style={{ alignItems: 'center', padding: 20 }}>
+                                            <View style={[styles.statsCard, { alignItems: 'center', padding: 20 }]}>
                                                 <ActivityIndicator size="small" color="#4CAF50" />
-                                                <Text style={{ marginTop: 8, color: '#636E72', fontSize: 12 }}>AI is analyzing your learning patterns...</Text>
+                                                <Text style={[styles.statsLabel, { textAlign: 'center', color: cardTextColor, marginTop: 8 }]}>
+                                                    AI is analyzing your learning patterns...
+                                                </Text>
                                             </View>
-                                        ) : generateLearningSuggestions.length > 0 ? (
-                                            generateLearningSuggestions.slice(0, 3).map((suggestion: any, index: number) => (
-                                                <View key={index} style={[styles.suggestionCard, { backgroundColor: 'rgba(255,255,255,0.9)', marginBottom: 8 }]}>
+                                        ) : (aiSuggestions.length > 0 || generateLearningSuggestions.length > 0) ? (
+                                            (aiSuggestions.length > 0 ? aiSuggestions : generateLearningSuggestions).slice(0, 3).map((suggestion: any, index: number) => (
+                                                <View key={index} style={[styles.suggestionCard, { marginBottom: 8 }]}>
                                                     <View style={styles.suggestionIcon}>
-                                                        {suggestion.icon}
+                                                        {suggestion.icon || (suggestion.type === 'strength' ? <Trophy size={16} color="#4CAF50" /> : suggestion.type === 'weakness' ? <Target size={16} color="#FF6B6B" /> : <Zap size={16} color="#FFA500" />)}
                                                     </View>
                                                     <View style={styles.suggestionContent}>
                                                         <Text style={[styles.suggestionTitle, { color: cardTextColor }]}>{suggestion.title}</Text>
@@ -1425,7 +1492,7 @@ export default function ProfileScreen() {
                                         style={styles.editCardBtn}
                                         onPress={() => setShowEditProfileModal(true)}
                                     >
-                                        <Edit size={16} color="#2D3436" />
+                                        <Edit size={16} color={cardTextColor} />
                                     </TouchableOpacity>
                                 </View>
                                 
@@ -1575,7 +1642,7 @@ export default function ProfileScreen() {
                                             </View>
                                         ) : generateLearningSuggestions.length > 0 ? (
                                             generateLearningSuggestions.slice(0, 3).map((suggestion: any, index: number) => (
-                                                <View key={index} style={[styles.suggestionCard, { backgroundColor: 'rgba(255,255,255,0.9)', marginBottom: 8 }]}>
+                                                <View key={index} style={[styles.suggestionCard, { marginBottom: 8 }]}>
                                                     <View style={styles.suggestionIcon}>
                                                         {suggestion.icon}
                                                     </View>
@@ -1628,18 +1695,13 @@ export default function ProfileScreen() {
                                     {recordMode === 'best' ? <Trophy size={18} color="#F1C40F" /> : renderGameIcon(record.gameType)}
                                 </View>
                                 <View style={{ flex: 1, marginLeft: 12 }}>
-                                    <Text style={styles.activityName}>{record.name}</Text>
-                                    <View style={styles.row}>
-                                        <Text style={[styles.activityDifficulty, { color: getDifficultyColor(record.gameDifficulty) }]}>{record.gameDifficulty || 'N/A'}</Text>
-                                        <Text style={styles.dot}> • </Text>
-                                        <Text style={styles.activityDate}>{new Date(record.createdAt).toLocaleDateString()}</Text>
-                                    </View>
+                                    <Text style={[styles.activityName, { color: cardTextColor }]}>{record.name}</Text>
+                                    <Text style={[styles.activityDate, { color: cardTextColor }]}>{new Date(record.createdAt).toLocaleDateString()}</Text>
                                 </View>
                                 <View style={styles.scoreContainer}>
-                                    <Text style={[styles.activityScore, recordMode === 'best' && { color: '#F1C40F' }]}>
-                                        {recordMode === 'best' ? 'BEST' : `+${record.points || 0} XP`}
+                                    <Text style={[styles.activityScore, { color: cardTextColor }, recordMode === 'best' && { color: '#F1C40F' }]}>
+                                        {recordMode === 'best' ? 'BEST' : `Score: ${record.scores || 0}`}
                                     </Text>
-                                    <Text style={styles.activityScoreValue}>Score: {record.scores || 0}</Text>
                                 </View>
                             </View>
                         )) : <Text style={styles.emptyText}>No records found.</Text>}
@@ -2657,29 +2719,29 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.08,
         shadowRadius: 8,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.6)',
+        borderColor: 'rgba(255,255,255,0.85)',
     },
     // 移除的舊樣式 - 已合併到 masterInfoCard
     // 主卡片內部樣式
     cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-    cardTitle: { fontSize: 20, fontWeight: '900' },
+    cardTitle: { fontSize: 24, fontWeight: '900' },
     editCardBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)', elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4 },
     infoSection: { marginBottom: 16 },
-    sectionLabel: { fontSize: 13, fontWeight: '700', marginBottom: 8 },
+    sectionLabel: { fontSize: 16, fontWeight: '700', marginBottom: 8 },
     // 緊湊布局樣式
     compactInfoGrid: { gap: 6 },
     infoRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
     compactInfoItem: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(248,249,250,0.2)', borderRadius: 8, padding: 6 },
     compactInfoContent: { marginLeft: 8, flex: 1 },
-    compactInfoLabel: { fontSize: 10, marginBottom: 1 },
-    compactInfoValue: { fontSize: 12, fontWeight: '700' },
+    compactInfoLabel: { fontSize: 12, marginBottom: 1 },
+    compactInfoValue: { fontSize: 14, fontWeight: '700' },
     // 收藏品區域樣式
     collectionSection: { marginBottom: 16 },
     collectionSubsection: { marginBottom: 12 },
     miniSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-    miniSectionLabel: { fontSize: 12, fontWeight: '700' },
+    miniSectionLabel: { fontSize: 14, fontWeight: '700' },
     miniViewBtn: { paddingHorizontal: 8, paddingVertical: 2, backgroundColor: 'rgba(0,0,0,0.04)', borderRadius: 8 },
-    miniViewText: { fontSize: 10, fontWeight: '600' },
+    miniViewText: { fontSize: 12, fontWeight: '600' },
     miniBadgesScroll: { flexDirection: 'row' },
     miniBadgeItem: { alignItems: 'center', marginRight: 8 },
     miniBackgroundsScroll: { flexDirection: 'row' },
@@ -2689,7 +2751,7 @@ const styles = StyleSheet.create({
     actionsSection: { marginBottom: 16 },
     actionButtons: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
     actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 10, padding: 10 },
-    actionBtnText: { fontSize: 12, fontWeight: '700', marginLeft: 6 },
+    actionBtnText: { fontSize: 14, fontWeight: '700', marginLeft: 6 },
     skillsSection: { marginBottom: 0 },
     skillsChartContainer: {
         backgroundColor: 'rgba(248,249,250,0.3)',
@@ -2699,87 +2761,87 @@ const styles = StyleSheet.create({
         minHeight: 120,   // 减小最小高度
         maxHeight: 130,   // 减小最大高度
     },
-    sectionTitle: { fontSize: 16, fontWeight: '800', color: '#2D3436', alignSelf: 'flex-start', marginBottom: 10 },
+    sectionTitle: { fontSize: 16, fontWeight: '800', alignSelf: 'flex-start', marginBottom: 10 },
     segmentedControl: { flexDirection: 'row', backgroundColor: '#FFFFFF', marginHorizontal: 32, marginTop: 20, padding: 4, borderRadius: 16, borderWidth: 2, borderColor: '#4CAF50' },
     segmentBtn: { flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: 'center' },
     activeSegment: { backgroundColor: '#4CAF50', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
-    segmentText: { fontSize: 12, fontWeight: '800', color: '#64748B' },
-    activeSegmentText: { color: '#4CAF50' },
-    activityList: { marginHorizontal: 32, backgroundColor: '#FFFFFF', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 16, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)' },
-    activityCard: { flexDirection: 'row', alignItems: 'center', paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: '#F1F2F6' },
+    segmentText: { fontSize: 14, fontWeight: '800', color: '#64748B' },
+    activeSegmentText: { color: '#4CAF50', fontSize: 14, fontWeight: '800' },
+    activityList: { marginHorizontal: 32, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 16, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+    activityCard: { flexDirection: 'row', alignItems: 'center', paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.2)' },
     scrollContent: { paddingHorizontal: 20, paddingBottom: 20 },
-    gameIconBg: { width: 42, height: 42, borderRadius: 12, backgroundColor: '#F8F9FA', justifyContent: 'center', alignItems: 'center' },
-    activityName: { fontSize: 15, fontWeight: '800', color: '#2D3436' },
+    gameIconBg: { width: 42, height: 42, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
+    activityName: { fontSize: 17, fontWeight: '800', color: '#FFFFFF' },
     row: { flexDirection: 'row', alignItems: 'center' },
-    activityDifficulty: { fontSize: 11, fontWeight: '700' },
-    dot: { color: '#BDC3C7' },
-    activityDate: { fontSize: 11, color: '#A0A0A0' },
+    activityDifficulty: { fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.8)' },
+    dot: { color: 'rgba(255,255,255,0.85)' },
+    activityDate: { fontSize: 11, color: 'rgba(255,255,255,0.85)' },
     scoreContainer: { alignItems: 'flex-end' },
-    activityScore: { fontSize: 14, fontWeight: '900', color: '#4CAF50' },
-    activityScoreValue: { fontSize: 10, color: '#636E72', fontWeight: '600' },
+    activityScore: { fontSize: 16, fontWeight: '900', color: '#FFFFFF' },
+    activityScoreValue: { fontSize: 10, color: 'rgba(255,255,255,0.85)', fontWeight: '600' },
     logoutBtn: { margin: 20, padding: 15, backgroundColor: '#FFF', borderRadius: 20, alignItems: 'center' },
-    logoutText: { color: '#FF4757', fontWeight: '800' },
-    emptyText: { textAlign: 'center', padding: 20, color: '#BDC3C7' },
-    viewAllRecordsBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FFFFFF', padding: 18, borderRadius: 12, borderWidth: 2, borderColor: '#4CAF50', marginVertical: 15 },
-    viewAllRecordsText: { fontSize: 16, fontWeight: '700', color: '#4CAF50', flex: 1, textAlign: 'center' },
+    logoutText: { color: '#FF4757', fontWeight: '800', fontSize: 18 },
+    emptyText: { textAlign: 'center', padding: 20, color: 'rgba(255,255,255,0.85)' },
+    viewAllRecordsBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FFFFFF', padding: 18, borderRadius: 12, borderWidth: 2, borderColor: '#4CAF50', marginVertical: 15, marginHorizontal: 32 },
+    viewAllRecordsText: { fontSize: 18, fontWeight: '700', color: '#4CAF50', flex: 1, textAlign: 'center' },
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center' },
     modalContent: { backgroundColor: '#FFF', borderRadius: 24, padding: 25, width: '85%', maxWidth: 400 },
-    modalTitle: { fontSize: 20, fontWeight: '900', color: '#2D3436', marginBottom: 20, textAlign: 'center' },
+    modalTitle: { fontSize: 22, fontWeight: '900', marginBottom: 20, textAlign: 'center' },
     inputContainer: { marginBottom: 20 },
-    inputLabel: { fontSize: 14, fontWeight: '600', color: '#2D3436', marginBottom: 5 },
-    textInput: { backgroundColor: '#F8F9FA', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16, color: '#2D3436', borderWidth: 1, borderColor: '#E2E8F0' },
+    inputLabel: { fontSize: 16, fontWeight: '600', marginBottom: 5 },
+    textInput: { backgroundColor: '#F8F9FA', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 12, fontSize: 18, borderWidth: 1, borderColor: '#E2E8F0' },
     passwordInput: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, backgroundColor: '#F8F9FA', paddingHorizontal: 15 },
     modalButtons: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
     modalBtn: { flex: 1, padding: 15, borderRadius: 12, alignItems: 'center', marginHorizontal: 5 },
     cancelBtn: { backgroundColor: '#F8F9FA', borderWidth: 1, borderColor: '#E2E8F0' },
-    cancelBtnText: { color: '#636E72', fontWeight: '800' },
+    cancelBtnText: { fontWeight: '800', fontSize: 16 },
     confirmBtn: { backgroundColor: '#4CAF50' },
-    confirmBtnText: { color: '#FFF', fontWeight: '800' },
+    confirmBtnText: { color: '#FFF', fontWeight: '800', fontSize: 16 },
     loadingContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
     errorContextText: { fontSize: 14, color: '#FF4757', fontWeight: '600', backgroundColor: '#FFF5F5', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#FFB6B6' },
     itemCard: { flexDirection: 'row', alignItems: 'center', padding: 15, borderBottomWidth: 1, borderBottomColor: '#F1F2F6' },
     itemIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F8F9FA', justifyContent: 'center', alignItems: 'center', marginRight: 15 },
     itemIconText: { fontSize: 16, fontWeight: 'bold', color: '#4CAF50' },
     itemInfo: { flex: 1 },
-    itemName: { fontSize: 16, fontWeight: '800', color: '#2D3436' },
-    itemType: { fontSize: 12, color: '#636E72', marginTop: 2 },
-    itemDescription: { fontSize: 12, color: '#A0A0A0', marginTop: 4 },
+    itemName: { fontSize: 18, fontWeight: '800' },
+    itemType: { fontSize: 14, marginTop: 2 },
+    itemDescription: { fontSize: 14, color: '#A0A0A0', marginTop: 4 },
     emptyItemsContainer: { alignItems: 'center', padding: 40 },
-    emptyItemsText: { fontSize: 16, fontWeight: 'bold', color: '#636E72' },
-    emptyItemsSubText: { fontSize: 12, color: '#A0A0A0', marginTop: 5 },
+    emptyItemsText: { fontSize: 18, fontWeight: 'bold', color: '#636E72' },
+    emptyItemsSubText: { fontSize: 14, color: '#A0A0A0', marginTop: 5 },
     missionCard: { flexDirection: 'row', alignItems: 'center', padding: 15, borderBottomWidth: 1, borderBottomColor: '#F1F2F6' },
     missionStatus: { width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
     missionStatusText: { fontSize: 14, fontWeight: 'bold', color: '#FFF' },
     missionInfo: { flex: 1 },
-    missionName: { fontSize: 16, fontWeight: '800', color: '#2D3436' },
-    missionType: { fontSize: 12, color: '#636E72', marginTop: 2 },
-    missionDescription: { fontSize: 12, color: '#A0A0A0', marginTop: 4 },
+    missionName: { fontSize: 18, fontWeight: '800' },
+    missionType: { fontSize: 14, color: '#636E72', marginTop: 2 },
+    missionDescription: { fontSize: 14, color: '#A0A0A0', marginTop: 4 },
     missionMeta: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
-    missionDifficulty: { fontSize: 11, fontWeight: '700', color: '#FF9800' },
-    missionScores: { fontSize: 11, fontWeight: '700', color: '#4CAF50' },
+    missionDifficulty: { fontSize: 13, fontWeight: '700', color: '#FF9800' },
+    missionScores: { fontSize: 13, fontWeight: '700', color: '#4CAF50' },
     emptyMissionsContainer: { alignItems: 'center', padding: 40 },
     emptyMissionsText: { fontSize: 16, fontWeight: 'bold', color: '#636E72' },
     emptyMissionsSubText: { fontSize: 12, color: '#A0A0A0', marginTop: 5 },
-    statsCard: { backgroundColor: '#F8F9FA', borderRadius: 12, padding: 15, marginBottom: 10, borderWidth: 1, borderColor: '#E2E8F0' },
-    statsCardTitle: { fontSize: 16, fontWeight: '800', color: '#2D3436', marginBottom: 10 },
+    statsCard: { backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12, padding: 15, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+    statsCardTitle: { fontSize: 18, fontWeight: '800', color: '#FFFFFF', marginBottom: 10 },
     statsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-    statsLabel: { fontSize: 14, color: '#636E72' },
-    statsValue: { fontSize: 14, fontWeight: '700', color: '#2D3436' },
+    statsLabel: { fontSize: 16, color: 'rgba(255,255,255,0.8)' },
+    statsValue: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
     equipmentGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 20 },
-    equipmentItem: { width: '48%', backgroundColor: '#F8F9FA', borderRadius: 12, padding: 15, marginBottom: 10, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
+    equipmentItem: { width: '48%', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12, padding: 15, marginBottom: 10, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
     equipmentIcon: { fontSize: 24, marginBottom: 5 },
-    equipmentName: { fontSize: 12, fontWeight: '700', color: '#2D3436', textAlign: 'center' },
-    suggestionCard: { backgroundColor: '#FFF', borderRadius: 12, padding: 15, marginBottom: 10, borderWidth: 1, borderColor: '#E2E8F0', flexDirection: 'row', alignItems: 'center' },
+    equipmentName: { fontSize: 14, fontWeight: '700', color: '#FFFFFF', textAlign: 'center' },
+    suggestionCard: { backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12, padding: 15, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', flexDirection: 'row', alignItems: 'center' },
     suggestionIcon: { marginRight: 15 },
     suggestionContent: { flex: 1 },
-    suggestionTitle: { fontSize: 14, fontWeight: '800', color: '#2D3436', marginBottom: 2 },
-    suggestionDescription: { fontSize: 12, color: '#636E72', marginBottom: 5 },
+    suggestionTitle: { fontSize: 16, fontWeight: '800', color: '#FFFFFF', marginBottom: 2 },
+    suggestionDescription: { fontSize: 14, color: 'rgba(255,255,255,0.8)', marginBottom: 5 },
     suggestionPriority: { alignSelf: 'flex-start' },
-    priorityText: { fontSize: 10, fontWeight: '700', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, backgroundColor: '#F0F0F0' },
+    priorityText: { fontSize: 12, fontWeight: '700', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.2)' },
     chartContainer: { marginVertical: 10, alignItems: 'center' },
-    chartTitle: { fontSize: 14, fontWeight: '700', color: '#2D3436', marginBottom: 5, textAlign: 'center' },
+    chartTitle: { fontSize: 16, fontWeight: '700', color: '#2D3436', marginBottom: 5, textAlign: 'center' },
     editSection: { marginBottom: 20 },
-    editSectionTitle: { fontSize: 16, fontWeight: '800', color: '#2D3436', marginBottom: 12 },
+    editSectionTitle: { fontSize: 18, fontWeight: '800', color: '#2D3436', marginBottom: 12 },
     // Styles for multiple badges display
     badgesSection: {
         marginTop: 16,
@@ -2794,13 +2856,13 @@ const styles = StyleSheet.create({
         marginBottom: 12,
     },
     badgesTitle: {
-        fontSize: 14,
+        fontSize: 16,
         fontWeight: '600',
         color: '#2D3436',
         marginLeft: 6,
     },
     badgesCount: {
-        fontSize: 12,
+        fontSize: 14,
         color: '#636E72',
         marginLeft: 4,
     },
@@ -2812,7 +2874,7 @@ const styles = StyleSheet.create({
         borderRadius: 12,
     },
     editBadgesText: {
-        fontSize: 11,
+        fontSize: 13,
         color: '#3498DB',
         fontWeight: '600',
     },
@@ -2825,7 +2887,7 @@ const styles = StyleSheet.create({
         width: 80,           // 增加寬度以容納更長的名稱
     },
     badgeItemName: {
-        fontSize: 10,
+        fontSize: 12,
         color: '#2D3436',
         marginTop: 4,
         textAlign: 'center',
@@ -2845,13 +2907,13 @@ const styles = StyleSheet.create({
         marginBottom: 12,
     },
     backgroundsTitle: {
-        fontSize: 14,
+        fontSize: 16,
         fontWeight: '600',
         color: '#2D3436',
         marginLeft: 6,
     },
     backgroundsCount: {
-        fontSize: 12,
+        fontSize: 14,
         color: '#636E72',
         marginLeft: 4,
     },
@@ -2863,7 +2925,7 @@ const styles = StyleSheet.create({
         borderRadius: 12,
     },
     editBackgroundsText: {
-        fontSize: 11,
+        fontSize: 13,
         color: '#3498DB',
         fontWeight: '600',
     },
@@ -2876,7 +2938,7 @@ const styles = StyleSheet.create({
         width: 100,
     },
     backgroundItemName: {
-        fontSize: 10,
+        fontSize: 12,
         color: '#2D3436',
         marginTop: 4,
         textAlign: 'center',
@@ -2897,8 +2959,7 @@ const styles = StyleSheet.create({
     infoColumn: { flex: 1, paddingHorizontal: 8 },
     miniBadgesSection: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.1)' },
     miniSectionTitle: { fontSize: 13, fontWeight: '700', color: '#636E72', marginBottom: 8 },
-    miniBadgesScroll: { flexDirection: 'row' },
-    miniBadgeItem: { alignItems: 'center', marginRight: 12 },
+
     moreBadgesBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.1)', justifyContent: 'center', alignItems: 'center' },
     moreBadgesText: { fontSize: 10, fontWeight: '700', color: '#636E72' },
     quickActionBtn: { alignItems: 'center', padding: 8 },
