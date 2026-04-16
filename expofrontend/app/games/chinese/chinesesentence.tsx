@@ -1,6 +1,7 @@
 // app/games/chinese/chinesesentence.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import { createGameMetadata, GameMetadata } from '../../../types/GameMetadata';
+import { convertToBackendMetadata } from '../../utils/metadataConverter';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, ActivityIndicator, Alert, StatusBar, Animated, Easing, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, Stack } from 'expo-router';
@@ -236,7 +237,7 @@ export default function ChineseSentenceGame() {
             const backendRequest = {
                 gameName: gameData.gameName,
                 scores: gameData.scores,
-                metadata: metadata
+                metadata: convertToBackendMetadata(metadata)
             };
             
             await axios.post('http://localhost:8080/api/user/game/score', backendRequest, {

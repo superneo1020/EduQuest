@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useLayoutEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert, ActivityIndicator, Dimensions, ScrollView, Image } from 'react-native';
 import { createGameMetadata, GameMetadata } from '../../../types/GameMetadata';
+import { convertToBackendMetadata } from '../../utils/metadataConverter';
 import { ArrowLeft, Trophy, Clock, Zap, Heart, CheckCircle2, XCircle, Brain, Timer } from 'lucide-react-native';
 import { useRouter, useNavigation } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -368,7 +369,7 @@ export default function CalculationGame() {
         const currentQ = questions[currentIndex];
         const isCorrect = selected === currentQ.answer;
 
-        setUserAnswers(prev => [...prev, { ...currentQ, userChoice: selected, isCorrect }]);
+        setUserAnswers(prev => [...prev, { ...currentQ, userChoice: selected, isCorrect, timeSpent: elapsedTime }]);
 
         if (isCorrect) {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -422,6 +423,7 @@ export default function CalculationGame() {
         if (currentIndex + 1 < 10 && playerHP > 0) {
             setupOptions(questions[currentIndex + 1]);
             setCurrentIndex(prev => prev + 1);
+            setElapsedTime(0); // Reset timer for next question
         } else {
             stopTimerAndRecord();
             setGameActive(false);
@@ -464,7 +466,7 @@ export default function CalculationGame() {
             const backendRequest = {
                 gameName: gameData.gameName,
                 scores: gameData.scores,
-                metadata: metadata
+                metadata: convertToBackendMetadata(metadata)
             };
             
             await axios.post('http://localhost:8080/api/user/game/score', backendRequest, { headers: { 'Authorization': `Bearer ${token}` } });

@@ -1,6 +1,7 @@
 // app/games/science/animal/ClawMachineGame.tsx
 import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
 import { createGameMetadata, GameMetadata } from '../../../../types/GameMetadata';
+import { convertToBackendMetadata } from '../../../utils/metadataConverter';
 import {
     View,
     Text,
@@ -261,7 +262,7 @@ const ClawMachineGame: React.FC = () => {
             const questionsData = Array.from({ length: answerCount }, (_, index) => ({
                 id: index + 1,
                 question: currentQuestion?.question || 'Catch the correct animal',
-                correctAnswer: currentQuestion?.answer || 'Unknown',
+                correctAnswer: currentQuestion?.targetAnimal || 'Unknown',
                 userAnswer: index < correctCatches ? 'Correct catch' : 'Wrong catch',
                 isCorrect: index < correctCatches,
                 questionType: 'claw-machine',
@@ -282,7 +283,7 @@ const ClawMachineGame: React.FC = () => {
             const backendRequest = {
                 gameName: gameData.gameName,
                 scores: gameData.scores,
-                metadata: metadata
+                metadata: convertToBackendMetadata(metadata)
             };
             
             await axios.post('http://localhost:8080/api/user/game/score', backendRequest, {

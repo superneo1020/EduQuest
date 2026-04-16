@@ -75,14 +75,16 @@ export default function Register() {
 
         // Additional validation for teacher registration
         if (userType === "teacher") {
-            if (!schoolName) {
-                setErrorMsg("School name is required for teacher registration");
-                return;
-            }
             if (!teacherReason) {
                 setErrorMsg("Please provide a reason for teacher registration");
                 return;
             }
+        }
+
+        // School name is required for both students and teachers
+        if (!schoolName) {
+            setErrorMsg("School name is required");
+            return;
         }
 
         setLoading(true);
@@ -94,7 +96,7 @@ export default function Register() {
                 email,
                 password,
                 isEducator: userType === "teacher",
-                schoolName: userType === "teacher" ? schoolName : null
+                schoolName: schoolName
             });
 
             if (userType === "teacher") {
@@ -230,21 +232,23 @@ export default function Register() {
                             />
                         </View>
 
+                        {/* School Name - Required for both students and teachers */}
+                        <View style={styles.inputWrapper}>
+                            <View style={styles.iconContainer}>
+                                <GraduationCap size={20} color="#64748B" />
+                            </View>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="School Name"
+                                value={schoolName}
+                                onChangeText={(t) => { setSchoolName(t); setErrorMsg(null); }}
+                                placeholderTextColor="#94A3B8"
+                            />
+                        </View>
+
                         {/* Teacher-specific fields */}
                         {userType === "teacher" && (
                             <>
-                                <View style={styles.inputWrapper}>
-                                    <View style={styles.iconContainer}>
-                                        <GraduationCap size={20} color="#64748B" />
-                                    </View>
-                                    <TextInput
-                                        style={styles.input}
-                                        placeholder="School Name"
-                                        value={schoolName}
-                                        onChangeText={(t) => { setSchoolName(t); setErrorMsg(null); }}
-                                        placeholderTextColor="#94A3B8"
-                                    />
-                                </View>
 
                                 <View style={styles.inputWrapper}>
                                     <View style={styles.iconContainer}>
