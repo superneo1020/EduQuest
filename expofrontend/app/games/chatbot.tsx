@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-    SafeAreaView, TextInput, Button, Text, ScrollView, StyleSheet, View,
+    SafeAreaView, TextInput, Text, ScrollView, StyleSheet, View,
     TouchableOpacity, ActivityIndicator, Modal, FlatList, Alert, Platform
 } from 'react-native';
 import * as Speech from 'expo-speech';
@@ -43,11 +43,18 @@ export default function Chatbot() {
     // RAG states
     const [ragMode, setRagMode] = useState(false);
     const [documents, setDocuments] = useState<Document[]>([]);
-    const [selectedDocId, setSelectedDocId] = useState<number | null>(null); // For filtering queries
+    const [selectedDocId, setSelectedDocId] = useState<number | null>(null);
     const [uploading, setUploading] = useState(false);
     const [showDocModal, setShowDocModal] = useState(false);
     const [ragStatus, setRagStatus] = useState<any>(null);
     const [refreshingDocs, setRefreshingDocs] = useState(false);
+    const [deletingDoc, setDeletingDoc] = useState<string | null>(null); // Track which doc is being deleted
+
+    // Delete confirmation modal state
+    const [deleteConfirmModal, setDeleteConfirmModal] = useState<{
+        visible: boolean;
+        doc: Document | null;
+    }>({ visible: false, doc: null });
 
     // Check RAG status and load documents on mount
     useEffect(() => {
@@ -82,7 +89,6 @@ export default function Chatbot() {
         try {
             setRefreshingDocs(true);
             const { data } = await axios.get(`${BACKEND}/rag/documents`);
-            // Map backend response to frontend format
             const mappedDocs = data.documents.map((doc: any) => ({
                 id: doc.id,
                 name: doc.display_name || doc.source_uri,
@@ -100,39 +106,71 @@ export default function Chatbot() {
         }
     }, []);
 
-    const deleteDocument = async (sourceUri: string) => {
-        Alert.alert(
-            'Delete Document',
-            'Are you sure you want to remove this document and all its chunks?',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Delete',
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            setLoading(true);
-                            await axios.post(`${BACKEND}/rag/delete`, { source_uri: sourceUri });
+    const handleDeleteDocument = useCallback((doc: Document) => {
+        console.log('[FRONTEND] Delete button clicked for:', doc.name);
+        console.log('[FRONTEND] Document sourceUri:', doc.sourceUri);
 
-                            // Remove from local state
-                            setDocuments(prev => prev.filter(d => d.sourceUri !== sourceUri));
+        // Prevent multiple simultaneous deletes
+        if (deletingDoc) {
+            console.log('[FRONTEND] Delete already in progress, skipping');
+            return;
+        }
 
-                            // If we deleted the selected doc, clear selection
-                            const deletedDoc = documents.find(d => d.sourceUri === sourceUri);
-                            if (deletedDoc && selectedDocId === deletedDoc.id) {
-                                setSelectedDocId(null);
-                            }
+        // Show custom delete confirmation modal
+        setDeleteConfirmModal({ visible: true, doc });
+    }, [deletingDoc]);
 
-                            Alert.alert('Deleted', 'Document removed successfully');
-                        } catch (err: any) {
-                            Alert.alert('Error', err.response?.data?.detail || 'Failed to delete document');
-                        } finally {
-                            setLoading(false);
-                        }
-                    }
-                }
-            ]
-        );
+    const confirmDelete = async () => {
+        const doc = deleteConfirmModal.doc;
+        if (!doc) return;
+
+        console.log('[FRONTEND] User confirmed delete');
+        setDeleteConfirmModal({ visible: false, doc: null });
+
+        try {
+            setDeletingDoc(doc.sourceUri);
+            console.log('[FRONTEND] Sending delete request to backend...');
+            console.log('[FRONTEND] Request payload:', { source_uri: doc.sourceUri });
+
+            const response = await axios.post(`${BACKEND}/rag/delete`, {
+                source_uri: doc.sourceUri
+            });
+
+            console.log('[FRONTEND] Delete response received:', response.data);
+
+            // Remove from local state immediately for responsive UI
+            setDocuments(prev => prev.filter(d => d.sourceUri !== doc.sourceUri));
+
+            // If we deleted the selected doc, clear selection
+            if (selectedDocId === doc.id) {
+                setSelectedDocId(null);
+            }
+
+            // Show success alert (using Alert for success is usually fine)
+            if (Platform.OS !== 'web') {
+                Alert.alert('Success', `"${doc.name}" has been deleted successfully`);
+            }
+
+            // Refresh the list to ensure sync with backend
+            await fetchDocuments();
+
+        } catch (err: any) {
+            console.error('[FRONTEND] Delete error:', err);
+            console.error('[FRONTEND] Error response:', err.response?.data);
+            console.error('[FRONTEND] Error status:', err.response?.status);
+            const errorMsg = err.response?.data?.detail || err.message || 'Failed to delete document';
+
+            if (Platform.OS !== 'web') {
+                Alert.alert('Delete Failed', errorMsg);
+            }
+        } finally {
+            setDeletingDoc(null);
+        }
+    };
+
+    const cancelDelete = () => {
+        console.log('[FRONTEND] User cancelled delete');
+        setDeleteConfirmModal({ visible: false, doc: null });
     };
 
     const pickAndUploadDocument = async () => {
@@ -147,17 +185,13 @@ export default function Chatbot() {
             const file = result.assets[0];
             setUploading(true);
 
-            // React Native FormData handling
             const formData = new FormData();
 
-            // Handle file attachment differently for web vs native
             if (Platform.OS === 'web') {
-                // Web: fetch blob
                 const response = await fetch(file.uri);
                 const blob = await response.blob();
                 formData.append('file', blob, file.name);
             } else {
-                // Native: use uri directly
                 // @ts-ignore - React Native FormData supports uri
                 formData.append('file', {
                     uri: file.uri,
@@ -183,7 +217,6 @@ export default function Chatbot() {
 
             const data = await uploadResponse.json();
 
-            // Add to documents list
             const newDoc: Document = {
                 id: data.document_id,
                 name: data.document_name,
@@ -210,7 +243,6 @@ export default function Chatbot() {
     const sendRagQuery = async (text: string) => {
         if (!text.trim()) return;
 
-        // Add user message
         setMessages(prev => [...prev, { role: 'user', content: text }]);
         setPrompt('');
         setLoading(true);
@@ -221,7 +253,6 @@ export default function Chatbot() {
                 top_k: 5
             };
 
-            // If specific document selected, filter by it
             if (selectedDocId) {
                 payload.document_id = selectedDocId;
             }
@@ -240,8 +271,6 @@ export default function Chatbot() {
         } catch (err: any) {
             console.error('RAG query failed', err);
             Alert.alert('Query Failed', err.response?.data?.detail || 'Could not query knowledge base');
-
-            // Fallback to regular chat
             await sendRegularMessage(text);
         } finally {
             setLoading(false);
@@ -259,7 +288,6 @@ export default function Chatbot() {
 
         try {
             const { data } = await axios.post(`${BACKEND}/chat`, { prompt: text });
-
             setMessages(prev => [...prev, {
                 role: 'bot',
                 content: data.response,
@@ -290,13 +318,10 @@ export default function Chatbot() {
 
     const startRecording = async () => {
         try {
-            // Stop any existing recording first
             if (recording) {
                 try {
                     await recording.stopAndUnloadAsync();
-                } catch (e) {
-                    // Ignore
-                }
+                } catch (e) {}
                 setRecording(null);
             }
 
@@ -316,16 +341,16 @@ export default function Chatbot() {
             await newRecording.prepareToRecordAsync({
                 android: {
                     extension: '.wav',
-                    outputFormat: 2, // AndroidOutputFormat.MPEG_4
-                    audioEncoder: 3, // AndroidAudioEncoder.AAC
+                    outputFormat: 2,
+                    audioEncoder: 3,
                     sampleRate: 16000,
                     numberOfChannels: 1,
                     bitRate: 128000,
                 },
                 ios: {
                     extension: '.wav',
-                    outputFormat: 1, // IOSOutputFormat.LINEARPCM
-                    audioQuality: 2, // IOSAudioQuality.HIGH
+                    outputFormat: 1,
+                    audioQuality: 2,
                     sampleRate: 16000,
                     numberOfChannels: 1,
                     bitRate: 128000,
@@ -366,7 +391,6 @@ export default function Chatbot() {
 
             setLoading(true);
 
-            // Create FormData for audio upload
             const audioFormData = new FormData();
 
             if (Platform.OS === 'web') {
@@ -436,7 +460,6 @@ export default function Chatbot() {
                 msg.isRag && styles.ragMessage
             ]}
         >
-            {/* RAG Badge */}
             {msg.isRag && (
                 <View style={styles.ragBadge}>
                     <Text style={styles.ragBadgeText}>📚 RAG</Text>
@@ -445,7 +468,6 @@ export default function Chatbot() {
 
             <Text style={styles.messageText}>{msg.content}</Text>
 
-            {/* Sources for RAG */}
             {msg.isRag && msg.sources && msg.sources.length > 0 && (
                 <View style={styles.sourcesContainer}>
                     <Text style={styles.sourcesTitle}>Sources:</Text>
@@ -457,7 +479,6 @@ export default function Chatbot() {
                 </View>
             )}
 
-            {/* Speak Button for Bot Messages */}
             {msg.role === 'bot' && (
                 <TouchableOpacity
                     onPress={() => handleSpeak(msg.content, idx)}
@@ -474,36 +495,60 @@ export default function Chatbot() {
         </View>
     );
 
-    const renderDocumentItem = ({ item }: { item: Document }) => (
-        <TouchableOpacity
-            style={[
-                styles.docItem,
-                selectedDocId === item.id && styles.docItemSelected
-            ]}
-            onPress={() => setSelectedDocId(selectedDocId === item.id ? null : item.id)}
-        >
-            <View style={styles.docInfo}>
-                <Text style={styles.docName}>{item.name}</Text>
-                <Text style={styles.docMeta}>
-                    {item.fileType.toUpperCase()} • {item.totalPages} pages • {item.chunks} chunks
-                </Text>
-            </View>
+    const renderDocumentItem = ({ item }: { item: Document }) => {
+        const isDeleting = deletingDoc === item.sourceUri;
+        const isSelected = selectedDocId === item.id;
 
-            <View style={styles.docActions}>
-                {selectedDocId === item.id && (
-                    <View style={styles.selectedBadge}>
-                        <Text style={styles.selectedText}>Selected</Text>
-                    </View>
-                )}
+        return (
+            <View style={[
+                styles.docItem,
+                isSelected && styles.docItemSelected,
+                isDeleting && styles.docItemDeleting
+            ]}>
                 <TouchableOpacity
-                    style={styles.deleteButton}
-                    onPress={() => deleteDocument(item.sourceUri)}
+                    style={styles.docMainContent}
+                    onPress={() => {
+                        if (!isDeleting) {
+                            setSelectedDocId(isSelected ? null : item.id);
+                        }
+                    }}
+                    disabled={isDeleting}
                 >
-                    <Text style={styles.deleteButtonText}>🗑</Text>
+                    <View style={styles.docInfo}>
+                        <Text style={styles.docName} numberOfLines={1}>
+                            {isDeleting ? 'Deleting...' : item.name}
+                        </Text>
+                        <Text style={styles.docMeta}>
+                            {item.fileType.toUpperCase()} • {item.totalPages} pages • {item.chunks} chunks
+                        </Text>
+                        {isSelected && (
+                            <View style={styles.selectedIndicator}>
+                                <Text style={styles.selectedIndicatorText}>✓ Selected for queries</Text>
+                            </View>
+                        )}
+                    </View>
                 </TouchableOpacity>
+
+                <View style={styles.docActions}>
+                    {isDeleting ? (
+                        <ActivityIndicator size="small" color="#ff6b6b" />
+                    ) : (
+                        <TouchableOpacity
+                            style={styles.deleteButton}
+                            onPress={() => {
+                                console.log('[FRONTEND] Delete button pressed for:', item.name);
+                                handleDeleteDocument(item);
+                            }}
+                            disabled={!!deletingDoc}
+                            activeOpacity={0.7}
+                        >
+                            <Text style={styles.deleteButtonText}>🗑</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
             </View>
-        </TouchableOpacity>
-    );
+        );
+    };
 
     return (
         <SafeAreaView style={styles.container}>
@@ -511,7 +556,6 @@ export default function Chatbot() {
             <View style={styles.header}>
                 <Text style={styles.title}>🤖 EduQuest Chatbot</Text>
 
-                {/* RAG Toggle */}
                 <TouchableOpacity
                     style={[
                         styles.ragToggle,
@@ -545,8 +589,8 @@ export default function Chatbot() {
             {/* Selected Document Indicator */}
             {ragMode && selectedDocId && (
                 <View style={styles.selectedDocBar}>
-                    <Text style={styles.selectedDocText}>
-                        Querying: {documents.find(d => d.id === selectedDocId)?.name}
+                    <Text style={styles.selectedDocText} numberOfLines={1}>
+                        Querying: {documents.find(d => d.id === selectedDocId)?.name || 'Unknown'}
                     </Text>
                     <TouchableOpacity onPress={() => setSelectedDocId(null)}>
                         <Text style={styles.clearSelection}>✕</Text>
@@ -584,7 +628,6 @@ export default function Chatbot() {
 
             {/* Input Area */}
             <View style={styles.inputContainer}>
-                {/* Upload Button (only when RAG available) */}
                 {ragStatus?.rag_available && (
                     <TouchableOpacity
                         style={styles.uploadButton}
@@ -651,7 +694,7 @@ export default function Chatbot() {
                         <Text style={styles.modalTitle}>📚 Document Library</Text>
 
                         <Text style={styles.modalSubtitle}>
-                            Tap to select for specific queries • Swipe items for options
+                            Tap document to select for specific queries • Press 🗑 to delete
                         </Text>
 
                         {documents.length === 0 ? (
@@ -675,6 +718,7 @@ export default function Chatbot() {
                                 refreshing={refreshingDocs}
                                 onRefresh={fetchDocuments}
                                 style={styles.docList}
+                                ItemSeparatorComponent={() => <View style={styles.docSeparator} />}
                             />
                         )}
 
@@ -687,11 +731,54 @@ export default function Chatbot() {
                     </View>
                 </View>
             </Modal>
+
+            {/* Delete Confirmation Modal */}
+            <Modal
+                visible={deleteConfirmModal.visible}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={cancelDelete}
+            >
+                <View style={styles.confirmModalOverlay}>
+                    <View style={styles.confirmModalContent}>
+                        <Text style={styles.confirmModalTitle}>🗑️ Delete Document</Text>
+
+                        {deleteConfirmModal.doc && (
+                            <>
+                                <Text style={styles.confirmModalText}>
+                                    Are you sure you want to delete:
+                                </Text>
+                                <Text style={styles.confirmModalDocName}>
+                                    "{deleteConfirmModal.doc.name}"
+                                </Text>
+                                <Text style={styles.confirmModalWarning}>
+                                    This will remove the document and all {deleteConfirmModal.doc.chunks} chunks permanently.
+                                </Text>
+                            </>
+                        )}
+
+                        <View style={styles.confirmModalButtons}>
+                            <TouchableOpacity
+                                style={[styles.confirmModalButton, styles.cancelButton]}
+                                onPress={cancelDelete}
+                            >
+                                <Text style={styles.cancelButtonText}>Cancel</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[styles.confirmModalButton, styles.deleteConfirmButton]}
+                                onPress={confirmDelete}
+                            >
+                                <Text style={styles.deleteConfirmButtonText}>Delete</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
 
-/* ---------- Styles ---------- */
 const styles = StyleSheet.create({
     container: {
         flex: 1,
@@ -762,6 +849,7 @@ const styles = StyleSheet.create({
         color: '#2b8a3e',
         fontWeight: '500',
         flex: 1,
+        marginRight: 8,
     },
     clearSelection: {
         fontSize: 14,
@@ -925,7 +1013,6 @@ const styles = StyleSheet.create({
         fontSize: 13,
         fontWeight: '500',
     },
-    // Modal styles
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.5)',
@@ -954,6 +1041,10 @@ const styles = StyleSheet.create({
     docList: {
         maxHeight: 300,
     },
+    docSeparator: {
+        height: 1,
+        backgroundColor: '#eee',
+    },
     emptyDocsContainer: {
         alignItems: 'center',
         marginVertical: 20,
@@ -975,18 +1066,25 @@ const styles = StyleSheet.create({
     },
     docItem: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
         paddingVertical: 12,
         paddingHorizontal: 8,
-        borderBottomWidth: 1,
-        borderBottomColor: '#eee',
         borderRadius: 8,
+        backgroundColor: '#f8f9fa',
     },
     docItemSelected: {
         backgroundColor: '#e7f5ff',
-        borderColor: '#4dabf7',
         borderWidth: 1,
+        borderColor: '#4dabf7',
+    },
+    docItemDeleting: {
+        opacity: 0.6,
+        backgroundColor: '#ffe3e3',
+    },
+    docMainContent: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
     },
     docInfo: {
         flex: 1,
@@ -1001,29 +1099,33 @@ const styles = StyleSheet.create({
         fontSize: 11,
         color: '#666',
     },
-    docActions: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-    },
-    selectedBadge: {
+    selectedIndicator: {
+        marginTop: 4,
         backgroundColor: '#40c057',
-        paddingHorizontal: 8,
+        paddingHorizontal: 6,
         paddingVertical: 2,
         borderRadius: 4,
+        alignSelf: 'flex-start',
     },
-    selectedText: {
+    selectedIndicatorText: {
         color: '#fff',
         fontSize: 10,
         fontWeight: 'bold',
     },
+    docActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginLeft: 8,
+    },
     deleteButton: {
-        padding: 6,
+        padding: 8,
         backgroundColor: '#ffebee',
         borderRadius: 6,
+        minWidth: 36,
+        alignItems: 'center',
     },
     deleteButtonText: {
-        fontSize: 14,
+        fontSize: 16,
     },
     closeModalButton: {
         marginTop: 16,
@@ -1033,6 +1135,73 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     closeModalText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    // Delete confirmation modal styles
+    confirmModalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    confirmModalContent: {
+        backgroundColor: '#fff',
+        borderRadius: 16,
+        padding: 24,
+        width: '85%',
+        maxWidth: 400,
+        alignItems: 'center',
+    },
+    confirmModalTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        marginBottom: 16,
+        color: '#1a1a1a',
+    },
+    confirmModalText: {
+        fontSize: 14,
+        color: '#666',
+        textAlign: 'center',
+        marginBottom: 8,
+    },
+    confirmModalDocName: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#333',
+        textAlign: 'center',
+        marginBottom: 8,
+    },
+    confirmModalWarning: {
+        fontSize: 13,
+        color: '#c92a2a',
+        textAlign: 'center',
+        marginBottom: 24,
+    },
+    confirmModalButtons: {
+        flexDirection: 'row',
+        gap: 12,
+        width: '100%',
+    },
+    confirmModalButton: {
+        flex: 1,
+        paddingVertical: 12,
+        borderRadius: 8,
+        alignItems: 'center',
+    },
+    cancelButton: {
+        backgroundColor: '#e9ecef',
+    },
+    cancelButtonText: {
+        color: '#495057',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    deleteConfirmButton: {
+        backgroundColor: '#c92a2a',
+    },
+    deleteConfirmButtonText: {
         color: '#fff',
         fontSize: 16,
         fontWeight: '600',
