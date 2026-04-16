@@ -112,21 +112,9 @@ export default function LandscapeOptimizedHome() {
                     </TouchableOpacity>
 
                     {/* 新增的教师页面按钮 */}
-                    <TouchableOpacity
-                        style={styles.teacherBtn}
-                        onPress={() => router.push('/teacher/teacher')}
-                    >
-                        <GraduationCap size={22} color="#6C5CE7" />
-                        <Text style={styles.teacherText}>Teacher</Text>
-                    </TouchableOpacity>
 
-                    <TouchableOpacity
-                        style={styles.logoutBtn}
-                        onPress={handleLogout}
-                    >
-                        <LogOut size={22} color="#FF4757" />
-                        <Text style={styles.logoutText}>Logout</Text>
-                    </TouchableOpacity>
+
+
 
                     <TouchableOpacity
                         style={styles.headerIconBtn}
@@ -140,6 +128,13 @@ export default function LandscapeOptimizedHome() {
                         onPress={() => router.push('/shop/shopScreen' as any)}
                     >
                         <ShoppingCart size={26} color="#2D3436" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.logoutBtn}
+                        onPress={handleLogout}
+                    >
+                        <LogOut size={22} color="#FF4757" />
+                        <Text style={styles.logoutText}>Logout</Text>
                     </TouchableOpacity>
                 </View>
             </View>
