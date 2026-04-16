@@ -1,6 +1,6 @@
 // app/games/chinese/chinesequiz.tsx
 // 餐廳大作戰 - 傳送帶版本（加入打擊回饋與倒數特效版）
-// 修正：3題模式，初級分數 30+30+40=100，高級 40+40+40=120
+// 修正：2題模式，初級分數 50+50=100，高級 60+60=120
 
 import React, { useState, useEffect, useRef } from 'react';
 import { createGameMetadata, GameMetadata } from '../../../types/GameMetadata';
@@ -242,7 +242,7 @@ const ChineseRestaurantGame = () => {
     const [difficulty, setDifficulty] = useState<'beginner' | 'advanced' | null>(null);
     const [aiFeedback, setAiFeedback] = useState<string>('');
     const [maxScore, setMaxScore] = useState(100);
-    // 每題對應的滿分分數（初級: [30,30,40], 高級: [40,40,40]）
+    // 每題對應的滿分分數（初級: [50,50], 高級: [60,60]）
     const [questionPoints, setQuestionPoints] = useState<number[]>([]);
 
     const [items, setItems] = useState<ConveyorItem[]>([]);
@@ -329,7 +329,7 @@ const ChineseRestaurantGame = () => {
                 gameType: "CHINESE",
                 gameDifficulty: difficulty === 'beginner' ? 'EASY' : 'MEDIUM'
             };
-            
+
             const questionsData = questions.map((q, index) => ({
                 id: index + 1,
                 question: q.question,
@@ -356,7 +356,7 @@ const ChineseRestaurantGame = () => {
                 scores: gameData.scores,
                 metadata: convertToBackendMetadata(metadata)
             };
-            
+
             await axios.post('http://localhost:8080/api/user/game/score', backendRequest, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -670,18 +670,18 @@ const ChineseRestaurantGame = () => {
 
     const loadQuestions = async (selectedDifficulty: 'beginner' | 'advanced') => {
         setLoading(true);
-        // 設定滿分與每題分數權重
+        // 設定滿分與每題分數權重（2題模式）
         if (selectedDifficulty === 'beginner') {
             setMaxScore(100);
-            setQuestionPoints([30, 30, 40]);
+            setQuestionPoints([50, 50]);  // 兩題各50分
         } else {
             setMaxScore(120);
-            setQuestionPoints([40, 40, 40]);
+            setQuestionPoints([60, 60]);  // 兩題各60分
         }
         try {
             const newQuestions = await ChineseAIService.generateQuestions({
                 difficulty: selectedDifficulty,
-                count: 3   // 改為3題
+                count: 2   // 改為2題
             });
             const extendedQuestions: ExtendedQuestion[] = newQuestions.map(q => ({
                 ...q,
@@ -945,7 +945,7 @@ const ChineseRestaurantGame = () => {
                 level: 'beginner' as const,
                 title: 'Intern chef',
                 badgeText: 'Easy to serve',
-                description: 'The conveyor belt is slower, with simple dishes, suitable for beginner little chefs. (3 dishes, Full Score: 30+30+40=100)',
+                description: 'The conveyor belt is slower, with simple dishes, suitable for beginner little chefs. (2 dishes, Full Score: 50+50=100)',
                 icon: '👨‍🍳',
                 color: '#FFA07A',
                 bgColor: '#FFF3E0',
@@ -955,7 +955,7 @@ const ChineseRestaurantGame = () => {
                 level: 'advanced' as const,
                 title: 'Master Chef',
                 badgeText: 'Expert Challenge',
-                description: 'The conveyor belt is faster, with complex dishes, testing your reaction speed. (3 dishes, each 40 points, Full Score: 120)',
+                description: 'The conveyor belt is faster, with complex dishes, testing your reaction speed. (2 dishes, each 60 points, Full Score: 120)',
                 icon: '👩‍🍳',
                 color: '#E67E22',
                 bgColor: '#FFE4C4',
@@ -1105,6 +1105,7 @@ const ChineseRestaurantGame = () => {
         </View>
     );
 };
+
 
 const styles = StyleSheet.create({
     container: {
