@@ -6,6 +6,16 @@ export interface GameScoreRequest {
     scores: number;
     gameType?: string;
     gameDifficulty?: string;
+    questions?: Array<{
+        id: number;
+        content: string;
+        questionType?: string;
+        userAnswer?: string;
+        correctAnswer?: string;
+        isCorrect?: boolean;
+        timeSpent?: number;
+    }>;
+    gameSpecificData?: Record<string, any>;
 }
 
 export interface GameResult {
@@ -77,9 +87,14 @@ class GameScoreService {
                 gameName: gameName,
                 scores: scores,
                 metadata: {
-                    gameType: gameData.gameType || 'EDUCATIONAL',
-                    gameDifficulty: gameData.gameDifficulty || 'MEDIUM',
-                    timestamp: new Date().toISOString()
+                    questions: gameData.questions || [],
+                    extraData: {
+                        gameType: gameData.gameType || 'EDUCATIONAL',
+                        gameDifficulty: gameData.gameDifficulty || 'MEDIUM',
+                        timestamp: new Date().toISOString(),
+                        finalScore: scores,
+                        ...gameData.gameSpecificData
+                    }
                 }
             };
             
