@@ -97,23 +97,12 @@ export default function LandscapeOptimizedHome() {
 
                 <View style={styles.headerRight}>
                     <TouchableOpacity
-                        style={styles.userInfoWrapper}
-                        onPress={() => router.push('/Profile/profile' as any)}
+                        style={styles.teacherBtn}
+                        onPress={() => router.push('/teacher/teacher')}
                     >
-                        <View style={styles.avatarCircle}>
-                            <Text style={styles.avatarLetter}>
-                                {user?.username?.charAt(0).toUpperCase() || 'U'}
-                            </Text>
-                        </View>
-                        <View style={styles.userMeta}>
-                            <Text style={styles.userNameText}>{user?.username || 'Guest'}</Text>
-                            <Text style={styles.userRoleText}>Student</Text>
-                        </View>
+                        <GraduationCap size={22} color="#6C5CE7" />
+                        <Text style={styles.teacherText}>Teacher</Text>
                     </TouchableOpacity>
-
-                    {/* 新增的教师页面按钮 */}
-
-
 
 
                     <TouchableOpacity
