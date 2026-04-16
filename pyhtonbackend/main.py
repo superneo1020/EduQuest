@@ -13,6 +13,7 @@ from psycopg2.extras import execute_values
 from typing import Any, List, Dict, Optional
 from contextlib import asynccontextmanager
 from pathlib import Path
+from datetime import datetime  # FIXED: Added import
 
 from fastapi import FastAPI, HTTPException, status, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
@@ -64,7 +65,7 @@ class Settings(BaseSettings):
     gemini_api_key: str = "AQ.Ab8RN6LRCyCveOXOfmbpbpGofO_WqyYEjtRRjhGjNvGvpClqRw"  # Your Vertex AI API key
     gemini_model: str = "gemini-2.5-flash-lite"
     gemini_location: str = "us-central1"  # or your preferred region
-    gemini_project: str = ""  # Optional: for project-specific billing
+    gemini_project: str = ""
 
     # Ollama Configuration for Embeddings
     ollama_host: str = "http://localhost:11434"
@@ -424,17 +425,48 @@ class PgVectorStore:
 
         return ids
 
-    def delete_document_by_source(self, source_uri: str):
+    def delete_document_by_source(self, source_uri: str) -> tuple[bool, Optional[int]]:
         """Delete document and all its chunks by source URI (cascade delete)."""
+        logger.info(f"[DELETE] Starting delete operation for source_uri: '{source_uri}'")
+
         with self.conn.cursor() as cur:
-            cur.execute(
-                "DELETE FROM documents WHERE source_uri = %s RETURNING id",
-                (source_uri,)
-            )
+            # First get the document ID before deleting
+            logger.info(f"[DELETE] Executing SELECT to find document ID for source_uri: '{source_uri}'")
+            cur.execute("SELECT id FROM documents WHERE source_uri = %s", (source_uri,))
             result = cur.fetchone()
-            deleted = cur.rowcount
+
+            logger.info(f"[DELETE] SELECT result: {result}")
+
+            if not result:
+                logger.warning(f"[DELETE] No document found with source_uri: '{source_uri}'")
+                # Let's check what documents exist
+                cur.execute("SELECT source_uri FROM documents LIMIT 5")
+                existing = cur.fetchall()
+                logger.info(f"[DELETE] Existing documents in DB: {[r[0] for r in existing]}")
+                return False, None
+
+            doc_id = result[0]
+            logger.info(f"[DELETE] Found document ID: {doc_id}")
+
+            # Count chunks before deletion for logging
+            cur.execute("SELECT COUNT(*) FROM document_chunks WHERE document_id = %s", (doc_id,))
+            chunk_count = cur.fetchone()[0]
+            logger.info(f"[DELETE] Document has {chunk_count} chunks that will be cascade deleted")
+
+            # Delete will cascade to chunks due to ON DELETE CASCADE
+            # Use RETURNING to get the ID back, but check rowcount properly
+            logger.info(f"[DELETE] Executing DELETE for source_uri: '{source_uri}'")
+            cur.execute("DELETE FROM documents WHERE source_uri = %s RETURNING id", (source_uri,))
+            deleted_row = cur.fetchone()
             self.conn.commit()
-            return deleted > 0, result[0] if result else None
+
+            logger.info(f"[DELETE] DELETE result (deleted_row): {deleted_row}")
+
+            # If we got a row back, deletion was successful
+            success = deleted_row is not None
+            logger.info(f"[DELETE] Deletion successful: {success}, deleted_doc_id: {doc_id}")
+
+            return success, doc_id
 
     def get_document_by_source(self, source_uri: str) -> Optional[Dict]:
         """Get document metadata by source URI."""
@@ -647,7 +679,7 @@ class RAGService:
         # 5. Insert document metadata first
         doc_metadata = {
             "original_path": file_path,
-            "processed_at": str(datetime.now()) if 'datetime' in dir() else None
+            "processed_at": str(datetime.now())
         }
         document_id = self.db.insert_document(
             source_uri=source_uri,
@@ -741,10 +773,16 @@ class RAGService:
 
     def delete_document(self, source_uri: str) -> Dict:
         """Delete a document and all its chunks."""
+        logger.info(f"[RAGService] delete_document called with source_uri: '{source_uri}'")
         deleted, doc_id = self.db.delete_document_by_source(source_uri)
+        logger.info(f"[RAGService] delete_document_by_source returned: deleted={deleted}, doc_id={doc_id}")
+
         if deleted:
+            logger.info(f"[RAGService] Document deleted successfully: '{source_uri}' (ID: {doc_id})")
             return {"status": "deleted", "document_id": doc_id, "source_uri": source_uri}
-        return {"status": "not_found", "source_uri": source_uri}
+
+        logger.warning(f"[RAGService] Document not found for deletion: '{source_uri}'")
+        raise HTTPException(status_code=404, detail=f"Document not found: {source_uri}")
 
 
 # ---------------------------------------------------------------------
@@ -1006,8 +1044,12 @@ def rag_list_documents():
 
 @app.post("/rag/delete", response_model=RAGDeleteResponse)
 def rag_delete(req: RAGDeleteRequest):
-    """Delete a document and all its chunks."""
+    """Delete a document and all its chunks by source URI."""
+    logger.info(f"[API] rag_delete endpoint called with source_uri: '{req.source_uri}'")
+    logger.info(f"[API] Request body: {req.model_dump()}")
+
     if rag_service is None:
+        logger.error("[API] RAG service is not available")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="RAG service not available"
@@ -1015,8 +1057,13 @@ def rag_delete(req: RAGDeleteRequest):
 
     try:
         result = rag_service.delete_document(req.source_uri)
+        logger.info(f"[API] Delete successful, returning: {result}")
         return RAGDeleteResponse(**result)
+    except HTTPException as he:
+        logger.warning(f"[API] HTTPException raised during delete: {he.status_code} - {he.detail}")
+        raise
     except Exception as e:
+        logger.exception(f"[API] RAG delete error for source_uri: '{req.source_uri}'")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Delete failed: {str(e)}"
