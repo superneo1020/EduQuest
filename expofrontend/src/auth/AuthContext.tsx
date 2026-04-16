@@ -11,6 +11,9 @@ type User = {
   password?: string; 
   points?: number; 
   roles?: string[];
+  school?: string;
+  createdAt?: string;
+  updatedAt?: string;
 } | null;
 
 type UserProfile = {
@@ -78,7 +81,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 username: String(data.user?.username || data.username || 'Guest'),
                 email: String(data.user?.email || data.email || ''),
                 points: Number(data.user?.points || data.points || 0), // 確保它是 Number
-                roles: data.user?.roles || data.roles || []
+                roles: data.user?.roles || data.roles || [],
+                school: data.user?.school || null,
+                createdAt: data.user?.createdAt || null,
+                updatedAt: data.user?.updatedAt || null
             };
 
             setUser(userData);
@@ -89,7 +95,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             await AsyncStorage.setItem('auth_user', JSON.stringify(userData));
 
             console.log('Login success, saved data:', userData);
-        } catch (error: any) {
+                    } catch (error: any) {
             console.error("login fail:", error.response?.data || error.message);
             throw error;
         }

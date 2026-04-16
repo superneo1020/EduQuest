@@ -121,13 +121,19 @@ VALUES
     ('MATH', 'AI Math Adventure', 'HARD', 'Robot', '結合人工智慧的高難度數學邏輯冒險。'),
 
     -- English Games
-    ('ENGLISH', 'Listening multiple choice questions', 'MEDIUM', 'Headphones', '聽力多選題測試，增強英文聽解能力。'),
-    ('ENGLISH', 'Word matching game', 'EASY', 'ABC', '經典單字配對，幫助記住基礎字彙。'),
-    ('ENGLISH', 'Sentence Reordering Game', 'HARD', 'Book', '句子重組挑戰，強化英文語法結構。'),
+    ('ENGLISH', 'Listening Game', 'MEDIUM', 'Headphones', '聽力多選題測試，增強英文聽解能力。'),
+    ('ENGLISH', 'Writing Game', 'EASY', 'ABC', '經典單字配對，幫助記住基礎字彙。'),
+    ('ENGLISH', 'Sentence Reorder', 'HARD', 'Book', '句子重組挑戰，強化英文語法結構。'),
 
     -- Science Games
-    ('SCIENCE', 'Animal sorting game', 'EASY', 'Leaf', '根據特徵對不同動物進行分類。'),
-    ('SCIENCE', 'Human Body Puzzle', 'MEDIUM', 'Brain', '人體器官拼圖，學習解剖學基礎知識。')
+    ('SCIENCE', 'Animal Catcher', 'EASY', 'Leaf', '根據特徵對不同動物進行分類。'),
+    ('SCIENCE', 'Animal Classification', 'MEDIUM', 'Brain', '人體器官拼圖，學習解剖學基礎知識。'),
+    ('SCIENCE', 'Body Parts Matching', 'MEDIUM', 'Body', '人體系統遊戲索引，探索人體各個系統。'),
+    ('SCIENCE', 'Human organs', 'EASY', 'Paw', '動物遊戲索引，學習各種動物知識。'),
+
+    -- Chinese Games
+    ('CHINESE', 'ChineseGame', 'MEDIUM', 'Character', '中文學習遊戲，提升中文能力。'),
+    ('CHINESE', 'ChineseSentenceGame', 'HARD', 'Scroll', '中文句子遊戲，學習中文句型結構。')
 ON CONFLICT (name) DO UPDATE SET
                                  type = EXCLUDED.type,
                                  difficulty = EXCLUDED.difficulty,
@@ -214,17 +220,17 @@ VALUES
     ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM games WHERE name = 'AI Math Adventure'), 75),
     ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM games WHERE name = 'AI Math Adventure'), 92),
 
-    -- Word matching game (EASY)
-    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM games WHERE name = 'Word matching game'), 98),
-    ((SELECT id FROM users WHERE username = 'student3'), (SELECT id FROM games WHERE name = 'Word matching game'), 70),
+    -- Writing Game (EASY)
+    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM games WHERE name = 'Writing Game'), 98),
+    ((SELECT id FROM users WHERE username = 'student3'), (SELECT id FROM games WHERE name = 'Writing Game'), 70),
 
-    -- Sentence Reordering Game (HARD)
-    ((SELECT id FROM users WHERE username = 'tech_teacher1'), (SELECT id FROM games WHERE name = 'Sentence Reordering Game'), 95),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM games WHERE name = 'Sentence Reordering Game'), 88),
+    -- Sentence Reorder (HARD)
+    ((SELECT id FROM users WHERE username = 'tech_teacher1'), (SELECT id FROM games WHERE name = 'Sentence Reorder'), 95),
+    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM games WHERE name = 'Sentence Reorder'), 88),
 
-    -- Animal sorting game (EASY)
-    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM games WHERE name = 'Animal sorting game'), 85),
-    ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM games WHERE name = 'Animal sorting game'), 92)
+    -- Animal Catcher (EASY)
+    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM games WHERE name = 'Animal Catcher'), 85),
+    ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM games WHERE name = 'Animal Catcher'), 92)
 ON CONFLICT DO NOTHING;
 ;;;
 
@@ -287,6 +293,26 @@ ON CONFLICT DO NOTHING;
 INSERT INTO items (type, name, icon, description, price)
 VALUES
     -- Avatar Items
+    ('AVATAR', 'Default', 'default', 'Default avatar icon', 100),
+    ('AVATAR', 'Happy Cat', 'happy_cat', 'Cute and friendly cat avatar', 100),
+    ('AVATAR', 'Cool Dog', 'cool_dog', 'Playful dog with cool style', 100),
+    ('AVATAR', 'Smart Owl', 'smart_owl', 'Wise owl with glasses', 100),
+    ('AVATAR', 'Sporty Rabbit', 'sporty_rabbit', 'Athletic rabbit ready for action', 100),
+    ('AVATAR', 'Artistic Butterfly', 'artistic_butterfly', 'Creative butterfly with colorful wings', 100),
+    ('AVATAR', 'Bookworm Bear', 'bookworm_bear', 'Studious bear who loves reading', 100),
+    ('AVATAR', 'Explorer Monkey', 'explorer_monkey', 'Adventurous monkey ready to explore', 100),
+    ('AVATAR', 'Star Student', 'star_student', 'Excellent student with star achievements', 100),
+    ('AVATAR', 'Rainbow Unicorn', 'rainbow_unicorn', 'Magical unicorn with rainbow colors', 100),
+    ('AVATAR', 'Rocket Raccoon', 'rocket_raccoon', 'Space raccoon with rocket power', 100),
+    ('AVATAR', 'Heart Panda', 'heart_panda', 'Lovely panda with heart patterns', 100),
+    ('AVATAR', 'Sunshine Bee', 'sunshine_bee', 'Bright bee spreading sunshine', 100),
+    ('AVATAR', 'Moon Turtle', 'moon_turtle', 'Mystical turtle under moonlight', 100),
+    ('AVATAR', 'Flower Ladybug', 'flower_ladybug', 'Cute ladybug with flower patterns', 100),
+    ('AVATAR', 'Rainbow Frog', 'rainbow_frog', 'Colorful frog with rainbow stripes', 100),
+    ('AVATAR', 'Cloud Sheep', 'cloud_sheep', 'Fluffy sheep floating on clouds', 100),
+    ('AVATAR', 'Apple Teacher', 'apple_teacher', 'Dedicated teacher with apple', 100),
+    ('AVATAR', 'Pencil Wizard', 'pencil_wizard', 'Magical wizard with pencil powers', 100),
+    ('AVATAR', 'Crayon Dragon', 'crayon_dragon', 'Creative dragon with crayon colors', 100),
     ('AVATAR', 'Cool Hat', 'Hat', 'Stylish hat for your avatar', 50),
     ('AVATAR', 'Superhero Cape', 'Cape', 'Fly through challenges with this cape', 100),
     ('AVATAR', 'Science Glasses', 'Glasses', 'Look smart with these glasses', 75),
