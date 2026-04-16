@@ -28,6 +28,11 @@ export default function LandscapeOptimizedHome() {
 
     const { token, loading, signOut, user } = useAuth();
 
+    // Debug: 檢查用戶角色數據
+    console.log('User data:', user);
+    console.log('User roles:', user?.roles);
+    console.log('Is teacher:', user?.roles?.includes('teacher'));
+
     // 替換現有的 onPress 邏輯
     const handleLogout = () => {
         setShowLogoutModal(true);
@@ -107,12 +112,21 @@ export default function LandscapeOptimizedHome() {
                         </View>
                         <View style={styles.userMeta}>
                             <Text style={styles.userNameText}>{user?.username || 'Guest'}</Text>
-                            <Text style={styles.userRoleText}>Student</Text>
+                            <Text style={styles.userRoleText}>{(user?.roles?.includes('teacher') || user?.roles === 'teacher') ? 'Teacher' : 'Student'}</Text>
                         </View>
                     </TouchableOpacity>
 
                     {/* 新增的教师页面按钮 */}
-
+                    {/* 新增的教师页面按钮 - 只对教师身份显示 */}
+                    {(user?.roles?.includes('teacher') || user?.roles === 'teacher') && (
+                        <TouchableOpacity
+                            style={styles.teacherBtn}
+                            onPress={() => router.push('/teacher/teacher' as any)}
+                        >
+                            <GraduationCap size={22} color="#6C5CE7" />
+                            <Text style={styles.teacherText}>Teacher</Text>
+                        </TouchableOpacity>
+                    )}
 
 
 
