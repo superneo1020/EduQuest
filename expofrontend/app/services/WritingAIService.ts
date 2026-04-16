@@ -1,7 +1,6 @@
 // app/services/WritingAIService.ts
 import { Platform } from 'react-native';
 
-// 定義 __DEV__ 如果不存在
 declare const __DEV__: boolean | undefined;
 
 export type WritingAnalysis = {
@@ -13,6 +12,7 @@ export type WritingAnalysis = {
     vocabularyScore?: number;
     structureScore?: number;
     confidence?: number;
+    challengeBonus?: number;
 };
 
 export type GrammarError = {
@@ -28,146 +28,80 @@ export type WritingPrompt = {
     wordLimit: number;
 };
 
+export type GrammarChallengeCard = {
+    grammarName: string;
+    exampleSentence: string;
+    bonusPoints: number;
+};
+
 class WritingAIService {
     private baseURL: string;
     private modelName: string;
     private enabled: boolean;
 
-    constructor() {
-        // 使用與 chatbot.tsx 相同的後端地址
-        this.baseURL = 'http://127.0.0.1:8000';
-        this.modelName = 'llama'; // 簡化模型名稱
-        this.enabled = true;
+    // 預定義的文法類型清單（小四程度）
+    private readonly grammarTypes: string[] = [
+        'to be (is/am/are) affirmative sentences',
+        'to have (has/have) indicates possession',
+        'Simple Present (habits/routines & facts)',
+        'Present Continuous (actions happening now)',
+        'Simple Past (common verbs)',
+        'Future tense (will / going to)',
+        'Comparatives',
+        'There is / There are',
+        'Conjunctions (and / but / so / because)'
+    ];
 
-        console.log('📝 WritingAIService initialized:', {
-            baseURL: this.baseURL,
-            modelName: this.modelName,
-            enabled: this.enabled
-        });
+    constructor() {
+        this.baseURL = 'http://127.0.0.1:8000';
+        this.modelName = 'gemma';
+        this.enabled = true;
+        console.log('📝 WritingAIService initialized:', { baseURL: this.baseURL, modelName: this.modelName, enabled: this.enabled });
     }
 
-    /**
-     * 獲取適配當前平台的 URL
-     */
     private getAdaptedURL(url: string): string {
-        // 如果是開發環境且在模擬器中，需要特殊處理 localhost
         if (typeof __DEV__ !== 'undefined' && __DEV__) {
-            console.log('🏗️ DEV mode detected, adapting URL for platform:', Platform.OS);
-
             if (url.includes('localhost') || url.includes('127.0.0.1')) {
                 if (Platform.OS === 'android') {
-                    // Android 模擬器使用特殊地址
-                    const adapted = url.replace('localhost', '10.0.2.2').replace('127.0.0.1', '10.0.2.2');
-                    console.log('🤖 Android emulator detected, adapted URL:', adapted);
-                    return adapted;
-                } else if (Platform.OS === 'ios') {
-                    console.log('🍎 iOS simulator detected, using localhost directly');
+                    return url.replace('localhost', '10.0.2.2').replace('127.0.0.1', '10.0.2.2');
                 }
             }
         }
         return url;
     }
 
-    /**
-     * 分析學生的寫作
-     */
     async analyzeWriting(
         studentWriting: string,
         prompt: string,
         promptInfo: WritingPrompt
     ): Promise<WritingAnalysis> {
         console.log('🚀 Starting AI analysis...');
-        console.log('📝 Student writing:', studentWriting);
-        console.log('🎯 Prompt:', prompt);
-        console.log('📊 Prompt info:', promptInfo);
-
         if (!this.enabled) {
-            console.log('⚠️ AI service disabled, returning mock analysis');
             return this.mockAnalysis(studentWriting, prompt, promptInfo);
         }
 
         try {
-            console.log('🤖 Attempting AI analysis...');
-
-            // 構建提示詞
             const fullPrompt = this.buildWritingPrompt(studentWriting, prompt, promptInfo);
-
-            console.log('📤 Sending request to AI service...');
-            console.log('🔗 Base URL:', this.baseURL);
-            console.log('🤖 Model:', this.modelName);
-
-            // 使用與 chatbot.tsx 相同的請求格式
-            const requestBody = {
-                prompt: fullPrompt
-            };
-
             const adaptedURL = this.getAdaptedURL(this.baseURL);
-            console.log('🌐 Adapted URL:', adaptedURL);
-
-            const startTime = Date.now();
-
-            // 使用 /chat 端點，與 chatbot.tsx 保持一致
             const response = await fetch(`${adaptedURL}/chat`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(requestBody),
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt: fullPrompt }),
             });
 
-            const endTime = Date.now();
-
-            console.log('📥 AI service response received in', endTime - startTime, 'ms');
-            console.log('🔢 Response status:', response.status);
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error('❌ AI service error:', errorText);
-
-                // 降級到模擬分析
-                return this.mockAnalysis(studentWriting, prompt, promptInfo);
-            }
-
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
-            console.log('✅ AI response received:', data);
-
-            // 根據 chatbot.tsx 的響應格式解析
             const aiResponse = data.response || data.choices?.[0]?.message?.content || data.result;
-
-            if (!aiResponse) {
-                console.error('❌ AI response format error:', data);
-                return this.mockAnalysis(studentWriting, prompt, promptInfo);
-            }
-
-            console.log('📄 AI response content:', aiResponse);
-
-            // 解析 AI 回應
-            const analysis = this.parseAIResponse(aiResponse, studentWriting, promptInfo);
-
-            return {
-                ...analysis,
-                confidence: 0.8,
-            };
-
-        } catch (error: any) {
-            console.error('❌ AI analysis failed:', error.message || error);
-            console.log('🔄 Falling back to mock analysis');
-
-            // 降級到模擬分析
+            if (!aiResponse) throw new Error('No AI response');
+            return this.parseAIResponse(aiResponse, studentWriting, promptInfo);
+        } catch (error) {
+            console.error('❌ AI analysis failed, using mock', error);
             return this.mockAnalysis(studentWriting, prompt, promptInfo);
         }
     }
 
-    /**
-     * 構建寫作提示詞
-     */
-    private buildWritingPrompt(
-        studentWriting: string,
-        prompt: string,
-        promptInfo: WritingPrompt
-    ): string {
+    private buildWritingPrompt(studentWriting: string, prompt: string, promptInfo: WritingPrompt): string {
         const wordCount = studentWriting.trim().split(/\s+/).filter(w => w.length > 0).length;
-
         return `You are an English writing teacher for young students (age 8-12).
 
 TASK: Analyze the student's writing based on the prompt.
@@ -206,287 +140,198 @@ Guidelines:
 5. Keep language simple for young learners`;
     }
 
-    /**
-     * 解析 AI 回應
-     */
     private parseAIResponse(aiResponse: string, originalWriting: string, promptInfo: WritingPrompt): WritingAnalysis {
-        console.log('🔍 Parsing AI response...');
-
         try {
-            // 清理響應文本，移除可能的 markdown 代碼塊
-            let cleanedResponse = aiResponse.trim();
-
-            // 移除可能存在的 ```json 和 ``` 標記
-            if (cleanedResponse.startsWith('```json')) {
-                cleanedResponse = cleanedResponse.substring(7);
-            }
-            if (cleanedResponse.startsWith('```')) {
-                cleanedResponse = cleanedResponse.substring(3);
-            }
-            if (cleanedResponse.endsWith('```')) {
-                cleanedResponse = cleanedResponse.substring(0, cleanedResponse.length - 3);
-            }
-
-            cleanedResponse = cleanedResponse.trim();
-
-            console.log('📄 Cleaned response:', cleanedResponse);
-
-            // 嘗試解析 JSON
-            const parsed = JSON.parse(cleanedResponse);
-
-            // 驗證並返回結果
+            let cleaned = aiResponse.trim();
+            if (cleaned.startsWith('```json')) cleaned = cleaned.slice(7);
+            if (cleaned.startsWith('```')) cleaned = cleaned.slice(3);
+            if (cleaned.endsWith('```')) cleaned = cleaned.slice(0, -3);
+            const parsed = JSON.parse(cleaned.trim());
             return {
                 score: Math.min(100, Math.max(0, parsed.score || 70)),
                 feedback: parsed.feedback || "Good effort! Keep practicing your English writing.",
-                suggestions: Array.isArray(parsed.suggestions) ?
-                    parsed.suggestions.slice(0, 3) :
-                    this.getDefaultSuggestions(originalWriting),
+                suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions.slice(0, 3) : this.getDefaultSuggestions(originalWriting),
                 correctedSentence: parsed.correctedSentence || this.generateDefaultCorrection(originalWriting),
-                grammarErrors: Array.isArray(parsed.grammarErrors) ?
-                    parsed.grammarErrors.slice(0, 2) : [],
+                grammarErrors: Array.isArray(parsed.grammarErrors) ? parsed.grammarErrors.slice(0, 2) : [],
                 vocabularyScore: Math.min(10, Math.max(1, parsed.vocabularyScore || 7)),
                 structureScore: Math.min(10, Math.max(1, parsed.structureScore || 7)),
             };
-
         } catch (error) {
-            console.error('❌ Failed to parse AI response as JSON:', error);
-            console.log('📄 Response that failed:', aiResponse);
-
-            // 嘗試從文本格式解析
+            console.error('JSON parse failed', error);
             return this.parseTextResponse(aiResponse, originalWriting, promptInfo);
         }
     }
 
-    /**
-     * 解析文本格式的回應
-     */
     private parseTextResponse(response: string, originalWriting: string, promptInfo: WritingPrompt): WritingAnalysis {
-        console.log('📝 Attempting to parse as text response...');
-
-        try {
-            // 嘗試從文本中找到 JSON 部分
-            const jsonMatch = response.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                const jsonStr = jsonMatch[0];
-                console.log('🎯 Found JSON in response:', jsonStr);
-                return this.parseAIResponse(jsonStr, originalWriting, promptInfo);
-            }
-        } catch (error) {
-            console.error('❌ Failed to extract JSON from text:', error);
+        const jsonMatch = response.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+            try {
+                return this.parseAIResponse(jsonMatch[0], originalWriting, promptInfo);
+            } catch (e) { /* fallback */ }
         }
-
-        // 如果都失敗，返回模擬分析
         return this.mockAnalysis(originalWriting, "", promptInfo);
     }
 
-    /**
-     * 測試連接
-     */
     async testConnection(): Promise<boolean> {
-        console.log('🔌 Testing backend connection...');
-
         try {
             const adaptedURL = this.getAdaptedURL(this.baseURL);
-            console.log('🌐 Testing connection to:', adaptedURL);
-
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 3000);
-
-            const response = await fetch(`${adaptedURL}/health` || adaptedURL, {
-                method: 'GET',
-                signal: controller.signal
-            });
-
+            const response = await fetch(`${adaptedURL}/health`, { method: 'GET', signal: controller.signal });
             clearTimeout(timeoutId);
-
-            const isConnected = response.ok;
-            console.log('📊 Connection test result:', isConnected ? '✅ SUCCESS' : '❌ FAILED');
-
-            return isConnected;
-
-        } catch (error: any) {
-            console.error('❌ Connection test failed:', error.message || error);
+            return response.ok;
+        } catch {
             return false;
         }
     }
 
-    /**
-     * 獲取默認建議
-     */
     private getDefaultSuggestions(writing: string): string[] {
         const wordCount = writing.trim().split(/\s+/).filter(w => w.length > 0).length;
-
         const suggestions = [
             "Try to use more descriptive words like 'beautiful', 'colorful', or 'exciting'.",
             "Remember to start sentences with capital letters.",
             "Add periods at the end of your sentences.",
         ];
-
-        if (wordCount < 15) {
-            suggestions.push("Try to write a bit more to describe the scene better.");
-        }
-
+        if (wordCount < 15) suggestions.push("Try to write a bit more to describe the scene better.");
         return suggestions.slice(0, 3);
     }
 
-    /**
-     * 生成默認修正句子
-     */
     private generateDefaultCorrection(writing: string): string {
-        if (!writing || writing.trim().length === 0) {
-            return "";
-        }
-
+        if (!writing || !writing.trim()) return "";
         let corrected = writing.trim();
-
-        // 確保首字母大寫
-        if (corrected.length > 0) {
-            corrected = corrected.charAt(0).toUpperCase() + corrected.slice(1);
-        }
-
-        // 確保有句號
-        if (!corrected.endsWith('.') && !corrected.endsWith('!') && !corrected.endsWith('?')) {
-            corrected += '.';
-        }
-
+        if (corrected.length > 0) corrected = corrected.charAt(0).toUpperCase() + corrected.slice(1);
+        if (!/[.!?]$/.test(corrected)) corrected += ".";
         return corrected;
     }
 
-    /**
-     * 模擬分析（備用方案）
-     */
-    private mockAnalysis(
-        studentWriting: string,
-        prompt: string,
-        promptInfo: WritingPrompt
-    ): WritingAnalysis {
-        console.log('🎭 Generating mock analysis');
-
+    private mockAnalysis(studentWriting: string, prompt: string, promptInfo: WritingPrompt): WritingAnalysis {
         const wordCount = studentWriting.trim().split(/\s+/).filter(w => w.length > 0).length;
         const sentences = studentWriting.split(/[.!?]+/).filter(s => s.trim().length > 0);
-
-        // 基礎分數
         let score = 70;
+        if (wordCount >= 25 && wordCount <= promptInfo.wordLimit) score += 15;
+        else if (wordCount >= 15) score += 10;
+        else if (wordCount < 10) score -= 10;
+        else if (wordCount < 5) score -= 20;
+        if (sentences.length >= 2) score += 5;
+        if (sentences.length >= 3) score += 5;
 
-        // 基於字數評分
-        if (wordCount >= 25 && wordCount <= promptInfo.wordLimit) {
-            score += 15;
-        } else if (wordCount >= 15) {
-            score += 10;
-        } else if (wordCount < 10) {
-            score -= 10;
-        } else if (wordCount < 5) {
-            score -= 20;
-        }
-
-        // 基於句子結構評分
-        if (sentences.length >= 2) {
-            score += 5;
-        }
-        if (sentences.length >= 3) {
-            score += 5;
-        }
-
-        // 檢查基本語法
         const hasCapital = /[A-Z]/.test(studentWriting[0] || '');
-        const hasPeriod = studentWriting.trim().endsWith('.');
+        const hasPeriod = /[.!?]$/.test(studentWriting.trim());
         const hasDescriptive = /(beautiful|colorful|big|small|happy|fun|nice|good|sunny|cloudy)/i.test(studentWriting);
 
-        if (hasCapital) {
-            score += 5;
-        }
-        if (hasPeriod) {
-            score += 5;
-        }
-        if (hasDescriptive) {
-            score += 10;
-        }
-
-        // 最終分數限制
+        if (hasCapital) score += 5;
+        if (hasPeriod) score += 5;
+        if (hasDescriptive) score += 10;
         score = Math.min(95, Math.max(30, score));
 
-        // 生成反饋
         let feedback = '';
-        if (score >= 90) {
-            feedback = 'Excellent writing! You described the scene beautifully with great vocabulary and structure.';
-        } else if (score >= 70) {
-            feedback = 'Good effort! Your writing is clear and shows understanding of the scene.';
-        } else if (score >= 50) {
-            feedback = 'Nice try! You have good ideas. With a little more practice, your writing will improve.';
-        } else {
-            feedback = 'Keep practicing! Remember to write complete sentences and describe what you see.';
-        }
+        if (score >= 90) feedback = 'Excellent writing! You described the scene beautifully with great vocabulary and structure.';
+        else if (score >= 70) feedback = 'Good effort! Your writing is clear and shows understanding of the scene.';
+        else if (score >= 50) feedback = 'Nice try! You have good ideas. With a little more practice, your writing will improve.';
+        else feedback = 'Keep practicing! Remember to write complete sentences and describe what you see.';
 
-        // 生成建議
         const suggestions = [];
-        if (!hasCapital) {
-            suggestions.push('Start sentences with capital letters.');
-        }
-        if (!hasPeriod) {
-            suggestions.push('Add periods at the end of sentences.');
-        }
-        if (!hasDescriptive) {
-            suggestions.push('Use descriptive words like "beautiful", "colorful", or "exciting".');
-        }
-        if (wordCount < 15) {
-            suggestions.push('Try to write a bit more to describe the scene.');
-        }
-
-        // 確保有足夠的建議
-        while (suggestions.length < 3) {
-            suggestions.push('Keep practicing your English writing every day.');
-        }
+        if (!hasCapital) suggestions.push('Start sentences with capital letters.');
+        if (!hasPeriod) suggestions.push('Add periods at the end of sentences.');
+        if (!hasDescriptive) suggestions.push('Use descriptive words like "beautiful", "colorful", or "exciting".');
+        if (wordCount < 15) suggestions.push('Try to write a bit more to describe the scene.');
+        while (suggestions.length < 3) suggestions.push('Keep practicing your English writing every day.');
 
         const correctedSentence = this.generateDefaultCorrection(studentWriting);
-
         return {
             score,
             feedback,
             suggestions: suggestions.slice(0, 3),
             correctedSentence,
-            grammarErrors: !hasCapital || !hasPeriod ? [
-                {
-                    type: !hasCapital ? 'Capitalization' : 'Punctuation',
-                    original: studentWriting,
-                    corrected: correctedSentence,
-                    explanation: !hasCapital
-                        ? 'Sentences should begin with a capital letter.'
-                        : 'Sentences should end with proper punctuation like a period.'
-                }
-            ] : [],
+            grammarErrors: (!hasCapital || !hasPeriod) ? [{
+                type: !hasCapital ? 'Capitalization' : 'Punctuation',
+                original: studentWriting,
+                corrected: correctedSentence,
+                explanation: !hasCapital ? 'Sentences should begin with a capital letter.' : 'Sentences should end with proper punctuation like a period.'
+            }] : [],
             vocabularyScore: hasDescriptive ? 8 : 6,
             structureScore: sentences.length >= 2 ? 8 : 6,
-            confidence: 0.3, // 模擬分析的置信度較低
+            confidence: 0.3,
+        };
+    }
+
+    /**
+     * 生成文法挑戰卡牌（保證多樣性，避免重複）
+     * @param previousGrammar 上一次使用的文法名稱（可選），用於避免重複
+     */
+    async generateGrammarCard(previousGrammar?: string): Promise<GrammarChallengeCard> {
+        console.log('🎴 Generating grammar challenge card, previous:', previousGrammar);
+
+        // 從預定義清單中選擇一個不重複的文法類型
+        let availableTypes = [...this.grammarTypes];
+        if (previousGrammar && availableTypes.includes(previousGrammar)) {
+            availableTypes = availableTypes.filter(t => t !== previousGrammar);
+        }
+        // 如果所有類型都用過了（理論上不會，因為有9種），則重置清單
+        if (availableTypes.length === 0) {
+            availableTypes = [...this.grammarTypes];
+        }
+        const selectedGrammar = availableTypes[Math.floor(Math.random() * availableTypes.length)];
+        console.log('Selected grammar type:', selectedGrammar);
+
+        // 呼叫 AI 為這個文法類型生成一個簡單例句
+        const examplePrompt = `You are an English teacher for 4th grade students.
+Please generate ONE simple example sentence that demonstrates the grammar pattern: "${selectedGrammar}".
+The sentence should be very easy to understand, suitable for a 9-10 year old child.
+Return ONLY the sentence as plain text, no extra explanation.`;
+
+        let exampleSentence = '';
+        try {
+            const adaptedURL = this.getAdaptedURL(this.baseURL);
+            const response = await fetch(`${adaptedURL}/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt: examplePrompt }),
+            });
+            if (response.ok) {
+                const data = await response.json();
+                exampleSentence = (data.response || data.choices?.[0]?.message?.content || data.result || '').trim();
+                // 清理可能的引號或標記
+                exampleSentence = exampleSentence.replace(/^["']|["']$/g, '');
+            }
+        } catch (error) {
+            console.warn('AI example generation failed, using fallback example', error);
+        }
+
+        // 如果 AI 沒有返回有效例句，使用備用例句
+        if (!exampleSentence) {
+            const fallbackExamples: Record<string, string> = {
+                'to be (is/am/are) 肯定句': 'I am a student.',
+                'to have (has/have) 表示擁有': 'I have a pencil.',
+                '一般現在式 (Simple Present) 習慣/事實': 'I go to school by bus.',
+                '現在進行式 (Present Continuous) 正在做': 'I am reading a book now.',
+                '一般過去式 (Simple Past) 常見動詞': 'I watched TV yesterday.',
+                '將來式 (Future: will / going to)': 'I will call you later.',
+                '比較級 (Comparatives)': 'Tom is taller than John.',
+                'There is / There are': 'There is a book on the desk.',
+                '連接詞 (and / but / so / because)': 'I like apples and oranges.'
+            };
+            exampleSentence = fallbackExamples[selectedGrammar] || 'She is happy.';
+        }
+
+        return {
+            grammarName: selectedGrammar,
+            exampleSentence: exampleSentence,
+            bonusPoints: 10,
         };
     }
 }
 
-// 導出默認實例
 export const writingAIService = new WritingAIService();
 
-// 導出工具函數
 export const formatGrammarErrors = (errors: GrammarError[]): string => {
     if (!errors || errors.length === 0) return '';
-
-    return errors.map(error =>
-        `• ${error.type}: "${error.original}" → "${error.corrected}"\n  ${error.explanation}`
-    ).join('\n\n');
+    return errors.map(e => `• ${e.type}: "${e.original}" → "${e.corrected}"\n  ${e.explanation}`).join('\n\n');
 };
 
 export const calculateOverallScore = (analysis: WritingAnalysis): number => {
-    const weights = {
-        mainScore: 0.6,
-        vocabulary: 0.2,
-        structure: 0.2
-    };
-
+    const weights = { mainScore: 0.6, vocabulary: 0.2, structure: 0.2 };
     const vocabScore = (analysis.vocabularyScore || 7) * 10;
     const structScore = (analysis.structureScore || 7) * 10;
-
-    const weightedScore =
-        analysis.score * weights.mainScore +
-        vocabScore * weights.vocabulary +
-        structScore * weights.structure;
-
-    return Math.round(weightedScore);
+    return Math.round(analysis.score * weights.mainScore + vocabScore * weights.vocabulary + structScore * weights.structure);
 };

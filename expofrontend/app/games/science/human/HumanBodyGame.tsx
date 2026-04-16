@@ -1,5 +1,6 @@
 // science/HumanBodyGame.tsx
 import React, { useState, useEffect, useMemo } from 'react';
+import { createGameMetadata, GameMetadata } from '../../../../types/GameMetadata';
 import {
     View,
     Text,
@@ -12,23 +13,30 @@ import {
     Platform,
     Animated,
     ScrollView,
+    ActivityIndicator,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import axios from 'axios';
+import { useAuth } from '@/src/auth/AuthContext';
 
 // 檢測是否是網頁環境
 const isWeb = Platform.OS === 'web';
 
 const HumanBodyGame = () => {
+    const navigation = useNavigation();
+    const { token } = useAuth();
+    const [isSaving, setIsSaving] = useState(false);
     const { width, height } = useWindowDimensions();
     const [isPortrait, setIsPortrait] = useState(height > width);
 
     // 器官圖片引用
     const organImages = {
-        heart: require('../../../assets/images/organs/heart.png'),
-        largeIntestine: require('../../../assets/images/organs/large-intestine.png'),
-        lung: require('../../../assets/images/organs/lung.png'),
-        liver: require('../../../assets/images/organs/liver.png'),
-        brain: require('../../../assets/images/organs/brain.png'),
-        stomach: require('../../../assets/images/organs/stomach.png'),
+        heart: require('../../../../assets/images/organs/heart.png'),
+        largeIntestine: require('../../../../assets/images/organs/large-intestine.png'),
+        lung: require('../../../../assets/images/organs/lung.png'),
+        liver: require('../../../../assets/images/organs/liver.png'),
+        brain: require('../../../../assets/images/organs/brain.png'),
+        stomach: require('../../../../assets/images/organs/stomach.png'),
     };
 
     // 監聽屏幕方向變化
@@ -57,7 +65,6 @@ const HumanBodyGame = () => {
             const bodyLeft = screenWidth * 0.05;
             const bodyTop = screenHeight * 0.1;
 
-            // 右側器官區域
             const organAreaLeft = bodyLeft + bodyWidth + 20;
             const organAreaTop = bodyTop;
             const organAreaWidth = Math.min(screenWidth - organAreaLeft - 10, 500);
@@ -75,10 +82,9 @@ const HumanBodyGame = () => {
                     width: organAreaWidth,
                     height: bodyHeight * 0.8,
                 },
-                // 網格設置
                 grid: {
-                    rows: 10,    // 10行
-                    cols: 8,     // 8列
+                    rows: 10,
+                    cols: 8,
                     cellWidth: bodyWidth / 8,
                     cellHeight: bodyHeight / 10
                 },
@@ -96,13 +102,11 @@ const HumanBodyGame = () => {
                 }
             };
         } else if (isWeb && isPortrait) {
-            // 網頁豎屏：自適應佈局
             const bodyWidth = Math.min(screenWidth * 0.85, 400);
             const bodyHeight = Math.min(screenHeight * 0.35, 350);
             const bodyLeft = (screenWidth - bodyWidth) / 2;
             const bodyTop = screenHeight * 0.15;
 
-            // 器官區域
             const organAreaTop = bodyTop + bodyHeight + 20;
             const organAreaHeight = 'auto' as const;
 
@@ -119,10 +123,9 @@ const HumanBodyGame = () => {
                     width: bodyWidth,
                     height: organAreaHeight,
                 },
-                // 網格設置
                 grid: {
-                    rows: 8,    // 8行
-                    cols: 6,    // 6列
+                    rows: 8,
+                    cols: 6,
                     cellWidth: bodyWidth / 6,
                     cellHeight: bodyHeight / 8
                 },
@@ -140,13 +143,11 @@ const HumanBodyGame = () => {
                 }
             };
         } else {
-            // 手機豎屏：上下佈局 - 人體圖在上，器官在下
             const bodyWidth = screenWidth * 0.85;
             const bodyHeight = screenHeight * 0.4;
             const bodyLeft = screenWidth * 0.075;
             const bodyTop = screenHeight * 0.12;
 
-            // 底部器官區域
             const organAreaTop = bodyTop + bodyHeight + 15;
             const organAreaHeight = screenHeight - organAreaTop - 15;
 
@@ -163,10 +164,9 @@ const HumanBodyGame = () => {
                     width: bodyWidth,
                     height: organAreaHeight,
                 },
-                // 網格設置
                 grid: {
-                    rows: 8,    // 8行
-                    cols: 6,    // 6列
+                    rows: 8,
+                    cols: 6,
                     cellWidth: bodyWidth / 6,
                     cellHeight: bodyHeight / 8
                 },
@@ -189,14 +189,14 @@ const HumanBodyGame = () => {
     const layout = calculateLayout();
     const { rows, cols, cellWidth, cellHeight } = layout.grid;
 
-    // 器官數據 - 現在使用網格坐標
+    // 器官數據
     const organs = useMemo(() => [
         {
             id: 1,
             name: 'Heart',
             image: organImages.heart,
             description: 'Responsible for pumping blood throughout the body',
-            gridPosition: { row: 2, col: 4 }, // 網格坐標（行, 列）
+            gridPosition: { row: 2, col: 4 },
             ...layout.organSize.heart,
             hint: 'Located in the middle left of the chest cavity'
         },
@@ -267,12 +267,85 @@ const HumanBodyGame = () => {
     const [showCorrectPositions, setShowCorrectPositions] = useState(false);
     const [highlightedCells, setHighlightedCells] = useState<Array<{ row: number, col: number }>>([]);
 
-    const [score, setScore] = useState(0);
     const [correctCount, setCorrectCount] = useState(0);
     const [wrongCount, setWrongCount] = useState(0);
     const [gameCompleted, setGameCompleted] = useState(false);
-    const [showResultModal, setShowResultModal] = useState(false);
     const [currentHint, setCurrentHint] = useState<string>('');
+    const [currentOrganInfo, setCurrentOrganInfo] = useState<{ name: string; description: string; hint: string } | null>(null);
+
+    // ========== 💾 保存分數到伺服器（满分120） ==========
+    const saveScore = async (finalScore: number) => {
+        if (!token) return;
+
+        setIsSaving(true);
+        try {
+            const gameData = {
+                gameName: "Human organs",
+                scores: finalScore,
+                gameType: "SCIENCE",
+                gameDifficulty: "MEDIUM"
+            };
+            
+            const questionsData = organs.map((organ, index) => {
+                const placedPosition = placedOrgans[organ.id];
+                const isCorrect = placedPosition && 
+                    placedPosition.row === organ.gridPosition.row && 
+                    placedPosition.col === organ.gridPosition.col;
+                
+                return {
+                    id: index + 1,
+                    question: `Place ${organ.name} in the correct position`,
+                    correctAnswer: `Position: ${organ.gridPosition.row}, ${organ.gridPosition.col}`,
+                    userAnswer: placedPosition ? `Position: ${placedPosition.row}, ${placedPosition.col}` : undefined,
+                    isCorrect: isCorrect,
+                    questionType: 'organ-placement'
+                };
+            });
+
+            const metadata: GameMetadata = createGameMetadata(
+                gameData.gameType,
+                gameData.gameDifficulty,
+                finalScore,
+                {
+                    totalOrgans: organs.length,
+                    correctIdentifications: correctCount
+                },
+                questionsData
+            );
+
+            const backendRequest = {
+                gameName: gameData.gameName,
+                scores: gameData.scores,
+                metadata: metadata
+            };
+            
+            await axios.post('http://localhost:8080/api/user/game/score', backendRequest, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            console.log("Score synced to server!");
+        } catch (e) {
+            console.error("Failed to sync score:", e);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    useEffect(() => {
+        if (gameCompleted) {
+            // 遊戲完成時保存分數（满分120）
+            const totalOrgans = organs.length;
+            const finalScoreValue = Math.round((correctCount / totalOrgans) * 120);
+            saveScore(finalScoreValue);
+        }
+    }, [gameCompleted, correctCount, organs.length]);
+
+    // 計算最終分數 (滿分120)
+    const finalScore = useMemo(() => {
+        const totalOrgans = organs.length;
+        if (totalOrgans === 0) return 0;
+        const score = (correctCount / totalOrgans) * 120;
+        return Math.round(score);
+    }, [correctCount, organs.length]);
 
     // 將網格坐標轉換為實際坐標
     const gridToPosition = (row: number, col: number) => {
@@ -285,19 +358,23 @@ const HumanBodyGame = () => {
         };
     };
 
-    // 處理器官卡片點擊
+    // 處理器官卡片點擊（修改：顯示器官介紹，取消綠色提示）
     const handleOrganSelect = (organId: number) => {
         const organ = organs.find(o => o.id === organId);
         if (!organ || placedOrgans[organId]) return;
 
         setSelectedOrgan(organId);
+        // 顯示器官名稱、介紹和提示
+        setCurrentOrganInfo({
+            name: organ.name,
+            description: organ.description,
+            hint: organ.hint
+        });
         setCurrentHint(organ.hint);
 
-        // 高亮顯示建議的網格單元
-        const suggestedCells = getSuggestedCells(organ);
-        setHighlightedCells(suggestedCells);
+        // 取消綠色提示：不再調用 getSuggestedCells，清空高亮
+        setHighlightedCells([]);
 
-        // 播放選中動畫
         Animated.spring(organAnimations[organId], {
             toValue: 1,
             useNativeDriver: true,
@@ -313,39 +390,7 @@ const HumanBodyGame = () => {
         });
     };
 
-    // 獲取建議放置的網格單元
-    const getSuggestedCells = (organ: any) => {
-        const cells = [];
-        const targetRow = organ.gridPosition.row;
-        const targetCol = organ.gridPosition.col;
-
-        // 為不同器官定義不同的建議區域
-        switch (organ.id) {
-            case 1: // 心臟
-                cells.push({ row: targetRow, col: targetCol });
-                cells.push({ row: targetRow, col: targetCol + 1 });
-                cells.push({ row: targetRow + 1, col: targetCol });
-                break;
-            case 2: // 大腸
-                for (let r = targetRow - 1; r <= targetRow + 1; r++) {
-                    for (let c = targetCol - 1; c <= targetCol + 1; c++) {
-                        if (r >= 0 && r < rows && c >= 0 && c < cols) {
-                            cells.push({ row: r, col: c });
-                        }
-                    }
-                }
-                break;
-            case 3: // 肺
-                cells.push({ row: targetRow, col: targetCol });
-                cells.push({ row: targetRow, col: targetCol + 1 });
-                break;
-            default:
-                cells.push({ row: targetRow, col: targetCol });
-                break;
-        }
-
-        return cells;
-    };
+    // 移除 getSuggestedCells 函數（不再需要）
 
     // 處理網格點擊
     const handleGridClick = (row: number, col: number) => {
@@ -354,19 +399,15 @@ const HumanBodyGame = () => {
         const organ = organs.find(o => o.id === selectedOrgan);
         if (!organ) return;
 
-        // 檢查是否點擊在有效的網格範圍內
         if (row < 0 || row >= rows || col < 0 || col >= cols) return;
 
-        // 檢查點擊的網格是否接近正確位置
         const targetRow = organ.gridPosition.row;
         const targetCol = organ.gridPosition.col;
         const rowDistance = Math.abs(row - targetRow);
         const colDistance = Math.abs(col - targetCol);
 
-        // 判斷是否正確（允許1-2個單元的誤差）
         const isCorrect = (rowDistance <= 1 && colDistance <= 1);
 
-        // 播放放置動畫
         Animated.sequence([
             Animated.timing(organAnimations[selectedOrgan], {
                 toValue: 1,
@@ -380,7 +421,6 @@ const HumanBodyGame = () => {
             })
         ]).start();
 
-        // 更新放置器官
         setPlacedOrgans(prev => ({
             ...prev,
             [selectedOrgan]: {
@@ -391,27 +431,20 @@ const HumanBodyGame = () => {
             }
         }));
 
-        // 計分
         if (isCorrect) {
             setCorrectCount(prev => prev + 1);
-            setScore(prev => prev + 10);
         } else {
             setWrongCount(prev => prev + 1);
-            setScore(prev => Math.max(0, prev - 2));
         }
 
-        // 取消選擇
         setSelectedOrgan(null);
         setCurrentHint('');
+        setCurrentOrganInfo(null);
         setHighlightedCells([]);
 
-        // 檢查遊戲是否完成
         const newPlacedCount = Object.keys(placedOrgans).length + 1;
         if (newPlacedCount === organs.length) {
             setGameCompleted(true);
-            setTimeout(() => {
-                setShowResultModal(true);
-            }, 1000);
         }
     };
 
@@ -424,19 +457,65 @@ const HumanBodyGame = () => {
     const resetGame = () => {
         setSelectedOrgan(null);
         setPlacedOrgans({});
-        setScore(0);
         setCorrectCount(0);
         setWrongCount(0);
         setGameCompleted(false);
-        setShowResultModal(false);
         setCurrentHint('');
+        setCurrentOrganInfo(null);
         setHighlightedCells([]);
 
-        // 重置動畫值
         Object.values(organAnimations).forEach(anim => {
             anim.setValue(0);
         });
     };
+
+    // 返回上一頁
+    const handleGoBack = () => {
+        navigation.goBack();
+    };
+
+    // 返回主頁
+    const handleGoHome = () => {
+        navigation.navigate('science/index' as never);
+    };
+
+    // 如果遊戲完成，顯示報告頁面
+    if (gameCompleted) {
+        return (
+            <ScrollView style={styles.container}>
+                <Text style={styles.title}>Session Report 🎓</Text>
+                <View style={styles.reportBox}>
+                    <Text style={styles.accuracyText}>Score: {finalScore} / 120</Text>
+                    <Text style={styles.summaryText}>
+                        You correctly placed {correctCount} out of {organs.length} organs.
+                        {wrongCount > 0 && ` ${wrongCount} organs were placed incorrectly.`}
+                    </Text>
+                </View>
+
+                {/* 保存中指示器 */}
+                {isSaving && (
+                    <View style={styles.savingIndicator}>
+                        <ActivityIndicator size="small" color="#4CAF50" />
+                        <Text style={styles.savingText}>同步分數中...</Text>
+                    </View>
+                )}
+
+                <View style={styles.reportButtons}>
+                    <TouchableOpacity style={styles.reportButton} onPress={resetGame}>
+                        <Text style={styles.reportButtonText}>Play Again</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={[styles.reportButton, styles.backButton]} onPress={handleGoBack}>
+                        <Text style={styles.reportButtonText}>difficulty select</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={[styles.reportButton, styles.homeButton]} onPress={handleGoHome}>
+                        <Text style={styles.reportButtonText}>Home</Text>
+                    </TouchableOpacity>
+                </View>
+            </ScrollView>
+        );
+    }
 
     // 計算器官卡片位置（網格佈局）
     const getOrganCardPosition = (index: number) => {
@@ -444,7 +523,6 @@ const HumanBodyGame = () => {
         const cardSize = layout.organCardSize;
 
         if (isWebLandscape) {
-            // 網頁橫屏：兩列佈局
             const col = index % 2;
             const row = Math.floor(index / 2);
             const margin = 8;
@@ -456,7 +534,6 @@ const HumanBodyGame = () => {
                 height: cardSize.height,
             };
         } else {
-            // 手機豎屏或網頁豎屏：三列佈局
             const col = index % 3;
             const row = Math.floor(index / 3);
             const margin = 6;
@@ -476,17 +553,14 @@ const HumanBodyGame = () => {
 
         for (let row = 0; row < rows; row++) {
             for (let col = 0; col < cols; col++) {
-                // 檢查這個單元是否被高亮（當前選擇的器官）
                 const isHighlighted = highlightedCells.some(cell =>
                     cell.row === row && cell.col === col
                 );
 
-                // 檢查這個單元是否有正確放置的器官
                 const hasOrgan = Object.entries(placedOrgans).some(([organId, pos]) =>
                     pos.row === row && pos.col === col
                 );
 
-                // 檢查這個單元是否是某個器官的正確位置
                 const isCorrectPosition = organs.some(organ =>
                     organ.gridPosition.row === row && organ.gridPosition.col === col
                 );
@@ -515,7 +589,6 @@ const HumanBodyGame = () => {
                                 styles.cellBorder,
                                 isCorrectPosition && showCorrectPositions && styles.correctPositionBorder
                             ]}>
-                                {/* 網格坐標標記（調試用） */}
                                 {__DEV__ && (
                                     <Text style={styles.gridCoordinate}>
                                         {row},{col}
@@ -524,7 +597,6 @@ const HumanBodyGame = () => {
                             </View>
                         )}
 
-                        {/* 顯示正確位置標記 */}
                         {isCorrectPosition && showCorrectPositions && (
                             <View style={styles.correctPositionMarker}>
                                 <Text style={styles.correctMarkerText}>✓</Text>
@@ -541,13 +613,10 @@ const HumanBodyGame = () => {
     // 渲染主要內容
     const renderContent = () => (
         <>
-            {/* 遊戲標題 */}
-            <Text style={styles.title}>Understanding Human Organs - Grid Version</Text>
+            <Text style={styles.title}>Understanding Human Organs</Text>
 
-            {/* 控制欄 */}
             <View style={styles.controlBar}>
                 <View style={styles.scoreBoard}>
-                    <Text style={styles.scoreText}>Score: {score}</Text>
                     <Text style={styles.scoreText}>Correct: {correctCount}</Text>
                     <Text style={styles.scoreText}>Wrong: {wrongCount}</Text>
                     <Text style={styles.scoreText}>Remaining: {organs.length - Object.keys(placedOrgans).length}</Text>
@@ -558,7 +627,7 @@ const HumanBodyGame = () => {
                         style={[styles.modeButton, showGrid && styles.activeModeButton]}
                         onPress={() => setShowGrid(!showGrid)}
                     >
-                        <Text style={styles.modeButtonText}>
+                        <Text style={[styles.modeButtonText, showGrid && styles.activeModeButtonText]}>
                             {showGrid ? 'Grid ✓' : 'Grid'}
                         </Text>
                     </TouchableOpacity>
@@ -567,27 +636,26 @@ const HumanBodyGame = () => {
                         style={[styles.modeButton, showCorrectPositions && styles.activeModeButton]}
                         onPress={() => setShowCorrectPositions(!showCorrectPositions)}
                     >
-                        <Text style={styles.modeButtonText}>
-                            {showCorrectPositions ? 'Show Correct Positions ✓' : 'Show Correct Positions'}
+                        <Text style={[styles.modeButtonText, showCorrectPositions && styles.activeModeButtonText]}>
+                            {showCorrectPositions ? 'Show ✓' : 'Show Positions'}
                         </Text>
                     </TouchableOpacity>
                 </View>
             </View>
 
-            {/* 提示區域 */}
-            {currentHint && (
+            {/* 修改：顯示器官介紹區塊 */}
+            {currentOrganInfo && (
                 <View style={styles.selectionHint}>
-                    <Text style={styles.selectionText}>Selected Organ</Text>
-                    <Text style={styles.hintText}>Hint: {currentHint}</Text>
+                    <Text style={styles.selectionText}>Selected Organ: {currentOrganInfo.name}</Text>
+                    <Text style={styles.descriptionText}>{currentOrganInfo.description}</Text>
+                    <Text style={styles.hintText}>Hint: {currentOrganInfo.hint}</Text>
                     <Text style={styles.instructionText}>
-                        Click on the grid to place the organ. Green cells are suggested positions.
+                        Click on the grid to place the organ.
                     </Text>
                 </View>
             )}
 
-            {/* 遊戲區域 */}
             <View style={styles.gameArea}>
-                {/* 人體圖區域 */}
                 <View style={[
                     styles.bodyArea,
                     {
@@ -597,17 +665,14 @@ const HumanBodyGame = () => {
                         top: layout.bodyOutline.top,
                     }
                 ]}>
-                    {/* 人體輪廓 */}
                     <Image
-                        source={require('../../../assets/images/organs/human-body-outline.png')}
+                        source={require('../../../../assets/images/organs/human-body-outline.png')}
                         style={styles.bodyOutlineImage}
                         resizeMode="contain"
                     />
 
-                    {/* 網格 */}
                     {renderGrid()}
 
-                    {/* 已放置的器官 */}
                     {Object.entries(placedOrgans).map(([organIdStr, position]) => {
                         const organId = parseInt(organIdStr);
                         const organ = organs.find(o => o.id === organId);
@@ -646,7 +711,6 @@ const HumanBodyGame = () => {
                                     resizeMode="contain"
                                 />
 
-                                {/* 器官名稱標籤 */}
                                 <Text style={[
                                     styles.organNameLabel,
                                     position.isCorrect ? styles.correctLabel : styles.wrongLabel
@@ -654,7 +718,6 @@ const HumanBodyGame = () => {
                                     {organ.name}
                                 </Text>
 
-                                {/* 如果放置不正確，箭頭將指示正確位置 */}
                                 {!position.isCorrect && showCorrectPositions && (
                                     <View style={[
                                         styles.correctArrow,
@@ -675,7 +738,6 @@ const HumanBodyGame = () => {
                     })}
                 </View>
 
-                {/* 器官選擇區域 */}
                 <View style={[
                     styles.organSelectionArea,
                     {
@@ -732,9 +794,6 @@ const HumanBodyGame = () => {
                                             <Text style={styles.organCardDescription}>
                                                 {organ.description}
                                             </Text>
-                                            <Text style={styles.organCardHint}>
-                                                Correct position: ({organ.gridPosition.row}, {organ.gridPosition.col})
-                                            </Text>
                                         </View>
                                     </View>
                                     {isPlaced && (
@@ -754,115 +813,14 @@ const HumanBodyGame = () => {
                 </View>
             </View>
 
-            {/* 控制按鈕 */}
             <View style={styles.controls}>
                 <TouchableOpacity style={styles.resetButton} onPress={resetGame}>
                     <Text style={styles.resetButtonText}>Reset Game</Text>
                 </TouchableOpacity>
             </View>
-
-            {/* 完成彈窗 */}
-            <Modal
-                animationType="slide"
-                transparent={true}
-                visible={showResultModal}
-                onRequestClose={() => setShowResultModal(false)}
-            >
-                <View style={styles.modalContainer}>
-                    <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Game Completed!</Text>
-
-                        <View style={styles.resultSummary}>
-                            <View style={styles.resultItem}>
-                                <Text style={styles.resultLabel}>Total Score</Text>
-                                <Text style={styles.resultValue}>{score}</Text>
-                            </View>
-                            <View style={styles.resultItem}>
-                                <Text style={styles.resultLabel}>Correct Count</Text>
-                                <Text style={[styles.resultValue, styles.correctValue]}>{correctCount}</Text>
-                            </View>
-                            <View style={styles.resultItem}>
-                                <Text style={styles.resultLabel}>Wrong Count</Text>
-                                <Text style={[styles.resultValue, styles.wrongValue]}>{wrongCount}</Text>
-                            </View>
-                        </View>
-
-                        {/* 網格放置結果顯示 */}
-                        <View style={styles.gridResult}>
-                            <Text style={styles.gridResultTitle}>Your placement results:</Text>
-                            <View style={styles.miniGrid}>
-                                {Array.from({ length: rows }).map((_, row) => (
-                                    <View key={row} style={styles.miniGridRow}>
-                                        {Array.from({ length: cols }).map((_, col) => {
-                                            const organHere = Object.entries(placedOrgans).find(
-                                                ([organId, pos]) => pos.row === row && pos.col === col
-                                            );
-                                            const isCorrectPosition = organs.some(organ =>
-                                                organ.gridPosition.row === row && organ.gridPosition.col === col
-                                            );
-
-                                            return (
-                                                <View
-                                                    key={col}
-                                                    style={[
-                                                        styles.miniGridCell,
-                                                        isCorrectPosition && styles.miniCorrectCell,
-                                                        organHere && styles.miniOccupiedCell,
-                                                        organHere && !placedOrgans[parseInt(organHere[0])].isCorrect && styles.miniWrongCell,
-                                                    ]}
-                                                >
-                                                    {organHere && (
-                                                        <Text style={styles.miniCellText}>
-                                                            {organs.find(o => o.id === parseInt(organHere[0]))?.name.charAt(0)}
-                                                        </Text>
-                                                    )}
-                                                    {isCorrectPosition && !organHere && (
-                                                        <Text style={styles.miniTargetText}>✓</Text>
-                                                    )}
-                                                </View>
-                                            );
-                                        })}
-                                    </View>
-                                ))}
-                            </View>
-                            <View style={styles.gridLegend}>
-                                <View style={styles.legendItem}>
-                                    <View style={[styles.legendColor, styles.legendCorrect]} />
-                                    <Text style={styles.legendText}>Correct Placement</Text>
-                                </View>
-                                <View style={styles.legendItem}>
-                                    <View style={[styles.legendColor, styles.legendWrong]} />
-                                    <Text style={styles.legendText}>Wrong Placement</Text>
-                                </View>
-                                <View style={styles.legendItem}>
-                                    <View style={[styles.legendColor, styles.legendTarget]} />
-                                    <Text style={styles.legendText}>Correct Position</Text>
-                                </View>
-                            </View>
-                        </View>
-
-                        <View style={styles.modalButtons}>
-                            <TouchableOpacity
-                                style={[styles.modalButton, styles.playAgainButton]}
-                                onPress={resetGame}
-                            >
-                                <Text style={styles.modalButtonText}>Play Again</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={[styles.modalButton, styles.closeButton]}
-                                onPress={() => setShowResultModal(false)}
-                            >
-                                <Text style={styles.modalButtonText}>Close</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </View>
-            </Modal>
         </>
     );
 
-    // 在網頁環境中使用 ScrollView，在移動設備上保持原樣
     if (isWeb) {
         return (
             <ScrollView
@@ -893,7 +851,7 @@ const styles = StyleSheet.create({
         minHeight: '100%',
         paddingBottom: 30,
     },
-    // 原始容器（用於移動設備）
+    // 原始容器
     container: {
         flex: 1,
         backgroundColor: '#f0f7ff',
@@ -972,6 +930,12 @@ const styles = StyleSheet.create({
         color: '#1565c0',
         marginBottom: 5,
     },
+    descriptionText: {
+        fontSize: isWeb ? 16 : 15,
+        color: '#2c3e50',
+        marginBottom: 8,
+        textAlign: 'center',
+    },
     hintText: {
         fontSize: isWeb ? 16 : 15,
         color: '#e74c3c',
@@ -1012,7 +976,6 @@ const styles = StyleSheet.create({
         position: 'absolute',
         zIndex: 1,
     },
-    // 網格樣式
     gridCell: {
         position: 'absolute',
         borderWidth: 1,
@@ -1133,11 +1096,6 @@ const styles = StyleSheet.create({
         color: '#7f8c8d',
         marginBottom: 4,
     },
-    organCardHint: {
-        fontSize: isWeb ? 12 : 11,
-        color: '#3498db',
-        fontWeight: '600',
-    },
     placedOrganText: {
         color: '#95a5a6',
     },
@@ -1238,164 +1196,67 @@ const styles = StyleSheet.create({
         fontSize: isWeb ? 18 : 17,
         fontWeight: 'bold',
     },
-    modalContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    // 報告頁面樣式
+    reportBox: {
+        backgroundColor: '#fff9c4',
         padding: 20,
+        borderRadius: 12,
+        marginBottom: 30,
     },
-    modalContent: {
-        backgroundColor: 'white',
-        borderRadius: 20,
-        padding: 25,
-        width: '90%',
-        maxWidth: 450,
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 10,
-    },
-    modalTitle: {
-        fontSize: isWeb ? 28 : 26,
+    accuracyText: {
+        fontSize: 32,
         fontWeight: 'bold',
-        color: '#2c3e50',
-        marginBottom: 25,
+        color: '#f57f17',
+        textAlign: 'center',
+        marginBottom: 15,
+    },
+    summaryText: {
+        fontSize: 16,
+        lineHeight: 24,
         textAlign: 'center',
     },
-    resultSummary: {
+    savingIndicator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        marginBottom: 16,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        backgroundColor: '#E8F5E9',
+        borderRadius: 20,
+        alignSelf: 'center',
+    },
+    savingText: {
+        fontSize: 12,
+        color: '#4CAF50',
+        fontWeight: '500',
+    },
+    reportButtons: {
         flexDirection: 'row',
         justifyContent: 'space-around',
-        width: '100%',
-        marginBottom: 25,
-    },
-    resultItem: {
-        alignItems: 'center',
-    },
-    resultLabel: {
-        fontSize: isWeb ? 15 : 14,
-        color: '#7f8c8d',
-        marginBottom: 5,
-    },
-    resultValue: {
-        fontSize: isWeb ? 34 : 32,
-        fontWeight: 'bold',
-        color: '#2c3e50',
-    },
-    correctValue: {
-        color: '#27ae60',
-    },
-    wrongValue: {
-        color: '#e74c3c',
-    },
-    gridResult: {
-        backgroundColor: '#f8f9fa',
-        padding: 20,
-        borderRadius: 15,
-        marginBottom: 25,
-        width: '100%',
-        alignItems: 'center',
-    },
-    gridResultTitle: {
-        fontSize: isWeb ? 19 : 18,
-        fontWeight: 'bold',
-        color: '#2c3e50',
-        marginBottom: 15,
-    },
-    miniGrid: {
-        backgroundColor: '#fff',
-        padding: 10,
-        borderRadius: 10,
-        marginBottom: 15,
-    },
-    miniGridRow: {
-        flexDirection: 'row',
-    },
-    miniGridCell: {
-        width: isWeb ? 28 : 25,
-        height: isWeb ? 28 : 25,
-        borderWidth: 1,
-        borderColor: '#ddd',
-        justifyContent: 'center',
-        alignItems: 'center',
-        margin: 1,
-    },
-    miniCorrectCell: {
-        borderColor: '#2ecc71',
-    },
-    miniOccupiedCell: {
-        backgroundColor: '#2ecc71',
-    },
-    miniWrongCell: {
-        backgroundColor: '#e74c3c',
-    },
-    miniCellText: {
-        fontSize: isWeb ? 11 : 10,
-        fontWeight: 'bold',
-        color: 'white',
-    },
-    miniTargetText: {
-        fontSize: isWeb ? 13 : 12,
-        color: '#2ecc71',
-        fontWeight: 'bold',
-    },
-    gridLegend: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        gap: 20,
+        gap: 15,
         flexWrap: 'wrap',
     },
-    legendItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 5,
-    },
-    legendColor: {
-        width: 15,
-        height: 15,
-        borderRadius: 3,
-    },
-    legendCorrect: {
-        backgroundColor: '#2ecc71',
-    },
-    legendWrong: {
-        backgroundColor: '#e74c3c',
-    },
-    legendTarget: {
-        backgroundColor: '#fff',
-        borderWidth: 2,
-        borderColor: '#2ecc71',
-    },
-    legendText: {
-        fontSize: isWeb ? 13 : 12,
-        color: '#7f8c8d',
-    },
-    modalButtons: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        width: '100%',
-        gap: 10,
-    },
-    modalButton: {
-        flex: 1,
-        paddingVertical: 15,
-        borderRadius: 12,
+    reportButton: {
+        backgroundColor: '#4CAF50',
+        paddingVertical: 12,
+        paddingHorizontal: 24,
+        borderRadius: 25,
+        minWidth: 120,
         alignItems: 'center',
     },
-    playAgainButton: {
-        backgroundColor: '#27ae60',
+    backButton: {
+        backgroundColor: '#FF9800',
     },
-    closeButton: {
-        backgroundColor: '#95a5a6',
+    homeButton: {
+        backgroundColor: '#2196F3',
     },
-    modalButtonText: {
+    reportButtonText: {
         color: 'white',
-        fontSize: isWeb ? 17 : 16,
+        fontSize: 16,
         fontWeight: 'bold',
     },
-
 });
 
 export default HumanBodyGame;
