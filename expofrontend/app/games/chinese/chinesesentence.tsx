@@ -30,8 +30,8 @@ type Question = {
 type Difficulty = 'easy' | 'medium' | null;
 type GameState = 'difficulty_select' | 'playing' | 'result';
 
-// 修改：总题数改为 3
-const TOTAL_QUESTIONS = 3;
+// 修改：总题数改为 2
+const TOTAL_QUESTIONS = 2;
 
 // --- 💥 浮动文字组件 (HIT / OUCH) ---
 const FloatingText = ({ text, color, onComplete }: { text: string, color: string, onComplete: () => void }) => {
@@ -120,8 +120,8 @@ const difficultyOptions = [
     },
     {
         id: 'medium',
-        title: 'Medium',
-        level: 'advanced',
+        title: 'Hard',      // 原 Medium 改为 Hard
+        level: 'challenge',
         description: 'Everyday expressions and slightly more complex sentences, challenge yourself！',
         icon: '🌳',
         color: '#FF9F4A',
@@ -196,9 +196,6 @@ export default function ChineseSentenceGame() {
     const [characterState, setCharacterState] = useState<keyof typeof CHARACTER_STATES>('idle');
     const [encouragementText, setEncouragementText] = useState('');
 
-    // 每道题满分数组
-    const [questionMaxPoints, setQuestionMaxPoints] = useState<number[]>([]);
-
     // 保存分数到服务器
     const saveScore = async (finalScore: number) => {
         if (!token || !difficulty) return;
@@ -211,7 +208,7 @@ export default function ChineseSentenceGame() {
                 gameType: "CHINESE",
                 gameDifficulty: difficulty === 'easy' ? 'EASY' : 'MEDIUM'
             };
-            
+
             const questionsData = questions.map((q, index) => ({
                 id: index + 1,
                 question: q.sentence,
@@ -220,7 +217,7 @@ export default function ChineseSentenceGame() {
                 isCorrect: q.isCorrect,
                 questionType: 'sentence-completion',
                 score: q.score || 0,
-                maxScore: q.maxScore || (difficulty === 'easy' ? 30 : 40)
+                maxScore: q.maxScore || (difficulty === 'easy' ? 50 : 60)
             }));
 
             const metadata: GameMetadata = createGameMetadata(
@@ -239,7 +236,7 @@ export default function ChineseSentenceGame() {
                 scores: gameData.scores,
                 metadata: convertToBackendMetadata(metadata)
             };
-            
+
             await axios.post('http://localhost:8080/api/user/game/score', backendRequest, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -351,13 +348,6 @@ export default function ChineseSentenceGame() {
         setElapsedSeconds(0);
         stopTimer();
 
-        // 根据难度设置每道题的满分数组
-        if (selectedDifficulty === 'easy') {
-            setQuestionMaxPoints([30, 30, 40]);
-        } else {
-            setQuestionMaxPoints([40, 40, 40]);
-        }
-
         setDifficulty(selectedDifficulty);
         setGameState('playing');
         setLoading(true);
@@ -369,6 +359,12 @@ export default function ChineseSentenceGame() {
         setGameActive(false);
         updateCharacterState('idle');
         loadFirstQuestion(selectedDifficulty);
+    };
+
+    // 根据难度和题号获取本题满分
+    const getMaxScoreForQuestion = (difficulty: Difficulty, index: number): number => {
+        if (difficulty === 'easy') return 50;
+        return 60; // medium/hard 每题60分
     };
 
     const loadFirstQuestion = async (selectedDifficulty: Difficulty) => {
@@ -389,7 +385,7 @@ export default function ChineseSentenceGame() {
                 explanation: response.explanation,
                 userAnswer: '',
                 isCorrect: false,
-                maxScore: questionMaxPoints[0]
+                maxScore: getMaxScoreForQuestion(selectedDifficulty, 0)
             }]);
             updateCharacterState('idle');
             startPrepSequence(true);
@@ -425,7 +421,7 @@ export default function ChineseSentenceGame() {
                 difficulty: difficulty || 'medium'
             });
 
-            const nextMaxScore = questionMaxPoints[currentIndex + 1] || (difficulty === 'easy' ? 30 : 40);
+            const nextMaxScore = getMaxScoreForQuestion(difficulty, currentIndex + 1);
             setQuestions(prev => [...prev, {
                 id: currentIndex + 1,
                 sentence: response.sentence,
@@ -466,7 +462,7 @@ export default function ChineseSentenceGame() {
         }
 
         const currentQuestion = questions[currentIndex];
-        const maxScoreForThis = questionMaxPoints[currentIndex];
+        const maxScoreForThis = currentQuestion.maxScore || getMaxScoreForQuestion(difficulty, currentIndex);
         setSubmitting(true);
 
         try {
@@ -539,7 +535,7 @@ export default function ChineseSentenceGame() {
     const calculateScore = () => {
         const totalScore = questions.reduce((acc, q) => acc + (q.score || 0), 0);
         const correctCount = questions.filter(q => q.isCorrect).length;
-        const maxScore = questionMaxPoints.reduce((a, b) => a + b, 0);
+        const maxScore = questions.reduce((acc, q) => acc + (q.maxScore || 0), 0);
 
         return {
             correct: correctCount,
@@ -672,7 +668,7 @@ export default function ChineseSentenceGame() {
 
         const currentQuestion = questions[currentIndex];
         const score = currentQuestion.score || 0;
-        const maxQuestionScore = currentQuestion.maxScore || (difficulty === 'easy' ? 30 : 40);
+        const maxQuestionScore = currentQuestion.maxScore || getMaxScoreForQuestion(difficulty, currentIndex);
 
         return (
             <Animated.View
@@ -842,8 +838,8 @@ export default function ChineseSentenceGame() {
                         Learn Chinese together with the cute panda! Complete the fill-in-the-blank exercises to gain a sense of accomplishment!✨
                     </Text>
                     <View style={styles.scoreInfoBox}>
-                        <Text style={styles.scoreInfoText}>🏆 Easy: 3 questions, total 100 points (30+30+40)</Text>
-                        <Text style={styles.scoreInfoText}>⚡ Medium: 3 questions, total 120 points (40 each)</Text>
+                        <Text style={styles.scoreInfoText}>🏆 Easy: 2 questions, total 100 points (50+50)</Text>
+                        <Text style={styles.scoreInfoText}>⚡ Hard: 2 questions, total 120 points (60+60)</Text>
                     </View>
                 </View>
 
@@ -876,7 +872,7 @@ export default function ChineseSentenceGame() {
 
                                 <View style={styles.scoreInfoRow}>
                                     <Text style={[styles.scoreInfoDetail, { color: option.color }]}>
-                                        {option.id === 'easy' ? '🏆 30+30+40 points (Total 100)' : '⚡ 40 points per question (Total 120)'}
+                                        {option.id === 'easy' ? '🏆 50+50 points (Total 100)' : '⚡ 60+60 points (Total 120)'}
                                     </Text>
                                 </View>
 
@@ -946,15 +942,12 @@ export default function ChineseSentenceGame() {
                         </View>
                     </View>
 
-                    <View style={styles.feedbackBox}>
-                        <Text style={styles.feedbackTitle}>💡 AI Study Tips</Text>
-                        <Text style={styles.feedbackText}>{aiFeedback}</Text>
-                    </View>
+
 
                     <View style={styles.summaryContainer}>
                         <Text style={styles.summaryTitle}>📝 Answer Summary：</Text>
                         {questions.map((q, index) => {
-                            const maxQScore = q.maxScore || (difficulty === 'easy' ? 30 : 40);
+                            const maxQScore = q.maxScore || (difficulty === 'easy' ? 50 : 60);
                             return (
                                 <View key={index} style={styles.summaryItem}>
                                     <Text style={styles.summaryNumber}>{index + 1}.</Text>
@@ -1030,7 +1023,7 @@ export default function ChineseSentenceGame() {
                         {/* 隐藏返回按钮，使用空 View 占位保持布局 */}
                         <View style={styles.headerButton} />
                         <Text style={styles.headerTitle}>
-                            🐼 Chinese fill-in-the-blank - {difficulty === 'easy' ? 'Simple mode' : 'Medium mode'}
+                            🐼 Chinese fill-in-the-blank - {difficulty === 'easy' ? 'Simple mode' : 'Hard mode'}
                         </Text>
                         <View style={styles.rightHeaderGroup}>
                             <View style={styles.timerContainer}>

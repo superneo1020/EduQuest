@@ -557,69 +557,53 @@ export default function ProfileScreen() {
 
     // Function to fetch AI learning suggestions
     const fetchAiLearningSuggestions = useCallback(async () => {
-        // 如果正在加載，或者根本沒有遊戲紀錄，就不要浪費資源請求 AI
-        if (loadingSuggestions || !gameHistory || gameHistory.length === 0) {
-            console.log('Skip AI fetch: No game history or already loading.');
-            return;
-        }
+        if (loadingSuggestions) return;
 
-        console.log('Starting AI suggestions fetch for new user...');
+        setLoadingSuggestions(true);
         try {
-            setLoadingSuggestions(true);
-
-            // 獲取當前用戶名 (轉小寫以確保一致性)
             const currentUsername = (displayUser?.username || user?.username || 'Guest').toLowerCase();
 
-            // 構建發送給 Python 後端的數據
             const gameScoreData = {
-                // 直接傳送 username，讓 Python 後端處理字符串
                 user_id: currentUsername,
                 game_scores: gameHistory.map((game: any) => ({
                     game_type: game.gameType || 'GENERAL',
                     game_name: game.name || game.gameName || 'Unknown Game',
                     score: game.scores || 0,
                     difficulty: game.gameDifficulty || 'MEDIUM',
-                    // 確保日期格式正確
                     createdAt: game.createdAt || new Date().toISOString()
                 }))
             };
 
-            console.log('Sending to AI backend (FastAPI):', gameScoreData);
-
-            // 注意：如果你在實機測試，localhost 可能需要換成你電腦的 IP
-            const response = await axios.post('http://localhost:8000/api/learning/suggestions', gameScoreData, {
-                timeout: 20000, // AI 運算可能較慢，給予 20 秒緩衝
-                headers: {
-                    'Content-Type': 'application/json'
+            const response = await axios.post(
+                `${getApiBaseUrl()}/api/learning/suggestions`,
+                gameScoreData,
+                {
+                    timeout: 20000,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${token}`
+                    }
                 }
-            });
+            );
 
-            if (response.data && response.data.suggestions) {
-                const suggestions = response.data.suggestions;
-                console.log('AI Analysis Success:', suggestions);
-
-                setAiSuggestions(suggestions);
-                // 如果你有本地持久化存儲，也可以存起來
-                if (typeof saveAiSuggestions === 'function') {
-                    saveAiSuggestions(suggestions);
-                }
+            if (response.data?.suggestions) {
+                setAiSuggestions(response.data.suggestions);
+                saveAiSuggestions(response.data.suggestions);
             }
         } catch (error: any) {
             console.error('AI Suggestion Error:', error);
-
-            // 如果是網絡錯誤或後端沒開，顯示提示
-            let errorTitle = 'AI 分析暫時不可用';
-            let errorMsg = '請確保 Python 後端 (Ollama) 已啟動。';
-
-            if (error.code === 'ECONNABORTED') {
-                errorMsg = 'AI 回應超時，請檢查 Ollama 運行狀態。';
-            }
-
-            Alert.alert(errorTitle, errorMsg, [{ text: '好的' }]);
+            Alert.alert(
+                'AI 分析暫時不可用',
+                error.response?.data?.message || '請確保後端服務已啟動',
+                [
+                    { text: '重試', onPress: fetchAiLearningSuggestions },
+                    { text: '取消', style: 'cancel' }
+                ]
+            );
         } finally {
             setLoadingSuggestions(false);
         }
-    }, [gameHistory, user, displayUser, loadingSuggestions, saveAiSuggestions]);
+    }, [gameHistory, token, displayUser, user, loadingSuggestions, saveAiSuggestions]);
 
     // Fetch AI suggestions when game history changes
     useEffect(() => {
@@ -1452,7 +1436,7 @@ export default function ProfileScreen() {
                                     {/* AI 建議直接顯示 */}
                                     {/* AI 建議直接顯示 */}
                                     <View style={{ marginTop: 16 }}>
-                                        <Text style={[styles.sectionLabel, { color: cardTextColor, marginBottom: 8 }]}>🤖 AI Learning Suggestions</Text>
+                                        <Text style={[styles.sectionLabel, { color: cardTextColor, marginBottom: 8 }]}>Learning Suggestions</Text>
                                         {loadingSuggestions ? (
                                             <View style={[styles.statsCard, { alignItems: 'center', padding: 20 }]}>
                                                 <ActivityIndicator size="small" color="#4CAF50" />
@@ -1634,7 +1618,7 @@ export default function ProfileScreen() {
                                     
                                     {/* AI 建議直接顯示 */}
                                     <View style={{ marginTop: 16 }}>
-                                        <Text style={[styles.sectionLabel, { color: cardTextColor, marginBottom: 8 }]}>🤖 AI Learning Suggestions</Text>
+                                        <Text style={[styles.sectionLabel, { color: cardTextColor, marginBottom: 8 }]}>Learning Suggestions</Text>
                                         {loadingSuggestions ? (
                                             <View style={{ alignItems: 'center', padding: 20 }}>
                                                 <ActivityIndicator size="small" color="#4CAF50" />

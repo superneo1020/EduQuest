@@ -119,15 +119,15 @@ const formatTime = (seconds: number): string => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 };
 
-// 根据难度和题目索引获取该题满分
+// 根据难度和题目索引获取该题满分（2题模式）
 const getMaxPointsForQuestion = (level: Difficulty, index: number): number => {
-    // index: 0, 1, 2 (共3题)
+    // index: 0, 1 (共2题)
     if (level === 'easy') {
-        return index === 0 ? 30 : index === 1 ? 30 : 40;
+        return 50; // 两题各50分
     } else if (level === 'medium') {
-        return index === 0 ? 30 : index === 1 ? 40 : 40;
+        return 55; // 两题各55分
     } else { // hard
-        return 40;
+        return 60; // 两题各60分
     }
 };
 
@@ -147,7 +147,7 @@ export default function ListeningScreen() {
         streak: 0,
         maxStreak: 0,
         correctAnswers: 0,
-        totalQuestions: 3,
+        totalQuestions: 2,
         isAnswered: false,
         isPlaying: false,
         gameCompleted: false,
@@ -196,7 +196,7 @@ export default function ListeningScreen() {
             icon: '🐟',
             color: '#4CAF50',
             bgColor: '#E8F5E9',
-            features: ['Slow speed', 'Basic vocabulary', '3 Questions', 'Points: 30/30/40']
+            features: ['Slow speed', 'Basic vocabulary', '2 Questions', 'Points: 50+50=100']
         },
         {
             id: 'medium' as const,
@@ -206,7 +206,7 @@ export default function ListeningScreen() {
             icon: '🐠',
             color: '#FF9800',
             bgColor: '#FFF3E0',
-            features: ['Normal speed', 'Common phrases', '3 Questions', 'Points: 30/40/40']
+            features: ['Normal speed', 'Common phrases', '2 Questions', 'Points: 55+55=110']
         },
         {
             id: 'hard' as const,
@@ -216,7 +216,7 @@ export default function ListeningScreen() {
             icon: '🐡',
             color: '#F44336',
             bgColor: '#FFEBEE',
-            features: ['Fast speed', 'Idiomatic usage', '3 Questions', 'Points: 40/40/40']
+            features: ['Fast speed', 'Idiomatic usage', '2 Questions', 'Points: 60+60=120']
         }
     ];
 
@@ -397,7 +397,7 @@ export default function ListeningScreen() {
                     ...prev,
                     isLoading: false,
                     questions: [firstQuestion],
-                    totalQuestions: 3,
+                    totalQuestions: 2,
                     currentQuestionIndex: 0,
                     gameCompleted: false,
                     score: 0,
@@ -464,6 +464,7 @@ export default function ListeningScreen() {
             selectedOptionId: null,
             fishCaught: false,
             totalTime: 0,
+            totalQuestions: 2,
         }));
 
         progressAnim.setValue(0);
@@ -494,6 +495,7 @@ export default function ListeningScreen() {
             selectedOptionId: null,
             fishCaught: false,
             totalTime: 0,
+            totalQuestions: 2,
         }));
 
         progressAnim.setValue(0);
@@ -519,7 +521,7 @@ export default function ListeningScreen() {
             streak: 0,
             maxStreak: 0,
             correctAnswers: 0,
-            totalQuestions: 3,
+            totalQuestions: 2,
             isAnswered: false,
             isPlaying: false,
             gameCompleted: false,
@@ -776,7 +778,7 @@ export default function ListeningScreen() {
                 gameType: "ENGLISH",
                 gameDifficulty: getLevelLabel(gameState.currentLevel!).toUpperCase()
             };
-            
+
             const questionsData = gameState.questions.map((q, index) => ({
                 id: index + 1,
                 question: q.question,
@@ -804,7 +806,7 @@ export default function ListeningScreen() {
                 scores: gameData.scores,
                 metadata: convertToBackendMetadata(metadata)
             };
-            
+
             await axios.post('http://localhost:8080/api/user/game/score', backendRequest, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -842,9 +844,9 @@ export default function ListeningScreen() {
                             Listen carefully and catch the right fish! 🎣
                         </Text>
                         <View style={styles.scoreInfoBox}>
-                            <Text style={styles.scoreInfoText}>🐟 Easy: 3 questions, total 100 points (30/30/40)</Text>
-                            <Text style={styles.scoreInfoText}>🐠 Medium: 3 questions, total 110 points (30/40/40)</Text>
-                            <Text style={styles.scoreInfoText}>🐡 Hard: 3 questions, total 120 points (40/40/40)</Text>
+                            <Text style={styles.scoreInfoText}>🐟 Easy: 2 questions, total 100 points (50+50)</Text>
+                            <Text style={styles.scoreInfoText}>🐠 Medium: 2 questions, total 110 points (55+55)</Text>
+                            <Text style={styles.scoreInfoText}>🐡 Hard: 2 questions, total 120 points (60+60)</Text>
                         </View>
                     </View>
 
@@ -921,7 +923,7 @@ export default function ListeningScreen() {
                 <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color="#4b6cb7" />
                     <Text style={styles.loadingText}>
-                        🎣 Preparing fishing pond... (1/3)
+                        🎣 Preparing fishing pond... (1/2)
                     </Text>
                 </View>
             </View>
