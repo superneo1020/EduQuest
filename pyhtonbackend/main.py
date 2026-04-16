@@ -20,10 +20,20 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 import static_ffmpeg
+
+# LangChain imports
+from langchain_community.document_loaders import PyPDFLoader, TextLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_core.documents import Document
+
 # ---------------------------------------------------------------------
-# Configuration: Gemini 2.5 Flash Lite on Vertex AI
+# Configuration: Gemini 2.5 Flash Lite for LLM, Ollama for Embeddings
 # ---------------------------------------------------------------------
-USE_GEMINI_API = True  # Force use of Gemini API instead of Ollama
+USE_GEMINI_API = True  # Force use of Gemini API instead of Ollama for LLM
+
+# Ollama Configuration for Embeddings
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+OLLAMA_EMBED_MODEL = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
 
 # Whisper model (lazy loading)
 whisper_model = None
@@ -50,11 +60,15 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
 
-    # Gemini Configuration (REQUIRED)
+    # Gemini Configuration (REQUIRED for LLM)
     gemini_api_key: str = "AQ.Ab8RN6LRCyCveOXOfmbpbpGofO_WqyYEjtRRjhGjNvGvpClqRw"  # Your Vertex AI API key
     gemini_model: str = "gemini-2.5-flash-lite"
     gemini_location: str = "us-central1"  # or your preferred region
     gemini_project: str = ""  # Optional: for project-specific billing
+
+    # Ollama Configuration for Embeddings
+    ollama_host: str = "http://localhost:11434"
+    ollama_embed_model: str = "nomic-embed-text"
 
     # Legacy Ollama config (kept for compatibility, ignored if USE_GEMINI_API=True)
     model: str = "gemma3:latest"  # Fallback only
@@ -84,7 +98,54 @@ logging.basicConfig(
 logger = logging.getLogger("eduquest-service")
 
 # ---------------------------------------------------------------------
-# Gemini API Client
+# Ollama Embedding Client (New - for local embeddings)
+# ---------------------------------------------------------------------
+class OllamaEmbeddingClient:
+    """Client for Ollama embedding API using nomic-embed-text or similar."""
+
+    def __init__(self, host: str = "http://localhost:11434", model: str = "nomic-embed-text"):
+        self.host = host.rstrip('/')
+        self.model = model
+        self.embedding_dim = 768  # nomic-embed-text outputs 768 dimensions
+
+    def get_embeddings(self, texts: List[str]) -> List[List[float]]:
+        """
+        Generate embeddings using Ollama's /api/embeddings endpoint.
+        Supports batch processing by making individual calls (Ollama handles one at a time).
+        """
+        embeddings = []
+
+        for i, text in enumerate(texts):
+            try:
+                url = f"{self.host}/api/embeddings"
+                payload = {
+                    "model": self.model,
+                    "prompt": text
+                }
+
+                response = requests.post(url, json=payload, timeout=60)
+                response.raise_for_status()
+
+                data = response.json()
+                if "embedding" in data:
+                    embeddings.append(data["embedding"])
+                    logger.info(f"  Embedded chunk {i+1}/{len(texts)}")
+                else:
+                    logger.warning(f"No embedding in response for chunk {i+1}: {data}")
+                    embeddings.append([0.0] * self.embedding_dim)
+
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Ollama embedding error for chunk {i+1}: {e}")
+                embeddings.append([0.0] * self.embedding_dim)
+
+        return embeddings
+
+    def get_embedding_dim(self) -> int:
+        return self.embedding_dim
+
+
+# ---------------------------------------------------------------------
+# Gemini API Client (For LLM - unchanged)
 # ---------------------------------------------------------------------
 class GeminiClient:
     """Client for Google Gemini 2.5 Flash Lite API on Vertex AI."""
@@ -203,70 +264,28 @@ class GeminiClient:
                 detail=f"Gemini streaming error: {str(e)}"
             )
 
-    def get_embeddings(self, texts: List[str]) -> List[List[float]]:
-        """
-        Get embeddings using Vertex AI text-embedding-005 model.
-        Note: Uses separate embedding endpoint.
-        """
-        # Embedding model uses different endpoint
-        embed_url = f"https://{self.location}-aiplatform.googleapis.com/v1/projects/{settings.gemini_project or '-'}/locations/{self.location}/publishers/google/models/text-embedding-005:predict?key={self.api_key}"
 
-        # Batch processing (max 5 per request for embeddings)
-        all_embeddings = []
-        batch_size = 5
-
-        for i in range(0, len(texts), batch_size):
-            batch = texts[i:i + batch_size]
-
-            payload = {
-                "instances": [
-                    {"content": text} for text in batch
-                ]
-            }
-
-            try:
-                response = requests.post(embed_url, json=payload, timeout=30)
-                response.raise_for_status()
-
-                data = response.json()
-
-                # Extract embeddings from predictions
-                if "predictions" in data:
-                    for pred in data["predictions"]:
-                        if "embeddings" in pred and "values" in pred["embeddings"]:
-                            all_embeddings.append(pred["embeddings"]["values"])
-                        else:
-                            logger.warning(f"Unexpected embedding format: {pred}")
-                            all_embeddings.append([0.0] * 768)
-                else:
-                    logger.warning(f"No predictions in embedding response: {data}")
-                    all_embeddings.extend([[0.0] * 768] * len(batch))
-
-                logger.info(f"  Embedded batch {i//batch_size + 1}/{(len(texts)-1)//batch_size + 1}")
-
-            except requests.exceptions.RequestException as e:
-                logger.error(f"Embedding API error: {e}")
-                all_embeddings.extend([[0.0] * 768] * len(batch))
-
-        return all_embeddings
-
-
-# Initialize Gemini client
+# Initialize clients
 gemini_client = GeminiClient(
     api_key=settings.gemini_api_key,
     model=settings.gemini_model,
     location=settings.gemini_location
 )
 
+ollama_embed_client = OllamaEmbeddingClient(
+    host=settings.ollama_host,
+    model=settings.ollama_embed_model
+)
+
 # ---------------------------------------------------------------------
-# RAG: pgvector Vector Store
+# RAG: pgvector Vector Store with Separate Documents Table
 # ---------------------------------------------------------------------
 class PgVectorStore:
-    """Manages pgvector database operations for RAG."""
+    """Manages pgvector database operations for RAG with separate documents and chunks tables."""
 
     def __init__(self):
         self.conn = None
-        self.embedding_dim = 768  # Gemini embeddings are 768-dim
+        self.embedding_dim = ollama_embed_client.get_embedding_dim()  # 768 for nomic-embed-text
         self._connect()
         self._setup_extensions()
 
@@ -293,93 +312,219 @@ class PgVectorStore:
             self.conn.commit()
             logger.info("✓ pgvector extension enabled")
 
-    def create_documents_table(self):
-        """Create table for storing documents with vector embeddings."""
-        create_table_sql = f"""
-        CREATE TABLE IF NOT EXISTS documents (
+    def create_tables(self):
+        """Create separate tables for documents (metadata) and chunks (vectors)."""
+
+        # Documents table - stores document metadata
+        create_documents_table_sql = """
+                                     CREATE TABLE IF NOT EXISTS documents (
+                                                                              id SERIAL PRIMARY KEY,
+                                                                              source_uri TEXT NOT NULL UNIQUE,
+                                                                              display_name TEXT,
+                                                                              file_type TEXT,
+                                                                              total_pages INTEGER DEFAULT 0,
+                                                                              total_chunks INTEGER DEFAULT 0,
+                                                                              metadata JSONB DEFAULT '{}',
+                                                                              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                                                              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                                     );
+
+                                     -- Index on source_uri for fast lookups
+                                     CREATE INDEX IF NOT EXISTS idx_documents_source_uri
+                                         ON documents(source_uri); \
+                                     """
+
+        # Chunks table - stores text chunks with embeddings
+        create_chunks_table_sql = f"""
+        CREATE TABLE IF NOT EXISTS document_chunks (
             id SERIAL PRIMARY KEY,
-            source_uri TEXT NOT NULL,
-            display_name TEXT,
+            document_id INTEGER REFERENCES documents(id) ON DELETE CASCADE,
             content TEXT NOT NULL,
             embedding VECTOR({self.embedding_dim}),
             chunk_index INTEGER DEFAULT 0,
-            total_chunks INTEGER DEFAULT 1,w
+            page_number INTEGER DEFAULT 0,
             metadata JSONB DEFAULT '{{}}',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
-        -- Create HNSW index for fast similarity search
-        CREATE INDEX IF NOT EXISTS idx_documents_embedding
-        ON documents
+        -- HNSW index for fast similarity search
+        CREATE INDEX IF NOT EXISTS idx_chunks_embedding
+        ON document_chunks
         USING hnsw (embedding vector_cosine_ops)
         WITH (m = 16, ef_construction = 64);
 
-        -- Create index on source_uri for filtering
-        CREATE INDEX IF NOT EXISTS idx_documents_source
-        ON documents(source_uri);
+        -- Index for filtering by document
+        CREATE INDEX IF NOT EXISTS idx_chunks_document_id
+        ON document_chunks(document_id);
         """
 
         with self.conn.cursor() as cur:
-            cur.execute(create_table_sql)
+            cur.execute(create_documents_table_sql)
+            cur.execute(create_chunks_table_sql)
             self.conn.commit()
-            logger.info("✓ Documents table created with HNSW index")
+            logger.info("✓ Documents and chunks tables created with HNSW index")
 
-    def delete_documents_by_source(self, source_uri: str):
-        """Delete all documents from a specific source."""
+    def insert_document(self, source_uri: str, display_name: str, file_type: str,
+                        total_pages: int, total_chunks: int, metadata: dict = None) -> int:
+        """Insert document metadata and return document_id."""
+        insert_sql = """
+                     INSERT INTO documents (source_uri, display_name, file_type, total_pages, total_chunks, metadata)
+                     VALUES (%s, %s, %s, %s, %s, %s)
+                         ON CONFLICT (source_uri) 
+            DO UPDATE SET
+                         display_name = EXCLUDED.display_name,
+                                            total_pages = EXCLUDED.total_pages,
+                                            total_chunks = EXCLUDED.total_chunks,
+                                            metadata = EXCLUDED.metadata,
+                                            updated_at = CURRENT_TIMESTAMP
+                                            RETURNING id; \
+                     """
+
         with self.conn.cursor() as cur:
-            cur.execute(
-                "DELETE FROM documents WHERE source_uri = %s",
-                (source_uri,)
-            )
-            deleted = cur.rowcount
+            cur.execute(insert_sql, (source_uri, display_name, file_type, total_pages, total_chunks, json.dumps(metadata or {})))
+            doc_id = cur.fetchone()[0]
             self.conn.commit()
-            return deleted
+            return doc_id
 
-    def insert_chunks(self, chunks_data: List[tuple]) -> List[int]:
+    def insert_chunks(self, document_id: int, chunks_data: List[tuple]) -> List[int]:
         """
         Insert chunks with embeddings into PostgreSQL.
-        chunks_data: List of (source_uri, display_name, content, embedding_vector, chunk_index, total_chunks)
+        chunks_data: List of (content, embedding_vector, chunk_index, page_number, metadata)
         """
         insert_sql = """
-                     INSERT INTO documents
-                     (source_uri, display_name, content, embedding, chunk_index, total_chunks)
+                     INSERT INTO document_chunks
+                         (document_id, content, embedding, chunk_index, page_number, metadata)
                      VALUES %s
                          RETURNING id; \
                      """
+
+        # Format: (document_id, content, embedding::vector, chunk_index, page_number, metadata)
+        formatted_data = [
+            (document_id, content, f"[{','.join(map(str, embedding))}]", chunk_idx, page_num, json.dumps(meta or {}))
+            for content, embedding, chunk_idx, page_num, meta in chunks_data
+        ]
 
         with self.conn.cursor() as cur:
             execute_values(
                 cur,
                 insert_sql,
-                chunks_data,
-                template="(%s, %s, %s, %s::vector, %s, %s)",
+                formatted_data,
+                template="(%s, %s, %s::vector, %s, %s, %s)",
                 fetch=True
             )
             ids = [row[0] for row in cur.fetchall()]
             self.conn.commit()
 
+            # Update total_chunks in documents table
+            cur.execute(
+                "UPDATE documents SET total_chunks = %s WHERE id = %s",
+                (len(chunks_data), document_id)
+            )
+            self.conn.commit()
+
         return ids
 
-    def similarity_search(self, query_embedding: List[float], top_k: int = 5) -> List[Dict]:
-        """Retrieve relevant chunks using cosine similarity."""
+    def delete_document_by_source(self, source_uri: str):
+        """Delete document and all its chunks by source URI (cascade delete)."""
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM documents WHERE source_uri = %s RETURNING id",
+                (source_uri,)
+            )
+            result = cur.fetchone()
+            deleted = cur.rowcount
+            self.conn.commit()
+            return deleted > 0, result[0] if result else None
+
+    def get_document_by_source(self, source_uri: str) -> Optional[Dict]:
+        """Get document metadata by source URI."""
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, source_uri, display_name, file_type, total_pages, total_chunks, created_at FROM documents WHERE source_uri = %s",
+                (source_uri,)
+            )
+            row = cur.fetchone()
+            if row:
+                return {
+                    "id": row[0],
+                    "source_uri": row[1],
+                    "display_name": row[2],
+                    "file_type": row[3],
+                    "total_pages": row[4],
+                    "total_chunks": row[5],
+                    "created_at": row[6]
+                }
+            return None
+
+    def similarity_search(self, query_embedding: List[float], top_k: int = 5,
+                          document_id: Optional[int] = None) -> List[Dict]:
+        """Retrieve relevant chunks using cosine similarity, optionally filtered by document."""
         vector_str = f"[{','.join(map(str, query_embedding))}]"
 
-        search_sql = """
-                     SELECT
-                         id,
-                         source_uri,
-                         display_name,
-                         content,
-                         chunk_index,
-                         1 - (embedding <=> %s::vector) as similarity_score
-                     FROM documents
-                     ORDER BY embedding <=> %s::vector
-                         LIMIT %s; \
-                     """
+        if document_id:
+            # Search within specific document
+            search_sql = """
+                         SELECT
+                             dc.id,
+                             dc.document_id,
+                             d.source_uri,
+                             d.display_name,
+                             dc.content,
+                             dc.chunk_index,
+                             dc.page_number,
+                             1 - (dc.embedding <=> %s::vector) as similarity_score
+                         FROM document_chunks dc
+                                  JOIN documents d ON dc.document_id = d.id
+                         WHERE dc.document_id = %s
+                         ORDER BY dc.embedding <=> %s::vector
+                             LIMIT %s; \
+                         """
+            params = (vector_str, document_id, vector_str, top_k)
+        else:
+            # Search across all documents
+            search_sql = """
+                         SELECT
+                             dc.id,
+                             dc.document_id,
+                             d.source_uri,
+                             d.display_name,
+                             dc.content,
+                             dc.chunk_index,
+                             dc.page_number,
+                             1 - (dc.embedding <=> %s::vector) as similarity_score
+                         FROM document_chunks dc
+                                  JOIN documents d ON dc.document_id = d.id
+                         ORDER BY dc.embedding <=> %s::vector
+                             LIMIT %s; \
+                         """
+            params = (vector_str, vector_str, top_k)
 
         with self.conn.cursor() as cur:
-            cur.execute(search_sql, (vector_str, vector_str, top_k))
+            cur.execute(search_sql, params)
+            rows = cur.fetchall()
+
+        return [
+            {
+                "chunk_id": row[0],
+                "document_id": row[1],
+                "source_uri": row[2],
+                "display_name": row[3],
+                "content": row[4],
+                "chunk_index": row[5],
+                "page_number": row[6],
+                "similarity_score": float(row[7])
+            }
+            for row in rows
+        ]
+
+    def list_documents(self) -> List[Dict]:
+        """List all documents with metadata."""
+        with self.conn.cursor() as cur:
+            cur.execute("""
+                        SELECT id, source_uri, display_name, file_type, total_pages, total_chunks, created_at
+                        FROM documents
+                        ORDER BY created_at DESC
+                        """)
             rows = cur.fetchall()
 
         return [
@@ -387,191 +532,187 @@ class PgVectorStore:
                 "id": row[0],
                 "source_uri": row[1],
                 "display_name": row[2],
-                "content": row[3],
-                "chunk_index": row[4],
-                "similarity_score": float(row[5])
+                "file_type": row[3],
+                "total_pages": row[4],
+                "total_chunks": row[5],
+                "created_at": row[6]
             }
             for row in rows
         ]
 
+
 # ---------------------------------------------------------------------
-# RAG: Document Processor (Using Gemini Embeddings)
+# RAG: Document Processor using LangChain + Ollama Embeddings
 # ---------------------------------------------------------------------
 class DocumentProcessor:
-    """Handles document chunking and embedding generation using Gemini/Vertex AI."""
+    """Handles document processing using LangChain loaders and Ollama embeddings."""
 
     def __init__(self):
-        self.client = gemini_client
-        logger.info("✓ Using Gemini/Vertex AI for embeddings (text-embedding-005)")
+        self.embed_client = ollama_embed_client
+        logger.info("✓ Using Ollama for embeddings (%s)", settings.ollama_embed_model)
 
-    def chunk_document(self, text: str, chunk_size: int = 1000, overlap: int = 200) -> List[str]:
-        """Split document into overlapping chunks."""
-        chunks = []
-        start = 0
-        text_length = len(text)
+        # LangChain text splitter
+        self.text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000,
+            chunk_overlap=200,
+            length_function=len,
+            separators=["\n\n", "\n", ". ", " ", ""]
+        )
 
-        while start < text_length:
-            end = min(start + chunk_size, text_length)
-            # Try to break at a sentence or word boundary
-            if end < text_length:
-                for i in range(min(end, text_length - 1), start, -1):
-                    if text[i] in '.!?\n' and i - start > chunk_size * 0.5:
-                        end = i + 1
-                        break
+    def load_document(self, file_path: str) -> List[Document]:
+        """Load document using LangChain loaders (PDF or text)."""
+        file_ext = Path(file_path).suffix.lower()
 
-            chunks.append(text[start:end].strip())
-            start = end - overlap
+        try:
+            if file_ext == '.pdf':
+                # Use LangChain PyPDFLoader - extracts text only
+                loader = PyPDFLoader(file_path, extract_images=False)
+                documents = loader.load()
+                logger.info(f"✓ Loaded PDF with {len(documents)} pages")
+                return documents
+            elif file_ext in ['.txt', '.md']:
+                loader = TextLoader(file_path, encoding='utf-8')
+                documents = loader.load()
+                return documents
+            elif file_ext == '.json':
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = json.load(f)
+                    # Convert JSON to text representation
+                    text_content = json.dumps(content, indent=2)
+                    return [Document(page_content=text_content, metadata={"source": file_path})]
+            else:
+                raise ValueError(f"Unsupported file extension: {file_ext}")
 
+        except Exception as e:
+            logger.error(f"Document loading failed: {e}")
+            raise
+
+    def split_documents(self, documents: List[Document]) -> List[Document]:
+        """Split documents into chunks using LangChain text splitter."""
+        if not documents:
+            return []
+
+        chunks = self.text_splitter.split_documents(documents)
+        logger.info(f"✓ Split into {len(chunks)} chunks")
         return chunks
 
     def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
-        """Generate embeddings using the standard Google AI API (Fixes 403 error)."""
-        # Standard URL for API Key usage
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key={settings.gemini_api_key}"
+        """Generate embeddings using Ollama (nomic-embed-text)."""
+        return self.embed_client.get_embeddings(texts)
 
-        all_embeddings = []
-        for text in texts:
-            payload = {
-                "model": "models/text-embedding-004",
-                "content": {
-                    "parts": [{"text": text}]
-                }
-            }
-            try:
-                response = requests.post(url, json=payload, timeout=30)
-                response.raise_for_status()
-                data = response.json()
-
-                if "embedding" in data:
-                    all_embeddings.append(data["embedding"]["values"])
-                else:
-                    logger.error(f"Unexpected response: {data}")
-                    # Fallback to zero-vector to prevent crash
-                    all_embeddings.append([0.0] * 768)
-
-            except Exception as e:
-                logger.error(f"❌ Embedding API error: {e}")
-                raise HTTPException(status_code=500, detail=f"Embedding failed: {str(e)}")
-
-        return all_embeddings
 
 class RAGService:
-    """Complete RAG pipeline with pgvector backend."""
+    """Complete RAG pipeline with LangChain + pgvector + Ollama embeddings + Gemini LLM."""
 
     def __init__(self):
         self.db = PgVectorStore()
-        # Ensure the table and pgvector extension exist on startup
-        self.db.create_documents_table()
-
-    def _extract_pdf_text(self, file_path: str) -> str:
-        """Helper to extract text from PDF using pdfplumber."""
-        import pdfplumber
-        text_content = []
-        try:
-            with pdfplumber.open(file_path) as pdf:
-                for page in pdf.pages:
-                    page_text = page.extract_text()
-                    if page_text:
-                        text_content.append(page_text)
-            return "\n\n".join(text_content)
-        except Exception as e:
-            logger.error(f"PDF extraction failed: {e}")
-            raise ValueError(f"Could not read PDF: {str(e)}")
+        self.processor = DocumentProcessor()
+        # Ensure tables exist on startup
+        self.db.create_tables()
 
     def upload_document(self, file_path: str, display_name: Optional[str] = None) -> Dict:
         """
-        Refined upload pipeline: Extract -> Smart Chunk -> Batch Embed -> SQL Insert.
+        Upload pipeline: Load with LangChain -> Split -> Embed with Ollama -> Store in pgvector.
+        Stores documents and chunks in separate tables.
         """
         if not os.path.exists(file_path):
             raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
 
-        file_ext = Path(file_path).suffix.lower()
-        # Use a consistent naming convention for the source
         source_uri = os.path.basename(file_path)
         display_name = display_name or source_uri
+        file_ext = Path(file_path).suffix.lower()
 
-        # 1. Extraction
+        # 1. Load document using LangChain (extracts text only from PDF)
         try:
-            if file_ext == '.pdf':
-                text = self._extract_pdf_text(file_path)
-            elif file_ext in ['.txt', '.md', '.json']:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    text = f.read()
-            else:
-                raise ValueError(f"Unsupported extension: {file_ext}")
+            documents = self.processor.load_document(file_path)
+            if not documents:
+                raise ValueError("No content extracted from document")
         except Exception as e:
-            logger.error(f"Extraction error: {e}")
-            raise HTTPException(status_code=400, detail=f"Failed to process file: {str(e)}")
+            logger.error(f"Loading error: {e}")
+            raise HTTPException(status_code=400, detail=f"Failed to load document: {str(e)}")
 
-        if not text.strip():
-            raise HTTPException(status_code=400, detail="Document is empty")
+        # 2. Split into chunks using LangChain
+        chunks = self.processor.split_documents(documents)
+        if not chunks:
+            raise HTTPException(status_code=400, detail="No chunks generated from document")
 
-        # 2. Smart Chunking (Recursive-style overlap)
-        # We split by double newline first to preserve paragraphs
-        raw_chunks = text.split("\n\n")
-        chunks = []
-        current_chunk = ""
-        max_chars = 1000
+        # 3. Extract texts and metadata from chunks
+        texts = [chunk.page_content for chunk in chunks]
+        total_pages = len(documents)
 
-        for part in raw_chunks:
-            if len(current_chunk) + len(part) < max_chars:
-                current_chunk += part + "\n\n"
-            else:
-                if current_chunk:
-                    chunks.append(current_chunk.strip())
-                current_chunk = part + "\n\n"
-        if current_chunk:
-            chunks.append(current_chunk.strip())
+        # 4. Generate embeddings using Ollama
+        logger.info(f"Generating embeddings for {len(texts)} chunks using Ollama...")
+        embeddings = self.processor.generate_embeddings(texts)
 
-        # 3. Batch Embeddings (Prevents overloading the API)
-        logger.info(f"Generating embeddings for {len(chunks)} chunks...")
-        embeddings = gemini_client.get_embeddings(chunks)
+        # 5. Insert document metadata first
+        doc_metadata = {
+            "original_path": file_path,
+            "processed_at": str(datetime.now()) if 'datetime' in dir() else None
+        }
+        document_id = self.db.insert_document(
+            source_uri=source_uri,
+            display_name=display_name,
+            file_type=file_ext.lstrip('.'),
+            total_pages=total_pages,
+            total_chunks=len(chunks),
+            metadata=doc_metadata
+        )
 
-        # 4. Prepare and Insert
+        # 6. Prepare chunks data with page numbers from metadata
         chunks_data = []
         for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
-            # Format as Postgres-friendly vector string
-            vector_str = f"[{','.join(map(str, embedding))}]"
+            page_num = chunk.metadata.get('page', 0) if hasattr(chunk, 'metadata') else 0
+            chunk_meta = {
+                "source": chunk.metadata.get('source', source_uri) if hasattr(chunk, 'metadata') else source_uri
+            }
             chunks_data.append((
-                source_uri,
-                display_name,
-                chunk,
-                vector_str,
+                chunk.page_content,
+                embedding,
                 idx,
-                len(chunks)
+                page_num,
+                chunk_meta
             ))
 
-        # Perform the DB operation
+        # 7. Insert chunks
         try:
-            # Optional: Clear old version of this specific file
-            self.db.delete_documents_by_source(source_uri)
-            self.db.insert_chunks(chunks_data)
+            chunk_ids = self.db.insert_chunks(document_id, chunks_data)
         except Exception as e:
-            logger.error(f"Database insertion failed: {e}")
-            raise HTTPException(status_code=500, detail="Database save failed")
+            logger.error(f"Chunk insertion failed: {e}")
+            # Rollback document if chunks fail
+            self.db.delete_document_by_source(source_uri)
+            raise HTTPException(status_code=500, detail="Failed to store document chunks")
 
         return {
+            "document_id": document_id,
             "document_name": display_name,
+            "source_uri": source_uri,
+            "file_type": file_ext.lstrip('.'),
+            "total_pages": total_pages,
             "chunks_uploaded": len(chunks),
+            "chunk_ids": chunk_ids,
             "status": "success"
         }
 
-    def query(self, question: str, top_k: int = 5) -> Dict:
-        """Enhanced query logic with context construction."""
+    def query(self, question: str, top_k: int = 5, document_id: Optional[int] = None) -> Dict:
+        """Query the RAG system using Ollama embeddings for retrieval and Gemini for generation."""
         try:
-            # 1. Embed the user question
-            question_embedding = gemini_client.get_embeddings([question])[0]
+            # 1. Embed the user question using Ollama
+            question_embedding = ollama_embed_client.get_embeddings([question])[0]
 
-            # 2. Semantic Search
-            results = self.db.similarity_search(question_embedding, top_k)
+            # 2. Semantic Search (optionally filtered by document_id)
+            results = self.db.similarity_search(question_embedding, top_k, document_id)
 
             if not results:
-                return {"answer": "I couldn't find any relevant information in the uploaded documents.", "sources": []}
+                return {
+                    "answer": "I couldn't find any relevant information in the uploaded documents.",
+                    "contexts": [],
+                    "sources": []
+                }
 
             # 3. Context Construction
             context_block = "\n---\n".join([r['content'] for r in results])
 
-            # 4. Prompt Engineering
+            # 4. Prompt Engineering for Gemini
             prompt = (
                 f"You are a helpful educational assistant. Use the following snippets from "
                 f"documents to answer the question. If the answer isn't in the context, say so.\n\n"
@@ -580,16 +721,31 @@ class RAGService:
                 f"ANSWER:"
             )
 
+            # 5. Generate answer using Gemini
             answer = gemini_client.generate(prompt, temperature=0.3)
 
             return {
                 "answer": answer,
                 "contexts": results,
-                "sources": list(set([r['display_name'] for r in results]))
+                "sources": list(set([r['display_name'] for r in results])),
+                "document_ids": list(set([r['document_id'] for r in results]))
             }
+
         except Exception as e:
             logger.error(f"RAG Query failed: {e}")
             raise HTTPException(status_code=500, detail="Search failed")
+
+    def list_documents(self) -> List[Dict]:
+        """List all uploaded documents."""
+        return self.db.list_documents()
+
+    def delete_document(self, source_uri: str) -> Dict:
+        """Delete a document and all its chunks."""
+        deleted, doc_id = self.db.delete_document_by_source(source_uri)
+        if deleted:
+            return {"status": "deleted", "document_id": doc_id, "source_uri": source_uri}
+        return {"status": "not_found", "source_uri": source_uri}
+
 
 # ---------------------------------------------------------------------
 # Lifespan
@@ -598,7 +754,7 @@ class RAGService:
 async def lifespan(app: FastAPI):
     global rag_service
 
-    logger.info("Initializing EduQuest AI Service with Gemini 2.5 Flash Lite...")
+    logger.info("Initializing EduQuest AI Service with Gemini 2.5 Flash Lite + Ollama Embeddings...")
 
     # Verify Gemini API connectivity
     try:
@@ -608,10 +764,18 @@ async def lifespan(app: FastAPI):
         logger.error(f"Gemini API connection failed: {e}")
         raise RuntimeError("Cannot connect to Gemini API. Check your API key.") from e
 
+    # Verify Ollama connectivity
+    try:
+        test_embed = ollama_embed_client.get_embeddings(["test"])[0]
+        logger.info(f"✓ Ollama embedding connection verified (dim: {len(test_embed)})")
+    except Exception as e:
+        logger.warning(f"Ollama embedding connection failed: {e}")
+        logger.warning("RAG functionality will be limited without Ollama")
+
     # Initialize RAG service
     try:
         rag_service = RAGService()
-        logger.info("✓ RAG service initialized with pgvector")
+        logger.info("✓ RAG service initialized with pgvector + LangChain + Ollama")
     except Exception as e:
         logger.warning(f"RAG service not available: {e}")
         rag_service = None
@@ -620,12 +784,13 @@ async def lifespan(app: FastAPI):
 
     logger.info("Shutting down")
 
+
 # ---------------------------------------------------------------------
 # App
 # ---------------------------------------------------------------------
 app = FastAPI(
-    title="EduQuest AI Service with Gemini 2.5 Flash Lite",
-    version="1.0.0",
+    title="EduQuest AI Service with Gemini 2.5 Flash Lite + Ollama Embeddings",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
@@ -681,19 +846,35 @@ class RAGUploadRequest(BaseModel):
     display_name: Optional[str] = Field(None, description="Optional display name")
 
 class RAGUploadResponse(BaseModel):
+    document_id: int
     document_name: str
-    chunks_uploaded: int
-    total_chunks: int
     source_uri: str
+    file_type: str
+    total_pages: int
+    chunks_uploaded: int
+    status: str
 
 class RAGQueryRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=2000)
     top_k: int = Field(default=5, ge=1, le=20)
+    document_id: Optional[int] = Field(None, description="Optional: filter by specific document")
 
 class RAGQueryResponse(BaseModel):
     answer: str
     contexts: list[dict]
     sources: list[str]
+    document_ids: list[int]
+
+class RAGListResponse(BaseModel):
+    documents: list[dict]
+
+class RAGDeleteRequest(BaseModel):
+    source_uri: str
+
+class RAGDeleteResponse(BaseModel):
+    status: str
+    document_id: Optional[int] = None
+    source_uri: str
 
 # ---------------------------------------------------------------------
 # Helpers
@@ -703,7 +884,7 @@ def generate_with_gemini(prompt: str, temperature: float = 0.7) -> str:
     return gemini_client.generate(prompt, temperature=temperature)
 
 # ---------------------------------------------------------------------
-# Chat Routes (Using Gemini)
+# Chat Routes (Using Gemini - unchanged)
 # ---------------------------------------------------------------------
 @app.post("/chat", response_model=ChatResponse)
 def chat_endpoint(req: ChatRequest) -> ChatResponse:
@@ -726,18 +907,18 @@ def chat_stream(req: ChatRequest) -> StreamingResponse:
     )
 
 # ---------------------------------------------------------------------
-# RAG Routes
+# RAG Routes (Updated with separate tables and Ollama embeddings)
 # ---------------------------------------------------------------------
 @app.post("/rag/upload", response_model=RAGUploadResponse)
 def rag_upload(req: RAGUploadRequest):
     """
-    Upload a document to the RAG knowledge base.
-    Supports PDF, TXT, MD, JSON files.
+    Upload a document to the RAG knowledge base using LangChain + Ollama embeddings.
+    Stores document metadata and chunks in separate tables.
     """
     if rag_service is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="RAG service not available. Check database configuration."
+            detail="RAG service not available. Check database and Ollama configuration."
         )
 
     try:
@@ -758,6 +939,7 @@ def rag_upload(req: RAGUploadRequest):
 def rag_upload_file(file: UploadFile = File(...), display_name: Optional[str] = None):
     """
     Upload a file directly via HTTP to the RAG knowledge base.
+    Uses LangChain for processing and Ollama for embeddings.
     """
     if rag_service is None:
         raise HTTPException(
@@ -785,7 +967,8 @@ def rag_upload_file(file: UploadFile = File(...), display_name: Optional[str] = 
 @app.post("/rag/query", response_model=RAGQueryResponse)
 def rag_query(req: RAGQueryRequest):
     """
-    Query the RAG system: retrieves relevant documents and generates answer.
+    Query the RAG system: retrieves relevant documents using Ollama embeddings
+    and generates answer using Gemini.
     """
     if rag_service is None:
         raise HTTPException(
@@ -794,7 +977,7 @@ def rag_query(req: RAGQueryRequest):
         )
 
     try:
-        result = rag_service.query(req.question, req.top_k)
+        result = rag_service.query(req.question, req.top_k, req.document_id)
         return RAGQueryResponse(**result)
     except Exception as e:
         logger.exception("RAG query error")
@@ -803,19 +986,59 @@ def rag_query(req: RAGQueryRequest):
             detail=f"Query failed: {str(e)}"
         )
 
+@app.get("/rag/documents", response_model=RAGListResponse)
+def rag_list_documents():
+    """List all uploaded documents with metadata."""
+    if rag_service is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="RAG service not available"
+        )
+
+    try:
+        documents = rag_service.list_documents()
+        return RAGListResponse(documents=documents)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list documents: {str(e)}"
+        )
+
+@app.post("/rag/delete", response_model=RAGDeleteResponse)
+def rag_delete(req: RAGDeleteRequest):
+    """Delete a document and all its chunks."""
+    if rag_service is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="RAG service not available"
+        )
+
+    try:
+        result = rag_service.delete_document(req.source_uri)
+        return RAGDeleteResponse(**result)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Delete failed: {str(e)}"
+        )
+
 @app.get("/rag/status")
 def rag_status():
     """Check RAG service status."""
     return {
         "rag_available": rag_service is not None,
-        "using_gemini": True,
-        "embedding_model": "text-embedding-005",
-        "llm_model": settings.gemini_model,
-        "database": f"{settings.pg_host}:{settings.pg_port}/{settings.pg_database}" if rag_service else None
+        "using_gemini_llm": True,
+        "gemini_model": settings.gemini_model,
+        "using_ollama_embeddings": True,
+        "ollama_host": settings.ollama_host,
+        "ollama_model": settings.ollama_embed_model,
+        "embedding_dim": ollama_embed_client.get_embedding_dim() if rag_service else None,
+        "database": f"{settings.pg_host}:{settings.pg_port}/{settings.pg_database}" if rag_service else None,
+        "tables": ["documents", "document_chunks"] if rag_service else None
     }
 
 # ---------------------------------------------------------------------
-# Math Routes (Using Gemini)
+# Math Routes (Using Gemini - unchanged)
 # ---------------------------------------------------------------------
 @app.get("/api/math/batch_generate")
 def batch_generate_math(difficulty: str = "easy", count: int = 10):
