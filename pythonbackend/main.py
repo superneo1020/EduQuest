@@ -2,7 +2,7 @@ from __future__ import annotations
 import logging
 import os
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, Union, List, Optional
 
 import ollama
 from fastapi import FastAPI, HTTPException, status
@@ -109,9 +109,17 @@ class CheckRequest(BaseModel):
 class SessionRecord(BaseModel):
     history: list[dict]
 
+class GameScore(BaseModel):
+    game_type: str
+    game_name: str
+    score: int
+    difficulty: str
+    createdAt: Optional[str] = None
+
 class GameScoreData(BaseModel):
-    user_id: int
-    game_scores: list[dict]  # [{"game_type": "MATH", "score": 85, "difficulty": "MEDIUM", "created_at": "2024-01-01"}]
+    # Union[int, str] 允許 user_id 既可以是數字也可以是字串 (如 "tommy")
+    user_id: Union[int, str]
+    game_scores: List[GameScore]
 
 class LearningSuggestions(BaseModel):
     suggestions: list[dict]  # [{"type": "weakness", "title": "...", 5"description": "..."}]
@@ -342,42 +350,51 @@ def generate_final_report(req: SessionRecord):
 def generate_learning_suggestions(req: GameScoreData):
     logger.info("Generating learning suggestions for user %s...", req.user_id)
 
-    # Analyze game scores to create learning suggestions
+    # Convert GameScore objects to dictionaries for JSON serialization
+    game_scores_dict = [gs.model_dump() for gs in req.game_scores]
+
     prompt = (
-        f"Analyze the following game scores for user {req.user_id} and provide personalized learning suggestions:\n"
-        f"Game Scores: {json.dumps(req.game_scores)}\n\n"
-        "Based on these scores, identify:\n"
-        "1. Strengths (subjects/games where user performs well)\n"
-        "2. Weaknesses (subjects/games where user struggles)\n"
-        "3. Learning patterns and trends\n"
-        "4. Specific recommendations for improvement\n\n"
-        "Return ONLY a JSON array of suggestion objects with this format:\n"
-        "[{\"type\": \"strength|weakness|recommendation\", \"title\": \"...\", \"description\": \"...\", \"priority\": \"high|medium|low\"}]\n"
-        "Keep descriptions concise and actionable. Focus on educational improvement."
+        f"Analyze this game data and give specific advice:\n\n"
+        f"Data: {json.dumps(game_scores_dict, ensure_ascii=False, indent=2)}\n\n"
+        "RULES:\n"
+        "- NEVER say 'You're excelling' or 'Great job'\n"
+        "- Mention actual scores and game types\n"
+        "- Compare their performance across different games\n"
+        "- Give specific suggestions based on weak areas\n"
+        "- If math score is 41, say 'Your math score is 41'\n"
+        "- Suggest specific practice for low scores\n"
+        "- Write like a friend giving advice, not a teacher\n\n"
+        "Be direct and specific to their data."
     )
 
     try:
         resp = ollama.chat(model=settings.model, messages=[{"role": "user", "content": prompt}])
         content = resp["message"]["content"].strip()
 
-        # Extract JSON from response
-        match = re.search(r'(\[.*\])', content, re.DOTALL)
-        if match:
-            suggestions = json.loads(match.group(1))
-            return LearningSuggestions(suggestions=suggestions)
-
-        # Fallback if parsing fails
-        fallback_suggestions = [
-            {"type": "recommendation", "title": "Continue Learning", "description": "Keep practicing to improve your skills", "priority": "medium"}
-        ]
-        return LearningSuggestions(suggestions=fallback_suggestions)
+        # Return AI analysis directly without format constraints
+        return {"suggestions": content, "type": "ai_analysis"}
 
     except Exception as e:
         logger.error(f"Learning suggestions generation failed: {e}")
-        fallback_suggestions = [
-            {"type": "recommendation", "title": "Try Different Games", "description": "Explore various game types to find your strengths", "priority": "low"}
-        ]
-        return LearningSuggestions(suggestions=fallback_suggestions)
+
+        # Even if error occurs, try to get AI to provide basic suggestions
+        try:
+            fallback_prompt = (
+                f"User {req.user_id} is having temporary issues with learning data analysis. "
+                "Please provide some general learning suggestions based on general learning principles. "
+                "Respond in a natural, conversational English tone, like a helpful advisor."
+            )
+            resp = ollama.chat(model=settings.model, messages=[{"role": "user", "content": fallback_prompt}])
+            fallback_content = resp["message"]["content"].strip()
+            return {"suggestions": fallback_content, "type": "fallback_analysis"}
+
+        except Exception as fallback_error:
+            logger.error(f"Fallback analysis also failed: {fallback_error}")
+            return {
+                "suggestions": "We're currently unable to generate personalized suggestions. We suggest you continue to maintain your study habits and try different types of games to find the learning method that best suits you.",
+                "type": "error_message"
+            }
+
 
 @app.post("/stt")
 def speech_to_text(file: UploadFile = File(...)):
