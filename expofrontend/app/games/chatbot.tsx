@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     SafeAreaView, TextInput, Button, Text, ScrollView, StyleSheet, View,
     TouchableOpacity, ActivityIndicator, Modal, FlatList, Alert, Platform
@@ -14,14 +14,19 @@ const BACKEND = 'http://127.0.0.1:8000';   // <-- your laptop IP
 interface Message {
     role: 'user' | 'bot';
     content: string;
-    isRag?: boolean;  // Track if this was a RAG response
-    sources?: string[];  // Track sources for RAG responses
+    isRag?: boolean;
+    sources?: string[];
+    documentIds?: number[];
 }
 
 interface Document {
+    id: number;
     name: string;
     sourceUri: string;
+    fileType: string;
+    totalPages: number;
     chunks: number;
+    createdAt: string;
 }
 
 export default function Chatbot() {
@@ -33,18 +38,32 @@ export default function Chatbot() {
 
     // Recording states
     const [recording, setRecording] = useState<Audio.Recording | null>(null);
+    const [isRecording, setIsRecording] = useState(false);
 
     // RAG states
-    const [ragMode, setRagMode] = useState(false);  // Toggle RAG mode
+    const [ragMode, setRagMode] = useState(false);
     const [documents, setDocuments] = useState<Document[]>([]);
+    const [selectedDocId, setSelectedDocId] = useState<number | null>(null); // For filtering queries
     const [uploading, setUploading] = useState(false);
     const [showDocModal, setShowDocModal] = useState(false);
     const [ragStatus, setRagStatus] = useState<any>(null);
+    const [refreshingDocs, setRefreshingDocs] = useState(false);
 
-    // Check RAG status on mount
+    // Check RAG status and load documents on mount
     useEffect(() => {
         checkRagStatus();
+        fetchDocuments();
     }, []);
+
+    // Cleanup speech on unmount
+    useEffect(() => {
+        return () => {
+            Speech.stop();
+            if (recording) {
+                recording.stopAndUnloadAsync().catch(() => {});
+            }
+        };
+    }, [recording]);
 
     /*  ---------- RAG Functions  ----------  */
 
@@ -59,10 +78,67 @@ export default function Chatbot() {
         }
     };
 
+    const fetchDocuments = useCallback(async () => {
+        try {
+            setRefreshingDocs(true);
+            const { data } = await axios.get(`${BACKEND}/rag/documents`);
+            // Map backend response to frontend format
+            const mappedDocs = data.documents.map((doc: any) => ({
+                id: doc.id,
+                name: doc.display_name || doc.source_uri,
+                sourceUri: doc.source_uri,
+                fileType: doc.file_type,
+                totalPages: doc.total_pages,
+                chunks: doc.total_chunks,
+                createdAt: doc.created_at
+            }));
+            setDocuments(mappedDocs);
+        } catch (err) {
+            console.log('Failed to fetch documents', err);
+        } finally {
+            setRefreshingDocs(false);
+        }
+    }, []);
+
+    const deleteDocument = async (sourceUri: string) => {
+        Alert.alert(
+            'Delete Document',
+            'Are you sure you want to remove this document and all its chunks?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            setLoading(true);
+                            await axios.post(`${BACKEND}/rag/delete`, { source_uri: sourceUri });
+
+                            // Remove from local state
+                            setDocuments(prev => prev.filter(d => d.sourceUri !== sourceUri));
+
+                            // If we deleted the selected doc, clear selection
+                            const deletedDoc = documents.find(d => d.sourceUri === sourceUri);
+                            if (deletedDoc && selectedDocId === deletedDoc.id) {
+                                setSelectedDocId(null);
+                            }
+
+                            Alert.alert('Deleted', 'Document removed successfully');
+                        } catch (err: any) {
+                            Alert.alert('Error', err.response?.data?.detail || 'Failed to delete document');
+                        } finally {
+                            setLoading(false);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     const pickAndUploadDocument = async () => {
         try {
             const result = await DocumentPicker.getDocumentAsync({
-                type: ['application/pdf', 'text/plain', 'application/json'],
+                type: ['application/pdf', 'text/plain', 'application/json', 'text/markdown'],
                 copyToCacheDirectory: true,
             });
 
@@ -71,16 +147,27 @@ export default function Chatbot() {
             const file = result.assets[0];
             setUploading(true);
 
-            // Read file as blob
-            const response = await fetch(file.uri);
-            const blob = await response.blob();
-
-            // Create FormData
+            // React Native FormData handling
             const formData = new FormData();
-            formData.append('file', blob, file.name);
+
+            // Handle file attachment differently for web vs native
+            if (Platform.OS === 'web') {
+                // Web: fetch blob
+                const response = await fetch(file.uri);
+                const blob = await response.blob();
+                formData.append('file', blob, file.name);
+            } else {
+                // Native: use uri directly
+                // @ts-ignore - React Native FormData supports uri
+                formData.append('file', {
+                    uri: file.uri,
+                    type: file.mimeType || 'application/octet-stream',
+                    name: file.name,
+                });
+            }
+
             formData.append('display_name', file.name);
 
-            // Upload using fetch
             const uploadResponse = await fetch(`${BACKEND}/rag/upload-file`, {
                 method: 'POST',
                 body: formData,
@@ -96,13 +183,19 @@ export default function Chatbot() {
 
             const data = await uploadResponse.json();
 
-            setDocuments(prev => [...prev, {
+            // Add to documents list
+            const newDoc: Document = {
+                id: data.document_id,
                 name: data.document_name,
                 sourceUri: data.source_uri,
-                chunks: data.chunks_uploaded
-            }]);
+                fileType: data.file_type,
+                totalPages: data.total_pages,
+                chunks: data.chunks_uploaded,
+                createdAt: new Date().toISOString()
+            };
 
-            Alert.alert('Upload Successful', `${data.document_name} (${data.chunks_uploaded} chunks)`);
+            setDocuments(prev => [newDoc, ...prev]);
+            Alert.alert('Upload Successful', `${data.document_name} (${data.chunks_uploaded} chunks, ${data.total_pages} pages)`);
 
             if (!ragMode) setRagMode(true);
 
@@ -123,16 +216,24 @@ export default function Chatbot() {
         setLoading(true);
 
         try {
-            const { data } = await axios.post(`${BACKEND}/rag/query`, {
+            const payload: any = {
                 question: text,
                 top_k: 5
-            });
+            };
+
+            // If specific document selected, filter by it
+            if (selectedDocId) {
+                payload.document_id = selectedDocId;
+            }
+
+            const { data } = await axios.post(`${BACKEND}/rag/query`, payload);
 
             const botMessage: Message = {
                 role: 'bot',
                 content: data.answer,
                 isRag: true,
-                sources: data.sources
+                sources: data.sources,
+                documentIds: data.document_ids
             };
 
             setMessages(prev => [...prev, botMessage]);
@@ -143,7 +244,7 @@ export default function Chatbot() {
             // Fallback to regular chat
             await sendRegularMessage(text);
         } finally {
-            setLoading(false)
+            setLoading(false);
         }
     };
 
@@ -189,6 +290,7 @@ export default function Chatbot() {
 
     const startRecording = async () => {
         try {
+            // Stop any existing recording first
             if (recording) {
                 try {
                     await recording.stopAndUnloadAsync();
@@ -214,16 +316,16 @@ export default function Chatbot() {
             await newRecording.prepareToRecordAsync({
                 android: {
                     extension: '.wav',
-                    outputFormat: 2,
-                    audioEncoder: 3,
+                    outputFormat: 2, // AndroidOutputFormat.MPEG_4
+                    audioEncoder: 3, // AndroidAudioEncoder.AAC
                     sampleRate: 16000,
                     numberOfChannels: 1,
                     bitRate: 128000,
                 },
                 ios: {
                     extension: '.wav',
-                    outputFormat: 1,
-                    audioQuality: 2,
+                    outputFormat: 1, // IOSOutputFormat.LINEARPCM
+                    audioQuality: 2, // IOSAudioQuality.HIGH
                     sampleRate: 16000,
                     numberOfChannels: 1,
                     bitRate: 128000,
@@ -236,19 +338,26 @@ export default function Chatbot() {
                     bitsPerSecond: 128000,
                 },
             });
+
             await newRecording.startAsync();
             setRecording(newRecording);
+            setIsRecording(true);
         } catch (err) {
             console.error('Failed to start recording', err);
+            Alert.alert('Error', 'Could not start recording');
         }
     };
 
     const stopRecording = async () => {
         if (!recording) return;
+
+        setIsRecording(false);
+        const currentRecording = recording;
         setRecording(null);
+
         try {
-            await recording.stopAndUnloadAsync();
-            const uri = recording.getURI();
+            await currentRecording.stopAndUnloadAsync();
+            const uri = currentRecording.getURI();
 
             if (!uri) {
                 Alert.alert('Error', 'Failed to get recording URI');
@@ -256,18 +365,34 @@ export default function Chatbot() {
             }
 
             setLoading(true);
-            const blob = await uriToBlob(uri);
-            const file = new File([blob], 'speech.wav', { type: 'audio/wav' });
-            const body = new FormData();
-            body.append('file', file);
 
-            const { data } = await axios.post(`${BACKEND}/stt`, body, {
+            // Create FormData for audio upload
+            const audioFormData = new FormData();
+
+            if (Platform.OS === 'web') {
+                const blob = await uriToBlob(uri);
+                audioFormData.append('file', blob, 'speech.wav');
+            } else {
+                // @ts-ignore
+                audioFormData.append('file', {
+                    uri: uri,
+                    type: 'audio/wav',
+                    name: 'speech.wav',
+                });
+            }
+
+            const { data } = await axios.post(`${BACKEND}/stt`, audioFormData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
 
             const recognizedText = data.text;
-            setPrompt(recognizedText);
-            await sendMessage(recognizedText);
+            if (recognizedText && recognizedText.trim()) {
+                setPrompt(recognizedText);
+                await sendMessage(recognizedText);
+            } else {
+                Alert.alert('No speech detected', 'Please try speaking again');
+                setLoading(false);
+            }
         } catch (err) {
             console.error('STT failed', err);
             Alert.alert('Speech recognition failed');
@@ -291,6 +416,7 @@ export default function Chatbot() {
                     language: 'en-US',
                     rate: 0.9,
                     onDone: () => setSpeakingIndex(null),
+                    onError: () => setSpeakingIndex(null),
                 });
             }
         } catch (err) {
@@ -307,7 +433,7 @@ export default function Chatbot() {
             style={[
                 styles.messageBubble,
                 msg.role === 'user' ? styles.userMessage : styles.botMessage,
-                msg.isRag && styles.ragMessage  // Highlight RAG responses
+                msg.isRag && styles.ragMessage
             ]}
         >
             {/* RAG Badge */}
@@ -348,6 +474,37 @@ export default function Chatbot() {
         </View>
     );
 
+    const renderDocumentItem = ({ item }: { item: Document }) => (
+        <TouchableOpacity
+            style={[
+                styles.docItem,
+                selectedDocId === item.id && styles.docItemSelected
+            ]}
+            onPress={() => setSelectedDocId(selectedDocId === item.id ? null : item.id)}
+        >
+            <View style={styles.docInfo}>
+                <Text style={styles.docName}>{item.name}</Text>
+                <Text style={styles.docMeta}>
+                    {item.fileType.toUpperCase()} • {item.totalPages} pages • {item.chunks} chunks
+                </Text>
+            </View>
+
+            <View style={styles.docActions}>
+                {selectedDocId === item.id && (
+                    <View style={styles.selectedBadge}>
+                        <Text style={styles.selectedText}>Selected</Text>
+                    </View>
+                )}
+                <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={() => deleteDocument(item.sourceUri)}
+                >
+                    <Text style={styles.deleteButtonText}>🗑</Text>
+                </TouchableOpacity>
+            </View>
+        </TouchableOpacity>
+    );
+
     return (
         <SafeAreaView style={styles.container}>
             {/* Header */}
@@ -374,10 +531,25 @@ export default function Chatbot() {
             {ragStatus?.rag_available && (
                 <View style={styles.ragStatusBar}>
                     <Text style={styles.ragStatusText}>
-                        {documents.length} documents in knowledge base
+                        {documents.length} docs • Ollama: {ragStatus.ollama_model} • Gemini: {ragStatus.gemini_model}
                     </Text>
-                    <TouchableOpacity onPress={() => setShowDocModal(true)}>
-                        <Text style={styles.viewDocsLink}>View Docs</Text>
+                    <TouchableOpacity onPress={() => {
+                        setShowDocModal(true);
+                        fetchDocuments();
+                    }}>
+                        <Text style={styles.viewDocsLink}>Manage Docs</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+
+            {/* Selected Document Indicator */}
+            {ragMode && selectedDocId && (
+                <View style={styles.selectedDocBar}>
+                    <Text style={styles.selectedDocText}>
+                        Querying: {documents.find(d => d.id === selectedDocId)?.name}
+                    </Text>
+                    <TouchableOpacity onPress={() => setSelectedDocId(null)}>
+                        <Text style={styles.clearSelection}>✕</Text>
                     </TouchableOpacity>
                 </View>
             )}
@@ -404,7 +576,7 @@ export default function Chatbot() {
                     <View style={styles.loadingContainer}>
                         <ActivityIndicator size="large" color="#4dabf7" />
                         <Text style={styles.loadingText}>
-                            {ragMode ? 'Searching knowledge base...' : 'Thinking...'}
+                            {ragMode ? (selectedDocId ? 'Searching selected doc...' : 'Searching knowledge base...') : 'Thinking...'}
                         </Text>
                     </View>
                 )}
@@ -430,7 +602,11 @@ export default function Chatbot() {
                 <View style={styles.inputRow}>
                     <TextInput
                         style={styles.input}
-                        placeholder={ragMode ? "Ask about your documents..." : "Ask anything..."}
+                        placeholder={
+                            ragMode
+                                ? (selectedDocId ? "Ask about selected document..." : "Ask about your documents...")
+                                : "Ask anything..."
+                        }
                         value={prompt}
                         onChangeText={setPrompt}
                         editable={!loading}
@@ -439,13 +615,13 @@ export default function Chatbot() {
                     <TouchableOpacity
                         onPressIn={startRecording}
                         onPressOut={stopRecording}
-                        disabled={loading}
+                        disabled={loading || isRecording}
                         style={[
                             styles.mic,
-                            { backgroundColor: recording ? '#ff4d4d' : '#4dabf7' }
+                            { backgroundColor: isRecording ? '#ff4d4d' : '#4dabf7' }
                         ]}
                     >
-                        <Text style={styles.micText}>{recording ? '🔴' : '🎤'}</Text>
+                        <Text style={styles.micText}>{isRecording ? '🔴' : '🎤'}</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -472,20 +648,33 @@ export default function Chatbot() {
             >
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>📚 Uploaded Documents</Text>
+                        <Text style={styles.modalTitle}>📚 Document Library</Text>
+
+                        <Text style={styles.modalSubtitle}>
+                            Tap to select for specific queries • Swipe items for options
+                        </Text>
 
                         {documents.length === 0 ? (
-                            <Text style={styles.emptyDocs}>No documents uploaded yet</Text>
+                            <View style={styles.emptyDocsContainer}>
+                                <Text style={styles.emptyDocs}>No documents uploaded yet</Text>
+                                <TouchableOpacity
+                                    style={styles.uploadPromptButton}
+                                    onPress={() => {
+                                        setShowDocModal(false);
+                                        pickAndUploadDocument();
+                                    }}
+                                >
+                                    <Text style={styles.uploadPromptText}>Upload First Document</Text>
+                                </TouchableOpacity>
+                            </View>
                         ) : (
                             <FlatList
                                 data={documents}
-                                keyExtractor={(item, idx) => idx.toString()}
-                                renderItem={({ item }) => (
-                                    <View style={styles.docItem}>
-                                        <Text style={styles.docName}>{item.name}</Text>
-                                        <Text style={styles.docChunks}>{item.chunks} chunks</Text>
-                                    </View>
-                                )}
+                                keyExtractor={(item) => item.id.toString()}
+                                renderItem={renderDocumentItem}
+                                refreshing={refreshingDocs}
+                                onRefresh={fetchDocuments}
+                                style={styles.docList}
                             />
                         )}
 
@@ -550,13 +739,35 @@ const styles = StyleSheet.create({
         borderBottomColor: '#a5d8ff',
     },
     ragStatusText: {
-        fontSize: 12,
+        fontSize: 11,
         color: '#1864ab',
     },
     viewDocsLink: {
         fontSize: 12,
         color: '#1971c2',
         fontWeight: '600',
+    },
+    selectedDocBar: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 6,
+        backgroundColor: '#d3f9d8',
+        borderBottomWidth: 1,
+        borderBottomColor: '#8ce99a',
+    },
+    selectedDocText: {
+        fontSize: 12,
+        color: '#2b8a3e',
+        fontWeight: '500',
+        flex: 1,
+    },
+    clearSelection: {
+        fontSize: 14,
+        color: '#c92a2a',
+        fontWeight: 'bold',
+        paddingHorizontal: 8,
     },
     messagesBox: {
         flex: 1,
@@ -725,34 +936,94 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
         borderRadius: 16,
         padding: 20,
-        width: '80%',
-        maxHeight: '60%',
+        width: '90%',
+        maxHeight: '70%',
     },
     modalTitle: {
         fontSize: 18,
         fontWeight: 'bold',
-        marginBottom: 16,
+        marginBottom: 4,
         textAlign: 'center',
+    },
+    modalSubtitle: {
+        fontSize: 12,
+        color: '#666',
+        textAlign: 'center',
+        marginBottom: 16,
+    },
+    docList: {
+        maxHeight: 300,
+    },
+    emptyDocsContainer: {
+        alignItems: 'center',
+        marginVertical: 20,
     },
     emptyDocs: {
         textAlign: 'center',
         color: '#999',
-        marginVertical: 20,
+        marginBottom: 16,
+    },
+    uploadPromptButton: {
+        backgroundColor: '#7950f2',
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        borderRadius: 8,
+    },
+    uploadPromptText: {
+        color: '#fff',
+        fontWeight: '600',
     },
     docItem: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
         paddingVertical: 12,
+        paddingHorizontal: 8,
         borderBottomWidth: 1,
         borderBottomColor: '#eee',
+        borderRadius: 8,
+    },
+    docItemSelected: {
+        backgroundColor: '#e7f5ff',
+        borderColor: '#4dabf7',
+        borderWidth: 1,
+    },
+    docInfo: {
+        flex: 1,
     },
     docName: {
         fontSize: 14,
         fontWeight: '500',
         color: '#333',
+        marginBottom: 2,
     },
-    docChunks: {
-        fontSize: 12,
+    docMeta: {
+        fontSize: 11,
         color: '#666',
-        marginTop: 2,
+    },
+    docActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    selectedBadge: {
+        backgroundColor: '#40c057',
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 4,
+    },
+    selectedText: {
+        color: '#fff',
+        fontSize: 10,
+        fontWeight: 'bold',
+    },
+    deleteButton: {
+        padding: 6,
+        backgroundColor: '#ffebee',
+        borderRadius: 6,
+    },
+    deleteButtonText: {
+        fontSize: 14,
     },
     closeModalButton: {
         marginTop: 16,
