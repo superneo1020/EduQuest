@@ -2,10 +2,11 @@ package com.eduquest.springbackend.dto;
 
 import java.util.List;
 
-public record AiAnalysisResponse(
+public record AiOverallResponse(
         String encouragementMessage,
         String analysis,
         List<String> strengths,
-        List<String> powerUpTips
+        List<String> powerUpTips,
+        String gamesForNextSteps
 ) {
 }
