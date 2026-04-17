@@ -76,12 +76,14 @@ public class UserGameController {
         return ResponseEntity.ok(userGameScoreService.createUserGameScore(userDetails.getId(), request));
     }
 
-    @GetMapping("/results/{gameId}")
+    @GetMapping({"/results", "/results/{gameId}"})
     public ResponseEntity<?> aiAnalysisWithMyGameScore(
             @AuthenticationPrincipal AppUserDetails userDetails,
-            @PathVariable Long gameId,
-            @PageableDefault Pageable pageable
+            @PathVariable(required = false) Long gameId,
+            @PageableDefault(size = 100) Pageable pageable
     ) {
-        return ResponseEntity.ok(aiAnalysisService.analyzeGame(gameId, userDetails.getId(), pageable));
+        return gameId != null
+                ? ResponseEntity.ok(aiAnalysisService.analyzeGame(gameId, userDetails.getId(), pageable))
+                : ResponseEntity.ok(aiAnalysisService.analyzeGameOverall(userDetails.getId()));
     }
 }
