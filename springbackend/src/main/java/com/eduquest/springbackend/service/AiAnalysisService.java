@@ -87,7 +87,7 @@ public class AiAnalysisService {
         // Build request
         PromptTemplate userTemplate = new PromptTemplate(analysisPromptResource);
         Message userMessage = userTemplate.createMessage(Map.of(
-                "intro", "daily progress",
+                "intro", "process for a specific game",
                 "data", formattedLeanData,
                 "instructions", buildInstructions(0, 1, 2, 3),
                 "daysSinceJoined", daysSinceJoined,
@@ -104,7 +104,7 @@ public class AiAnalysisService {
         }
     }
 
-    public AiOverallResponse analyzeGameOverall(Long userId, Pageable pageable) {
+    public AiOverallResponse analyzeGameDaily(Long userId, Pageable pageable) {
         Instant now = Instant.now();
         Instant studentCreatedAt = userRepo.findCreatedAtById(userId).orElseThrow(
                 () -> new RuntimeException("User not found"));
