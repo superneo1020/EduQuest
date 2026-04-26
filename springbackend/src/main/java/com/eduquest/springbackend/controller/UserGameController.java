@@ -84,6 +84,6 @@ public class UserGameController {
     ) {
         return gameId != null
                 ? ResponseEntity.ok(aiAnalysisService.analyzeGame(gameId, userDetails.getId(), pageable))
-                : ResponseEntity.ok(aiAnalysisService.analyzeGameOverall(userDetails.getId()));
+                : ResponseEntity.ok(aiAnalysisService.analyzeGameOverall(userDetails.getId(), pageable));
     }
 }
