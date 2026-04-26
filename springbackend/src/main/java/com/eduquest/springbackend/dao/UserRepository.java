@@ -12,6 +12,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.Optional;
 
@@ -51,6 +52,9 @@ public interface UserRepository extends JpaRepository<AppUser, Long>, JpaSpecifi
 
     @Query("SELECT u.isActive FROM AppUser u WHERE u.username = :username")
     Optional<Boolean> findIsActiveByUsername(@Param("username") String username);
+
+    @Query("SELECT u.createdAt FROM AppUser u WHERE u.id = :id")
+    Optional<Instant> findCreatedAtById(@Param("id") Long userId);
 
     @Query("SELECT new com.eduquest.springbackend.dto.UserMiniDto(u.id, u.username, u.email) " +
             "FROM AppUser u " +
