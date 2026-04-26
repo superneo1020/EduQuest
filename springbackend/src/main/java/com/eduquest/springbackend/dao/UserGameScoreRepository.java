@@ -120,5 +120,5 @@ public interface UserGameScoreRepository extends JpaRepository<UserGameScore,Lon
             "FROM UserGameScore ugs JOIN ugs.game g " +
             "WHERE ugs.user.id = :userId " +
             "AND ugs.createdAt > :specificTime")
-    List<UserGameScoreDto> findUserGameScoresByUserIdAndCreatedAtAfter(Long userId, Instant specificTime);
+    Page<UserGameScoreDto> findUserGameScoresByUserIdAndCreatedAtAfter(Long userId, Instant specificTime, Pageable pageable);
 }
