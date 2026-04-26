@@ -1,11 +1,10 @@
 package com.eduquest.springbackend.service;
 
-import com.eduquest.springbackend.dto.UserGameScoreDto;
+import com.eduquest.springbackend.dto.FastAPIAnalysisRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
-import reactor.core.publisher.Mono;
 
 @Service
 public class ExternalAiService {
@@ -17,12 +16,15 @@ public class ExternalAiService {
         this.webClient = webClientBuilder.baseUrl("http://localhost:8000").build();
     }
 
-    public Mono<String> sendDataToFastApi(UserGameScoreDto request) {
-        return this.webClient.post()
+    public void postAnalysisRequest(FastAPIAnalysisRequest request) {
+        this.webClient.post()
                 .uri("/ai/analyze-trends")
                 .bodyValue(request)
                 .retrieve()
                 .bodyToMono(String.class)
-                .doOnError(e -> logger.error("FastAPI Error: {}", e.getMessage()));
+                .subscribe(
+                        result -> logger.info("FastAPI successfully processed: {}", result),
+                        error -> logger.error("Failed to reach FastAPI: {}", error.getMessage())
+                );
     }
 }

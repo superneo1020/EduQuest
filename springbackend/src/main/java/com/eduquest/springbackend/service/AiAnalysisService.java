@@ -21,6 +21,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -41,12 +42,14 @@ public class AiAnalysisService {
     private final UserGameScoreRepository userGameScoreRepo;
     private final UserRepository userRepo;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ExternalAiService externalAiService;
 
     public AiAnalysisService(
             ChatClient.Builder builder,
             UserGameScoreRepository userGameScoreRepo,
             UserRepository userRepo,
-            GameRepository gameRepo
+            GameRepository gameRepo,
+            ExternalAiService externalAiService
     ) {
         String games = gameRepo.findAllGameRecords().stream()
                 .map(g -> String.format(
@@ -71,6 +74,7 @@ public class AiAnalysisService {
                 .build();
         this.userGameScoreRepo = userGameScoreRepo;
         this.userRepo = userRepo;
+        this.externalAiService = externalAiService;
     }
 
     public AiAnalysisResponse analyzeGame(Long gameId, Long userId, Pageable pageable) {
@@ -134,6 +138,24 @@ public class AiAnalysisService {
         }
     }
 
+    public void prepareAndSendToFastApi(Long userId, Long gameId, Pageable pageable) {
+        // Calculate time context
+        Instant studentCreatedAt = userRepo.findCreatedAtById(userId).orElseThrow();
+        long daysJoined = ChronoUnit.DAYS.between(studentCreatedAt, Instant.now());
+        String profile = String.format("Joined for %d days.", daysJoined);
+
+        // Get user game scores (no need formatting)
+        var userGameScores = userGameScoreRepo.findUserGameScoresByUserIdAndGameId(userId, gameId, pageable);
+        List<GameLeanScore> leanData = getLeanData(userGameScores.getContent());
+
+        // format request
+        String sessionId = UUID.randomUUID().toString();
+        FastAPIAnalysisRequest request = new FastAPIAnalysisRequest(sessionId, userId, leanData, profile);
+
+        // call to fastapi
+        externalAiService.postAnalysisRequest(request);
+    }
+
     private String buildInstructions(int... indices) {
         StringBuilder sb = new StringBuilder("Please return a JSON object with these fields:\n");
         for (int i = 0; i < indices.length; i++) {
@@ -146,7 +168,22 @@ public class AiAnalysisService {
     }
 
     private String simplifyForAi(List<UserGameScoreDto> originalList) {
-        List<GameLeanScore> leanData = originalList.stream().map(dto -> {
+        List<GameLeanScore> leanData = getLeanData(originalList);
+
+        String formattedLeanData;
+        try {
+            formattedLeanData = leanData.isEmpty()
+                    ? "[{\"note\": \"No games played today yet. This is a fresh start!\"}]"
+                    : objectMapper.writeValueAsString(leanData);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
+
+        return formattedLeanData;
+    }
+
+    private List<GameLeanScore> getLeanData(List<UserGameScoreDto> originalList) {
+        return originalList.stream().map(dto -> {
             // 1. Extract the words from the correct answers (for praise).
             List<String> achievements = dto.metadata().questions().stream()
                     .filter(GameQuestionRecord::isCorrect)
@@ -167,16 +204,5 @@ public class AiAnalysisService {
                     dto.createdAt().toString().substring(0, 10)
             );
         }).collect(Collectors.toList());
-
-        String formattedLeanData;
-        try {
-            formattedLeanData = leanData.isEmpty()
-                    ? "[{\"note\": \"No games played today yet. This is a fresh start!\"}]"
-                    : objectMapper.writeValueAsString(leanData);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
-        }
-
-        return formattedLeanData;
     }
 }
