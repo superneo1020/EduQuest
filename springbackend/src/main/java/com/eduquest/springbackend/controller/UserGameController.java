@@ -1,6 +1,7 @@
 package com.eduquest.springbackend.controller;
 
 import com.eduquest.springbackend.dto.UserGameScoreRequest;
+import com.eduquest.springbackend.service.AiAnalysisService;
 import com.eduquest.springbackend.service.AppUserDetails;
 import com.eduquest.springbackend.service.UserGameScoreService;
 import jakarta.validation.Valid;
@@ -17,9 +18,11 @@ import org.springframework.web.bind.annotation.*;
 public class UserGameController {
 
     private final UserGameScoreService userGameScoreService;
+    private final AiAnalysisService aiAnalysisService;
 
-    public UserGameController(UserGameScoreService userGameScoreService) {
+    public UserGameController(UserGameScoreService userGameScoreService, AiAnalysisService aiAnalysisService) {
         this.userGameScoreService = userGameScoreService;
+        this.aiAnalysisService = aiAnalysisService;
     }
 
     @GetMapping({"/score", "/{name}/score"})
@@ -71,5 +74,16 @@ public class UserGameController {
             @Valid @RequestBody UserGameScoreRequest request
     ) {
         return ResponseEntity.ok(userGameScoreService.createUserGameScore(userDetails.getId(), request));
+    }
+
+    @GetMapping({"/results", "/results/{gameId}"})
+    public ResponseEntity<?> aiAnalysisWithMyGameScore(
+            @AuthenticationPrincipal AppUserDetails userDetails,
+            @PathVariable(required = false) Long gameId,
+            @PageableDefault(size = 100) Pageable pageable
+    ) {
+        return gameId != null
+                ? ResponseEntity.ok(aiAnalysisService.analyzeGame(gameId, userDetails.getId(), pageable))
+                : ResponseEntity.ok(aiAnalysisService.analyzeGameOverall(userDetails.getId()));
     }
 }
