@@ -495,7 +495,7 @@ class ClawAIService {
 
             const targetFact = ANIMAL_KNOWLEDGE_BASE[this.currentQuestion.targetAnimal];
             funFact = targetFact?.funFact || `${this.currentQuestion.targetIcon} The correct answer is ${this.currentQuestion.targetAnimal}！`;
-            message = `❌ Wrong answer! ${scoreChange} score`;
+            message = `❌ The correct animal is ${this.currentQuestion.targetAnimal} ${this.currentQuestion.targetIcon}. ${scoreChange} point(s).`;
             encouragement = this.getRandomEncouragement(false, 0);
             nextHint = `💡hint：${this.currentQuestion.hint}.The goal is ${this.currentQuestion.targetIcon} ${this.currentQuestion.targetAnimal}`;
         }
