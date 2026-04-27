@@ -258,7 +258,7 @@ const ClawMachineGame: React.FC = () => {
                 gameType: "SCIENCE",
                 gameDifficulty: "EASY"
             };
-            
+
             const questionsData = Array.from({ length: answerCount }, (_, index) => ({
                 id: index + 1,
                 question: currentQuestion?.question || 'Catch the correct animal',
@@ -285,7 +285,7 @@ const ClawMachineGame: React.FC = () => {
                 scores: gameData.scores,
                 metadata: convertToBackendMetadata(metadata)
             };
-            
+
             await axios.post('http://localhost:8080/api/user/game/score', backendRequest, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -930,6 +930,7 @@ const ClawMachineGame: React.FC = () => {
 
     return (
         <Animated.View style={[styles.container, screenShakeStyle]}>
+            {/* 浮層元件 – 絕對定位，不受滾動影響 */}
             {prepText && (
                 <Animated.View style={[styles.prepOverlay, prepAnimatedStyle]}>
                     <View style={styles.prepCard}>
@@ -943,7 +944,6 @@ const ClawMachineGame: React.FC = () => {
                     </View>
                 </Animated.View>
             )}
-
             {floatingText && (
                 <FloatingText
                     key={floatingText.id}
@@ -952,165 +952,6 @@ const ClawMachineGame: React.FC = () => {
                     onComplete={() => setFloatingText(null)}
                 />
             )}
-
-            <View style={styles.header}>
-                <View style={styles.headerPlaceholder} />
-                <Text style={styles.title}>🐾 Animal Scratch Fun 🐾</Text>
-                <View style={styles.rightHeader}>
-                    <View style={styles.timerContainer}>
-                        <Text style={styles.timerIcon}>⏱️</Text>
-                        <Text style={styles.timerText}>{formatTime(elapsedSeconds)}</Text>
-                    </View>
-                    <Animated.View style={[styles.scoreContainer, { transform: [{ scale: scoreScale }] }]}>
-                        <Text style={styles.scoreValue}>{Math.round(score)}</Text>
-                        <Text style={styles.scoreMax}>/100</Text>
-                    </Animated.View>
-                </View>
-            </View>
-
-            {/* AI 問題面板 */}
-            <View style={styles.aiQuestionPanel}>
-                {isAiThinking ? (
-                    <View style={styles.questionBoxLoading}>
-                        <ActivityIndicator size="large" color="#FFD700" />
-                        <Text style={styles.aiLoadingText}>🤖 AI is thinking about the question....</Text>
-                        <Text style={styles.aiLoadingSubtext}>Almost done！</Text>
-                    </View>
-                ) : currentQuestion ? (
-                    <>
-                        <View style={styles.questionBox}>
-                            <Text style={styles.questionLabel}>📋 question</Text>
-                            <Text style={styles.questionText}>{currentQuestion.description}</Text>
-                            <TouchableOpacity
-                                style={styles.hintButton}
-                                onPress={() => setShowQuestionHint(!showQuestionHint)}
-                            >
-                                <Text style={styles.hintButtonText}>💡 hint</Text>
-                            </TouchableOpacity>
-                            {showQuestionHint && (
-                                <Text style={styles.hintText}>🔍 {currentQuestion.hint}</Text>
-                            )}
-                        </View>
-                        {aiFeedback && (
-                            <Animated.View style={[
-                                styles.aiFeedbackBox,
-                                aiFeedback.isCorrect ? styles.feedbackCorrectBox : styles.feedbackWrongBox
-                            ]}>
-                                <Text style={styles.aiFunFact}>📖 {aiFeedback.funFact}</Text>
-                                <Text style={styles.aiEncouragement}>💪 {aiFeedback.encouragement}</Text>
-                            </Animated.View>
-                        )}
-                    </>
-                ) : (
-                    <View style={styles.questionBoxLoading}>
-                        <Text style={styles.aiLoadingText}>🐣 Get ready...</Text>
-                        <Text style={styles.aiLoadingSubtext}>AI will ask a question soon!</Text>
-                    </View>
-                )}
-            </View>
-
-            <View style={styles.machineContainer}>
-                <View style={styles.machineBody}>
-                    <View style={styles.machineTop}>
-                        <View style={styles.railHorizontal} />
-                        <View style={styles.railVertical} />
-                        <Text style={styles.machineLabel}>ANIMAL CATCHER</Text>
-                    </View>
-                    <View style={styles.gameArea}>
-                        <View style={styles.gameBackground}>
-                            <View style={styles.gridPattern} />
-                        </View>
-                        {items.map(item => !item.caught && (
-                            <Animated.View
-                                key={item.id}
-                                style={[
-                                    styles.item,
-                                    {
-                                        left: item.x,
-                                        top: item.y,
-                                        width: item.type.width,
-                                        height: item.type.height,
-                                        transform: [{
-                                            scale: suctionItem?.id === item.id && isSuction ? suctionScale : 1
-                                        }],
-                                        borderColor: '#4caf50',
-                                        backgroundColor: 'rgba(76, 175, 80, 0.15)',
-                                    }
-                                ]}
-                            >
-                                <Text style={styles.itemIcon}>{item.type.icon}</Text>
-                                <Text style={styles.itemName}>{item.type.name}</Text>
-
-                            </Animated.View>
-                        ))}
-                        <Animated.View
-                            style={[styles.rope, { left: clawX + 22, height: dropHeight }]}
-                        />
-                        <Animated.View
-                            style={[
-                                styles.claw,
-                                { left: clawX, top: Animated.add(dropHeight, 15), transform: [{ scale: clawScale }] }
-                            ]}
-                        >
-                            <Image
-                                source={require('@/assets/images/claw_arm.png')}
-                                style={styles.clawImage}
-                                resizeMode="contain"
-                            />
-                            {isSuction && suctionItem && (
-                                <Animated.View style={[styles.suctionEffect, { transform: [{ scale: suctionScale }] }]}>
-                                    <Text style={styles.suctionText}></Text>
-                                </Animated.View>
-                            )}
-                        </Animated.View>
-                        <View style={styles.suctionZone}>
-                            <Text style={styles.suctionZoneText}>⬇️ CATCH ZONE ⬇️</Text>
-                        </View>
-                    </View>
-                </View>
-
-                <View style={styles.controlPanel}>
-                    <View style={styles.controlButtons}>
-                        <TouchableOpacity
-                            style={[styles.controlBtn, styles.leftBtn]}
-                            onPressIn={() => setLeftPressed(true)}
-                            onPressOut={() => setLeftPressed(false)}
-                            disabled={isDropping || gameOver || gameComplete || showReport || prepText !== null || processing || isAiThinking}
-                            activeOpacity={0.7}
-                        >
-                            <Text style={styles.btnText}>◀</Text>
-                        </TouchableOpacity>
-                        <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-                            <TouchableOpacity
-                                style={[styles.controlBtn, styles.grabBtn]}
-                                onPress={dropClaw}
-                                disabled={isDropping || gameOver || gameComplete || showReport || prepText !== null || processing || isAiThinking}
-                                activeOpacity={0.7}
-                            >
-                                <Text style={styles.grabBtnText}>⚡ Scraping ⚡</Text>
-                            </TouchableOpacity>
-                        </Animated.View>
-                        <TouchableOpacity
-                            style={[styles.controlBtn, styles.rightBtn]}
-                            onPressIn={() => setRightPressed(true)}
-                            onPressOut={() => setRightPressed(false)}
-                            disabled={isDropping || gameOver || gameComplete || showReport || prepText !== null || processing || isAiThinking}
-                            activeOpacity={0.7}
-                        >
-                            <Text style={styles.btnText}>▶</Text>
-                        </TouchableOpacity>
-                    </View>
-                    <View style={styles.bottomBar}>
-                        <TouchableOpacity style={styles.resetBtn} onPress={resetGame}>
-                            <Text style={styles.resetBtnText}>⟳ Start over</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.completeBtn} onPress={showReportPage} disabled={showReport}>
-                            <Text style={styles.completeBtnText}>✓ Finish</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </View>
-
             {feedbackMessage && (
                 <Animated.View
                     style={[
@@ -1126,6 +967,171 @@ const ClawMachineGame: React.FC = () => {
                     </View>
                 </Animated.View>
             )}
+
+            {/* 可滾動的主要內容 */}
+            <ScrollView
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={true}
+                bounces={false}
+            >
+                <View style={styles.header}>
+                    <View style={styles.headerPlaceholder} />
+                    <Text style={styles.title}>🐾 Animal Scratch Fun 🐾</Text>
+                    <View style={styles.rightHeader}>
+                        <View style={styles.timerContainer}>
+                            <Text style={styles.timerIcon}>⏱️</Text>
+                            <Text style={styles.timerText}>{formatTime(elapsedSeconds)}</Text>
+                        </View>
+                        <Animated.View style={[styles.scoreContainer, { transform: [{ scale: scoreScale }] }]}>
+                            <Text style={styles.scoreValue}>{Math.round(score)}</Text>
+                            <Text style={styles.scoreMax}>/100</Text>
+                        </Animated.View>
+                    </View>
+                </View>
+
+                {/* AI 問題面板 */}
+                <View style={styles.aiQuestionPanel}>
+                    {isAiThinking ? (
+                        <View style={styles.questionBoxLoading}>
+                            <ActivityIndicator size="large" color="#2e7d32" />
+                            <Text style={styles.aiLoadingText}>🤖 AI is thinking about the question....</Text>
+                            <Text style={styles.aiLoadingSubtext}>Almost done！</Text>
+                        </View>
+                    ) : currentQuestion ? (
+                        <>
+                            <View style={styles.questionBox}>
+                                <Text style={styles.questionLabel}>📋 question</Text>
+                                <Text style={styles.questionText}>{currentQuestion.description}</Text>
+                                <TouchableOpacity
+                                    style={styles.hintButton}
+                                    onPress={() => setShowQuestionHint(!showQuestionHint)}
+                                >
+                                    <Text style={styles.hintButtonText}>💡 hint</Text>
+                                </TouchableOpacity>
+                                {showQuestionHint && (
+                                    <Text style={styles.hintText}>🔍 {currentQuestion.hint}</Text>
+                                )}
+                            </View>
+                            {aiFeedback && (
+                                <Animated.View style={[
+                                    styles.aiFeedbackBox,
+                                    aiFeedback.isCorrect ? styles.feedbackCorrectBox : styles.feedbackWrongBox
+                                ]}>
+                                    <Text style={styles.aiFunFact}>📖 {aiFeedback.funFact}</Text>
+                                    <Text style={styles.aiEncouragement}>💪 {aiFeedback.encouragement}</Text>
+                                </Animated.View>
+                            )}
+                        </>
+                    ) : (
+                        <View style={styles.questionBoxLoading}>
+                            <Text style={styles.aiLoadingText}>🐣 Get ready...</Text>
+                            <Text style={styles.aiLoadingSubtext}>AI will ask a question soon!</Text>
+                        </View>
+                    )}
+                </View>
+
+                <View style={styles.machineContainer}>
+                    <View style={styles.machineBody}>
+                        <View style={styles.machineTop}>
+                            <View style={styles.railHorizontal} />
+                            <View style={styles.railVertical} />
+                            <Text style={styles.machineLabel}>ANIMAL CATCHER</Text>
+                        </View>
+                        <View style={styles.gameArea}>
+                            <View style={styles.gameBackground}>
+                                <View style={styles.gridPattern} />
+                            </View>
+                            {items.map(item => !item.caught && (
+                                <Animated.View
+                                    key={item.id}
+                                    style={[
+                                        styles.item,
+                                        {
+                                            left: item.x,
+                                            top: item.y,
+                                            width: item.type.width,
+                                            height: item.type.height,
+                                            transform: [{
+                                                scale: suctionItem?.id === item.id && isSuction ? suctionScale : 1
+                                            }],
+                                            borderColor: '#4caf50',
+                                            backgroundColor: 'rgba(76, 175, 80, 0.15)',
+                                        }
+                                    ]}
+                                >
+                                    <Text style={styles.itemIcon}>{item.type.icon}</Text>
+                                    <Text style={styles.itemName}>{item.type.name}</Text>
+                                </Animated.View>
+                            ))}
+                            <Animated.View
+                                style={[styles.rope, { left: clawX + 22, height: dropHeight }]}
+                            />
+                            <Animated.View
+                                style={[
+                                    styles.claw,
+                                    { left: clawX, top: Animated.add(dropHeight, 15), transform: [{ scale: clawScale }] }
+                                ]}
+                            >
+                                <Image
+                                    source={require('@/assets/images/claw_arm.png')}
+                                    style={styles.clawImage}
+                                    resizeMode="contain"
+                                />
+                                {isSuction && suctionItem && (
+                                    <Animated.View style={[styles.suctionEffect, { transform: [{ scale: suctionScale }] }]}>
+                                        <Text style={styles.suctionText}></Text>
+                                    </Animated.View>
+                                )}
+                            </Animated.View>
+                            <View style={styles.suctionZone}>
+                                <Text style={styles.suctionZoneText}>⬇️ CATCH ZONE ⬇️</Text>
+                            </View>
+                        </View>
+                    </View>
+
+                    <View style={styles.controlPanel}>
+                        <View style={styles.controlButtons}>
+                            <TouchableOpacity
+                                style={[styles.controlBtn, styles.leftBtn]}
+                                onPressIn={() => setLeftPressed(true)}
+                                onPressOut={() => setLeftPressed(false)}
+                                disabled={isDropping || gameOver || gameComplete || showReport || prepText !== null || processing || isAiThinking}
+                                activeOpacity={0.7}
+                            >
+                                <Text style={styles.btnText}>◀</Text>
+                            </TouchableOpacity>
+                            <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                                <TouchableOpacity
+                                    style={[styles.controlBtn, styles.grabBtn]}
+                                    onPress={dropClaw}
+                                    disabled={isDropping || gameOver || gameComplete || showReport || prepText !== null || processing || isAiThinking}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text style={styles.grabBtnText}>⚡ Scraping ⚡</Text>
+                                </TouchableOpacity>
+                            </Animated.View>
+                            <TouchableOpacity
+                                style={[styles.controlBtn, styles.rightBtn]}
+                                onPressIn={() => setRightPressed(true)}
+                                onPressOut={() => setRightPressed(false)}
+                                disabled={isDropping || gameOver || gameComplete || showReport || prepText !== null || processing || isAiThinking}
+                                activeOpacity={0.7}
+                            >
+                                <Text style={styles.btnText}>▶</Text>
+                            </TouchableOpacity>
+                        </View>
+                        <View style={styles.bottomBar}>
+                            <TouchableOpacity style={styles.resetBtn} onPress={resetGame}>
+                                <Text style={styles.resetBtnText}>⟳ Start over</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.completeBtn} onPress={showReportPage} disabled={showReport}>
+                                <Text style={styles.completeBtnText}>✓ Finish</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+                <View style={styles.bottomSpacer} />
+            </ScrollView>
         </Animated.View>
     );
 };
@@ -1133,10 +1139,16 @@ const ClawMachineGame: React.FC = () => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#1e3a2f',
+        backgroundColor: '#e8f5e9', // 淺綠色背景
+        paddingTop: 12,
+        paddingHorizontal: 12,
+    },
+    scrollContent: {
+        paddingBottom: 30,
         alignItems: 'center',
-        justifyContent: 'center',
-        padding: 12,
+    },
+    bottomSpacer: {
+        height: 20,
     },
     header: {
         flexDirection: 'row',
@@ -1151,8 +1163,8 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 14,
         fontWeight: 'bold',
-        color: '#ffdd88',
-        backgroundColor: '#3a2a1f',
+        color: '#1b5e20', // 深綠色文字
+        backgroundColor: '#c8e6c9',
         paddingHorizontal: 10,
         paddingVertical: 6,
         borderRadius: 20,
@@ -1166,12 +1178,12 @@ const styles = StyleSheet.create({
     timerContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#2d2b1f',
+        backgroundColor: '#c8e6c9',
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 20,
         borderWidth: 1,
-        borderColor: '#ffaa44',
+        borderColor: '#2e7d32',
     },
     timerIcon: {
         fontSize: 14,
@@ -1180,27 +1192,27 @@ const styles = StyleSheet.create({
     timerText: {
         fontSize: 16,
         fontWeight: 'bold',
-        color: '#ffdd88',
+        color: '#1b5e20',
         fontFamily: Platform.OS === 'web' ? 'monospace' : 'Courier',
     },
     scoreContainer: {
-        backgroundColor: '#2d2b1f',
+        backgroundColor: '#c8e6c9',
         paddingHorizontal: 10,
         paddingVertical: 4,
         borderRadius: 20,
         flexDirection: 'row',
         alignItems: 'baseline',
         borderWidth: 2,
-        borderColor: '#ffaa44',
+        borderColor: '#2e7d32',
     },
     scoreValue: {
         fontSize: 20,
         fontWeight: 'bold',
-        color: '#ffdd88',
+        color: '#1b5e20',
     },
     scoreMax: {
         fontSize: 10,
-        color: '#c9a87b',
+        color: '#2e7d32',
         marginLeft: 2,
     },
     aiQuestionPanel: {
@@ -1208,36 +1220,36 @@ const styles = StyleSheet.create({
         marginBottom: 10,
     },
     questionBox: {
-        backgroundColor: '#2d2b1f',
+        backgroundColor: '#c8e6c9', // 淺綠色問題框
         borderRadius: 12,
         padding: 12,
         borderWidth: 2,
-        borderColor: '#ffaa44',
+        borderColor: '#2e7d32',
     },
     questionBoxLoading: {
-        backgroundColor: '#2d2b1f',
+        backgroundColor: '#c8e6c9',
         borderRadius: 12,
         padding: 24,
         borderWidth: 2,
-        borderColor: '#ffaa44',
+        borderColor: '#2e7d32',
         alignItems: 'center',
         justifyContent: 'center',
     },
     questionLabel: {
         fontSize: 11,
-        color: '#ffaa44',
+        color: '#1b5e20',
         marginBottom: 6,
         fontWeight: 'bold',
     },
     questionText: {
         fontSize: 15,
-        color: '#fff',
+        color: '#1b5e20', // 深綠色文字
         fontWeight: 'bold',
         marginBottom: 10,
         lineHeight: 22,
     },
     hintButton: {
-        backgroundColor: '#3a2a1f',
+        backgroundColor: '#a5d6a7',
         paddingVertical: 5,
         paddingHorizontal: 12,
         borderRadius: 20,
@@ -1245,14 +1257,15 @@ const styles = StyleSheet.create({
     },
     hintButtonText: {
         fontSize: 11,
-        color: '#ffdd88',
+        color: '#1b5e20',
+        fontWeight: 'bold',
     },
     hintText: {
         fontSize: 12,
-        color: '#c9a87b',
+        color: '#2e7d32',
         marginTop: 8,
         padding: 8,
-        backgroundColor: '#1e3a2f',
+        backgroundColor: '#f1f8e9',
         borderRadius: 8,
     },
     aiFeedbackBox: {
@@ -1278,13 +1291,13 @@ const styles = StyleSheet.create({
     aiLoadingText: {
         fontSize: 16,
         fontWeight: 'bold',
-        color: '#ffdd88',
+        color: '#1b5e20',
         marginTop: 12,
         fontFamily: Platform.OS === 'web' ? 'monospace' : 'Courier',
     },
     aiLoadingSubtext: {
         fontSize: 12,
-        color: '#c9a87b',
+        color: '#2e7d32',
         marginTop: 4,
     },
     machineContainer: {
