@@ -716,6 +716,7 @@ export default function ChineseSentenceGame() {
         );
     };
 
+    // 修改：renderQuestion 改为返回带 ScrollView 的可滚动区域，并将绝对定位浮层提到外部
     const renderQuestion = () => {
         if (questions.length === 0) return null;
 
@@ -727,102 +728,119 @@ export default function ChineseSentenceGame() {
             transform: [{ translateX: shakeAnim }]
         };
 
-        return (
-            <Animated.View style={[{ flex: 1 }, { transform: [{ translateX: screenShake }] }]}>
-                <View style={styles.questionContainer}>
-                    {renderCharacter()}
+        // 主要游戏内容（可滚动部分）
+        const gameContent = (
+            <View style={styles.questionContainer}>
+                {renderCharacter()}
 
-                    {prepText && (
-                        <Animated.View style={[styles.prepOverlay, { transform: [{ scale: prepScale }] }]}>
-                            <Text style={[styles.prepText, { color: currentTheme.primary }]}>{prepText}</Text>
-                        </Animated.View>
-                    )}
-
-                    {floatingText && (
-                        <FloatingText
-                            key={floatingText.id}
-                            text={floatingText.text}
-                            color={floatingText.color}
-                            onComplete={() => setFloatingText(null)}
+                <View style={styles.progressContainer}>
+                    <Text style={styles.progressText}>
+                        📝  {currentIndex + 1} / {TOTAL_QUESTIONS} question
+                    </Text>
+                    <View style={styles.progressBar}>
+                        <View
+                            style={[
+                                styles.progressFill,
+                                { width: `${((currentIndex + 1) / TOTAL_QUESTIONS) * 100}%`, backgroundColor: currentTheme.primary }
+                            ]}
                         />
-                    )}
-
-                    <View style={styles.progressContainer}>
-                        <Text style={styles.progressText}>
-                            📝  {currentIndex + 1} / {TOTAL_QUESTIONS} question
-                        </Text>
-                        <View style={styles.progressBar}>
-                            <View
-                                style={[
-                                    styles.progressFill,
-                                    { width: `${((currentIndex + 1) / TOTAL_QUESTIONS) * 100}%`, backgroundColor: currentTheme.primary }
-                                ]}
-                            />
-                        </View>
                     </View>
+                </View>
 
-                    <Animated.View style={[styles.sentenceCard, animatedShake]}>
-                        <Text style={styles.sentenceText}>
-                            {parts.map((part, index) => (
-                                <React.Fragment key={index}>
-                                    <Text>{part}</Text>
-                                    {index < parts.length - 1 && (
-                                        <Text style={[styles.blankSpace, { color: currentTheme.primary }]}>_____</Text>
-                                    )}
-                                </React.Fragment>
-                            ))}
+                <Animated.View style={[styles.sentenceCard, animatedShake]}>
+                    <Text style={styles.sentenceText}>
+                        {parts.map((part, index) => (
+                            <React.Fragment key={index}>
+                                <Text>{part}</Text>
+                                {index < parts.length - 1 && (
+                                    <Text style={[styles.blankSpace, { color: currentTheme.primary }]}>_____</Text>
+                                )}
+                            </React.Fragment>
+                        ))}
+                    </Text>
+
+                    {currentQuestion.translation && (
+                        <Text style={styles.translationText}>
+                            📖 {currentQuestion.translation}
                         </Text>
+                    )}
+                </Animated.View>
 
-                        {currentQuestion.translation && (
-                            <Text style={styles.translationText}>
-                                📖 {currentQuestion.translation}
-                            </Text>
-                        )}
-                    </Animated.View>
-
-                    {!showFeedback && (
-                        <>
-                            <View style={styles.inputContainer}>
-                                <TextInput
-                                    style={[styles.input, !gameActive && styles.disabledInput]}
-                                    value={inputText}
-                                    onChangeText={setInputText}
-                                    placeholder="✏️ Please enter the answer..."
-                                    placeholderTextColor="#999"
-                                    editable={!submitting && !loading && gameActive}
-                                />
-
-                                <TouchableOpacity
-                                    style={[styles.hintButton, { borderColor: currentTheme.primary }]}
-                                    onPress={() => setShowHint(!showHint)}
-                                    disabled={!gameActive}
-                                >
-                                    <Ionicons name="help-circle-outline" size={24} color={currentTheme.primary} />
-                                </TouchableOpacity>
-                            </View>
-
-                            {showHint && currentQuestion.hint && (
-                                <View style={[styles.hintContainer, { backgroundColor: currentTheme.bgColor || currentTheme.characterBg }]}>
-                                    <Text style={styles.hintText}>💡 Tip：{currentQuestion.hint}</Text>
-                                </View>
-                            )}
+                {!showFeedback && (
+                    <>
+                        <View style={styles.inputContainer}>
+                            <TextInput
+                                style={[styles.input, !gameActive && styles.disabledInput]}
+                                value={inputText}
+                                onChangeText={setInputText}
+                                placeholder="✏️ Please enter the answer..."
+                                placeholderTextColor="#999"
+                                editable={!submitting && !loading && gameActive}
+                            />
 
                             <TouchableOpacity
-                                style={[styles.submitButton, (!inputText.trim() || submitting || loading || !gameActive) && styles.disabledButton, { backgroundColor: currentTheme.primary }]}
-                                onPress={handleSubmit}
-                                disabled={!inputText.trim() || submitting || loading || !gameActive}
+                                style={[styles.hintButton, { borderColor: currentTheme.primary }]}
+                                onPress={() => setShowHint(!showHint)}
+                                disabled={!gameActive}
                             >
-                                {submitting ? (
-                                    <ActivityIndicator color="#fff" />
-                                ) : (
-                                    <Text style={styles.submitButtonText}>✨ Submit Answer ✨</Text>
-                                )}
+                                <Ionicons name="help-circle-outline" size={24} color={currentTheme.primary} />
                             </TouchableOpacity>
-                        </>
-                    )}
+                        </View>
 
-                    {renderFeedback()}
-                </View>
+                        {showHint && currentQuestion.hint && (
+                            <View style={[styles.hintContainer, { backgroundColor: currentTheme.bgColor || currentTheme.characterBg }]}>
+                                <Text style={styles.hintText}>💡 Tip：{currentQuestion.hint}</Text>
+                            </View>
+                        )}
+
+                        <TouchableOpacity
+                            style={[styles.submitButton, (!inputText.trim() || submitting || loading || !gameActive) && styles.disabledButton, { backgroundColor: currentTheme.primary }]}
+                            onPress={handleSubmit}
+                            disabled={!inputText.trim() || submitting || loading || !gameActive}
+                        >
+                            {submitting ? (
+                                <ActivityIndicator color="#fff" />
+                            ) : (
+                                <Text style={styles.submitButtonText}>✨ Submit Answer ✨</Text>
+                            )}
+                        </TouchableOpacity>
+                    </>
+                )}
+
+                {renderFeedback()}
+
+                {/* 底部留空便于滚动 */}
+                <View style={styles.bottomSpacer} />
+            </View>
+        );
+
+        // 整体结构：外层 Animated.View 用于屏幕震动，内部 ScrollView 实现滚动
+        // 绝对定位的倒计时和浮动文字放在 ScrollView 外部
+        return (
+            <Animated.View style={[{ flex: 1 }, { transform: [{ translateX: screenShake }] }]}>
+                {/* 倒计时浮层 */}
+                {prepText && (
+                    <Animated.View style={[styles.prepOverlayAbsolute, { transform: [{ scale: prepScale }] }]}>
+                        <Text style={[styles.prepTextAbsolute, { color: currentTheme.primary }]}>{prepText}</Text>
+                    </Animated.View>
+                )}
+                {/* 浮动文字 HIT/OUCH */}
+                {floatingText && (
+                    <FloatingText
+                        key={floatingText.id}
+                        text={floatingText.text}
+                        color={floatingText.color}
+                        onComplete={() => setFloatingText(null)}
+                    />
+                )}
+                {/* 可滚动内容 */}
+                <ScrollView
+                    contentContainerStyle={styles.playingScrollContent}
+                    showsVerticalScrollIndicator={true}
+                    bounces={false}
+                >
+                    {gameContent}
+                </ScrollView>
             </Animated.View>
         );
     };
@@ -941,8 +959,6 @@ export default function ChineseSentenceGame() {
                             </Text>
                         </View>
                     </View>
-
-
 
                     <View style={styles.summaryContainer}>
                         <Text style={styles.summaryTitle}>📝 Answer Summary：</Text>
@@ -1180,6 +1196,12 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
     },
+    playingScrollContent: {
+        paddingBottom: 30,
+    },
+    bottomSpacer: {
+        height: 20,
+    },
     questionContainer: {
         flex: 1,
         padding: 20,
@@ -1355,7 +1377,8 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
     },
-    prepOverlay: {
+    // 修改：倒计时浮层改为绝对定位，不随滚动移动
+    prepOverlayAbsolute: {
         position: 'absolute',
         top: '35%',
         left: 0,
@@ -1364,7 +1387,7 @@ const styles = StyleSheet.create({
         zIndex: 100,
         backgroundColor: 'transparent',
     },
-    prepText: {
+    prepTextAbsolute: {
         fontSize: 72,
         fontWeight: '900',
         textAlign: 'center',
