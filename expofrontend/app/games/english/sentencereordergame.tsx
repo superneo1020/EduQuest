@@ -52,23 +52,21 @@ const FloatingText = ({ text, color, onComplete }: { text: string, color: string
 // 根據難度和題目索引獲取每題滿分 (共3題)
 const getPointsForQuestion = (difficulty: Difficulty, index: number): number => {
     if (difficulty === 'easy') {
-        // 第1題30分，第2題30分，第3題40分
         if (index === 0) return 30;
         if (index === 1) return 30;
         return 40;
-    } else { // hard
-        // 每題40分
+    } else {
         return 40;
     }
 };
 
 // 獲取總滿分
 const getTotalMaxScore = (difficulty: Difficulty): number => {
-    if (difficulty === 'easy') return 100; // 30+30+40
-    return 120; // 40+40+40
+    if (difficulty === 'easy') return 100;
+    return 120;
 };
 
-// 難度級別配置 - 3題，動態分值
+// 難度級別配置
 const DIFFICULTY_LEVELS = {
     easy: {
         label: 'Easy',
@@ -101,15 +99,14 @@ interface WordItem {
     currentIndex: number;
 }
 
-// 扩展问题数据类型（用于保存到后端）
 interface QuestionRecord {
     id: number;
-    question: string;           // 原始句子
-    correctAnswer: string;      // 正确句子（字符串）
-    userAnswer: string;         // 用户排列的句子（字符串）
+    question: string;
+    correctAnswer: string;
+    userAnswer: string;
     isCorrect: boolean;
     questionType: string;
-    options: any[];             // 留空数组，保持与听力游戏结构一致
+    options: any[];
     earnedPoints: number;
 }
 
@@ -134,33 +131,28 @@ export default function SentenceReorderScreen() {
     const [isSaving, setIsSaving] = useState(false);
     const { token } = useAuth();
 
-    // 倒數計時狀態
     const [prepText, setPrepText] = useState<string | null>(null);
     const prepScale = useSharedValue(0);
-
-    // 遊戲進行中標誌（倒數完成後才可操作）
     const [gameActive, setGameActive] = useState(false);
 
-    // 特效狀態
     const [floatingText, setFloatingText] = useState<{ id: number, text: string, color: string } | null>(null);
     const screenShake = useSharedValue(0);
 
-    // ========== 🕒 計時器相關狀態 ==========
     const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
     const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const timerStartedRef = useRef<boolean>(false);
 
-    // 本地最高分
     const [highScore, setHighScore] = useState(0);
 
-    // 格式化時間 (MM:SS)
+    // ✅ 新增：當前題目是否已作答（用於鎖定操作並只顯示 "Next"）
+    const [isAnswered, setIsAnswered] = useState(false);
+
     const formatTime = (totalSeconds: number): string => {
         const minutes = Math.floor(totalSeconds / 60);
         const seconds = totalSeconds % 60;
         return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     };
 
-    // 停止計時器
     const stopTimer = useCallback(() => {
         if (timerIntervalRef.current) {
             clearInterval(timerIntervalRef.current);
@@ -168,7 +160,6 @@ export default function SentenceReorderScreen() {
         }
     }, []);
 
-    // 開始計時器（只在第一次調用時生效）
     const startTimerOnce = useCallback(() => {
         if (timerStartedRef.current) return;
         timerStartedRef.current = true;
@@ -178,7 +169,6 @@ export default function SentenceReorderScreen() {
         }, 1000);
     }, []);
 
-    // 遊戲狀態
     const [gameState, setGameState] = useState<GameState>({
         currentQuestionIndex: 0,
         totalQuestions: 3,
@@ -196,10 +186,8 @@ export default function SentenceReorderScreen() {
         gameFinished: false
     });
 
-    // Store all questions and user answers (每题一条记录)
     const [questionsHistory, setQuestionsHistory] = useState<QuestionRecord[]>([]);
 
-    // 螢幕震動動畫樣式
     const animatedScreenStyle = useAnimatedStyle(() => ({
         transform: [{ translateX: screenShake.value }]
     }));
@@ -209,7 +197,6 @@ export default function SentenceReorderScreen() {
         opacity: withTiming(prepText ? 1 : 0)
     }));
 
-    // 加载本地最高分
     const loadHighScore = async (difficulty: Difficulty) => {
         try {
             const saved = await AsyncStorage.getItem(`sentence_reorder_high_score_${difficulty}`);
@@ -219,7 +206,6 @@ export default function SentenceReorderScreen() {
         }
     };
 
-    // 保存本地最高分
     const saveHighScore = async (newScore: number, difficulty: Difficulty) => {
         try {
             if (newScore > highScore) {
@@ -231,39 +217,33 @@ export default function SentenceReorderScreen() {
         }
     };
 
-    // 倒數準備序列
     const startPrepSequence = useCallback((isFirstTime: boolean = true) => {
         setGameActive(false);
-
         setTimeout(() => {
             setPrepText('READY');
             prepScale.value = 0;
             prepScale.value = withSpring(1.2);
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         }, 100);
-
         setTimeout(() => {
             setPrepText('GO!');
             prepScale.value = 0;
             prepScale.value = withSpring(1.5);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
             if (isFirstTime) {
                 startTimerOnce();
             }
         }, 1000);
-
         setTimeout(() => {
             setPrepText(null);
             setGameActive(true);
+            setIsAnswered(false); // ✅ 新題目開始時重置作答狀態
         }, 1600);
     }, [startTimerOnce]);
 
-    // 生成單一題目（使用AI或備用）
     const generateQuestion = useCallback(async (difficulty: Difficulty, questionNumber: number): Promise<ReorderQuestion> => {
         const aiAvailable = await ReorderService.isAIAvailable();
         console.log(`Generating question ${questionNumber + 1}, AI available:`, aiAvailable);
-
         if (aiAvailable) {
             const question = await ReorderService.generateSingleQuestion(difficulty, questionNumber);
             if (question) {
@@ -273,26 +253,23 @@ export default function SentenceReorderScreen() {
         return ReorderService.getFallbackQuestion(difficulty, questionNumber);
     }, []);
 
-    // 初始化當前題目的單詞順序
     const initializeQuestionWords = (question: ReorderQuestion) => {
         const shuffled = ReorderService.shuffleWords(question.words);
-
         const words: WordItem[] = shuffled.map((item, newIndex) => ({
             id: `${item.originalIndex}-${Date.now()}-${Math.random()}`,
             text: item.word,
             originalIndex: item.originalIndex,
             currentIndex: newIndex
         }));
-
         setGameState(prev => ({
             ...prev,
             words: words,
             feedback: '',
             isChecking: false
         }));
+        setIsAnswered(false); // ✅ 重置作答狀態
     };
 
-    // 加載第一題並開始遊戲
     const loadFirstQuestion = useCallback(async (difficulty: Difficulty) => {
         setGameState(prev => ({
             ...prev,
@@ -305,9 +282,8 @@ export default function SentenceReorderScreen() {
             correctAnswers: 0,
             wrongAnswers: 0
         }));
-        setQuestionsHistory([]); // 清空历史记录
+        setQuestionsHistory([]);
         await loadHighScore(difficulty);
-
         try {
             const firstQuestion = await generateQuestion(difficulty, 0);
             setGameState(prev => ({
@@ -330,14 +306,11 @@ export default function SentenceReorderScreen() {
         }
     }, [generateQuestion, startPrepSequence]);
 
-    // 初始化遊戲（選擇難度後調用）
     const initializeGame = useCallback(async (difficulty: Difficulty) => {
         const questionsCount = DIFFICULTY_LEVELS[difficulty].questionsPerGame;
-
         timerStartedRef.current = false;
         setElapsedSeconds(0);
         stopTimer();
-
         setGameState(prev => ({
             ...prev,
             totalQuestions: questionsCount,
@@ -351,20 +324,16 @@ export default function SentenceReorderScreen() {
             currentQuestion: null,
             isLoading: true
         }));
-
         await loadFirstQuestion(difficulty);
     }, [loadFirstQuestion, stopTimer]);
 
-    // 加載下一題（不重新啟動計時器）
     const loadNextQuestion = useCallback(async () => {
         const nextIndex = gameState.currentQuestionIndex + 1;
         const difficulty = gameState.difficulty!;
-
         setGameState(prev => ({
             ...prev,
             isLoadingNext: true
         }));
-
         try {
             const nextQuestion = await generateQuestion(difficulty, nextIndex);
             setGameState(prev => ({
@@ -393,31 +362,33 @@ export default function SentenceReorderScreen() {
         }
     }, [gameState.currentQuestionIndex, gameState.difficulty, generateQuestion, startPrepSequence]);
 
-    // 向左移動單詞
-    const moveLeft = (wordId: string) => {
-        if (gameState.isChecking || !gameActive) return;
-
+    const moveWord = (wordId: string, direction: 'left' | 'right') => {
+        // ✅ 若已作答則不可移動
+        if (gameState.isChecking || !gameActive || isAnswered) return;
         const currentWords = [...gameState.words];
         const index = currentWords.findIndex(w => w.id === wordId);
-
-        if (index > 0) {
+        if (index === -1) return;
+        if (direction === 'left' && index > 0) {
             const temp = currentWords[index];
             currentWords[index] = currentWords[index - 1];
             currentWords[index - 1] = temp;
-
-            const updatedWords = currentWords.map((word, idx) => ({
-                ...word,
-                currentIndex: idx
-            }));
-
-            setGameState(prev => ({
-                ...prev,
-                words: updatedWords
-            }));
+        } else if (direction === 'right' && index < currentWords.length - 1) {
+            const temp = currentWords[index];
+            currentWords[index] = currentWords[index + 1];
+            currentWords[index + 1] = temp;
+        } else {
+            return;
         }
+        const updatedWords = currentWords.map((word, idx) => ({
+            ...word,
+            currentIndex: idx
+        }));
+        setGameState(prev => ({
+            ...prev,
+            words: updatedWords
+        }));
     };
 
-    // 觸發螢幕震動效果
     const triggerScreenShake = () => {
         screenShake.value = withSequence(
             withTiming(10, { duration: 50 }),
@@ -430,7 +401,6 @@ export default function SentenceReorderScreen() {
         );
     };
 
-    // 辅助函数：根据当前单词顺序生成用户句子字符串
     const getUserSentence = (words: WordItem[]): string => {
         return words
             .sort((a, b) => a.currentIndex - b.currentIndex)
@@ -438,23 +408,17 @@ export default function SentenceReorderScreen() {
             .join(' ');
     };
 
-    // 檢查答案
     const checkAnswer = () => {
         if (gameState.isChecking || !gameActive || !gameState.currentQuestion) return;
-
         setGameState(prev => ({ ...prev, isChecking: true }));
-
         const currentOrder = [...gameState.words]
             .sort((a, b) => a.currentIndex - b.currentIndex)
             .map(word => word.originalIndex);
-
         const isCorrect = ReorderService.checkAnswer(currentOrder);
         const originalSentence = gameState.currentQuestion.sentence;
         const userSentence = getUserSentence(gameState.words);
         const difficulty = gameState.difficulty!;
         const pointsEarned = isCorrect ? getPointsForQuestion(difficulty, gameState.currentQuestionIndex) : 0;
-
-        // 构造本题记录（覆盖已有记录）
         const newRecord: QuestionRecord = {
             id: gameState.currentQuestionIndex + 1,
             question: originalSentence,
@@ -462,11 +426,9 @@ export default function SentenceReorderScreen() {
             userAnswer: userSentence,
             isCorrect: isCorrect,
             questionType: 'sentence-reorder',
-            options: [],  // 与听力游戏结构保持一致
+            options: [],
             earnedPoints: pointsEarned,
         };
-
-        // 更新历史记录：如果已存在当前题目的记录，则替换；否则追加
         setQuestionsHistory(prev => {
             const existingIndex = prev.findIndex(r => r.id === gameState.currentQuestionIndex + 1);
             if (existingIndex !== -1) {
@@ -477,14 +439,11 @@ export default function SentenceReorderScreen() {
                 return [...prev, newRecord];
             }
         });
-
         if (isCorrect) {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
             setFloatingText({ id: Date.now(), text: 'HIT!', color: '#FFD700' });
-
             const newScore = gameState.score + pointsEarned;
             const newCorrectAnswers = gameState.correctAnswers + 1;
-
             setGameState(prev => ({
                 ...prev,
                 score: newScore,
@@ -496,7 +455,6 @@ export default function SentenceReorderScreen() {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
             triggerScreenShake();
             setFloatingText({ id: Date.now(), text: 'OUCH!', color: '#FF4757' });
-
             setGameState(prev => ({
                 ...prev,
                 wrongAnswers: prev.wrongAnswers + 1,
@@ -504,39 +462,31 @@ export default function SentenceReorderScreen() {
                 feedback: `❌ Incorrect\nCorrect: "${originalSentence}"`
             }));
         }
-
+        // ✅ 標記為已作答，鎖定操作並切換為顯示 Next 按鈕
+        setIsAnswered(true);
         setTimeout(() => {
             setFloatingText(null);
         }, 800);
     };
 
-    // 重試當前題目（清除本题已有记录，重置单词顺序）
     const retryQuestion = () => {
         if (!gameActive || !gameState.currentQuestion) return;
-
-        // 移除当前题目的历史记录（如果有）
         setQuestionsHistory(prev => prev.filter(r => r.id !== gameState.currentQuestionIndex + 1));
-
-        // 重置单词顺序并重新激活题目
         initializeQuestionWords(gameState.currentQuestion);
         startPrepSequence(false);
     };
 
-    // 下一題
     const nextQuestion = () => {
         if (!gameActive) return;
-
         if (gameState.currentQuestionIndex + 1 < gameState.totalQuestions) {
             loadNextQuestion();
         } else {
-            // 游戏完成
             setGameActive(false);
             stopTimer();
             setGameState(prev => ({
                 ...prev,
                 gameFinished: true
             }));
-            // 保存最高分和上传分数
             if (gameState.difficulty) {
                 saveHighScore(gameState.score, gameState.difficulty);
                 saveScore();
@@ -544,7 +494,6 @@ export default function SentenceReorderScreen() {
         }
     };
 
-    // 重新開始遊戲
     const restartGame = () => {
         if (gameState.difficulty) {
             initializeGame(gameState.difficulty);
@@ -568,7 +517,6 @@ export default function SentenceReorderScreen() {
         }
     };
 
-    // 返回上一頁
     const backToDifficulty = () => {
         stopTimer();
         timerStartedRef.current = false;
@@ -582,34 +530,29 @@ export default function SentenceReorderScreen() {
         }));
     };
 
-    // 返回主頁
     const goToHome = () => {
         stopTimer();
         timerStartedRef.current = false;
         router.back();
     };
 
-    // 計算正確率
     const getAccuracy = () => {
         const totalAnswered = gameState.correctAnswers + gameState.wrongAnswers;
         if (totalAnswered === 0) return 0;
         return Math.round((gameState.correctAnswers / totalAnswered) * 100);
     };
 
-    // 計算滿分百分比
     const getScorePercentage = () => {
         if (!gameState.difficulty) return 0;
         const maxScore = getTotalMaxScore(gameState.difficulty);
         return Math.round((gameState.score / maxScore) * 100);
     };
 
-    // 獲取當前難度的滿分
     const getMaxScore = () => {
         if (!gameState.difficulty) return 100;
         return getTotalMaxScore(gameState.difficulty);
     };
 
-    // 獲取得分顏色
     const getScoreColor = () => {
         const percentage = getScorePercentage();
         if (percentage >= 80) return '#4CAF50';
@@ -617,7 +560,6 @@ export default function SentenceReorderScreen() {
         return '#F44336';
     };
 
-    // 獲取進度百分比
     const getProgress = () => {
         if (gameState.totalQuestions === 0) return 0;
         return ((gameState.currentQuestionIndex + 1) / gameState.totalQuestions) * 100;
@@ -627,7 +569,6 @@ export default function SentenceReorderScreen() {
         return DIFFICULTY_LEVELS[difficulty].label;
     };
 
-    // 保存分数到后端（与听力游戏结构一致）
     const saveScore = async () => {
         if (!token || !gameState.difficulty) return;
         setIsSaving(true);
@@ -638,8 +579,6 @@ export default function SentenceReorderScreen() {
                 gameType: "ENGLISH",
                 gameDifficulty: getLevelLabel(gameState.difficulty).toUpperCase()
             };
-
-            // 构建 questionsData（与 listeninggame 保持一致）
             const questionsData = questionsHistory.map(q => ({
                 id: q.id,
                 question: q.question,
@@ -650,7 +589,6 @@ export default function SentenceReorderScreen() {
                 options: q.options,
                 earnedPoints: q.earnedPoints
             }));
-
             const metadata: GameMetadata = createGameMetadata(
                 gameData.gameType,
                 gameData.gameDifficulty,
@@ -661,13 +599,11 @@ export default function SentenceReorderScreen() {
                 },
                 questionsData
             );
-
             const backendRequest = {
                 gameName: gameData.gameName,
                 scores: gameData.scores,
                 metadata: convertToBackendMetadata(metadata)
             };
-
             await axios.post('http://localhost:8080/api/user/game/score', backendRequest, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -679,27 +615,41 @@ export default function SentenceReorderScreen() {
         }
     };
 
-    // 渲染單詞卡片
-    const renderWordCard = (word: WordItem, index: number) => {
+    const renderWordCard = (word: WordItem, index: number, total: number) => {
+        const canMoveLeft = index > 0;
+        const canMoveRight = index < total - 1;
+        const disabled = !gameActive || gameState.isChecking || isAnswered; // ✅ 已作答禁用箭頭
         return (
-            <TouchableOpacity
-                key={word.id}
-                style={[styles.wordCard, (!gameActive || gameState.isChecking) && styles.disabledCard]}
-                onPress={() => moveLeft(word.id)}
-                activeOpacity={0.7}
-                disabled={!gameActive || gameState.isChecking}
-            >
+            <View key={word.id} style={[styles.wordCard, disabled && styles.disabledCard]}>
+                <TouchableOpacity
+                    onPress={() => moveWord(word.id, 'left')}
+                    disabled={!canMoveLeft || disabled}
+                    style={[styles.arrowButton, !canMoveLeft && styles.arrowDisabled]}
+                    activeOpacity={0.6}
+                >
+                    <Ionicons
+                        name="arrow-back"
+                        size={18}
+                        color={canMoveLeft && !disabled ? 'white' : 'rgba(255,255,255,0.3)'}
+                    />
+                </TouchableOpacity>
                 <Text style={styles.wordText}>{word.text}</Text>
-                {index > 0 && (
-                    <View style={styles.moveHint}>
-                        <Ionicons name="arrow-back" size={12} color="rgba(255,255,255,0.7)" />
-                    </View>
-                )}
-            </TouchableOpacity>
+                <TouchableOpacity
+                    onPress={() => moveWord(word.id, 'right')}
+                    disabled={!canMoveRight || disabled}
+                    style={[styles.arrowButton, !canMoveRight && styles.arrowDisabled]}
+                    activeOpacity={0.6}
+                >
+                    <Ionicons
+                        name="arrow-forward"
+                        size={18}
+                        color={canMoveRight && !disabled ? 'white' : 'rgba(255,255,255,0.3)'}
+                    />
+                </TouchableOpacity>
+            </View>
         );
     };
 
-    // 難度選擇頁面
     const renderDifficultySelector = () => {
         return (
             <SafeAreaView style={styles.container}>
@@ -712,7 +662,6 @@ export default function SentenceReorderScreen() {
                             Tap words to build perfect English sentences!
                         </Text>
                     </View>
-
                     <View style={styles.menuGrid}>
                         {(Object.keys(DIFFICULTY_LEVELS) as Difficulty[]).map((level) => {
                             const config = DIFFICULTY_LEVELS[level];
@@ -730,7 +679,6 @@ export default function SentenceReorderScreen() {
                                     <View style={styles.cardIconContainer}>
                                         <Text style={styles.cardIcon}>{config.icon}</Text>
                                     </View>
-
                                     <View style={styles.cardContent}>
                                         <View style={styles.cardHeader}>
                                             <Text style={[styles.diffBtnText, { color: config.color }]}>
@@ -756,18 +704,15 @@ export default function SentenceReorderScreen() {
         );
     };
 
-    // 遊戲完成頁面（增加每题得分详情和最高分显示）
     const renderCompletionScreen = () => {
         const maxScore = getMaxScore();
         const scorePercentage = getScorePercentage();
         const totalTimeFormatted = formatTime(elapsedSeconds);
-
         let performanceMessage = '';
         if (scorePercentage >= 80) performanceMessage = 'Excellent! 🎉';
         else if (scorePercentage >= 60) performanceMessage = 'Good job! 👍';
         else if (scorePercentage >= 40) performanceMessage = 'Keep practicing! 💪';
         else performanceMessage = 'Try again! You can do it! 🌟';
-
         return (
             <ScrollView style={styles.container} contentContainerStyle={styles.completionContainer}>
                 <LinearGradient
@@ -777,7 +722,6 @@ export default function SentenceReorderScreen() {
                     <Text style={styles.completionTitle}>Game Completed! 🎉</Text>
                     <Text style={styles.completionSubtitle}>{performanceMessage}</Text>
                 </LinearGradient>
-
                 <View style={styles.scoreCircle}>
                     <Text style={[styles.scoreNumber, { color: getScoreColor() }]}>
                         {gameState.score}
@@ -785,20 +729,16 @@ export default function SentenceReorderScreen() {
                     <Text style={styles.scoreMax}>/ {maxScore}</Text>
                     <Text style={styles.scoreLabel}>Final Score</Text>
                 </View>
-
-
                 <View style={styles.reportTimeBox}>
                     <Text style={styles.reportScoreLabel}>⏱️ Total Time</Text>
                     <Text style={styles.reportTimeValue}>{totalTimeFormatted}</Text>
                 </View>
-
                 {isSaving && (
                     <View style={styles.savingIndicator}>
                         <ActivityIndicator size="small" color="#4CAF50" />
                         <Text style={styles.savingText}>Synchronizing scores...</Text>
                     </View>
                 )}
-
                 <View style={styles.statsCard}>
                     <View style={styles.statRow}>
                         <View style={styles.statItem}>
@@ -818,20 +758,15 @@ export default function SentenceReorderScreen() {
                         </View>
                     </View>
                 </View>
-
-                {/* 此处已移除 Per Question Score 区块 */}
-
                 <View style={styles.completionButtons}>
                     <TouchableOpacity style={[styles.completionButton, styles.playAgainButton]} onPress={restartGame}>
                         <Ionicons name="refresh" size={20} color="white" />
                         <Text style={styles.completionButtonText}>Play Again</Text>
                     </TouchableOpacity>
-
                     <TouchableOpacity style={[styles.completionButton, styles.backDifficultyButton]} onPress={backToDifficulty}>
                         <Ionicons name="options" size={20} color="white" />
                         <Text style={styles.completionButtonText}>Change Difficulty</Text>
                     </TouchableOpacity>
-
                     <TouchableOpacity style={[styles.completionButton, styles.homeButton]} onPress={goToHome}>
                         <Ionicons name="home" size={20} color="white" />
                         <Text style={styles.completionButtonText}>Back to game</Text>
@@ -841,7 +776,6 @@ export default function SentenceReorderScreen() {
         );
     };
 
-    // 加載下一題的提示界面
     const renderLoadingNext = () => {
         return (
             <View style={styles.loadingOverlay}>
@@ -854,13 +788,12 @@ export default function SentenceReorderScreen() {
         );
     };
 
-    // 遊戲主界面
     const renderGameScreen = () => {
         if (!gameState.currentQuestion) return null;
-
         if (gameState.isLoadingNext) {
             return renderLoadingNext();
         }
+        const isLastQuestion = gameState.currentQuestionIndex === gameState.totalQuestions - 1;
 
         return (
             <View style={styles.container}>
@@ -869,7 +802,6 @@ export default function SentenceReorderScreen() {
                         headerShown: false,
                     }}
                 />
-
                 <Animated.View style={[{ flex: 1 }, animatedScreenStyle]}>
                     <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
                         <LinearGradient
@@ -882,15 +814,12 @@ export default function SentenceReorderScreen() {
                                 <Text style={styles.timerText}>{formatTime(elapsedSeconds)}</Text>
                             </View>
                         </LinearGradient>
-
                         <Text style={styles.headerSubtitle}>Arrange the words to form correct sentences</Text>
-
                         {prepText && (
                             <Animated.View style={[styles.prepOverlay, animatedPrepStyle]}>
                                 <Text style={styles.prepText}>{prepText}</Text>
                             </Animated.View>
                         )}
-
                         {floatingText && (
                             <FloatingText
                                 key={floatingText.id}
@@ -899,11 +828,9 @@ export default function SentenceReorderScreen() {
                                 onComplete={() => setFloatingText(null)}
                             />
                         )}
-
                         <View style={styles.progressBar}>
                             <View style={[styles.progressFill, { width: `${getProgress()}%` }]} />
                         </View>
-
                         <View style={styles.statsBar}>
                             <View style={styles.statBox}>
                                 <Text style={styles.statValue}>{gameState.score}</Text>
@@ -924,7 +851,6 @@ export default function SentenceReorderScreen() {
                                 <Text style={styles.statLabel}>Question</Text>
                             </View>
                         </View>
-
                         <View style={[styles.questionCard, !gameActive && styles.inactiveCard]}>
                             <View style={styles.questionHeader}>
                                 <Text style={styles.questionTitle}>Question {gameState.currentQuestionIndex + 1}</Text>
@@ -934,24 +860,20 @@ export default function SentenceReorderScreen() {
                                     </Text>
                                 </View>
                             </View>
-
                             <Text style={styles.translation}>{gameState.currentQuestion.translation}</Text>
-
                             <View style={styles.wordsContainer}>
                                 {gameState.words.length > 0 ? (
                                     gameState.words
                                         .sort((a, b) => a.currentIndex - b.currentIndex)
-                                        .map((word, idx) => renderWordCard(word, idx))
+                                        .map((word, idx) => renderWordCard(word, idx, gameState.words.length))
                                 ) : (
                                     <Text style={styles.loadingText}>Loading...</Text>
                                 )}
                             </View>
-
                             <Text style={styles.instructionHint}>
-                                💡 Tap a word to move it left
+                                💡 Tap arrows to move words left or right
                             </Text>
                         </View>
-
                         {gameState.feedback !== '' && (
                             <View style={[
                                 styles.feedbackBox,
@@ -961,36 +883,39 @@ export default function SentenceReorderScreen() {
                                 <Text style={styles.feedbackText}>{gameState.feedback}</Text>
                             </View>
                         )}
-
-                        <View style={styles.controls}>
-                            <TouchableOpacity
-                                style={[styles.button, styles.checkButton, (!gameActive || gameState.isChecking) && styles.disabledButton]}
-                                onPress={checkAnswer}
-                                disabled={!gameActive || gameState.isChecking}
-                            >
-                                <Text style={styles.buttonText}>
-                                    {gameState.isChecking ? 'Checking...' : 'Check'}
-                                </Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={[styles.button, styles.retryButton, !gameActive && styles.disabledButton]}
-                                onPress={retryQuestion}
-                                disabled={!gameActive}
-                            >
-                                <Text style={styles.buttonText}>Retry</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={[styles.button, styles.nextButton, !gameActive && styles.disabledButton]}
-                                onPress={nextQuestion}
-                                disabled={!gameActive}
-                            >
-                                <Text style={styles.buttonText}>
-                                    {gameState.currentQuestionIndex === gameState.totalQuestions - 1 ? 'Finish' : 'Next'}
-                                </Text>
-                            </TouchableOpacity>
-                        </View>
+                        {/* ✅ 根據是否已作答顯示不同按鈕群組 */}
+                        {!isAnswered ? (
+                            <View style={styles.controls}>
+                                <TouchableOpacity
+                                    style={[styles.button, styles.checkButton, (!gameActive || gameState.isChecking) && styles.disabledButton]}
+                                    onPress={checkAnswer}
+                                    disabled={!gameActive || gameState.isChecking}
+                                >
+                                    <Text style={styles.buttonText}>
+                                        {gameState.isChecking ? 'Checking...' : 'Check'}
+                                    </Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.button, styles.retryButton, !gameActive && styles.disabledButton]}
+                                    onPress={retryQuestion}
+                                    disabled={!gameActive}
+                                >
+                                    <Text style={styles.buttonText}>Retry</Text>
+                                </TouchableOpacity>
+                            </View>
+                        ) : (
+                            <View style={styles.controls}>
+                                <TouchableOpacity
+                                    style={[styles.button, styles.nextButton, (!gameActive) && styles.disabledButton]}
+                                    onPress={nextQuestion}
+                                    disabled={!gameActive}
+                                >
+                                    <Text style={styles.buttonText}>
+                                        {isLastQuestion ? 'Finish' : 'Next'}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
                     </ScrollView>
                 </Animated.View>
             </View>
@@ -1006,18 +931,14 @@ export default function SentenceReorderScreen() {
             </View>
         );
     }
-
     if (gameState.gameFinished) {
         return renderCompletionScreen();
     }
-
     if (!gameState.gameStarted) {
         return renderDifficultySelector();
     }
-
     return renderGameScreen();
 }
-
 
 const styles = StyleSheet.create({
     container: {
@@ -1049,7 +970,6 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#999',
     },
-    // 加載下一題的覆蓋層
     loadingOverlay: {
         flex: 1,
         justifyContent: 'center',
@@ -1084,7 +1004,6 @@ const styles = StyleSheet.create({
         marginLeft: 10,
         padding: 5,
     },
-    // 倒數覆蓋層
     prepOverlay: {
         position: 'absolute',
         top: '40%',
@@ -1110,7 +1029,6 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
         elevation: 5,
     },
-    // 浮動文字
     floatingLayer: {
         position: 'absolute',
         top: '35%',
@@ -1128,7 +1046,6 @@ const styles = StyleSheet.create({
         textShadowOffset: { width: 2, height: 2 },
         textShadowRadius: 4,
     },
-    // 難度選擇頁面樣式
     headerSection: {
         alignItems: 'center',
         paddingTop: 50,
@@ -1216,7 +1133,6 @@ const styles = StyleSheet.create({
         color: '#4b6cb7',
         fontWeight: '500',
     },
-    // 遊戲主界面樣式 - 新增帶計時器的標題欄
     headerWithTimer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -1239,7 +1155,6 @@ const styles = StyleSheet.create({
         marginBottom: 16,
         paddingHorizontal: 20,
     },
-    // 計時器樣式
     timerContainer: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1349,13 +1264,12 @@ const styles = StyleSheet.create({
         marginBottom: 16,
     },
     wordCard: {
-        backgroundColor: '#4b6cb7',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        borderRadius: 8,
-        minWidth: 60,
+        flexDirection: 'row',
         alignItems: 'center',
-        position: 'relative',
+        backgroundColor: '#4b6cb7',
+        paddingHorizontal: 6,
+        paddingVertical: 10,
+        borderRadius: 12,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.2,
@@ -1365,16 +1279,20 @@ const styles = StyleSheet.create({
     disabledCard: {
         opacity: 0.6,
     },
+    arrowButton: {
+        width: 28,
+        height: 28,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    arrowDisabled: {
+        opacity: 0.4,
+    },
     wordText: {
         fontSize: 16,
         fontWeight: '600',
         color: 'white',
-    },
-    moveHint: {
-        position: 'absolute',
-        bottom: -8,
-        left: '50%',
-        transform: [{ translateX: -8 }],
+        marginHorizontal: 6,
     },
     instructionHint: {
         fontSize: 12,
@@ -1434,7 +1352,6 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
     },
-    // 完成頁面樣式
     completionContainer: {
         flexGrow: 1,
         paddingBottom: 30,
@@ -1477,7 +1394,6 @@ const styles = StyleSheet.create({
         color: '#666',
         marginTop: 8,
     },
-    // 新增：總結頁面的時間顯示樣式
     reportTimeBox: {
         backgroundColor: 'white',
         padding: 16,

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     View, Text, FlatList, ActivityIndicator,
-    StyleSheet, RefreshControl, TouchableOpacity, ScrollView, Dimensions
+    StyleSheet, RefreshControl, TouchableOpacity, Dimensions
 } from 'react-native';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -21,7 +21,6 @@ const GAME_CATEGORIES = [
     "Human organs",
     "ChineseGame",
     "ChineseSentenceGame"
-
 ].sort();
 
 const { width } = Dimensions.get('window');
@@ -126,15 +125,10 @@ const LeaderboardScreen = () => {
 
         return (
             <View style={[styles.rankItem, isTopThree && styles.topThreeItem]}>
-                {/* 排名區塊 */}
                 <View style={[styles.rankBadge, rankStyle]}>
                     {rankIcon ? rankIcon : <Text style={styles.rankText}>{rank}</Text>}
                 </View>
-
-                {/* 頭像 */}
                 <Avatar username={item.username} size={50} />
-
-                {/* 玩家資訊 */}
                 <View style={styles.userInfo}>
                     <Text style={styles.username}>{item.username}</Text>
                     <View style={styles.levelBadge}>
@@ -142,8 +136,6 @@ const LeaderboardScreen = () => {
                         <Text style={styles.levelText}>Lv.{Math.floor(score / 100) + 1}</Text>
                     </View>
                 </View>
-
-                {/* 分數 */}
                 <View style={styles.scoreContainer}>
                     <Text style={[styles.score, isTopThree && { color: '#FFA500' }]}>{score}</Text>
                     <Text style={styles.ptText}>score</Text>
@@ -152,19 +144,15 @@ const LeaderboardScreen = () => {
         );
     };
 
-    return (
-        <View style={styles.container}>
+    // 標題與遊戲類別網格（作為 FlatList 的頭部）
+    const ListHeader = () => (
+        <>
             <View style={styles.header}>
                 <Text style={styles.mainTitle}>🏆 Ranking</Text>
                 <Text style={styles.subTitle}>Let's see who is the strongest learner!</Text>
             </View>
-
-            <View style={styles.selectorWrapper}>
-                <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.categoryScroll}
-                >
+            <View style={styles.categoryGridContainer}>
+                <View style={styles.categoryGrid}>
                     {GAME_CATEGORIES.map((game) => (
                         <TouchableOpacity
                             key={game}
@@ -182,9 +170,13 @@ const LeaderboardScreen = () => {
                             </Text>
                         </TouchableOpacity>
                     ))}
-                </ScrollView>
+                </View>
             </View>
+        </>
+    );
 
+    return (
+        <View style={styles.container}>
             <FlatList
                 data={data}
                 renderItem={renderItem}
@@ -192,6 +184,7 @@ const LeaderboardScreen = () => {
                 onEndReached={handleLoadMore}
                 onEndReachedThreshold={0.2}
                 contentContainerStyle={styles.listContent}
+                ListHeaderComponent={ListHeader}
                 refreshControl={
                     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#FF6B6B']} />
                 }
@@ -211,15 +204,32 @@ const styles = StyleSheet.create({
     header: { alignItems: 'center', marginTop: 60, marginBottom: 16 },
     mainTitle: { fontSize: 32, fontWeight: '900', color: '#FF6B6B', textShadowColor: '#FFD700', textShadowOffset: { width: 2, height: 2 }, textShadowRadius: 4 },
     subTitle: { fontSize: 14, color: '#FFA500', fontWeight: '600', marginTop: 4 },
-    selectorWrapper: { marginBottom: 12, paddingVertical: 8, backgroundColor: '#FFF9F0' },
-    categoryScroll: { paddingHorizontal: 16, gap: 12 },
+
+    // 類別網格容器
+    categoryGridContainer: { paddingHorizontal: 16, paddingVertical: 8, marginBottom: 12 },
+    categoryGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'flex-start',
+        gap: 10, // React Native 0.71+ 支援，若不支援可改用 margin
+    },
     categoryButton: {
-        paddingHorizontal: 20, paddingVertical: 10, borderRadius: 30,
-        backgroundColor: '#FFE4B5', marginRight: 12, elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4
+        paddingHorizontal: 18,
+        paddingVertical: 10,
+        borderRadius: 30,
+        backgroundColor: '#FFE4B5',
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        // 自適應最小寬度，避免按鈕過窄
+        minWidth: width > 600 ? 140 : 110,
+        alignItems: 'center',
     },
     categoryButtonActive: { backgroundColor: '#FF6B6B', transform: [{ scale: 1.02 }] },
     categoryText: { color: '#FF8C42', fontWeight: 'bold', fontSize: 14 },
     categoryTextActive: { color: '#FFF', fontWeight: 'bold' },
+
     listContent: { paddingHorizontal: 16, paddingBottom: 20 },
     rankItem: {
         flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF',
