@@ -19,6 +19,10 @@ const MACHINE_WIDTH = Math.min(760, screenWidth - 40);
 const GAME_WIDTH = MACHINE_WIDTH - 40;
 const GAME_HEIGHT = 240;
 
+// 统一物件框尺寸
+const ITEM_WIDTH = 60;
+const ITEM_HEIGHT = 64;
+
 // 动物类型定义
 interface AnimalType {
     name: string;
@@ -367,7 +371,7 @@ const ClawMachineGame: React.FC = () => {
         const shuffledAnimals = [...ALL_ANIMAL_TYPES].sort(() => 0.5 - Math.random());
         const selectedAnimals = shuffledAnimals.slice(0, animalCount);
         const startX = 20;
-        const bottomY = GAME_HEIGHT - 70;
+        const bottomY = GAME_HEIGHT - ITEM_HEIGHT - 5; // 确保框体不超出区域
         const spacingX = (GAME_WIDTH - 40) / itemCount;
         for (let i = 0; i < selectedAnimals.length; i++) {
             const animalType = selectedAnimals[i];
@@ -459,8 +463,8 @@ const ClawMachineGame: React.FC = () => {
         const clawBottomY = GAME_HEIGHT - 20;
         for (const item of items) {
             if (item.caught) continue;
-            const itemCenterX = item.x + item.type.width / 2;
-            const itemCenterY = item.y + item.type.height / 2;
+            const itemCenterX = item.x + ITEM_WIDTH / 2;
+            const itemCenterY = item.y + ITEM_HEIGHT / 2;
             const distance = Math.sqrt(
                 Math.pow(clawCenterX - itemCenterX, 2) + Math.pow(clawBottomY - itemCenterY, 2)
             );
@@ -793,10 +797,11 @@ const ClawMachineGame: React.FC = () => {
                             </View>
                             {items.map(item => !item.caught && (
                                 <Animated.View key={item.id} style={[styles.item, {
-                                    left: item.x, top: item.y, width: item.type.width, height: item.type.height,
+                                    left: item.x,
+                                    top: item.y,
+                                    width: ITEM_WIDTH,
+                                    height: ITEM_HEIGHT,
                                     transform: [{ scale: suctionItem?.id === item.id && isSuction ? suctionScale : 1 }],
-                                    borderColor: '#4caf50',
-                                    backgroundColor: 'rgba(76, 175, 80, 0.15)',
                                 }]}>
                                     <Text style={styles.itemIcon}>{item.type.icon}</Text>
                                     <Text style={styles.itemName}>{item.type.name}</Text>
@@ -907,9 +912,23 @@ const styles = StyleSheet.create({
     rope: { position: 'absolute', width: 4, backgroundColor: '#8B4513', borderRadius: 2, top: 15 },
     claw: { position: 'absolute', width: 48, height: 48, zIndex: 10, alignItems: 'center', justifyContent: 'center' },
     clawImage: { width: '100%', height: '100%' },
-    item: { position: 'absolute', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255, 248, 225, 0.95)', borderRadius: 10, borderWidth: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3, elevation: 4, padding: 4 },
-    itemIcon: { fontSize: 28 },
-    itemName: { fontSize: 9, marginTop: 2, fontWeight: '500', color: '#57280f' },
+    item: {
+        position: 'absolute',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(255, 248, 225, 0.95)',
+        borderRadius: 10,
+        borderWidth: 2,
+        borderColor: '#4caf50',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 3,
+        elevation: 4,
+        padding: 4,
+    },
+    itemIcon: { fontSize: 32 },
+    itemName: { fontSize: 10, marginTop: 2, fontWeight: '500', color: '#57280f' },
     suctionZone: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 35, backgroundColor: 'rgba(76, 175, 80, 0.25)', borderTopWidth: 2, borderTopColor: '#4caf50', alignItems: 'center', justifyContent: 'center' },
     suctionZoneText: { fontSize: 10, color: '#2e7d32', fontWeight: 'bold', fontFamily: Platform.OS === 'web' ? 'monospace' : 'Courier' },
     controlPanel: { backgroundColor: '#3a94b7', padding: 10, borderTopWidth: 2, borderTopColor: '#c9a87b' },
