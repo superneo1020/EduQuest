@@ -6,6 +6,7 @@ plugins {
 ext {
     springCloudVersion = "2025.0.2"
     springAiVersion = "1.1.4"
+    springCloudGcpVersion = "7.4.6"
 }
 
 group = 'com.eduquest'
@@ -44,6 +45,7 @@ dependencyManagement {
     imports {
         mavenBom "org.springframework.cloud:spring-cloud-dependencies:$springCloudVersion"
         mavenBom "org.springframework.ai:spring-ai-bom:$springAiVersion"
+        mavenBom "com.google.cloud:spring-cloud-gcp-dependencies:$springCloudGcpVersion"
     }
 }
 

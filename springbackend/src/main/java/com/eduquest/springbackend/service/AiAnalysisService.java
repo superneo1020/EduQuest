@@ -6,6 +6,9 @@ import com.eduquest.springbackend.dao.UserRepository;
 import com.eduquest.springbackend.dto.*;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
 import org.springframework.ai.chat.messages.Message;
@@ -31,26 +34,39 @@ public class AiAnalysisService {
     private Resource analysisPromptResource;
 
     private final List<String> fieldLibrary = List.of(
-            "\"encouragementMessage\": Two sentences: praise an achievement from 'achievements' and motivate for tomorrow.",
-            "\"analysis\": Summary: most played category, highest score, and improvement area.",
-            "\"strengths\": Bullet points on question types correctly answered in 'achievements'.",
-            "\"powerUpTips\": Use the 'Description' of the games the student failed in 'challenges' to provide 2 specific pedagogical tips.",
-            "\"gamesForNextSteps\": Recommend a game where the 'Core Skill' matches the student's weakest area in 'challenges', and explain why based on its 'Description'."
+            "\"encouragementMessage\": Two sentences. If 'achievements' has items, praise a specific one. If empty, praise their high scores or effort, and motivate for tomorrow.",
+            "\"analysis\": Summary: most played category (based on gameCategory), highest score, and one general improvement area.",
+            "\"strengths\": Bullet points on question types correctly answered in 'achievements'. If empty, list general strengths based on their high scores.",
+            "\"powerUpTips\": If 'challenges' has items, use the 'Description' of those failed games to provide 2 specific pedagogical tips. If empty, provide 2 general tips to keep up the good work.",
+            "\"gamesForNextSteps\": Recommend a game from the 'available games' list where the 'Core Skill' matches the student's weakest area or expands their current skills. Explain why based on its 'Description'."
     );
 
-    private final ChatClient chatClient;
+    private ChatClient chatClient;
+    private final ChatClient.Builder chatClientBuilder;
     private final UserGameScoreRepository userGameScoreRepo;
     private final UserRepository userRepo;
+    private final GameRepository gameRepo;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ExternalAiService externalAiService;
+    private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
     public AiAnalysisService(
-            ChatClient.Builder builder,
+            ChatClient.Builder chatClientBuilder,
             UserGameScoreRepository userGameScoreRepo,
             UserRepository userRepo,
             GameRepository gameRepo,
             ExternalAiService externalAiService
     ) {
+        this.chatClientBuilder = chatClientBuilder;
+        this.userGameScoreRepo = userGameScoreRepo;
+        this.userRepo = userRepo;
+        this.gameRepo = gameRepo;
+        this.externalAiService = externalAiService;
+    }
+
+    @PostConstruct
+    public void initGameLibrary() {
+        // Build games list
         String games = gameRepo.findAllGameRecords().stream()
                 .map(g -> String.format(
                         "- %s: [Category: %s] [Description: %s]",
@@ -60,6 +76,7 @@ public class AiAnalysisService {
                 ))
                 .collect(Collectors.joining(", "));
 
+        // Build full system prompt
         String fullSystemPrompt = """
             You are an encouraging, friendly AI mentor of EduQuest for primary school students.
             Your goal is to make students feel proud of their progress.
@@ -68,13 +85,12 @@ public class AiAnalysisService {
             Current available games for reference: %s
             """.formatted(games);
 
-        this.chatClient = builder
+        this.chatClient = chatClientBuilder
                 .defaultSystem(fullSystemPrompt)
                 .defaultAdvisors(new SimpleLoggerAdvisor())
                 .build();
-        this.userGameScoreRepo = userGameScoreRepo;
-        this.userRepo = userRepo;
-        this.externalAiService = externalAiService;
+
+        logger.info("AiAnalysisService: Game library context cached successfully!");
     }
 
     public AiAnalysisResponse analyzeGame(Long gameId, Long userId, Pageable pageable) {
@@ -196,7 +212,18 @@ public class AiAnalysisService {
                     .map(q -> String.format("Q: %s, My Ans: %s", q.content(), q.userAnswer()))
                     .toList();
 
+            if (achievements.isEmpty()) {
+                achievements = List.of("No correct answers found.");
+            }
+
+            if (challenges.isEmpty()) {
+                challenges = List.of("Perfect session! No challenges found.");
+            }
+
+            String gameName = dto.name();
+
             return new GameLeanScore(
+                    gameName,
                     dto.scores(),
                     dto.difficulty(),
                     achievements,

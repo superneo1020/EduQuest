@@ -10,7 +10,6 @@ public class AiConfig {
 
     @Bean
     ChatClient chatClient(ChatClient.Builder builder) {
-        // can add default advisors here (like memory or logging)
         return builder.build();
     }
 

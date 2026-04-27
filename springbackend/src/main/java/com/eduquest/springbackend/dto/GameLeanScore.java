@@ -3,6 +3,7 @@ package com.eduquest.springbackend.dto;
 import java.util.List;
 
 public record GameLeanScore(
+        String gameName,
         int score,
         String difficulty,
         List<String> achievements, // correct answers
