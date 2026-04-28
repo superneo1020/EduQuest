@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.util.List;
 
 public interface UserGameScoreRepository extends JpaRepository<UserGameScore,Long> {
@@ -112,4 +113,12 @@ public interface UserGameScoreRepository extends JpaRepository<UserGameScore,Lon
             @Param("classId") Long classId,
             Pageable pageable
     );
+
+    @Query("SELECT new com.eduquest.springbackend.dto.UserGameScoreDto(" +
+            "g.name, g.type, g.difficulty, g.icon, g.description, " +
+            "ugs.scores, ugs.metadata, ugs.createdAt) " +
+            "FROM UserGameScore ugs JOIN ugs.game g " +
+            "WHERE ugs.user.id = :userId " +
+            "AND ugs.createdAt > :specificTime")
+    List<UserGameScoreDto> findUserGameScoresByUserIdAndCreatedAtAfter(Long userId, Instant specificTime);
 }
