@@ -2,6 +2,7 @@ package com.eduquest.springbackend.controller;
 
 import com.eduquest.springbackend.dto.*;
 import com.eduquest.springbackend.service.AppUserDetails;
+import com.eduquest.springbackend.service.EducatorAiAnalysisService;
 import com.eduquest.springbackend.service.EducatorService;
 import com.eduquest.springbackend.service.UserGameScoreService;
 import jakarta.validation.Valid;
@@ -20,10 +21,16 @@ import java.util.Map;
 public class EducatorController {
 
     private final EducatorService educatorService;
+    private final EducatorAiAnalysisService educatorAiAnalysisService;
     private final UserGameScoreService userGameScoreService;
 
-    public EducatorController(EducatorService educatorService, UserGameScoreService userGameScoreService) {
+    public EducatorController(
+            EducatorService educatorService,
+            EducatorAiAnalysisService educatorAiAnalysisService,
+            UserGameScoreService userGameScoreService
+    ) {
         this.educatorService = educatorService;
+        this.educatorAiAnalysisService = educatorAiAnalysisService;
         this.userGameScoreService = userGameScoreService;
     }
 
@@ -97,9 +104,31 @@ public class EducatorController {
         return ResponseEntity.ok(educatorService.removeCourseMember(courseId, userId));
     }
 
+    @GetMapping("/class/{courseId}/game/score")
+    @PreAuthorize("@courseMemberSecurity.isCourseMember(#courseId)")
+    public ResponseEntity<?> showAllCourseMembersGameRecord(
+            @PathVariable Long courseId,
+            @PageableDefault(
+                    size = 100,
+                    sort = "createdAt",
+                    direction = Sort.Direction.DESC
+            ) Pageable pageable
+    ) {
+        return ResponseEntity.ok(userGameScoreService.showAllGameRecordByCourseId(courseId, pageable));
+    }
+
+    @GetMapping("/class/{courseId}/game/score/result")
+    @PreAuthorize("@courseMemberSecurity.isCourseMember(#courseId)")
+    public ResponseEntity<?> aiAnalysisAllCourseMembersGameRecord(
+            @PathVariable Long courseId,
+            @PageableDefault(size = 100) Pageable pageable
+    ) {
+        return ResponseEntity.ok(educatorAiAnalysisService.analysisRecentProgress(courseId, pageable));
+    }
+
     @GetMapping({"student/{userId}/game/score", "student/{userId}/game/{name}/score"})
     @PreAuthorize("@userSecurity.isBothUserSameSchool(#userId)")
-    public ResponseEntity<?> getMyGameScore(
+    public ResponseEntity<?> getStudentGameScore(
             @PathVariable Long userId,
             @PathVariable(required = false) String name,
             @PageableDefault(
@@ -114,12 +143,25 @@ public class EducatorController {
 
     @GetMapping({"student/{userId}/game/best", "student/{userId}/game/{name}/best"})
     @PreAuthorize("@userSecurity.isBothUserSameSchool(#userId)")
-    public ResponseEntity<?> getMyBestGameScore(
+    public ResponseEntity<?> getStudentBestGameScore(
             @PathVariable Long userId,
             @PathVariable(required = false) String name
     ) {
         return name != null
                 ? ResponseEntity.ok(userGameScoreService.showBestGameRecord(userId, name))
                 : ResponseEntity.ok(userGameScoreService.showBestGameRecord(userId));
+    }
+
+    @GetMapping("student/{userId}/game/{gameId}/result")
+    @PreAuthorize("@userSecurity.isBothUserSameSchool(#userId)")
+    public ResponseEntity<?> aiAnalysisStudentGameScore(
+            @PathVariable Long userId,
+            @PathVariable Long gameId,
+            @PageableDefault(
+                    sort = "createdAt",
+                    direction = Sort.Direction.DESC
+            ) Pageable pageable
+    ) {
+        return ResponseEntity.ok(educatorAiAnalysisService.analyzeStudentGameProgress(userId, gameId, pageable));
     }
 }
