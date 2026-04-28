@@ -1,6 +1,6 @@
 // app/games/chinese/chinesequiz.tsx
 // 餐廳大作戰 - 傳送帶版本（加入打擊回饋與倒數特效版）
-// 修正：2題模式，初級分數 50+50=100，高級 60+60=120
+// 支援網頁上下滾動
 
 import React, { useState, useEffect, useRef } from 'react';
 import { createGameMetadata, GameMetadata } from '../../../types/GameMetadata';
@@ -785,159 +785,239 @@ const ChineseRestaurantGame = () => {
         }
     };
 
-    // 渲染游戏主界面
+    // 渲染游戏主界面（加入 ScrollView 支援滾動）
     const renderPlaying = () => (
         <View style={styles.gameContainer}>
             <StatusBar barStyle="dark-content" />
+            {/* 絕對定位的浮層 - 不受滾動影響 */}
+            {prepText && (
+                <Animated.View style={[styles.prepOverlay, { transform: [{ scale: prepScale }] }]}>
+                    <Text style={styles.prepText}>{prepText}</Text>
+                </Animated.View>
+            )}
+            {floatingText && (
+                <FloatingText
+                    key={floatingText.id}
+                    text={floatingText.text}
+                    color={floatingText.color}
+                    onComplete={() => setFloatingText(null)}
+                />
+            )}
+            {hintVisible && (
+                <Animated.View style={[styles.floatingHint, { backgroundColor: hintColor }]}>
+                    <Text style={styles.floatingHintText}>{hintText}</Text>
+                </Animated.View>
+            )}
             <Animated.View style={{ flex: 1, transform: [{ translateX: screenShake }] }}>
-                {/* 修改：頂部欄帶計時器 */}
-                <View style={styles.gameHeaderWithTimer}>
-                    <TouchableOpacity onPress={handleRestart} style={styles.exitButton}>
-                        <Text style={styles.exitButtonText}>← Leave</Text>
-                    </TouchableOpacity>
-                    <View style={styles.timerContainer}>
-                        <Text style={styles.timerIcon}>⏱️</Text>
-                        <Text style={styles.timerText}>{formatTime(elapsedSeconds)}</Text>
-                    </View>
-                    <View style={styles.statsRow}>
-                        <View style={styles.statBox}>
-                            <Star size={18} color="#FFD966" />
-                            <Animated.Text style={[styles.statValue, { transform: [{ scale: scoreAnim }] }]}>
-                                {score}/{maxScore}
-                            </Animated.Text>
+                <ScrollView
+                    contentContainerStyle={styles.playingScrollContent}
+                    showsVerticalScrollIndicator={true}
+                    bounces={false}
+                >
+                    {/* 頂部欄（帶計時器） */}
+                    <View style={styles.gameHeaderWithTimer}>
+                        <TouchableOpacity onPress={handleRestart} style={styles.exitButton}>
+                            <Text style={styles.exitButtonText}>← Leave</Text>
+                        </TouchableOpacity>
+                        <View style={styles.timerContainer}>
+                            <Text style={styles.timerIcon}>⏱️</Text>
+                            <Text style={styles.timerText}>{formatTime(elapsedSeconds)}</Text>
                         </View>
-                        <View style={styles.statBox}>
-                            <Sparkles size={18} color="#FF6B6B" />
-                            <Animated.Text style={[styles.statValue, styles.comboText, { transform: [{ scale: comboAnim }] }]}>
-                                x{combo}
-                            </Animated.Text>
-                        </View>
-                        <View style={styles.statBox}>
-                            <Heart size={18} color="#FF6B6B" />
-                            <Text style={styles.statValue}>
-                                {questions.filter(q => q.isAnsweredCorrectly).length}/{questions.length}
-                            </Text>
-                        </View>
-                    </View>
-                </View>
-
-                <View style={styles.restaurantArea}>
-                    <Animated.View style={[styles.customerArea, { transform: [{ scale: customerAnim }] }]}>
-                        <View style={styles.customerCard}>
-                            <View style={styles.customerAvatar}>
-                                <Text style={styles.customerEmoji}>{getCustomerEmoji()}</Text>
+                        <View style={styles.statsRow}>
+                            <View style={styles.statBox}>
+                                <Star size={18} color="#FFD966" />
+                                <Animated.Text style={[styles.statValue, { transform: [{ scale: scoreAnim }] }]}>
+                                    {score}/{maxScore}
+                                </Animated.Text>
                             </View>
-                            <View style={styles.speechBubble}>
-                                <Text style={styles.speechText}>{getCustomerMessage()}</Text>
-                                {currentQuestion && (
-                                    <Text style={styles.dishName}>{currentQuestion.question}</Text>
+                            <View style={styles.statBox}>
+                                <Sparkles size={18} color="#FF6B6B" />
+                                <Animated.Text style={[styles.statValue, styles.comboText, { transform: [{ scale: comboAnim }] }]}>
+                                    x{combo}
+                                </Animated.Text>
+                            </View>
+                            <View style={styles.statBox}>
+                                <Heart size={18} color="#FF6B6B" />
+                                <Text style={styles.statValue}>
+                                    {questions.filter(q => q.isAnsweredCorrectly).length}/{questions.length}
+                                </Text>
+                            </View>
+                        </View>
+                    </View>
+
+                    <View style={styles.restaurantArea}>
+                        <Animated.View style={[styles.customerArea, { transform: [{ scale: customerAnim }] }]}>
+                            <View style={styles.customerCard}>
+                                <View style={styles.customerAvatar}>
+                                    <Text style={styles.customerEmoji}>{getCustomerEmoji()}</Text>
+                                </View>
+                                <View style={styles.speechBubble}>
+                                    <Text style={styles.speechText}>{getCustomerMessage()}</Text>
+                                    {currentQuestion && (
+                                        <Text style={styles.dishName}>{currentQuestion.question}</Text>
+                                    )}
+                                </View>
+                            </View>
+                        </Animated.View>
+
+                        <View style={styles.conveyorArea}>
+                            <View
+                                style={styles.conveyorBelt}
+                                onLayout={(e) => {
+                                    const { width } = e.nativeEvent.layout;
+                                    if (width > 0) setBeltWidth(width);
+                                }}
+                            >
+                                {/* 条纹层 - 根据平台选择不同实现 */}
+                                {!isWeb ? (
+                                    <StripesCanvas
+                                        beltWidth={beltWidth}
+                                        beltHeight={CONVEYOR_HEIGHT}
+                                        isActive={gameActive && !gameComplete && !nextQuestionDelay}
+                                        speedPxPerSec={116.6667}
+                                    />
+                                ) : (
+                                    <WebStripes
+                                        beltWidth={beltWidth}
+                                        beltHeight={CONVEYOR_HEIGHT}
+                                        isActive={gameActive && !gameComplete && !nextQuestionDelay}
+                                    />
+                                )}
+
+                                {items.map(item => (
+                                    <Animated.View
+                                        key={item.id}
+                                        style={[
+                                            styles.conveyorItem,
+                                            {
+                                                transform: [{ translateX: item.x }, { scale: item.scale }],
+                                                opacity: item.opacity,
+                                                top: item.y,
+                                            }
+                                        ]}
+                                    >
+                                        <TouchableOpacity
+                                            style={[styles.foodButton, !gameActive && styles.disabledFoodButton]}
+                                            onPress={() => handleItemClick(item)}
+                                            activeOpacity={0.7}
+                                            disabled={!gameActive}
+                                        >
+                                            <Text style={styles.foodIcon}>{item.icon}</Text>
+                                            <Text style={[styles.foodText, item.isCorrect ? styles.correctText : styles.wrongText]}>
+                                                {item.text}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </Animated.View>
+                                ))}
+
+                                {items.length === 0 && isGameActive && !gameComplete && !nextQuestionDelay && gameActive && (
+                                    <View style={styles.conveyorHint}>
+                                        <Text style={styles.conveyorHintText}>✨ The ingredients come out from here ✨</Text>
+                                        <Text style={[styles.conveyorHintText, { fontSize: 10, marginTop: 4 }]}>→ Move to the left</Text>
+                                    </View>
                                 )}
                             </View>
+                            <View style={styles.conveyorLeftWheel} />
+                            <View style={styles.conveyorRightWheel} />
                         </View>
-                    </Animated.View>
 
-                    <View style={styles.conveyorArea}>
-                        <View
-                            style={styles.conveyorBelt}
-                            onLayout={(e) => {
-                                const { width } = e.nativeEvent.layout;
-                                if (width > 0) setBeltWidth(width);
-                            }}
-                        >
-                            {prepText && (
-                                <Animated.View style={[styles.prepOverlay, { transform: [{ scale: prepScale }] }]}>
-                                    <Text style={styles.prepText}>{prepText}</Text>
-                                </Animated.View>
-                            )}
-
-                            {floatingText && (
-                                <FloatingText
-                                    key={floatingText.id}
-                                    text={floatingText.text}
-                                    color={floatingText.color}
-                                    onComplete={() => setFloatingText(null)}
-                                />
-                            )}
-
-                            {/* 条纹层 - 根据平台选择不同实现 */}
-                            {!isWeb ? (
-                                <StripesCanvas
-                                    beltWidth={beltWidth}
-                                    beltHeight={CONVEYOR_HEIGHT}
-                                    isActive={gameActive && !gameComplete && !nextQuestionDelay}
-                                    speedPxPerSec={116.6667}
-                                />
-                            ) : (
-                                <WebStripes
-                                    beltWidth={beltWidth}
-                                    beltHeight={CONVEYOR_HEIGHT}
-                                    isActive={gameActive && !gameComplete && !nextQuestionDelay}
-                                />
-                            )}
-
-                            {items.map(item => (
-                                <Animated.View
-                                    key={item.id}
-                                    style={[
-                                        styles.conveyorItem,
-                                        {
-                                            transform: [{ translateX: item.x }, { scale: item.scale }],
-                                            opacity: item.opacity,
-                                            top: item.y,
-                                        }
-                                    ]}
-                                >
-                                    <TouchableOpacity
-                                        style={[styles.foodButton, !gameActive && styles.disabledFoodButton]}
-                                        onPress={() => handleItemClick(item)}
-                                        activeOpacity={0.7}
-                                        disabled={!gameActive}
-                                    >
-                                        <Text style={styles.foodIcon}>{item.icon}</Text>
-                                        <Text style={[styles.foodText, item.isCorrect ? styles.correctText : styles.wrongText]}>
-                                            {item.text}
-                                        </Text>
-                                    </TouchableOpacity>
-                                </Animated.View>
-                            ))}
-
-                            {items.length === 0 && isGameActive && !gameComplete && !nextQuestionDelay && gameActive && (
-                                <View style={styles.conveyorHint}>
-                                    <Text style={styles.conveyorHintText}>✨ The ingredients come out from here ✨</Text>
-                                    <Text style={[styles.conveyorHintText, { fontSize: 10, marginTop: 4 }]}>→ Move to the left</Text>
-                                </View>
-                            )}
-                        </View>
-                        <View style={styles.conveyorLeftWheel} />
-                        <View style={styles.conveyorRightWheel} />
-                    </View>
-
-                    <View style={styles.progressContainer}>
-                        <View style={styles.progressBar}>
-                            <View style={[styles.progressFill, { width: `${((currentIndex + 1) / questions.length) * 100}%` }]} />
+                        <View style={styles.progressContainer}>
+                            <View style={styles.progressBar}>
+                                <View style={[styles.progressFill, { width: `${((currentIndex + 1) / questions.length) * 100}%` }]} />
+                            </View>
                         </View>
                     </View>
-                </View>
 
-                <View style={styles.controlPanel}>
-                    <TouchableOpacity style={styles.resetGameBtn} onPress={resetGame}>
-                        <Text style={styles.resetGameBtnText}>⟳ Start over</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.completeGameBtn} onPress={() => handleGameComplete(score)}>
-                        <Text style={styles.completeGameBtnText}>✓ Closed for business</Text>
-                    </TouchableOpacity>
-                </View>
-
-                {hintVisible && (
-                    <Animated.View style={[styles.floatingHint, { backgroundColor: hintColor }]}>
-                        <Text style={styles.floatingHintText}>{hintText}</Text>
-                    </Animated.View>
-                )}
+                    <View style={styles.controlPanel}>
+                        <TouchableOpacity style={styles.resetGameBtn} onPress={resetGame}>
+                            <Text style={styles.resetGameBtnText}>⟳ Start over</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.completeGameBtn} onPress={() => handleGameComplete(score)}>
+                            <Text style={styles.completeGameBtnText}>✓ Closed for business</Text>
+                        </TouchableOpacity>
+                    </View>
+                    <View style={styles.bottomSpacer} />
+                </ScrollView>
             </Animated.View>
         </View>
     );
 
-    // 渲染难度选择界面
+    // 渲染结果界面（加入 ScrollView 支援滾動）
+    const renderResult = () => {
+        const { totalQuestions, correctCount, accuracy } = calculateScoreStats();
+        const totalTimeFormatted = formatTime(elapsedSeconds);
+        return (
+            <View style={styles.container}>
+                <StatusBar barStyle="dark-content" />
+                <ScrollView contentContainerStyle={styles.resultScrollContent}>
+                    <View style={styles.resultHeader}>
+                        <TouchableOpacity onPress={handleRestart} style={styles.resultBackButton}>
+                            <Ionicons name="arrow-back" size={24} color="#333" />
+                        </TouchableOpacity>
+                        <Text style={styles.resultHeaderTitle}>Business Closed</Text>
+                        <View style={{ width: 40 }} />
+                    </View>
+                    <View style={styles.resultCard}>
+                        <Text style={styles.resultTitle}>🍽️ Today's performance 🍽️</Text>
+                        <View style={styles.scoreCircle}>
+                            <Text style={styles.scorePercentage}>{score}</Text>
+                            <Text style={styles.scoreLabel}>Total Score (Full Score {maxScore})</Text>
+                        </View>
+
+                        <View style={styles.reportTimeBox}>
+                            <Text style={styles.reportScoreLabel}>⏱️ Total Time</Text>
+                            <Text style={styles.reportTimeValue}>{totalTimeFormatted}</Text>
+                        </View>
+
+                        {isSaving && (
+                            <View style={styles.savingIndicator}>
+                                <ActivityIndicator size="small" color="#4CAF50" />
+                                <Text style={styles.savingText}>Synchronizing scores...</Text>
+                            </View>
+                        )}
+                        <View style={styles.scoreDetails}>
+                            <Text style={styles.scoreDetailText}>✅ Serve the correct order: {correctCount}/{totalQuestions}</Text>
+                            <Text style={styles.scoreDetailText}>🔥 Highest Combo: x{maxCombo}</Text>
+                            <View style={styles.percentageBadge}>
+                                <Text style={styles.percentageText}>🎯 Customer satisfaction: {accuracy}%</Text>
+                            </View>
+                        </View>
+                        <View style={styles.summaryContainer}>
+                            <Text style={styles.summaryTitle}>📝 Order History：</Text>
+                            {questions.map((q, index) => (
+                                <View key={index} style={styles.summaryItem}>
+                                    <Text style={styles.summaryNumber}>{index + 1}.</Text>
+                                    <Text style={styles.summaryAnswer} numberOfLines={1}>
+                                        {q.userAnswer || 'Meal not served'}
+                                    </Text>
+                                    <Text style={[styles.summaryScore, q.isAnsweredCorrectly ? styles.correctScore : styles.incorrectScore]}>
+                                        {q.isAnsweredCorrectly ? '✓' : '✗'}
+                                    </Text>
+                                </View>
+                            ))}
+                        </View>
+                        <View style={styles.feedbackBox}>
+                            <Text style={styles.feedbackTitle}>💡 Chef's Review</Text>
+                            <Text style={styles.feedbackText}>{aiFeedback}</Text>
+                        </View>
+                        <View style={styles.resultButtonContainer}>
+                            <TouchableOpacity style={[styles.resultButton, styles.tryAgainResultButton]} onPress={handleTryAgain}>
+                                <Text style={styles.resultButtonText}>🔄 Play again</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[styles.resultButton, styles.newDifficultyButton]} onPress={handleRestart}>
+                                <Text style={styles.resultButtonText}>🎯 Select Difficulty</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[styles.resultButton, styles.backToGamesResultButton]} onPress={handleBackToGames}>
+                                <Text style={styles.resultButtonText}>🎮 Return to game</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </ScrollView>
+            </View>
+        );
+    };
+
+    // 渲染难度选择界面（原本已存在，现保留）
     const renderDifficultySelect = () => {
         const difficultyOptions = [
             {
@@ -1011,82 +1091,6 @@ const ChineseRestaurantGame = () => {
         );
     };
 
-    // 渲染结果界面
-    const renderResult = () => {
-        const { totalQuestions, correctCount, accuracy } = calculateScoreStats();
-        const totalTimeFormatted = formatTime(elapsedSeconds);
-        return (
-            <View style={styles.container}>
-                <StatusBar barStyle="dark-content" />
-                <View style={styles.resultHeader}>
-                    <TouchableOpacity onPress={handleRestart} style={styles.resultBackButton}>
-                        <Ionicons name="arrow-back" size={24} color="#333" />
-                    </TouchableOpacity>
-                    <Text style={styles.resultHeaderTitle}>Business Closed</Text>
-                    <View style={{ width: 40 }} />
-                </View>
-                <ScrollView contentContainerStyle={styles.resultContainer}>
-                    <View style={styles.resultCard}>
-                        <Text style={styles.resultTitle}>🍽️ Today's performance 🍽️</Text>
-                        <View style={styles.scoreCircle}>
-                            <Text style={styles.scorePercentage}>{score}</Text>
-                            <Text style={styles.scoreLabel}>Total Score (Full Score {maxScore})</Text>
-                        </View>
-
-                        {/* 新增：顯示總花費時間 */}
-                        <View style={styles.reportTimeBox}>
-                            <Text style={styles.reportScoreLabel}>⏱️ Total Time</Text>
-                            <Text style={styles.reportTimeValue}>{totalTimeFormatted}</Text>
-                        </View>
-
-                        {isSaving && (
-                            <View style={styles.savingIndicator}>
-                                <ActivityIndicator size="small" color="#4CAF50" />
-                                <Text style={styles.savingText}>Synchronizing scores...</Text>
-                            </View>
-                        )}
-                        <View style={styles.scoreDetails}>
-                            <Text style={styles.scoreDetailText}>✅ Serve the correct order: {correctCount}/{totalQuestions}</Text>
-                            <Text style={styles.scoreDetailText}>🔥 Highest Combo: x{maxCombo}</Text>
-                            <View style={styles.percentageBadge}>
-                                <Text style={styles.percentageText}>🎯 Customer satisfaction: {accuracy}%</Text>
-                            </View>
-                        </View>
-                        <View style={styles.summaryContainer}>
-                            <Text style={styles.summaryTitle}>📝 Order History：</Text>
-                            {questions.map((q, index) => (
-                                <View key={index} style={styles.summaryItem}>
-                                    <Text style={styles.summaryNumber}>{index + 1}.</Text>
-                                    <Text style={styles.summaryAnswer} numberOfLines={1}>
-                                        {q.userAnswer || 'Meal not served'}
-                                    </Text>
-                                    <Text style={[styles.summaryScore, q.isAnsweredCorrectly ? styles.correctScore : styles.incorrectScore]}>
-                                        {q.isAnsweredCorrectly ? '✓' : '✗'}
-                                    </Text>
-                                </View>
-                            ))}
-                        </View>
-                        <View style={styles.feedbackBox}>
-                            <Text style={styles.feedbackTitle}>💡 Chef's Review</Text>
-                            <Text style={styles.feedbackText}>{aiFeedback}</Text>
-                        </View>
-                        <View style={styles.resultButtonContainer}>
-                            <TouchableOpacity style={[styles.resultButton, styles.tryAgainResultButton]} onPress={handleTryAgain}>
-                                <Text style={styles.resultButtonText}>🔄 Play again</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={[styles.resultButton, styles.newDifficultyButton]} onPress={handleRestart}>
-                                <Text style={styles.resultButtonText}>🎯 Select Difficulty</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={[styles.resultButton, styles.backToGamesResultButton]} onPress={handleBackToGames}>
-                                <Text style={styles.resultButtonText}>🎮 Return to game</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </ScrollView>
-            </View>
-        );
-    };
-
     if (loading) {
         return (
             <View style={styles.loadingContainer}>
@@ -1106,7 +1110,6 @@ const ChineseRestaurantGame = () => {
     );
 };
 
-
 const styles = StyleSheet.create({
     container: {
         flex: 1,
@@ -1115,6 +1118,12 @@ const styles = StyleSheet.create({
     scrollContent: {
         flexGrow: 1,
         paddingBottom: 40,
+    },
+    playingScrollContent: {
+        paddingBottom: 30,
+    },
+    bottomSpacer: {
+        height: 20,
     },
     headerSection: {
         alignItems: 'center',
@@ -1237,7 +1246,6 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#FCE4B2',
     },
-    // 新增：帶計時器的頂部欄樣式
     gameHeaderWithTimer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -1248,7 +1256,6 @@ const styles = StyleSheet.create({
         borderBottomWidth: 2,
         borderBottomColor: '#FFD966',
     },
-    // 計時器樣式
     timerContainer: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1267,16 +1274,6 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: '#fff',
         fontFamily: Platform.OS === 'web' ? 'monospace' : 'Courier',
-    },
-    // 保留原有樣式作為備用
-    gameHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: 15,
-        backgroundColor: '#FFB347',
-        borderBottomWidth: 2,
-        borderBottomColor: '#FFD966',
     },
     exitButton: {
         backgroundColor: '#FF6B6B',
@@ -1575,19 +1572,17 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: '#333',
     },
-    resultContainer: {
+    resultScrollContent: {
         flexGrow: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 20,
-        backgroundColor: '#FCE4B2',
-        minHeight: '100%',
+        paddingVertical: 20,
     },
     resultCard: {
         backgroundColor: '#FFFFFF',
         borderRadius: 25,
         padding: 30,
-        width: '100%',
+        width: '90%',
         alignItems: 'center',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
@@ -1616,7 +1611,6 @@ const styles = StyleSheet.create({
         color: '#666',
         marginTop: 5,
     },
-    // 新增：總結頁面的時間顯示樣式
     reportTimeBox: {
         backgroundColor: '#FFF3E0',
         padding: 16,
