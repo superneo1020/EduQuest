@@ -321,6 +321,132 @@ class EducatorService {
         return this.handleResponse(response, 'addStudentToClass');
     }
 
+    async removeStudentFromSchool(userId: number): Promise<OperationResult> {
+        const headers = await this.getAuthHeaders();
+        
+        // First try direct school member removal endpoints
+        const schoolEndpoints = [
+            `${getApiBaseUrl()}/api/educator/school/member/${userId}`,
+            `${getApiBaseUrl()}/api/educator/school/members/${userId}`,
+            `${getApiBaseUrl()}/api/user/school/member/${userId}`
+        ];
+
+        let lastError: Error | null = null;
+
+        // Try school member endpoints first
+        for (const url of schoolEndpoints) {
+            console.log(`EducatorService: Trying to remove student ${userId} from school at: ${url}`);
+
+            try {
+                const response = await fetch(url, {
+                    method: 'DELETE',
+                    headers,
+                });
+
+                console.log(`EducatorService.removeStudentFromSchool: Response status: ${response.status}`);
+
+                if (response.ok) {
+                    let data;
+                    try {
+                        const responseText = await response.text();
+                        console.log(`EducatorService.removeStudentFromSchool: Response body:`, responseText);
+                        data = responseText ? JSON.parse(responseText) : { message: 'Student removed from school successfully', warning: false };
+                    } catch (e) {
+                        console.log(`EducatorService.removeStudentFromSchool: Could not parse response`);
+                        data = { message: 'Student removed from school successfully', warning: false };
+                    }
+
+                    console.log(`EducatorService.removeStudentFromSchool: Success, returning:`, data);
+                    return data;
+                } else {
+                    let errorMessage = `Failed to remove student from school`;
+                    try {
+                        const errorData = await response.json();
+                        console.log(`EducatorService.removeStudentFromSchool: Error response:`, errorData);
+                        errorMessage = errorData.message || errorData.warning || errorMessage;
+                    } catch (e) {
+                        console.log(`EducatorService.removeStudentFromSchool: Could not parse error response`);
+                    }
+
+                    if (response.status === 403) {
+                        lastError = new Error('Permission denied: You do not have permission to remove students from school');
+                    } else if (response.status === 404) {
+                        lastError = new Error('Student not found in school');
+                    } else {
+                        lastError = new Error(errorMessage);
+                    }
+                    
+                    continue;
+                }
+            } catch (error) {
+                console.log(`EducatorService.removeStudentFromSchool: Request failed for ${url}:`, error);
+                lastError = error as Error;
+                continue;
+            }
+        }
+
+        // If school endpoints failed, try removing from all classes as fallback
+        console.log(`EducatorService: School endpoints failed, trying class removal as fallback`);
+        try {
+            // Get all classes to find which classes the student belongs to
+            const classesResponse = await this.getClasses();
+            const classes = classesResponse.items || [];
+            
+            let removedFromClasses = 0;
+            let forbiddenCount = 0;
+            let notFoundCount = 0;
+            
+            for (const classItem of classes) {
+                try {
+                    // Try to remove student from each class
+                    await this.removeStudentFromClass(classItem.id, userId);
+                    removedFromClasses++;
+                    console.log(`EducatorService: Removed student ${userId} from class ${classItem.id}`);
+                } catch (classError: any) {
+                    console.log(`EducatorService: Could not remove student ${userId} from class ${classItem.id}:`, classError);
+                    
+                    // Count different types of errors
+                    if (classError.message?.includes('Permission denied') || 
+                        classError.message?.includes('Forbidden') ||
+                        classError.message?.includes('403')) {
+                        forbiddenCount++;
+                    } else if (classError.message?.includes('not found') || 
+                               classError.message?.includes('404')) {
+                        notFoundCount++;
+                    }
+                    // Continue with other classes
+                }
+            }
+
+            if (removedFromClasses > 0) {
+                let message = `Student removed from ${removedFromClasses} class(es) successfully`;
+                let warning = false;
+                
+                // Add warnings for classes where removal failed
+                if (forbiddenCount > 0) {
+                    message += ` (permission denied for ${forbiddenCount} class(es))`;
+                    warning = true;
+                }
+                if (notFoundCount > 0) {
+                    message += ` (not found in ${notFoundCount} class(es))`;
+                }
+                
+                console.log(`EducatorService: Fallback successful - ${message}`);
+                return { message, warning };
+            } else if (forbiddenCount > 0) {
+                throw new Error(`Permission denied: You do not have permission to remove this student from any classes. The student may be in classes you don't manage.`);
+            } else if (notFoundCount === classes.length) {
+                throw new Error('Student was not found in any classes');
+            } else {
+                throw new Error('Student could not be removed from any classes due to permission or other issues');
+            }
+        } catch (fallbackError) {
+            console.log(`EducatorService: Fallback class removal also failed:`, fallbackError);
+            const errorMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+            throw new Error(`Failed to remove student: ${errorMessage}`);
+        }
+    }
+
     async ensureTeacherAsMember(courseId: number): Promise<CourseMember> {
         const headers = await this.getAuthHeaders();
         const response = await fetch(`${getApiBaseUrl()}/api/educator/class/${courseId}/member/ensure-teacher`, {
@@ -498,9 +624,9 @@ class EducatorService {
             if (student) {
                 return {
                     id: student.id,
-                    name: student.name,
+                    name: student.name || 'Unknown',
                     email: student.email,
-                    username: student.name, // Using name as username fallback
+                    username: student.name || 'Unknown', // Using name as username fallback
                 };
             }
             
