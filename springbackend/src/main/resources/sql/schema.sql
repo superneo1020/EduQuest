@@ -262,41 +262,6 @@ CREATE INDEX IF NOT EXISTS idx_user_items_user_id ON user_items(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_items_item_id ON user_items(item_id);
 ;;;
 
-CREATE TABLE IF NOT EXISTS documents (
-    id BIGSERIAL PRIMARY KEY,
-    source_uri TEXT NOT NULL,
-    display_name VARCHAR(50) NOT NULL,
-    content TEXT NOT NULL,
-    embedding VECTOR(768),
-    chunk_index INTEGER DEFAULT 0,
-    total_chunks INTEGER DEFAULT 1,
-    metadata JSONB DEFAULT '{}'::jsonb,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-;;;
-
-CREATE INDEX IF NOT EXISTS idx_documents_embedding ON documents USING hnsw (embedding vector_cosine_ops) WITH (m = 16, ef_construction = 64);
-;;;
-CREATE INDEX IF NOT EXISTS idx_documents_source ON documents(source_uri);
-;;;
-
-CREATE TABLE IF NOT EXISTS chat_history (
-    id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT NOT NULL,
-    content TEXT NOT NULL,
-    metadata JSONB DEFAULT '{}'::jsonb,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
-);
-;;;
-
-CREATE INDEX IF NOT EXISTS idx_chat_history_user_id ON chat_history(user_id);
-;;;
-CREATE INDEX IF NOT EXISTS idx_chat_history_created_at ON chat_history(created_at DESC);
-;;;
-
-
 -- add trigger for sync game scores
 CREATE OR REPLACE FUNCTION fn_sync_game_points()
     RETURNS TRIGGER AS $$
@@ -552,14 +517,6 @@ DROP TRIGGER IF EXISTS trg_class_members_updated_at ON class_members;
 ;;;
 CREATE TRIGGER trg_class_members_updated_at
     BEFORE UPDATE ON class_members
-    FOR EACH ROW
-EXECUTE FUNCTION update_timestamp();
-;;;
-
-DROP TRIGGER IF EXISTS trg_documents_updated_at ON documents;
-;;;
-CREATE TRIGGER trg_documents_updated_at
-    BEFORE UPDATE ON documents
     FOR EACH ROW
 EXECUTE FUNCTION update_timestamp();
 ;;;
