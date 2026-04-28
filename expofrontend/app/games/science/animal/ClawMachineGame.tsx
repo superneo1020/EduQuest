@@ -749,6 +749,7 @@ const ClawMachineGame: React.FC = () => {
                     </View>
                 </View>
 
+
                 {/* AI 问题面板 */}
                 <View style={styles.aiQuestionPanel}>
                     {isAiThinking && !waitingForNext ? (
