@@ -3,9 +3,10 @@ package com.eduquest.springbackend.service;
 import com.eduquest.springbackend.dao.GameRepository;
 import com.eduquest.springbackend.dao.UserGameScoreRepository;
 import com.eduquest.springbackend.dao.UserRepository;
-import com.eduquest.springbackend.dto.*;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.eduquest.springbackend.dto.AiAnalysisResponse;
+import com.eduquest.springbackend.dto.AiOverallResponse;
+import com.eduquest.springbackend.dto.FastAPIAnalysisRequest;
+import com.eduquest.springbackend.dto.GameLeanScore;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,10 +36,10 @@ public class AiAnalysisService {
 
     private final List<String> fieldLibrary = List.of(
             "\"encouragementMessage\": Two sentences. If 'achievements' has items, praise a specific one. If empty, praise their high scores or effort, and motivate for tomorrow.",
-            "\"analysis\": Summary: most played category (based on gameCategory), highest score, and one general improvement area.",
+            "\"analysis\": Summary: most played 'Category', highest score, and one general improvement area.",
             "\"strengths\": Bullet points on question types correctly answered in 'achievements'. If empty, list general strengths based on their high scores.",
             "\"powerUpTips\": If 'challenges' has items, use the 'Description' of those failed games to provide 2 specific pedagogical tips. If empty, provide 2 general tips to keep up the good work.",
-            "\"gamesForNextSteps\": Recommend a game from the 'available games' list where the 'Core Skill' matches the student's weakest area or expands their current skills. Explain why based on its 'Description'."
+            "\"gamesForNextSteps\": Recommend a game from the 'Available Games' list where the 'Core Skill' matches the student's weakest area or expands their current skills. Explain why based on its 'Description'."
     );
 
     private ChatClient chatClient;
@@ -46,8 +47,8 @@ public class AiAnalysisService {
     private final UserGameScoreRepository userGameScoreRepo;
     private final UserRepository userRepo;
     private final GameRepository gameRepo;
-    private final ObjectMapper objectMapper = new ObjectMapper();
     private final ExternalAiService externalAiService;
+    private final PromptSerializer promptSerializer;
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
     public AiAnalysisService(
@@ -55,13 +56,15 @@ public class AiAnalysisService {
             UserGameScoreRepository userGameScoreRepo,
             UserRepository userRepo,
             GameRepository gameRepo,
-            ExternalAiService externalAiService
+            ExternalAiService externalAiService,
+            PromptSerializer promptSerializer
     ) {
         this.chatClientBuilder = chatClientBuilder;
         this.userGameScoreRepo = userGameScoreRepo;
         this.userRepo = userRepo;
         this.gameRepo = gameRepo;
         this.externalAiService = externalAiService;
+        this.promptSerializer = promptSerializer;
     }
 
     @PostConstruct
@@ -82,7 +85,7 @@ public class AiAnalysisService {
             Your goal is to make students feel proud of their progress.
             Always use simple language and a growth-mindset tone.
             
-            Current available games for reference: %s
+            Current Available Games for reference: %s
             """.formatted(games);
 
         this.chatClient = chatClientBuilder
@@ -101,15 +104,15 @@ public class AiAnalysisService {
         long daysSinceJoined = ChronoUnit.DAYS.between(studentCreatedAt, now);
 
         // Get user game scores
-        var userGameScores = userGameScoreRepo.findUserGameScoresByUserIdAndGameId(userId, gameId, pageable);
-        var formattedLeanData = simplifyForAi(userGameScores.getContent());
+        var userGameScores = userGameScoreRepo.findGameRecordMiniByUserIdAndGameId(userId, gameId, pageable);
+        var formattedLeanData = promptSerializer.simplifyForAi(userGameScores.getContent());
 
         // Build request
         PromptTemplate userTemplate = new PromptTemplate(analysisPromptResource);
         Message userMessage = userTemplate.createMessage(Map.of(
                 "intro", "process for a specific game",
                 "data", formattedLeanData,
-                "instructions", buildInstructions(0, 1, 2, 3),
+                "instructions", promptSerializer.buildInstructions(fieldLibrary,0, 1, 2, 3),
                 "daysSinceJoined", daysSinceJoined,
                 "now", now
         ));
@@ -132,14 +135,14 @@ public class AiAnalysisService {
         Instant twentyFourHoursAgo = Instant.now().minus(1, ChronoUnit.DAYS);
 
         var userGameScores = userGameScoreRepo.findUserGameScoresByUserIdAndCreatedAtAfter(userId, twentyFourHoursAgo, pageable);
-        var formattedLeanData = simplifyForAi(userGameScores.getContent());
+        var formattedLeanData = promptSerializer.simplifyForAi(userGameScores.getContent());
 
         // Build request
         PromptTemplate userTemplate = new PromptTemplate(analysisPromptResource);
         Message userMessage = userTemplate.createMessage(Map.of(
                 "intro", "daily progress",
                 "data", formattedLeanData,
-                "instructions", buildInstructions(0, 1, 2, 3, 4),
+                "instructions", promptSerializer.buildInstructions(fieldLibrary,0, 1, 2, 3, 4),
                 "daysSinceJoined", daysSinceJoined,
                 "now", now
         ));
@@ -156,13 +159,14 @@ public class AiAnalysisService {
 
     public void prepareAndSendToFastApi(Long userId, Long gameId, Pageable pageable) {
         // Calculate time context
-        Instant studentCreatedAt = userRepo.findCreatedAtById(userId).orElseThrow();
+        Instant studentCreatedAt = userRepo.findCreatedAtById(userId).orElseThrow(
+                () -> new RuntimeException("User not found"));
         long daysJoined = ChronoUnit.DAYS.between(studentCreatedAt, Instant.now());
         String profile = String.format("Joined for %d days.", daysJoined);
 
         // Get user game scores (no need formatting)
-        var userGameScores = userGameScoreRepo.findUserGameScoresByUserIdAndGameId(userId, gameId, pageable);
-        List<GameLeanScore> leanData = getLeanData(userGameScores.getContent());
+        var userGameScores = userGameScoreRepo.findGameRecordMiniByUserIdAndGameId(userId, gameId, pageable);
+        List<GameLeanScore> leanData = promptSerializer.getLeanData(userGameScores.getContent());
 
         // format request
         String sessionId = UUID.randomUUID().toString();
@@ -170,66 +174,5 @@ public class AiAnalysisService {
 
         // call to fastapi
         externalAiService.postAnalysisRequest(request);
-    }
-
-    private String buildInstructions(int... indices) {
-        StringBuilder sb = new StringBuilder("Please return a JSON object with these fields:\n");
-        for (int i = 0; i < indices.length; i++) {
-            int fieldIndex = indices[i];
-            if (fieldIndex >= 0 && fieldIndex < fieldLibrary.size()) {
-                sb.append(String.format("%d. %s\n", i + 1, fieldLibrary.get(fieldIndex)));
-            }
-        }
-        return sb.toString();
-    }
-
-    private String simplifyForAi(List<UserGameScoreDto> originalList) {
-        List<GameLeanScore> leanData = getLeanData(originalList);
-
-        String formattedLeanData;
-        try {
-            formattedLeanData = leanData.isEmpty()
-                    ? "[{\"note\": \"No games played today yet. This is a fresh start!\"}]"
-                    : objectMapper.writeValueAsString(leanData);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
-        }
-
-        return formattedLeanData;
-    }
-
-    private List<GameLeanScore> getLeanData(List<UserGameScoreDto> originalList) {
-        return originalList.stream().map(dto -> {
-            // 1. Extract the words from the correct answers (for praise).
-            List<String> achievements = dto.metadata().questions().stream()
-                    .filter(GameQuestionRecord::isCorrect)
-                    .map(GameQuestionRecord::content) // just content
-                    .toList();
-
-            // 2. Extract records of incorrect answers (for suggestion purposes).
-            List<String> challenges = dto.metadata().questions().stream()
-                    .filter(q -> !q.isCorrect())
-                    .map(q -> String.format("Q: %s, My Ans: %s", q.content(), q.userAnswer()))
-                    .toList();
-
-            if (achievements.isEmpty()) {
-                achievements = List.of("No correct answers found.");
-            }
-
-            if (challenges.isEmpty()) {
-                challenges = List.of("Perfect session! No challenges found.");
-            }
-
-            String gameName = dto.name();
-
-            return new GameLeanScore(
-                    gameName,
-                    dto.scores(),
-                    dto.difficulty(),
-                    achievements,
-                    challenges,
-                    dto.createdAt().toString().substring(0, 10)
-            );
-        }).collect(Collectors.toList());
     }
 }

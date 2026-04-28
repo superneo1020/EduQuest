@@ -2,7 +2,8 @@ package com.eduquest.springbackend.dto;
 
 import java.util.List;
 
-public record GameLeanScore(
+public record CourseGameLeanScore(
+        String username,
         String gameName,
         int score,
         List<String> achievements, // correct answers

@@ -1,7 +1,9 @@
 package com.eduquest.springbackend.dao;
 
+import com.eduquest.springbackend.dto.CourseGameScoreMini;
 import com.eduquest.springbackend.dto.LeaderboardScoreDto;
 import com.eduquest.springbackend.dto.UserGameScoreDto;
+import com.eduquest.springbackend.dto.UserGameScoreMini;
 import com.eduquest.springbackend.model.UserGameScore;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -27,6 +29,17 @@ public interface UserGameScoreRepository extends JpaRepository<UserGameScore,Lon
             Pageable pageable
     );
 
+    @Query("SELECT new com.eduquest.springbackend.dto.UserGameScoreMini(" +
+            "g.name, ugs.scores, ugs.metadata, ugs.createdAt) " +
+            "FROM UserGameScore ugs JOIN ugs.game g " +
+            "WHERE ugs.user.id = :userId " +
+            "AND ugs.game.id = :gameId")
+    Slice<UserGameScoreMini> findGameRecordMiniByUserIdAndGameId(
+            @Param("userId") Long userId,
+            @Param("gameId") Long gameId,
+            Pageable pageable
+    );
+
     @Query("SELECT new com.eduquest.springbackend.dto.UserGameScoreDto(" +
             "g.name, g.type, g.difficulty, g.icon, g.description, " +
             "ugs.scores, ugs.metadata, ugs.createdAt) " +
@@ -34,17 +47,27 @@ public interface UserGameScoreRepository extends JpaRepository<UserGameScore,Lon
             "WHERE ugs.user.id = :userId")
     Page<UserGameScoreDto> findUserGameScoresByUserId(@Param("userId") Long userId, Pageable pageable);
 
+    @Query("SELECT new com.eduquest.springbackend.dto.CourseGameScoreMini(" +
+            "u.username, g.name, ugs.scores, ugs.metadata, ugs.createdAt) " +
+            "FROM UserGameScore ugs " +
+            "JOIN ugs.game g " +
+            "JOIN ugs.user u " +
+            "JOIN CourseMember cm ON cm.user = u " +
+            "WHERE cm.course.id = :courseId " +
+            "ORDER BY ugs.user.id, ugs.createdAt DESC")
+    Slice<CourseGameScoreMini> findAllUserGameScoresByCourseId(@Param("courseId") Long courseId, Pageable pageable);
+
     @Query("SELECT new com.eduquest.springbackend.dto.UserGameScoreDto(" +
             "g.name, g.type, g.difficulty, g.icon, g.description, " +
             "ugs.scores, ugs.metadata, ugs.createdAt) " +
             "FROM UserGameScore ugs " +
             "JOIN ugs.game g " +
-            "WHERE ugs.user.id = :userId " +
-            "AND ugs.scores = (SELECT MAX(ugs2.scores) " +
+            "WHERE ugs.id = (SELECT ugs2.id " +
             "   FROM UserGameScore ugs2 " +
             "   WHERE ugs2.user.id = :userId " +
-            "   AND ugs2.game.id = g.id) " +
-            "ORDER BY ugs.scores DESC, ugs.createdAt")
+            "   AND ugs2.game.id = g.id " +
+            "   ORDER BY ugs2.scores DESC, ugs2.createdAt " +
+            "   LIMIT 1)")
     List<UserGameScoreDto> findAllHighestScoresByUserId(@Param("userId") Long userId);
 
     @Query("SELECT new com.eduquest.springbackend.dto.UserGameScoreDto(" +
@@ -114,11 +137,10 @@ public interface UserGameScoreRepository extends JpaRepository<UserGameScore,Lon
             Pageable pageable
     );
 
-    @Query("SELECT new com.eduquest.springbackend.dto.UserGameScoreDto(" +
-            "g.name, g.type, g.difficulty, g.icon, g.description, " +
-            "ugs.scores, ugs.metadata, ugs.createdAt) " +
+    @Query("SELECT new com.eduquest.springbackend.dto.UserGameScoreMini(" +
+            "g.name, ugs.scores, ugs.metadata, ugs.createdAt) " +
             "FROM UserGameScore ugs JOIN ugs.game g " +
             "WHERE ugs.user.id = :userId " +
             "AND ugs.createdAt > :specificTime")
-    Page<UserGameScoreDto> findUserGameScoresByUserIdAndCreatedAtAfter(Long userId, Instant specificTime, Pageable pageable);
+    Slice<UserGameScoreMini> findUserGameScoresByUserIdAndCreatedAtAfter(Long userId, Instant specificTime, Pageable pageable);
 }

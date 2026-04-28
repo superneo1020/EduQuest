@@ -31,8 +31,12 @@ public class UserGameScoreService {
             "username", "scores", "createdAt"
     );
 
-    private final Set<String> USER_PROFILE_DTO_FIELD = Set.of(
+    private final Set<String> USER_RECORD_DTO_FIELD = Set.of(
             "name", "type", "difficulty", "icon", "description", "scores", "createdAt"
+    );
+
+    private final Set<String> USER_RECORD_MINI_DTO_FIELD = Set.of(
+            "name", "scores", "createdAt"
     );
 
     private final GameService gameService;
@@ -100,14 +104,14 @@ public class UserGameScoreService {
 
     @Transactional(readOnly = true)
     public UtilPageResponse<UserGameScoreDto> showGameRecord(Long userId, Pageable pageable) {
-        Pageable cleanPageable = PageableUtils.filterSort(pageable, USER_PROFILE_DTO_FIELD);
+        Pageable cleanPageable = PageableUtils.filterSort(pageable, USER_RECORD_DTO_FIELD);
         var page = userGameScoreRepo.findUserGameScoresByUserId(userId, cleanPageable);
         return dtoMapper.toPageResponse(page);
     }
 
     @Transactional(readOnly = true)
     public UtilPageResponse<UserGameScoreDto> showGameRecord(Long userId, Pageable pageable, String gameName) {
-        Pageable cleanPageable = PageableUtils.filterSort(pageable, USER_PROFILE_DTO_FIELD);
+        Pageable cleanPageable = PageableUtils.filterSort(pageable, USER_RECORD_DTO_FIELD);
         Long gameId = gameService.checkIdByName(gameName);
         var page = userGameScoreRepo.findUserGameScoresByUserIdAndGameId(userId, gameId, cleanPageable);
         return dtoMapper.toPageResponse(page);
@@ -122,5 +126,11 @@ public class UserGameScoreService {
     public UserGameScoreDto showBestGameRecord(Long userId, String gameName) {
         Long gameId = gameService.checkIdByName(gameName);
         return userGameScoreRepo.findHighestScoresByUserIdAndGameId(userId, gameId);
+    }
+
+    @Transactional
+    public UtilSliceResponse<CourseGameScoreMini> showAllGameRecordByCourseId(Long courseId, Pageable pageable) {
+        Pageable cleanedPageable = PageableUtils.filterSort(pageable, USER_RECORD_MINI_DTO_FIELD);
+        return dtoMapper.toSliceResponse(userGameScoreRepo.findAllUserGameScoresByCourseId(courseId, cleanedPageable));
     }
 }
