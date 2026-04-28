@@ -79,57 +79,88 @@ export default function StudentMetadataView({ visible, onClose, student, token }
     };
 
     const analyzeWithAi = async () => {
+        if (gameRecords.length === 0) {
+            generateFallbackAnalysis();
+            return;
+        }
         setAnalyzingWithAi(true);
         try {
-            const analysis = await callPythonBackendAPI(gameRecords, student.username);
+            const analysis = await callSpringBootAIAnalysis(student.username);
             setAiAnalysis(analysis);
             setShowAiAnalysis(true);
         } catch (error) {
-            console.error('Error calling Python backend API:', error);
-            // Fallback to local analysis if API fails
+            console.error('Error calling Spring Boot AI analysis:', error);
             generateFallbackAnalysis();
         } finally {
             setAnalyzingWithAi(false);
         }
     };
 
-    const callPythonBackendAPI = async (records: GameRecord[], studentName: string): Promise<string> => {
-        // Prepare data for Python backend API /api/learning/suggestions
-        const gameScores = records.map(record => ({
-            game_type: record.metadata.gameType || 'Unknown',
-            game_name: record.gameName,
-            score: record.scores,
-            difficulty: record.metadata.gameDifficulty || 'unknown',
-            createdAt: record.createdAt
-        }));
-
-        const requestData = {
-            user_id: studentName,
-            game_scores: gameScores
-        };
-
+    const callSpringBootAIAnalysis = async (studentName: string): Promise<string> => {
         try {
-            // Call existing Python backend API
-            const response = await fetch('http://localhost:8000/api/learning/suggestions', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(requestData)
+
+            const response = await axios.get(`${getApiBaseUrl()}/api/user/game/results`, {
+                headers: { Authorization: `Bearer ${token}` }
             });
 
-            if (!response.ok) {
-                throw new Error(`Python backend API call failed: ${response.statusText}`);
-            }
-
-            const data = await response.json();
-
-            // Format AI response to match our expected format
-            return formatAIResponse(data.suggestions, studentName, records);
+            // 后端返回的数据结构应该是 AiOverallResponse
+            const aiData = response.data;
+            return formatSpringBootAIResponse(aiData, studentName, gameRecords);
         } catch (error) {
-            console.error('Python backend API error:', error);
+            console.error('Spring Boot AI API error:', error);
             throw error;
         }
+    };
+
+    const formatSpringBootAIResponse = (aiData: any, studentName: string, records: GameRecord[]): string => {
+        // 统计基本数据
+        const totalScore = records.reduce((sum, r) => sum + r.scores, 0);
+        const averageScore = records.length ? totalScore / records.length : 0;
+        const allQuestions = records.flatMap(r => r.metadata?.questions || []);
+        const correctAnswers = allQuestions.filter(q => q.isCorrect).length;
+        const accuracyRate = allQuestions.length ? (correctAnswers / allQuestions.length) * 100 : 0;
+
+        // 游戏类型统计
+        const gameTypeStats = records.reduce((acc, record) => {
+            const type = record.metadata?.gameType || 'Unknown';
+            if (!acc[type]) acc[type] = { count: 0, totalScore: 0 };
+            acc[type].count++;
+            acc[type].totalScore += record.scores;
+            return acc;
+        }, {} as Record<string, { count: number; totalScore: number }>);
+
+        let result = `🧠 AI 学习分析报告\n`;
+        result += `👤 学生：${studentName}\n`;
+        result += `📅 分析时间：${new Date().toLocaleDateString('zh-TW')}\n\n`;
+        result += `📈 整体表现分析\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        result += `🎮 游戏总数：${records.length} 场\n`;
+        result += `📊 平均得分：${averageScore.toFixed(1)} 分\n`;
+        result += `🎯 答题准确率：${accuracyRate.toFixed(1)}%\n\n`;
+        result += `📚 学习领域分析\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        Object.entries(gameTypeStats).forEach(([type, stats]) => {
+            const avgScore = stats.totalScore / stats.count;
+            result += `🔹 ${type}：${stats.count} 场，平均 ${avgScore.toFixed(1)} 分\n`;
+        });
+        result += `\n💡 AI 学习建议\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+
+        if (aiData) {
+            if (aiData.encouragementMessage) result += `🌟 ${aiData.encouragementMessage}\n\n`;
+            if (aiData.analysis) result += `📊 ${aiData.analysis}\n\n`;
+            if (aiData.strengths && Array.isArray(aiData.strengths)) {
+                result += `💪 优势：\n`;
+                aiData.strengths.forEach((s: string, idx: number) => result += `  ${idx+1}. ${s}\n`);
+                result += `\n`;
+            }
+            if (aiData.powerUpTips && Array.isArray(aiData.powerUpTips)) {
+                result += `⚡ 强化建议：\n`;
+                aiData.powerUpTips.forEach((t: string, idx: number) => result += `  ${idx+1}. ${t}\n`);
+                result += `\n`;
+            }
+            if (aiData.gamesForNextSteps) result += `🎮 下一步推荐：${aiData.gamesForNextSteps}\n`;
+        } else {
+            result += `暂时无法获取 AI 分析，请稍后重试。\n`;
+        }
+        return result;
     };
 
     const formatAIResponse = (aiResponse: string, studentName: string, records: GameRecord[]): string => {
@@ -383,7 +414,7 @@ export default function StudentMetadataView({ visible, onClose, student, token }
                                     <Brain size={20} color="#fff" />
                                 )}
                                 <Text style={styles.aiAnalysisButtonText}>
-                                    {analyzingWithAi ? '分析中...' : 'AI 分析'}
+                                    {analyzingWithAi ? '分析中...' : 'AI analysis'}
                                 </Text>
                             </TouchableOpacity>
                         )}
