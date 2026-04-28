@@ -210,8 +210,8 @@ const styles = StyleSheet.create({
     categoryGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        justifyContent: 'flex-start',
-        gap: 10, // React Native 0.71+ 支援，若不支援可改用 margin
+        justifyContent: 'center',  // 改為置中
+        gap: 10,
     },
     categoryButton: {
         paddingHorizontal: 18,
@@ -222,7 +222,6 @@ const styles = StyleSheet.create({
         shadowColor: '#000',
         shadowOpacity: 0.1,
         shadowRadius: 4,
-        // 自適應最小寬度，避免按鈕過窄
         minWidth: width > 600 ? 140 : 110,
         alignItems: 'center',
     },
