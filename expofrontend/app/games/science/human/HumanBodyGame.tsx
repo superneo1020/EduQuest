@@ -1,5 +1,5 @@
 // science/HumanBodyGame.tsx
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createGameMetadata, GameMetadata } from '../../../../types/GameMetadata';
 import { convertToBackendMetadata } from '../../../utils/metadataConverter';
 import {
@@ -23,12 +23,59 @@ import { useAuth } from '@/src/auth/AuthContext';
 // 檢測是否是網頁環境
 const isWeb = Platform.OS === 'web';
 
+// 格式化时间 MM:SS
+const formatTime = (totalSeconds: number): string => {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+};
+
 const HumanBodyGame = () => {
     const navigation = useNavigation();
     const { token } = useAuth();
     const [isSaving, setIsSaving] = useState(false);
     const { width, height } = useWindowDimensions();
     const [isPortrait, setIsPortrait] = useState(height > width);
+
+    // ========== 🕒 计时器相关 ==========
+    const [elapsedSeconds, setElapsedSeconds] = useState(0);
+    const [organTimeMap, setOrganTimeMap] = useState<Record<number, number>>({});
+    const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+    // 启动计时器：每次都先清除已有的，再新建
+    const startTimer = useCallback(() => {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        intervalRef.current = setInterval(() => {
+            setElapsedSeconds(prev => prev + 1);
+        }, 1000);
+    }, []);
+
+    const stopTimer = useCallback(() => {
+        if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+        }
+    }, []);
+
+    const resetTimer = useCallback(() => {
+        stopTimer();
+        setElapsedSeconds(0);
+        setOrganTimeMap({});
+    }, [stopTimer]);
+
+    const restartTimer = useCallback(() => {
+        resetTimer();
+        startTimer();
+    }, [resetTimer, startTimer]);
+
+    // 组件挂载时启动计时器，卸载时停止
+    useEffect(() => {
+        startTimer();
+        return () => stopTimer();
+    }, [startTimer, stopTimer]);
+
+    // ========== 🎯 手動校準參數 ==========
+    const GRID_OFFSET = { x: 13, y: 13 };
 
     // 器官圖片引用
     const organImages = {
@@ -48,7 +95,6 @@ const HumanBodyGame = () => {
         };
 
         const dimensionsHandler = Dimensions.addEventListener('change', updateLayout);
-
         return () => {
             dimensionsHandler?.remove();
         };
@@ -190,63 +236,76 @@ const HumanBodyGame = () => {
     const layout = calculateLayout();
     const { rows, cols, cellWidth, cellHeight } = layout.grid;
 
-    // 器官數據
+    // ==================== 器官數據（使用 allowedPositions 多組正確座標） ====================
     const organs = useMemo(() => [
         {
             id: 1,
             name: 'Heart',
             image: organImages.heart,
             description: 'Responsible for pumping blood throughout the body',
-            gridPosition: { row: 2, col: 4 },
+            allowedPositions: [{ row: 2, col: 4 }],
             ...layout.organSize.heart,
-            hint: 'Located in the middle left of the chest cavity'
+            hint: 'Located in the middle left of the chest cavity',
+            visualOffset: { x: 0, y: 0 },
         },
         {
             id: 2,
             name: 'Large Intestine',
             image: organImages.largeIntestine,
             description: 'Absorbs water and forms feces',
-            gridPosition: { row: 4, col: 3 },
+            allowedPositions: [{ row: 4, col: 3 }, { row: 4, col: 4 }],
             ...layout.organSize.largeIntestine,
-            hint: 'Located in the abdomen, surrounding the small intestine'
+            hint: 'Located in the abdomen, surrounding the small intestine',
+            visualOffset: { x: 0, y: 0 },
         },
         {
             id: 3,
             name: 'Lung',
             image: organImages.lung,
             description: 'Perform gas exchange, breathing',
-            gridPosition: { row: 2, col: 3 },
+            allowedPositions: [{ row: 2, col: 3 }],
             ...layout.organSize.lung,
-            hint: 'Located in the chest cavity on both sides'
+            hint: 'Located in the chest cavity on both sides',
+            visualOffset: { x: 0, y: 0 },
         },
         {
             id: 4,
             name: 'Liver',
             image: organImages.liver,
             description: 'Detoxify, metabolize, and store nutrients',
-            gridPosition: { row: 3, col: 4 },
+            allowedPositions: [{ row: 3, col: 3 }],
             ...layout.organSize.liver,
-            hint: 'Located in the right upper abdomen'
+            hint: 'Located in the right upper abdomen',
+            visualOffset: { x: 0, y: 0 },
         },
         {
             id: 5,
             name: 'Brain',
             image: organImages.brain,
             description: 'Controls body activities and thinking',
-            gridPosition: { row: 0, col: 3 },
+            allowedPositions: [{ row: 0, col: 3 }, { row: 0, col: 4 }],
             ...layout.organSize.brain,
-            hint: 'Located in the head'
+            hint: 'Located in the head',
+            visualOffset: { x: 0, y: 0 },
         },
         {
             id: 6,
             name: 'Stomach',
             image: organImages.stomach,
             description: 'Digests food and secretes stomach acid',
-            gridPosition: { row: 3, col: 3 },
+            allowedPositions: [{ row: 3, col: 4 }],
             ...layout.organSize.stomach,
-            hint: 'Located in the upper left abdomen'
+            hint: 'Located in the upper left abdomen',
+            visualOffset: { x: 0, y: 0 },
         },
     ], [layout, organImages]);
+
+    const organsWithMainPos = useMemo(() => {
+        return organs.map(organ => ({
+            ...organ,
+            gridPosition: organ.allowedPositions[0]
+        }));
+    }, [organs]);
 
     // 遊戲狀態
     const [selectedOrgan, setSelectedOrgan] = useState<number | null>(null);
@@ -274,7 +333,7 @@ const HumanBodyGame = () => {
     const [currentHint, setCurrentHint] = useState<string>('');
     const [currentOrganInfo, setCurrentOrganInfo] = useState<{ name: string; description: string; hint: string } | null>(null);
 
-    // ========== 💾 保存分數到伺服器（满分120） ==========
+    // ========== 💾 保存分數到伺服器（包含时间数据） ==========
     const saveScore = async (finalScore: number) => {
         if (!token) return;
 
@@ -286,22 +345,33 @@ const HumanBodyGame = () => {
                 gameType: "SCIENCE",
                 gameDifficulty: "MEDIUM"
             };
-            
+
             const questionsData = organs.map((organ, index) => {
                 const placedPosition = placedOrgans[organ.id];
-                const isCorrect = placedPosition && 
-                    placedPosition.row === organ.gridPosition.row && 
-                    placedPosition.col === organ.gridPosition.col;
-                
+                let isCorrect = false;
+                if (placedPosition) {
+                    isCorrect = organ.allowedPositions.some(
+                        pos => pos.row === placedPosition.row && pos.col === placedPosition.col
+                    );
+                }
+                const correctAnswerStr = organ.allowedPositions
+                    .map(p => `(${p.row},${p.col})`)
+                    .join(' or ');
+
+                const timeSpent = organTimeMap[organ.id] || 0;
+
                 return {
                     id: index + 1,
                     question: `Place ${organ.name} in the correct position`,
-                    correctAnswer: `Position: ${organ.gridPosition.row}, ${organ.gridPosition.col}`,
-                    userAnswer: placedPosition ? `Position: ${placedPosition.row}, ${placedPosition.col}` : undefined,
+                    correctAnswer: correctAnswerStr,
+                    userAnswer: placedPosition ? `(${placedPosition.row},${placedPosition.col})` : undefined,
                     isCorrect: isCorrect,
-                    questionType: 'organ-placement'
+                    questionType: 'organ-placement',
+                    timeSpent: timeSpent,
                 };
             });
+
+            const totalTimeFormatted = formatTime(elapsedSeconds);
 
             const metadata: GameMetadata = createGameMetadata(
                 gameData.gameType,
@@ -309,7 +379,9 @@ const HumanBodyGame = () => {
                 finalScore,
                 {
                     totalOrgans: organs.length,
-                    correctIdentifications: correctCount
+                    correctIdentifications: correctCount,
+                    totalTimeSeconds: elapsedSeconds,
+                    totalTimeFormatted: totalTimeFormatted,
                 },
                 questionsData
             );
@@ -319,11 +391,11 @@ const HumanBodyGame = () => {
                 scores: gameData.scores,
                 metadata: convertToBackendMetadata(metadata)
             };
-            
+
             await axios.post('http://localhost:8080/api/user/game/score', backendRequest, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            console.log("Score synced to server!");
+            console.log("Score synced to server with time data!");
         } catch (e) {
             console.error("Failed to sync score:", e);
         } finally {
@@ -333,14 +405,12 @@ const HumanBodyGame = () => {
 
     useEffect(() => {
         if (gameCompleted) {
-            // 遊戲完成時保存分數（满分120）
             const totalOrgans = organs.length;
             const finalScoreValue = Math.round((correctCount / totalOrgans) * 120);
             saveScore(finalScoreValue);
         }
     }, [gameCompleted, correctCount, organs.length]);
 
-    // 計算最終分數 (滿分120)
     const finalScore = useMemo(() => {
         const totalOrgans = organs.length;
         if (totalOrgans === 0) return 0;
@@ -348,32 +418,27 @@ const HumanBodyGame = () => {
         return Math.round(score);
     }, [correctCount, organs.length]);
 
-    // 將網格坐標轉換為實際坐標
     const gridToPosition = (row: number, col: number) => {
         const bodyLeft = layout.bodyOutline.left;
         const bodyTop = layout.bodyOutline.top;
 
         return {
-            x: bodyLeft + (col - 2) * cellWidth + cellWidth,
-            y: bodyTop + (row - 2) * cellHeight + cellHeight
+            x: bodyLeft + (col - 2) * cellWidth + cellWidth + GRID_OFFSET.x,
+            y: bodyTop + (row - 2) * cellHeight + cellHeight + GRID_OFFSET.y,
         };
     };
 
-    // 處理器官卡片點擊（修改：顯示器官介紹，取消綠色提示）
     const handleOrganSelect = (organId: number) => {
         const organ = organs.find(o => o.id === organId);
         if (!organ || placedOrgans[organId]) return;
 
         setSelectedOrgan(organId);
-        // 顯示器官名稱、介紹和提示
         setCurrentOrganInfo({
             name: organ.name,
             description: organ.description,
             hint: organ.hint
         });
         setCurrentHint(organ.hint);
-
-        // 取消綠色提示：不再調用 getSuggestedCells，清空高亮
         setHighlightedCells([]);
 
         Animated.spring(organAnimations[organId], {
@@ -391,9 +456,6 @@ const HumanBodyGame = () => {
         });
     };
 
-    // 移除 getSuggestedCells 函數（不再需要）
-
-    // 處理網格點擊
     const handleGridClick = (row: number, col: number) => {
         if (!selectedOrgan) return;
 
@@ -402,12 +464,13 @@ const HumanBodyGame = () => {
 
         if (row < 0 || row >= rows || col < 0 || col >= cols) return;
 
-        const targetRow = organ.gridPosition.row;
-        const targetCol = organ.gridPosition.col;
-        const rowDistance = Math.abs(row - targetRow);
-        const colDistance = Math.abs(col - targetCol);
+        const isCorrect = organ.allowedPositions.some(pos => pos.row === row && pos.col === col);
 
-        const isCorrect = (rowDistance <= 1 && colDistance <= 1);
+        // 记录该器官被放置时的当前时间点
+        setOrganTimeMap(prev => ({
+            ...prev,
+            [selectedOrgan]: elapsedSeconds
+        }));
 
         Animated.sequence([
             Animated.timing(organAnimations[selectedOrgan], {
@@ -428,7 +491,7 @@ const HumanBodyGame = () => {
                 row,
                 col,
                 isCorrect,
-                gridPosition: { row: targetRow, col: targetCol }
+                gridPosition: organ.allowedPositions[0]
             }
         }));
 
@@ -445,16 +508,15 @@ const HumanBodyGame = () => {
 
         const newPlacedCount = Object.keys(placedOrgans).length + 1;
         if (newPlacedCount === organs.length) {
+            stopTimer(); // 游戏完成，停止计时
             setGameCompleted(true);
         }
     };
 
-    // 當屏幕方向改變時重置遊戲
     useEffect(() => {
         resetGame();
     }, [isPortrait]);
 
-    // 重來按鈕功能
     const resetGame = () => {
         setSelectedOrgan(null);
         setPlacedOrgans({});
@@ -468,19 +530,19 @@ const HumanBodyGame = () => {
         Object.values(organAnimations).forEach(anim => {
             anim.setValue(0);
         });
+
+        // 重置并重启计时器
+        restartTimer();
     };
 
-    // 返回上一頁
     const handleGoBack = () => {
         navigation.goBack();
     };
 
-    // 返回主頁
     const handleGoHome = () => {
         navigation.navigate('science/index' as never);
     };
 
-    // 如果遊戲完成，顯示報告頁面
     if (gameCompleted) {
         return (
             <ScrollView style={styles.container}>
@@ -491,9 +553,12 @@ const HumanBodyGame = () => {
                         You correctly placed {correctCount} out of {organs.length} organs.
                         {wrongCount > 0 && ` ${wrongCount} organs were placed incorrectly.`}
                     </Text>
+                    <View style={styles.totalTimeContainer}>
+                        <Text style={styles.totalTimeLabel}>⏱️ Total Time:</Text>
+                        <Text style={styles.totalTimeValue}>{formatTime(elapsedSeconds)}</Text>
+                    </View>
                 </View>
 
-                {/* 保存中指示器 */}
                 {isSaving && (
                     <View style={styles.savingIndicator}>
                         <ActivityIndicator size="small" color="#4CAF50" />
@@ -518,7 +583,6 @@ const HumanBodyGame = () => {
         );
     }
 
-    // 計算器官卡片位置（網格佈局）
     const getOrganCardPosition = (index: number) => {
         const isWebLandscape = isWeb && !isPortrait;
         const cardSize = layout.organCardSize;
@@ -548,7 +612,6 @@ const HumanBodyGame = () => {
         }
     };
 
-    // 渲染網格
     const renderGrid = () => {
         const gridCells = [];
 
@@ -562,9 +625,12 @@ const HumanBodyGame = () => {
                     pos.row === row && pos.col === col
                 );
 
-                const isCorrectPosition = organs.some(organ =>
-                    organ.gridPosition.row === row && organ.gridPosition.col === col
-                );
+                let isAnyCorrectPosition = false;
+                if (showCorrectPositions) {
+                    isAnyCorrectPosition = organs.some(organ =>
+                        organ.allowedPositions.some(pos => pos.row === row && pos.col === col)
+                    );
+                }
 
                 const cellPosition = gridToPosition(row, col);
 
@@ -588,7 +654,7 @@ const HumanBodyGame = () => {
                         {showGrid && (
                             <View style={[
                                 styles.cellBorder,
-                                isCorrectPosition && showCorrectPositions && styles.correctPositionBorder
+                                isAnyCorrectPosition && styles.correctPositionBorder
                             ]}>
                                 {__DEV__ && (
                                     <Text style={styles.gridCoordinate}>
@@ -598,7 +664,7 @@ const HumanBodyGame = () => {
                             </View>
                         )}
 
-                        {isCorrectPosition && showCorrectPositions && (
+                        {isAnyCorrectPosition && (
                             <View style={styles.correctPositionMarker}>
                                 <Text style={styles.correctMarkerText}>✓</Text>
                             </View>
@@ -611,7 +677,6 @@ const HumanBodyGame = () => {
         return gridCells;
     };
 
-    // 渲染主要內容
     const renderContent = () => (
         <>
             <Text style={styles.title}>Understanding Human Organs</Text>
@@ -621,6 +686,10 @@ const HumanBodyGame = () => {
                     <Text style={styles.scoreText}>Correct: {correctCount}</Text>
                     <Text style={styles.scoreText}>Wrong: {wrongCount}</Text>
                     <Text style={styles.scoreText}>Remaining: {organs.length - Object.keys(placedOrgans).length}</Text>
+                    <View style={styles.timerSeparator} />
+                    <View style={styles.timerSection}>
+                        <Text style={styles.timerLabel}>⏱️ {formatTime(elapsedSeconds)}</Text>
+                    </View>
                 </View>
 
                 <View style={styles.modeButtons}>
@@ -644,7 +713,6 @@ const HumanBodyGame = () => {
                 </View>
             </View>
 
-            {/* 修改：顯示器官介紹區塊 */}
             {currentOrganInfo && (
                 <View style={styles.selectionHint}>
                     <Text style={styles.selectionText}>Selected Organ: {currentOrganInfo.name}</Text>
@@ -680,6 +748,8 @@ const HumanBodyGame = () => {
                         if (!organ) return null;
 
                         const pos = gridToPosition(position.row, position.col);
+                        const finalX = pos.x + (organ.visualOffset?.x ?? 0);
+                        const finalY = pos.y + (organ.visualOffset?.y ?? 0);
 
                         return (
                             <Animated.View
@@ -687,8 +757,8 @@ const HumanBodyGame = () => {
                                 style={[
                                     styles.placedOrgan,
                                     {
-                                        left: pos.x - organ.width / 2,
-                                        top: pos.y - organ.height / 2,
+                                        left: finalX - organ.width / 2,
+                                        top: finalY - organ.height / 2,
                                         width: organ.width,
                                         height: organ.height,
                                         opacity: organAnimations[organId].interpolate({
@@ -725,8 +795,8 @@ const HumanBodyGame = () => {
                                         {
                                             transform: [{
                                                 rotate: Math.atan2(
-                                                    organ.gridPosition.row - position.row,
-                                                    organ.gridPosition.col - position.col
+                                                    organ.allowedPositions[0].row - position.row,
+                                                    organ.allowedPositions[0].col - position.col
                                                 ) + 'rad'
                                             }]
                                         }
@@ -842,7 +912,6 @@ const HumanBodyGame = () => {
 };
 
 const styles = StyleSheet.create({
-    // 網頁滾動容器
     scrollContainer: {
         flex: 1,
         backgroundColor: '#f0f7ff',
@@ -852,7 +921,6 @@ const styles = StyleSheet.create({
         minHeight: '100%',
         paddingBottom: 30,
     },
-    // 原始容器
     container: {
         flex: 1,
         backgroundColor: '#f0f7ff',
@@ -883,7 +951,8 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 4,
         elevation: 3,
-        flexWrap: isWeb ? 'wrap' : 'nowrap',
+        flexWrap: 'wrap',
+        alignItems: 'center',
     },
     scoreText: {
         fontSize: isWeb ? 15 : 14,
@@ -891,6 +960,20 @@ const styles = StyleSheet.create({
         color: '#2c3e50',
         marginHorizontal: isWeb ? 6 : 8,
         marginVertical: isWeb ? 2 : 0,
+    },
+    timerSeparator: {
+        width: 1,
+        height: 20,
+        backgroundColor: '#ccc',
+        marginHorizontal: 10,
+    },
+    timerSection: {
+        marginLeft: 4,
+    },
+    timerLabel: {
+        fontSize: isWeb ? 15 : 14,
+        fontWeight: 'bold',
+        color: '#FF9800',
     },
     modeButtons: {
         flexDirection: 'row',
@@ -1197,7 +1280,6 @@ const styles = StyleSheet.create({
         fontSize: isWeb ? 18 : 17,
         fontWeight: 'bold',
     },
-    // 報告頁面樣式
     reportBox: {
         backgroundColor: '#fff9c4',
         padding: 20,
@@ -1215,6 +1297,23 @@ const styles = StyleSheet.create({
         fontSize: 16,
         lineHeight: 24,
         textAlign: 'center',
+    },
+    totalTimeContainer: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginTop: 15,
+        gap: 8,
+    },
+    totalTimeLabel: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#333',
+    },
+    totalTimeValue: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#FF9800',
     },
     savingIndicator: {
         flexDirection: 'row',

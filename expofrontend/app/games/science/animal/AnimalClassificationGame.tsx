@@ -118,35 +118,90 @@ const AnimalClassificationGame: React.FC = () => {
     const categoryScale = useRef(new Animated.Value(1)).current;
     const scoreAnim = useRef(new Animated.Value(1)).current;
 
-    // ========== 💾 保存分數到伺服器 ==========
+    // ========== 🕒 计时器相关状态 ==========
+    const [elapsedSeconds, setElapsedSeconds] = useState(0);
+    const intervalRef = useRef<NodeJS.Timeout | null>(null);
+    const timerActiveRef = useRef(false);
+    // 记录每个动物被分类时的耗时（秒）
+    const [animalTimeMap, setAnimalTimeMap] = useState<Record<number, number>>({});
+
+    // 格式化时间显示 (MM:SS)
+    const formatTime = (totalSeconds: number): string => {
+        const mins = Math.floor(totalSeconds / 60);
+        const secs = totalSeconds % 60;
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    // 启动计时器（只能在预备动画结束后或重置后调用）
+    const startTimer = () => {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        if (timerActiveRef.current) return;
+        timerActiveRef.current = true;
+        intervalRef.current = setInterval(() => {
+            setElapsedSeconds(prev => prev + 1);
+        }, 1000);
+    };
+
+    const stopTimer = () => {
+        if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+        }
+        timerActiveRef.current = false;
+    };
+
+    const resetTimer = () => {
+        stopTimer();
+        setElapsedSeconds(0);
+    };
+
+    // 组件卸载时停止计时器
+    useEffect(() => {
+        return () => stopTimer();
+    }, []);
+
+    // ========== 💾 保存分數到伺服器（含时间数据） ==========
     const saveScore = async (finalScore: number) => {
         if (!token) return;
 
         setIsSaving(true);
         try {
+            // 构建每个问题的数据
+            const questionsData = ANIMALS.map((animal, index) => {
+                const userAns = categoryAssignments[animal.id];
+                const isCorrect = userAns === animal.type;
+                const timeSpent = animalTimeMap[animal.id] || 0;
+                return {
+                    id: index + 1,
+                    question: `Classify ${animal.name}`,
+                    correctAnswer: animal.type,
+                    userAnswer: userAns || undefined,
+                    isCorrect: isCorrect,
+                    questionType: 'classification',
+                    timeSpent: timeSpent,
+                };
+            });
+
             const gameData = {
                 gameName: "Animal Classification",
                 scores: finalScore,
                 gameType: "SCIENCE",
                 gameDifficulty: "EASY"
             };
-            
-            const questionsData = ANIMALS.map((animal, index) => ({
-                id: index + 1,
-                question: `Classify ${animal.name}`,
-                correctAnswer: animal.type,
-                userAnswer: categoryAssignments[animal.id] || undefined,
-                isCorrect: categoryAssignments[animal.id] === animal.type,
-                questionType: 'classification'
-            }));
 
+            // 格式化总时间字符串 "MM:SS"
+            const totalTimeFormatted = formatTime(elapsedSeconds);
+
+            // 创建 metadata，extraData 中包含 totalTimeFormatted
             const metadata: GameMetadata = createGameMetadata(
                 gameData.gameType,
                 gameData.gameDifficulty,
                 finalScore,
                 {
                     totalAnimals: ANIMALS.length,
-                    correctClassifications: score
+                    correctClassifications: score,
+                    totalTimeSeconds: elapsedSeconds,
+                    totalTimeFormatted: totalTimeFormatted,   // ✅ 新增字段
                 },
                 questionsData
             );
@@ -156,11 +211,11 @@ const AnimalClassificationGame: React.FC = () => {
                 scores: gameData.scores,
                 metadata: convertToBackendMetadata(metadata)
             };
-            
+
             await axios.post('http://localhost:8080/api/user/game/score', backendRequest, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            console.log("Score synced to server!");
+            console.log("Score synced to server with time data!");
         } catch (e) {
             console.error("Failed to sync score:", e);
         } finally {
@@ -198,6 +253,9 @@ const AnimalClassificationGame: React.FC = () => {
     };
 
     const startPrepSequence = () => {
+        // 重置计时和动画显示
+        resetTimer();
+        setAnimalTimeMap({});   // 清空时间记录
         setTimeout(() => {
             setPrepText('READY?');
             prepScale.setValue(0);
@@ -211,7 +269,11 @@ const AnimalClassificationGame: React.FC = () => {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }, 1000);
         setTimeout(() => {
-            Animated.timing(prepScale, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => setPrepText(null));
+            Animated.timing(prepScale, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => {
+                setPrepText(null);
+                // 预备动画彻底结束后，正式开始计时
+                startTimer();
+            });
         }, 1600);
     };
 
@@ -233,6 +295,12 @@ const AnimalClassificationGame: React.FC = () => {
         if (selectedAnimal) {
             const isCorrect = selectedAnimal.type === categoryId;
             showHitFeedback(isCorrect);
+
+            // 记录该动物分类完成时的时间点（秒）
+            setAnimalTimeMap(prev => ({
+                ...prev,
+                [selectedAnimal.id]: elapsedSeconds
+            }));
 
             // 更新分數（即時更新，满分120）
             const newCorrectCount = isCorrect ? gameResult.correct + 1 : gameResult.correct;
@@ -273,6 +341,13 @@ const AnimalClassificationGame: React.FC = () => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             setCategoryAssignments(prev => { const newAssignments = { ...prev }; delete newAssignments[animalId]; return newAssignments; });
             setAvailableAnimals(prev => [...prev, animal]);
+
+            // 移除该动物的时间记录，以便重新分类时重新记录时间
+            setAnimalTimeMap(prev => {
+                const newMap = { ...prev };
+                delete newMap[animalId];
+                return newMap;
+            });
         }
         checkGameCompletion();
     };
@@ -292,6 +367,8 @@ const AnimalClassificationGame: React.FC = () => {
 
     const checkGameCompletion = () => {
         if (Object.keys(categoryAssignments).length === allAnimals.length) {
+            // 游戏已完成，停止计时
+            stopTimer();
             const result = calculateScore();
             saveGameResult(result);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -300,8 +377,10 @@ const AnimalClassificationGame: React.FC = () => {
     };
 
     const showFinalReport = async () => {
+        // 防止重复调用时重复停止计时，但已经完成时停止过一次，这里确保停止
+        stopTimer();
         const result = calculateScore();
-        // 保存分數到伺服器
+        // 保存分數到伺服器（含时间信息）
         await saveScore(result.score);
         setFinalReport({ summary: generateSummary(result), accuracy: result.score });
         setIsFinished(true);
@@ -309,7 +388,6 @@ const AnimalClassificationGame: React.FC = () => {
 
     const generateSummary = (result: GameResult): string => {
         let summary = '';
-        // 满分120分，阈值调整：满分120 → 优秀；≥84分（相当于原70%正确率）→ 良好
         if (result.score === 120) summary = '🌟 EXCELLENT! You classified all animals correctly! 🌟';
         else if (result.score >= 84) summary = `🎉 Good job! You got ${result.correct} out of ${result.total} correct. Keep practicing! 🎉`;
         else summary = `📚 You got ${result.correct} out of ${result.total} correct. Let's review and try again! 💪`;
@@ -332,12 +410,14 @@ const AnimalClassificationGame: React.FC = () => {
         try {
             const existing = await AsyncStorage.getItem('animalGameResults');
             const results = existing ? JSON.parse(existing) : [];
-            results.push({ ...result, date: new Date().toISOString() });
+            results.push({ ...result, date: new Date().toISOString(), totalTime: elapsedSeconds });
             await AsyncStorage.setItem('animalGameResults', JSON.stringify(results));
         } catch (error) { console.error('Save failed:', error); }
     };
 
     const resetGame = () => {
+        // 重置游戏时停止当前计时，清空记录，重新开始预备序列
+        stopTimer();
         setCategoryAssignments({});
         setAvailableAnimals(allAnimals);
         setScore(0);
@@ -347,13 +427,23 @@ const AnimalClassificationGame: React.FC = () => {
         setIsFinished(false);
         setFinalReport({ summary: '', accuracy: 0 });
         setFloatingText(null);
-        startPrepSequence();
+        setElapsedSeconds(0);
+        setAnimalTimeMap({});
+        startPrepSequence(); // 会重置计时并在动画完毕后重新计时
     };
 
     const cancelSelection = () => {
         setSelectedAnimal(null);
         setShowDropZones(false);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    };
+
+    const handleGoBack = () => {
+        navigation.goBack();
+    };
+
+    const handleGoToGameList = () => {
+        navigation.navigate('science/index' as never);
     };
 
     const screenShakeStyle = { transform: [{ translateX: screenShake }] };
@@ -413,16 +503,7 @@ const AnimalClassificationGame: React.FC = () => {
         );
     };
 
-    const handleGoBack = () => {
-        navigation.goBack();
-    };
-
-    // 返回遊戲列表頁面
-    const handleGoToGameList = () => {
-        navigation.navigate('science/index' as never);
-    };
-
-    // 完成页面 - 同样隐藏系统导航栏
+    // 最终报告页面（增加了游玩时间显示）
     if (isFinished) {
         return (
             <ScrollView style={styles.container}>
@@ -436,7 +517,12 @@ const AnimalClassificationGame: React.FC = () => {
                         <Text style={styles.scoreCircleLabel}>/ 120</Text>
                     </View>
 
-                    {/* 保存中指示器 */}
+                    {/* 显示总游玩时间 */}
+                    <View style={styles.totalTimeContainer}>
+                        <Text style={styles.totalTimeLabel}>⏱️ Total Time:</Text>
+                        <Text style={styles.totalTimeValue}>{formatTime(elapsedSeconds)}</Text>
+                    </View>
+
                     {isSaving && (
                         <View style={styles.savingIndicator}>
                             <ActivityIndicator size="small" color="#4CAF50" />
@@ -493,11 +579,18 @@ const AnimalClassificationGame: React.FC = () => {
             <ScrollView contentContainerStyle={styles.scrollContainer}>
                 <View style={styles.header}>
                     <Text style={styles.title}>Classify the Animals!</Text>
+                    {/* 分数区域左侧增加游玩时间 */}
                     <Animated.View style={[styles.scoreContainer, scoreAnimatedStyle]}>
-                        <Text style={styles.scoreLabel}>⭐ Score:</Text>
-                        <Text style={styles.scoreValue}>{score}</Text>
-                        <Text style={styles.scoreMax}>/120</Text>
-                        <Text style={styles.progressText}>({Object.keys(categoryAssignments).length}/{allAnimals.length})</Text>
+                        <View style={styles.timerSection}>
+                            <Text style={styles.timerLabel}>⏱️ {formatTime(elapsedSeconds)}</Text>
+                        </View>
+                        <View style={styles.divider} />
+                        <View style={styles.scoreSection}>
+                            <Text style={styles.scoreLabel}>⭐ Score:</Text>
+                            <Text style={styles.scoreValue}>{score}</Text>
+                            <Text style={styles.scoreMax}>/120</Text>
+                            <Text style={styles.progressText}>({Object.keys(categoryAssignments).length}/{allAnimals.length})</Text>
+                        </View>
                     </Animated.View>
                 </View>
 
@@ -558,6 +651,10 @@ const styles = StyleSheet.create({
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap' },
     title: { fontSize: 22, fontWeight: 'bold', color: '#333', flex: 1 },
     scoreContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 20, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
+    timerSection: { paddingRight: 8, borderRightWidth: 1, borderRightColor: '#ddd' },
+    timerLabel: { fontSize: 14, fontWeight: '600', color: '#FF9800' },
+    divider: { width: 1, height: 20, backgroundColor: '#ddd', marginHorizontal: 8 },
+    scoreSection: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
     scoreLabel: { fontSize: 14, color: '#666', marginRight: 5 },
     scoreValue: { fontSize: 20, fontWeight: 'bold', color: '#4CAF50', marginRight: 2 },
     scoreMax: { fontSize: 12, color: '#999', marginRight: 5 },
@@ -612,6 +709,9 @@ const styles = StyleSheet.create({
     scoreCircle: { alignItems: 'center', justifyContent: 'center', marginBottom: 25 },
     scoreCircleNumber: { fontSize: 64, fontWeight: 'bold', color: '#4CAF50' },
     scoreCircleLabel: { fontSize: 20, color: '#666', marginTop: -5 },
+    totalTimeContainer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 20, gap: 8 },
+    totalTimeLabel: { fontSize: 18, fontWeight: '600', color: '#333' },
+    totalTimeValue: { fontSize: 18, fontWeight: 'bold', color: '#FF9800' },
     savingIndicator: {
         flexDirection: 'row',
         alignItems: 'center',

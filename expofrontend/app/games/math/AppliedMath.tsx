@@ -82,6 +82,9 @@ const AppliedMath = () => {
     const [elapsedTime, setElapsedTime] = useState(0);
     const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+    // 防重複提交鎖
+    const isCompletingRef = useRef(false);
+
     // 遊戲化狀態
     const [prepText, setPrepText] = useState<string | null>(null);
     const prepScale = useSharedValue(0);
@@ -103,7 +106,7 @@ const AppliedMath = () => {
         }, 1000);
     };
 
-    // 停止計時器並返回當前秒數（不依賴 state 非同步問題）
+    // 停止計時器並返回當前秒數
     const stopTimerAndGetElapsed = (): number => {
         if (timerIntervalRef.current) {
             clearInterval(timerIntervalRef.current);
@@ -184,6 +187,13 @@ const AppliedMath = () => {
     };
 
     const generateFinalSummary = async () => {
+        // 防止重複提交
+        if (isCompletingRef.current) {
+            console.log("generateFinalSummary already in progress, skip");
+            return;
+        }
+        isCompletingRef.current = true;
+
         // 停止計時並取得實際花費秒數
         const finalTime = stopTimerAndGetElapsed();
 
@@ -200,11 +210,12 @@ const AppliedMath = () => {
             // 保存最終報告（使用前端計算的準確率）
             setFinalReport({ summary: reportData.summary, accuracy: accuracy, totalTime: finalTime });
 
+            // 組裝上傳資料，加入總時間
             const gameData = {
                 gameName: "AI Math Adventure",
                 scores: finalScore,
                 gameType: "MATH",
-                gameDifficulty: difficulty?.toUpperCase() || "MEDIUM"  // 根據用戶選擇的難度動態設置
+                gameDifficulty: difficulty?.toUpperCase() || "MEDIUM"
             };
 
             const questionsData = sessionHistory.map((item, index) => ({
@@ -217,13 +228,18 @@ const AppliedMath = () => {
                 timeSpent: 0
             }));
 
+            const totalTimeSeconds = finalTime;
+            const totalTimeFormatted = formatTime(totalTimeSeconds);
+
             const metadata: GameMetadata = createGameMetadata(
                 gameData.gameType,
                 gameData.gameDifficulty,
                 finalScore,
                 {
                     totalProblems: sessionHistory.length,
-                    correctProblems: totalCorrect
+                    correctProblems: totalCorrect,
+                    totalTimeSeconds: totalTimeSeconds,
+                    totalTimeFormatted: totalTimeFormatted,
                 },
                 questionsData
             );
@@ -244,6 +260,9 @@ const AppliedMath = () => {
             setIsFinished(true);
         } finally {
             setLoading(false);
+            setTimeout(() => {
+                isCompletingRef.current = false;
+            }, 500);
         }
     };
 
@@ -259,6 +278,8 @@ const AppliedMath = () => {
         setIsFinished(false);
         setDifficulty(null);
         setElapsedTime(0);
+        // 重置鎖
+        isCompletingRef.current = false;
     };
 
     // 總結頁面

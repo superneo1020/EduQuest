@@ -30,10 +30,9 @@ type Question = {
 type Difficulty = 'easy' | 'medium' | null;
 type GameState = 'difficulty_select' | 'playing' | 'result';
 
-// 修改：总题数改为 2
 const TOTAL_QUESTIONS = 2;
 
-// --- 💥 浮动文字组件 (HIT / OUCH) ---
+// 浮动文字组件
 const FloatingText = ({ text, color, onComplete }: { text: string, color: string, onComplete: () => void }) => {
     const opacity = useRef(new Animated.Value(1)).current;
     const translateY = useRef(new Animated.Value(0)).current;
@@ -72,9 +71,8 @@ const CHARACTER_STATES = {
     celebrate: { icon: '🎊🐼🎉', message: 'Congratulations on completing！', bgColor: '#FFF9C4' }
 };
 
-// 鼓励语录库
 const ENCOURAGEMENT_MESSAGES = {
-    ggreat: [
+    great: [
         '🎉 Amazing!', '🌟 You are a genius!', '💪 Keep it up!',
         '✨ Perfect!', '🏆 Super awesome!', '🎈 Wow! So impressive!'
     ],
@@ -88,7 +86,6 @@ const ENCOURAGEMENT_MESSAGES = {
     ]
 };
 
-// 主题色彩配置
 const THEME_COLORS = {
     easy: {
         primary: '#6B8C5C',
@@ -120,7 +117,7 @@ const difficultyOptions = [
     },
     {
         id: 'medium',
-        title: 'Hard',      // 原 Medium 改为 Hard
+        title: 'Hard',
         level: 'challenge',
         description: 'Everyday expressions and slightly more complex sentences, challenge yourself！',
         icon: '🌳',
@@ -135,6 +132,8 @@ export default function ChineseSentenceGame() {
     const router = useRouter();
     const { token } = useAuth();
     const [isSaving, setIsSaving] = useState(false);
+    // 防重複提交鎖
+    const isCompletingRef = useRef(false);
 
     // 动画值
     const bounceAnim = useRef(new Animated.Value(0)).current;
@@ -146,19 +145,17 @@ export default function ChineseSentenceGame() {
     const prepScale = useRef(new Animated.Value(0)).current;
     const [gameActive, setGameActive] = useState(false);
 
-    // ========== 🕒 新增：计时器相关状态 ==========
+    // 计时器相关状态
     const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
     const timerIntervalRef = useRef<number | null>(null);
     const timerStartedRef = useRef<boolean>(false);
 
-    // 格式化时间 (MM:SS)
     const formatTime = (totalSeconds: number): string => {
         const minutes = Math.floor(totalSeconds / 60);
         const seconds = totalSeconds % 60;
         return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     };
 
-    // 停止计时器
     const stopTimer = () => {
         if (timerIntervalRef.current) {
             clearInterval(timerIntervalRef.current);
@@ -166,7 +163,6 @@ export default function ChineseSentenceGame() {
         }
     };
 
-    // 开始计时器（只在第一次调用时生效）
     const startTimerOnce = () => {
         if (timerStartedRef.current) return;
         timerStartedRef.current = true;
@@ -196,10 +192,14 @@ export default function ChineseSentenceGame() {
     const [characterState, setCharacterState] = useState<keyof typeof CHARACTER_STATES>('idle');
     const [encouragementText, setEncouragementText] = useState('');
 
-    // 保存分数到服务器
+    // 保存分数到服务器（加入游玩总时间）
     const saveScore = async (finalScore: number) => {
         if (!token || !difficulty) return;
-
+        if (isCompletingRef.current) {
+            console.log("saveScore already in progress, skip");
+            return;
+        }
+        isCompletingRef.current = true;
         setIsSaving(true);
         try {
             const gameData = {
@@ -217,8 +217,12 @@ export default function ChineseSentenceGame() {
                 isCorrect: q.isCorrect,
                 questionType: 'sentence-completion',
                 score: q.score || 0,
-                maxScore: q.maxScore || (difficulty === 'easy' ? 50 : 60)
+                maxScore: q.maxScore || (difficulty === 'easy' ? 50 : 60),
+                timeSpent: 0
             }));
+
+            const totalTimeSeconds = elapsedSeconds;
+            const totalTimeFormatted = formatTime(totalTimeSeconds);
 
             const metadata: GameMetadata = createGameMetadata(
                 gameData.gameType,
@@ -226,7 +230,9 @@ export default function ChineseSentenceGame() {
                 finalScore,
                 {
                     totalSentences: questions.length,
-                    correctSentences: questions.filter(q => q.isCorrect).length
+                    correctSentences: questions.filter(q => q.isCorrect).length,
+                    totalTimeSeconds: totalTimeSeconds,
+                    totalTimeFormatted: totalTimeFormatted,
                 },
                 questionsData
             );
@@ -245,13 +251,14 @@ export default function ChineseSentenceGame() {
             console.error("Failed to sync score:", e);
         } finally {
             setIsSaving(false);
+            setTimeout(() => {
+                isCompletingRef.current = false;
+            }, 500);
         }
     };
 
-    // 倒数准备序列 - 只在第一次开始计时器
     const startPrepSequence = (isFirstTime: boolean = true) => {
         setGameActive(false);
-
         setTimeout(() => {
             setPrepText('GO!');
             prepScale.setValue(0);
@@ -262,19 +269,16 @@ export default function ChineseSentenceGame() {
                 useNativeDriver: true,
             }).start();
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
             if (isFirstTime) {
                 startTimerOnce();
             }
         }, 100);
-
         setTimeout(() => {
             setPrepText(null);
             setGameActive(true);
         }, 1200);
     };
 
-    // 触发屏幕震动效果
     const triggerScreenShake = () => {
         Animated.sequence([
             Animated.timing(screenShake, { toValue: 10, duration: 50, useNativeDriver: true }),
@@ -287,7 +291,6 @@ export default function ChineseSentenceGame() {
         ]).start();
     };
 
-    // 播放弹跳动画
     const playBounceAnimation = () => {
         bounceAnim.setValue(0);
         Animated.spring(bounceAnim, {
@@ -298,40 +301,21 @@ export default function ChineseSentenceGame() {
         }).start();
     };
 
-    // 播放摇晃动画（答错时）
     const playShakeAnimation = () => {
         shakeAnim.setValue(0);
         Animated.sequence([
-            Animated.timing(shakeAnim, {
-                toValue: 10,
-                duration: 50,
-                useNativeDriver: true
-            }),
-            Animated.timing(shakeAnim, {
-                toValue: -10,
-                duration: 50,
-                useNativeDriver: true
-            }),
-            Animated.timing(shakeAnim, {
-                toValue: 5,
-                duration: 50,
-                useNativeDriver: true
-            }),
-            Animated.timing(shakeAnim, {
-                toValue: 0,
-                duration: 50,
-                useNativeDriver: true
-            })
+            Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
+            Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
+            Animated.timing(shakeAnim, { toValue: 5, duration: 50, useNativeDriver: true }),
+            Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true })
         ]).start();
     };
 
-    // 获取随机鼓励语录
     const getRandomEncouragement = (type: 'great' | 'good' | 'tryAgain') => {
         const messages = ENCOURAGEMENT_MESSAGES[type];
         return messages[Math.floor(Math.random() * messages.length)];
     };
 
-    // 更新角色状态
     const updateCharacterState = (type: keyof typeof CHARACTER_STATES, customMessage?: string) => {
         setCharacterState(type);
         if (customMessage) {
@@ -341,9 +325,9 @@ export default function ChineseSentenceGame() {
         }
     };
 
-    // 初始化游戏（当难度选择后）
     const startGame = (selectedDifficulty: Difficulty) => {
-        // 重置计时器状态
+        // 重置完成锁
+        isCompletingRef.current = false;
         timerStartedRef.current = false;
         setElapsedSeconds(0);
         stopTimer();
@@ -361,10 +345,9 @@ export default function ChineseSentenceGame() {
         loadFirstQuestion(selectedDifficulty);
     };
 
-    // 根据难度和题号获取本题满分
     const getMaxScoreForQuestion = (difficulty: Difficulty, index: number): number => {
         if (difficulty === 'easy') return 50;
-        return 60; // medium/hard 每题60分
+        return 60;
     };
 
     const loadFirstQuestion = async (selectedDifficulty: Difficulty) => {
@@ -473,9 +456,7 @@ export default function ChineseSentenceGame() {
                 alternatives: currentQuestion.alternatives
             });
 
-            // 根据难度和当前题目索引计算实际得分（按比例映射）
             let questionScore = Math.round((result.score / 100) * maxScoreForThis);
-            // 确保不超过满分
             questionScore = Math.min(questionScore, maxScoreForThis);
 
             setQuestions(prev => prev.map((q, idx) =>
@@ -531,12 +512,10 @@ export default function ChineseSentenceGame() {
         loadNextQuestion();
     };
 
-    // 计算总分（根据每题实际得分累加）
     const calculateScore = () => {
         const totalScore = questions.reduce((acc, q) => acc + (q.score || 0), 0);
         const correctCount = questions.filter(q => q.isCorrect).length;
         const maxScore = questions.reduce((acc, q) => acc + (q.maxScore || 0), 0);
-
         return {
             correct: correctCount,
             total: TOTAL_QUESTIONS,
@@ -551,6 +530,7 @@ export default function ChineseSentenceGame() {
         const percentage = score.percentage;
         const maxScore = score.maxScore;
 
+        // 只保存一次
         await saveScore(score.totalScore);
 
         let feedback = '';
@@ -569,15 +549,13 @@ export default function ChineseSentenceGame() {
         setAiFeedback(feedback);
     };
 
-    // 返回难度选择页面
     const handleNewDifficulty = async () => {
         stopTimer();
         timerStartedRef.current = false;
         setElapsedSeconds(0);
-
         if (gameState === 'playing' && questions.length > 0) {
             const currentScore = calculateScore();
-            if (currentScore.totalScore > 0) {
+            if (currentScore.totalScore > 0 && !isCompletingRef.current) {
                 await saveScore(currentScore.totalScore);
             }
         }
@@ -627,7 +605,7 @@ export default function ChineseSentenceGame() {
                         onPress: async () => {
                             stopTimer();
                             const currentScore = calculateScore();
-                            if (currentScore.totalScore > 0) {
+                            if (currentScore.totalScore > 0 && !isCompletingRef.current) {
                                 await saveScore(currentScore.totalScore);
                             }
                             setGameState('difficulty_select');
@@ -644,11 +622,9 @@ export default function ChineseSentenceGame() {
         }
     };
 
-    // 渲染可爱角色
     const renderCharacter = () => {
         const state = CHARACTER_STATES[characterState];
         const currentTheme = difficulty ? THEME_COLORS[difficulty] : THEME_COLORS.easy;
-
         return (
             <View
                 style={[
@@ -662,14 +638,11 @@ export default function ChineseSentenceGame() {
         );
     };
 
-    // 渲染游戏中的反馈卡片
     const renderFeedback = () => {
         if (!showFeedback) return null;
-
         const currentQuestion = questions[currentIndex];
         const score = currentQuestion.score || 0;
         const maxQuestionScore = currentQuestion.maxScore || getMaxScoreForQuestion(difficulty, currentIndex);
-
         return (
             <Animated.View
                 style={[
@@ -716,23 +689,18 @@ export default function ChineseSentenceGame() {
         );
     };
 
-    // 修改：renderQuestion 改为返回带 ScrollView 的可滚动区域，并将绝对定位浮层提到外部
     const renderQuestion = () => {
         if (questions.length === 0) return null;
-
         const currentQuestion = questions[currentIndex];
         const parts = currentQuestion.sentence.split('__');
         const currentTheme = difficulty ? THEME_COLORS[difficulty] : THEME_COLORS.easy;
-
         const animatedShake = {
             transform: [{ translateX: shakeAnim }]
         };
 
-        // 主要游戏内容（可滚动部分）
         const gameContent = (
             <View style={styles.questionContainer}>
                 {renderCharacter()}
-
                 <View style={styles.progressContainer}>
                     <Text style={styles.progressText}>
                         📝  {currentIndex + 1} / {TOTAL_QUESTIONS} question
@@ -758,7 +726,6 @@ export default function ChineseSentenceGame() {
                             </React.Fragment>
                         ))}
                     </Text>
-
                     {currentQuestion.translation && (
                         <Text style={styles.translationText}>
                             📖 {currentQuestion.translation}
@@ -777,7 +744,6 @@ export default function ChineseSentenceGame() {
                                 placeholderTextColor="#999"
                                 editable={!submitting && !loading && gameActive}
                             />
-
                             <TouchableOpacity
                                 style={[styles.hintButton, { borderColor: currentTheme.primary }]}
                                 onPress={() => setShowHint(!showHint)}
@@ -808,23 +774,17 @@ export default function ChineseSentenceGame() {
                 )}
 
                 {renderFeedback()}
-
-                {/* 底部留空便于滚动 */}
                 <View style={styles.bottomSpacer} />
             </View>
         );
 
-        // 整体结构：外层 Animated.View 用于屏幕震动，内部 ScrollView 实现滚动
-        // 绝对定位的倒计时和浮动文字放在 ScrollView 外部
         return (
             <Animated.View style={[{ flex: 1 }, { transform: [{ translateX: screenShake }] }]}>
-                {/* 倒计时浮层 */}
                 {prepText && (
                     <Animated.View style={[styles.prepOverlayAbsolute, { transform: [{ scale: prepScale }] }]}>
                         <Text style={[styles.prepTextAbsolute, { color: currentTheme.primary }]}>{prepText}</Text>
                     </Animated.View>
                 )}
-                {/* 浮动文字 HIT/OUCH */}
                 {floatingText && (
                     <FloatingText
                         key={floatingText.id}
@@ -833,7 +793,6 @@ export default function ChineseSentenceGame() {
                         onComplete={() => setFloatingText(null)}
                     />
                 )}
-                {/* 可滚动内容 */}
                 <ScrollView
                     contentContainerStyle={styles.playingScrollContent}
                     showsVerticalScrollIndicator={true}
@@ -845,7 +804,6 @@ export default function ChineseSentenceGame() {
         );
     };
 
-    // 难度选择页面（优化视觉设计）
     const renderDifficultySelector = () => {
         return (
             <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -887,13 +845,11 @@ export default function ChineseSentenceGame() {
                                     </View>
                                 </View>
                                 <Text style={styles.diffDesc}>{option.description}</Text>
-
                                 <View style={styles.scoreInfoRow}>
                                     <Text style={[styles.scoreInfoDetail, { color: option.color }]}>
                                         {option.id === 'easy' ? '🏆 50+50 points (Total 100)' : '⚡ 60+60 points (Total 120)'}
                                     </Text>
                                 </View>
-
                                 <View style={styles.featuresList}>
                                     {option.features.map((feature, index) => (
                                         <View key={index} style={styles.featureItem}>
@@ -902,12 +858,9 @@ export default function ChineseSentenceGame() {
                                         </View>
                                     ))}
                                 </View>
-
                                 <View style={styles.startButtonContainer}>
                                     <View style={[styles.startButton, { backgroundColor: option.color }]}>
-                                        <Text style={styles.startButtonText}>
-                                            🚀 Start Game →
-                                        </Text>
+                                        <Text style={styles.startButtonText}>🚀 Start Game →</Text>
                                     </View>
                                 </View>
                             </View>
@@ -918,37 +871,30 @@ export default function ChineseSentenceGame() {
         );
     };
 
-    // 结果页面
     const renderResult = () => {
         const score = calculateScore();
         const maxScore = score.maxScore;
         const totalTimeFormatted = formatTime(elapsedSeconds);
-
         return (
             <ScrollView contentContainerStyle={styles.resultContainer}>
                 <View style={styles.resultCard}>
                     <Text style={styles.resultTitle}>🎉 Game Result 🎉</Text>
-
                     {renderCharacter()}
-
                     <View style={styles.scoreCircle}>
                         <Text style={styles.scorePercentage}>{score.totalScore}</Text>
                         <Text style={styles.scorePercentSign}>/{maxScore}</Text>
                         <Text style={styles.scoreLabel}>Total Score</Text>
                     </View>
-
                     <View style={styles.reportTimeBox}>
                         <Text style={styles.reportScoreLabel}>⏱️ Total Time</Text>
                         <Text style={styles.reportTimeValue}>{totalTimeFormatted}</Text>
                     </View>
-
                     {isSaving && (
                         <View style={styles.savingIndicator}>
                             <ActivityIndicator size="small" color="#4CAF50" />
                             <Text style={styles.savingText}>Synchronizing scores...</Text>
                         </View>
                     )}
-
                     <View style={styles.scoreDetails}>
                         <Text style={styles.scoreDetailText}>
                             ✅ Correct {score.correct} / {score.total} question
@@ -959,7 +905,6 @@ export default function ChineseSentenceGame() {
                             </Text>
                         </View>
                     </View>
-
                     <View style={styles.summaryContainer}>
                         <Text style={styles.summaryTitle}>📝 Answer Summary：</Text>
                         {questions.map((q, index) => {
@@ -980,33 +925,17 @@ export default function ChineseSentenceGame() {
                             );
                         })}
                     </View>
-
                     <View style={styles.resultButtonContainer}>
-                        <TouchableOpacity
-                            style={[styles.resultButton, styles.tryAgainButton]}
-                            onPress={handleTryAgain}
-                        >
+                        <TouchableOpacity style={[styles.resultButton, styles.tryAgainButton]} onPress={handleTryAgain}>
                             <Text style={styles.resultButtonText}>🔄 Play again</Text>
                         </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.resultButton, styles.newDifficultyButton]}
-                            onPress={handleNewDifficulty}
-                        >
+                        <TouchableOpacity style={[styles.resultButton, styles.newDifficultyButton]} onPress={handleNewDifficulty}>
                             <Text style={styles.resultButtonText}>🎯 Replacement Difficulty</Text>
                         </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.resultButton, styles.backToGamesButton]}
-                            onPress={handleBackToGames}
-                        >
+                        <TouchableOpacity style={[styles.resultButton, styles.backToGamesButton]} onPress={handleBackToGames}>
                             <Text style={styles.resultButtonText}>🎮 Return to game list</Text>
                         </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.resultButton, styles.homeButton]}
-                            onPress={handleBackToHome}
-                        >
+                        <TouchableOpacity style={[styles.resultButton, styles.homeButton]} onPress={handleBackToHome}>
                             <Text style={styles.resultButtonText}>🏠 Return to homepage</Text>
                         </TouchableOpacity>
                     </View>
@@ -1036,7 +965,6 @@ export default function ChineseSentenceGame() {
                 <SafeAreaView style={[styles.container, { backgroundColor: '#f5f5f5' }]} edges={['top']}>
                     <StatusBar barStyle="dark-content" />
                     <View style={[styles.headerWithTimer, { backgroundColor: currentTheme.primary }]}>
-                        {/* 隐藏返回按钮，使用空 View 占位保持布局 */}
                         <View style={styles.headerButton} />
                         <Text style={styles.headerTitle}>
                             🐼 Chinese fill-in-the-blank - {difficulty === 'easy' ? 'Simple mode' : 'Hard mode'}
@@ -1377,7 +1305,6 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
     },
-    // 修改：倒计时浮层改为绝对定位，不随滚动移动
     prepOverlayAbsolute: {
         position: 'absolute',
         top: '35%',
@@ -1658,26 +1585,6 @@ const styles = StyleSheet.create({
     percentageText: {
         fontSize: 14,
         fontWeight: '600',
-    },
-    feedbackBox: {
-        width: '100%',
-        backgroundColor: '#F5F7FA',
-        borderRadius: 15,
-        padding: 20,
-        marginBottom: 30,
-        borderLeftWidth: 4,
-        borderLeftColor: '#FF9F4A',
-    },
-    feedbackTitle: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 10,
-    },
-    feedbackText: {
-        fontSize: 14,
-        color: '#666',
-        lineHeight: 20,
     },
     summaryContainer: {
         width: '100%',
