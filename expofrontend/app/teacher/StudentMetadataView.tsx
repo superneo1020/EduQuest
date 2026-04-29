@@ -7,7 +7,7 @@ import {
     ScrollView,
     TouchableOpacity,
     ActivityIndicator,
-    SafeAreaView,
+    SafeAreaView, Alert,
 } from 'react-native';
 import { X, Calendar, Gamepad2, Trophy, Target, Clock, TrendingUp, Brain } from 'lucide-react-native';
 import { getApiBaseUrl } from '@/src/api/client';
@@ -409,7 +409,7 @@ export default function StudentMetadataView({ visible, onClose, student, token }
             );
 
             if (response.data) {
-                const analysis = formatGameAIAnalysis(response.data, gameRecord);
+                const analysis = formatGameAIAnalysis(response.data, gameRecord.gameName);
                 setAiAnalysis(analysis);
                 setShowAiAnalysis(true);
             }
