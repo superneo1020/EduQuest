@@ -45,4 +45,3 @@ sentence-transformers>=2.2.0
 
 static-ffmpeg
 Pillow
-google-cloud-aiplatform
