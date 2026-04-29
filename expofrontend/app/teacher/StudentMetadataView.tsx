@@ -48,9 +48,8 @@ export default function StudentMetadataView({ visible, onClose, student, token }
     const loadStudentGameMetadata = async () => {
         setLoading(true);
         try {
-            const response = await axios.get(`${getApiBaseUrl()}/api/user/game/score`, {
-                headers: { Authorization: `Bearer ${token}` },
-                params: { userId: student.id }
+            const response = await axios.get(`${getApiBaseUrl()}/api/educator/student/${student.id}/game/score`, {
+                headers: { Authorization: `Bearer ${token}` }
             });
 
             if (response.data && response.data.content) {
@@ -154,7 +153,21 @@ export default function StudentMetadataView({ visible, onClose, student, token }
                                         {question.isCorrect ? 'Correct' : 'Incorrect'}
                                     </Text>
                                 </View>
-                                <Text style={styles.questionText}>{question.question}</Text>
+                                <Text style={styles.questionText}>{question.content || question.question}</Text>
+                                
+                                {/*  Game Type and Time Info */}
+                                <View style={styles.questionMeta}>
+                                    <View style={styles.metaItem}>
+                                        <Text style={styles.metaLabel}>Game Type:</Text>
+                                        <Text style={styles.metaValue}>{metadata.extraData?.gameType || 'N/A'}</Text>
+                                    </View>
+                                    {question.timeSpent !== undefined && question.timeSpent > 0 && (
+                                        <View style={styles.metaItem}>
+                                            <Text style={styles.metaLabel}>Time Spent:</Text>
+                                            <Text style={styles.metaValue}>{question.timeSpent}s</Text>
+                                        </View>
+                                    )}
+                                </View>
                                 <View style={styles.answerRow}>
                                     <Text style={styles.answerLabel}>Your Answer:</Text>
                                     <Text style={styles.answerValue}>{String(question.userAnswer || 'No answer')}</Text>
@@ -463,6 +476,30 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#2D3436',
         marginBottom: 8,
+    },
+    questionMeta: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 8,
+        paddingVertical: 4,
+        paddingHorizontal: 8,
+        backgroundColor: '#e8f4f8',
+        borderRadius: 4,
+    },
+    metaItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    metaLabel: {
+        fontSize: 11,
+        color: '#666',
+        marginRight: 4,
+        fontWeight: '500',
+    },
+    metaValue: {
+        fontSize: 11,
+        color: '#2D3436',
+        fontWeight: '600',
     },
     answerRow: {
         flexDirection: 'row',
