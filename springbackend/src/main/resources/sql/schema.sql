@@ -198,24 +198,6 @@ CREATE TABLE IF NOT EXISTS missions (
 );
 ;;;
 
--- 強制更新 missions 表的類型約束，加入 CHINESE
-DO $$
-    BEGIN
-        ALTER TABLE missions DROP CONSTRAINT IF EXISTS missions_type_check;
-        ALTER TABLE missions ADD CONSTRAINT missions_type_check
-            CHECK (type IN ('ENGLISH', 'MATH', 'SCIENCE', 'CHINESE', 'MEMORY'));
-    END $$;
-;;;
-
--- 同理，games 表也建議加上這段以防萬一
-DO $$
-    BEGIN
-        ALTER TABLE games DROP CONSTRAINT IF EXISTS games_type_check;
-        ALTER TABLE games ADD CONSTRAINT games_type_check
-            CHECK (type IN ('ENGLISH', 'MATH', 'SCIENCE', 'CHINESE'));
-    END $$;
-;;;
-
 CREATE TABLE IF NOT EXISTS user_missions (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL,
