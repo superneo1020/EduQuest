@@ -72,7 +72,12 @@ public class PromptSerializer {
     public List<CourseGameLeanScore> getLeanDataForCourse(List<CourseGameScoreMini> originalList) {
         return originalList.stream().map(dto -> {
             // Extract the words from the correct answers (for praise).
-            var summary = processQuestions(dto.metadata().questions());
+            var summary = dto.metadata() != null
+                    ? processQuestions(dto.metadata().questions())
+                    : new QuestionSummary(
+                            List.of("No metadata available."),
+                            List.of("No metadata available.")
+                    );
 
             return new CourseGameLeanScore(
                     dto.username(),
@@ -88,12 +93,12 @@ public class PromptSerializer {
     private QuestionSummary processQuestions(List<GameQuestionRecord> questions) {
         var achievements = questions.stream()
                 .filter(GameQuestionRecord::isCorrect)
-                .map(GameQuestionRecord::content)
+                .map(q -> String.format("Q: %s, Time spent:%ds", q.content(), q.timeSpent()))
                 .toList();
 
         var challenges = questions.stream()
                 .filter(q -> !q.isCorrect())
-                .map(q -> String.format("Q: %s, My Ans: %s", q.content(), q.userAnswer()))
+                .map(q -> String.format("Q: %s, My Ans: %s, Time spent:%ds", q.content(), q.userAnswer(), q.timeSpent()))
                 .toList();
 
         return new QuestionSummary(
