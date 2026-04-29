@@ -30,7 +30,6 @@ import ReAnimated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-
 
 const { width, height } = Dimensions.get('window');
 
-// 游戏数据类型
 type Difficulty = 'easy' | 'medium' | 'hard';
 
 type Option = {
@@ -41,13 +40,11 @@ type Option = {
     emoji?: string;
 };
 
-// 扩展 Question 类型，添加每道题的满分值
 interface ExtendedQuestion extends Question {
-    maxPoints: number;   // 本题满分
-    earnedPoints?: number; // 实际得分
+    maxPoints: number;
+    earnedPoints?: number;
 }
 
-// 魚的位置類型
 type FishPosition = {
     x: RNAnimated.Value;
     y: RNAnimated.Value;
@@ -57,7 +54,6 @@ type FishPosition = {
     phase: RNAnimated.Value;
 };
 
-// 游戏状态类型
 type GameState = {
     currentLevel: Difficulty | null;
     currentQuestionIndex: number;
@@ -74,10 +70,9 @@ type GameState = {
     isLoading: boolean;
     questions: ExtendedQuestion[];
     fishCaught: boolean;
-    totalTime: number;
+    totalTime: number; // 保留，现在存储真实秒数
 };
 
-// 难度配置
 const DIFFICULTY_CONFIG: Record<Difficulty, { label: string; color: string; description: string; hint: string; icon: string }> = {
     easy: {
         label: 'Beginner',
@@ -102,36 +97,26 @@ const DIFFICULTY_CONFIG: Record<Difficulty, { label: string; color: string; desc
     }
 };
 
-// 鱼的颜色配置
 const FISH_COLORS = {
     easy: ['#FFB6C1', '#FFC0CB', '#FF69B4', '#FF1493'],
     medium: ['#87CEEB', '#00BFFF', '#1E90FF', '#4169E1'],
     hard: ['#FFA500', '#FF8C00', '#FF7F50', '#FF6347'],
 };
 
-// 鱼的表情
 const FISH_EMOJIS = ['🐟', '🐠', '🐡', '🎏', '🐋'];
 
-// 格式化时间为 mm:ss
 const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 };
 
-// 根据难度和题目索引获取该题满分（2题模式）
 const getMaxPointsForQuestion = (level: Difficulty, index: number): number => {
-    // index: 0, 1 (共2题)
-    if (level === 'easy') {
-        return 50; // 两题各50分
-    } else if (level === 'medium') {
-        return 55; // 两题各55分
-    } else { // hard
-        return 60; // 两题各60分
-    }
+    if (level === 'easy') return 50;
+    else if (level === 'medium') return 55;
+    else return 60;
 };
 
-// 获取总分（根据难度）
 const getTotalMaxScore = (level: Difficulty): number => {
     if (level === 'easy') return 100;
     if (level === 'medium') return 110;
@@ -139,7 +124,6 @@ const getTotalMaxScore = (level: Difficulty): number => {
 };
 
 export default function ListeningScreen() {
-    // 游戏状态
     const [gameState, setGameState] = useState<GameState>({
         currentLevel: null,
         currentQuestionIndex: 0,
@@ -159,14 +143,15 @@ export default function ListeningScreen() {
         totalTime: 0,
     });
 
-    // 计时器状态
     const [elapsedTime, setElapsedTime] = useState(0);
     const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-    // 准备动画相关
     const [prepText, setPrepText] = useState<string | null>(null);
     const prepScale = useSharedValue(0);
     const prepTriggered = useRef(false);
+
+    // 新增：记录游戏真正的开始时间戳
+    const startTimeRef = useRef<number>(0);
 
     const prepAnimatedStyle = useAnimatedStyle(() => ({
         transform: [{ scale: prepScale.value }],
@@ -175,6 +160,8 @@ export default function ListeningScreen() {
 
     const { token } = useAuth();
     const [isSaving, setIsSaving] = useState(false);
+    const isCompletingRef = useRef(false);
+
     const [highScore, setHighScore] = useState(0);
     const [fishPositions, setFishPositions] = useState<FishPosition[]>([]);
     const [rippleAnim] = useState(new RNAnimated.Value(0));
@@ -182,11 +169,9 @@ export default function ListeningScreen() {
     const [waterLevel] = useState(new RNAnimated.Value(0));
     const [bobberAnim] = useState(new RNAnimated.Value(0));
 
-    // 动画引用
     const scaleAnim = useRef(new RNAnimated.Value(1)).current;
     const progressAnim = useRef(new RNAnimated.Value(0)).current;
 
-    // 定义难度选项
     const difficultyOptions = [
         {
             id: 'easy' as const,
@@ -220,10 +205,8 @@ export default function ListeningScreen() {
         }
     ];
 
-    // 获取当前难度下的总分
     const totalMaxScore = gameState.currentLevel ? getTotalMaxScore(gameState.currentLevel) : 100;
 
-    // 启动计时器
     const startTimer = () => {
         if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
         setElapsedTime(0);
@@ -232,32 +215,24 @@ export default function ListeningScreen() {
         }, 1000);
     };
 
-    // 停止计时器并记录时间
-    const stopTimerAndRecord = () => {
+    const stopTimer = () => {
         if (timerIntervalRef.current) {
             clearInterval(timerIntervalRef.current);
             timerIntervalRef.current = null;
         }
-        setGameState(prev => ({ ...prev, totalTime: elapsedTime }));
     };
 
-    // 重置计时器
     const resetTimer = () => {
-        if (timerIntervalRef.current) {
-            clearInterval(timerIntervalRef.current);
-            timerIntervalRef.current = null;
-        }
+        stopTimer();
         setElapsedTime(0);
     };
 
-    // 加载最高分
     useEffect(() => {
         if (gameState.currentLevel) {
             loadHighScore();
         }
     }, [gameState.currentLevel]);
 
-    // 播放水波动画
     useEffect(() => {
         RNAnimated.loop(
             RNAnimated.sequence([
@@ -314,7 +289,6 @@ export default function ListeningScreen() {
         }
     };
 
-    // 初始化鱼的位置
     const initFishPositions = (options: Option[]) => {
         const positions: FishPosition[] = [];
         const speedMultiplier = gameState.currentLevel === 'easy' ? 0.5 :
@@ -338,7 +312,6 @@ export default function ListeningScreen() {
         startFishAnimation(positions);
     };
 
-    // 启动鱼的游动动画
     const startFishAnimation = (positions: FishPosition[]) => {
         positions.forEach((fish, index) => {
             const animate = () => {
@@ -365,7 +338,6 @@ export default function ListeningScreen() {
         });
     };
 
-    // 生成并追加指定索引的题目（附带本题满分）
     const generateAndAddQuestion = async (index: number, level: Difficulty): Promise<ExtendedQuestion | null> => {
         try {
             const question = await AIService.generateSingleQuestion(level, index);
@@ -386,7 +358,6 @@ export default function ListeningScreen() {
         }
     };
 
-    // 加载第一题
     const loadFirstQuestion = async (level: Difficulty) => {
         setGameState(prev => ({ ...prev, isLoading: true, questions: [] }));
 
@@ -417,8 +388,10 @@ export default function ListeningScreen() {
         }
     };
 
-    // 准备动画
     const startPrepSequence = () => {
+        // ✅ 修复：在显示 READY 前记录游戏真正开始的时间戳
+        startTimeRef.current = Date.now();
+
         setPrepText('READY');
         prepScale.value = 0;
         prepScale.value = withSpring(1.2);
@@ -428,12 +401,11 @@ export default function ListeningScreen() {
             prepScale.value = withSpring(1.5);
             setTimeout(() => {
                 setPrepText(null);
-                startTimer();
+                startTimer(); // UI 计时器从 GO 结束后开始（仅用于展示）
             }, 600);
         }, 1000);
     };
 
-    // 监听加载完成，触发准备动画
     useEffect(() => {
         if (!gameState.isLoading && !gameState.gameCompleted && gameState.currentLevel && gameState.questions.length > 0 && !prepTriggered.current) {
             prepTriggered.current = true;
@@ -441,7 +413,6 @@ export default function ListeningScreen() {
         }
     }, [gameState.isLoading, gameState.gameCompleted, gameState.currentLevel, gameState.questions.length]);
 
-    // 选择难度并开始游戏
     const selectDifficulty = async (level: Difficulty) => {
         prepTriggered.current = false;
         resetTimer();
@@ -471,7 +442,6 @@ export default function ListeningScreen() {
         await loadFirstQuestion(level);
     };
 
-    // 重新开始游戏
     const restartGame = async () => {
         if (!gameState.currentLevel) return;
         stopAudio();
@@ -502,14 +472,12 @@ export default function ListeningScreen() {
         await loadFirstQuestion(gameState.currentLevel);
     };
 
-    // 重试加载第一题
     const retryLoadQuestions = async () => {
         if (!gameState.currentLevel) return;
         setGameState(prev => ({ ...prev, isLoading: true }));
         await loadFirstQuestion(gameState.currentLevel);
     };
 
-    // 返回难度选择页面
     const backToDifficultySelect = () => {
         prepTriggered.current = false;
         stopAudio();
@@ -535,19 +503,16 @@ export default function ListeningScreen() {
         setFishPositions([]);
     };
 
-    // 返回主页面
     const goBackToGames = () => {
         resetTimer();
         router.back();
     };
 
-    // 获取当前问题
     const getCurrentQuestion = (): ExtendedQuestion | null => {
         if (gameState.questions.length === 0) return null;
         return gameState.questions[gameState.currentQuestionIndex];
     };
 
-    // 播放语音
     const playAudio = async () => {
         if (gameState.isPlaying || prepText !== null) {
             if (gameState.isPlaying) stopAudio();
@@ -600,7 +565,6 @@ export default function ListeningScreen() {
         setGameState(prev => ({ ...prev, isPlaying: false }));
     };
 
-    // 钓鱼！选择选项
     const catchFish = (option: Option, index: number) => {
         if (gameState.isAnswered || gameState.gameCompleted || gameState.fishCaught || prepText !== null) return;
 
@@ -671,7 +635,6 @@ export default function ListeningScreen() {
         }
     };
 
-    // 下一题或结束游戏
     const nextQuestion = async () => {
         if (prepText !== null) return;
         if (gameState.isLoading) return;
@@ -724,38 +687,36 @@ export default function ListeningScreen() {
         }
     };
 
-    // 结束游戏
     const endGame = async () => {
-        stopTimerAndRecord();
-        setGameState(prev => ({ ...prev, gameCompleted: true }));
+        stopTimer(); // 停止 UI 计时器
+
+        // ✅ 修复：基于绝对时间戳计算真实游玩秒数，至少 1 秒
+        const realSeconds = Math.max(1, Math.round((Date.now() - startTimeRef.current) / 1000));
+
+        setGameState(prev => ({ ...prev, gameCompleted: true, totalTime: realSeconds }));
         saveHighScore(gameState.score);
-        await saveScore(gameState.score);
+        await saveScore(gameState.score, realSeconds);
     };
 
-    // 显示提示
     const toggleHint = () => {
         if (prepText !== null) return;
         setGameState(prev => ({ ...prev, showHint: !prev.showHint }));
     };
 
-    // 获取难度标签
     const getLevelLabel = (level: Difficulty): string => {
         return DIFFICULTY_CONFIG[level].label;
     };
 
-    // 计算准确率
     const calculateAccuracy = (): number => {
         return Math.round((gameState.correctAnswers / gameState.totalQuestions) * 100);
     };
 
-    // 计算分数百分比
     const calculatePercentageScore = (): number => {
         const currentScore = Math.min(gameState.score, totalMaxScore);
         const percentage = (currentScore / totalMaxScore) * 100;
         return Math.round(percentage);
     };
 
-    // 获取结果消息
     const getResultMessage = (accuracy: number): string => {
         if (accuracy === 100) return "🐟 Amazing! You caught all the right fish! 🎣";
         if (accuracy >= 80) return "🎣 Great fishing! Your listening skills are excellent!";
@@ -763,12 +724,16 @@ export default function ListeningScreen() {
         return "🐡 Keep trying! Every fisherman learns with practice!";
     };
 
-    // 获取星级评价
     const getStarRating = (percentage: number): number => {
         return Math.min(5, Math.ceil(percentage / 20));
     };
 
-    const saveScore = async (finalScore: number) => {
+    const saveScore = async (finalScore: number, totalSeconds: number) => {
+        if (isCompletingRef.current) {
+            console.log("saveScore already in progress, skip");
+            return;
+        }
+        isCompletingRef.current = true;
         setIsSaving(true);
         try {
             const scoreToSave = Math.max(finalScore, 0);
@@ -787,8 +752,11 @@ export default function ListeningScreen() {
                 isCorrect: q.isCorrect,
                 questionType: 'listening-audio',
                 options: q.options,
-                earnedPoints: q.earnedPoints || 0
+                earnedPoints: q.earnedPoints || 0,
+                timeSpent: 0 // 可后续逐题细化
             }));
+
+            const totalTimeFormatted = formatTime(totalSeconds);
 
             const metadata: GameMetadata = createGameMetadata(
                 gameData.gameType,
@@ -796,7 +764,9 @@ export default function ListeningScreen() {
                 finalScore,
                 {
                     audioClips: gameState.questions.length,
-                    correctAnswers: gameState.correctAnswers
+                    correctAnswers: gameState.correctAnswers,
+                    totalTimeSeconds: totalSeconds,
+                    totalTimeFormatted: totalTimeFormatted,
                 },
                 questionsData
             );
@@ -810,14 +780,17 @@ export default function ListeningScreen() {
             await axios.post('http://localhost:8080/api/user/game/score', backendRequest, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
+            console.log("Score synced to server with time:", totalSeconds);
         } catch (e) {
             console.error("Save score failed:", e);
         } finally {
             setIsSaving(false);
+            setTimeout(() => {
+                isCompletingRef.current = false;
+            }, 500);
         }
     };
 
-    // 当问题改变时初始化鱼的位置
     useEffect(() => {
         const currentQ = getCurrentQuestion();
         if (currentQ && !gameState.isLoading && !gameState.gameCompleted && !prepText) {
@@ -904,7 +877,6 @@ export default function ListeningScreen() {
         );
     }
 
-    // 加载进度
     if (gameState.isLoading) {
         return (
             <View style={styles.container}>
@@ -930,7 +902,6 @@ export default function ListeningScreen() {
         );
     }
 
-    // 加载失败界面
     if (!currentQuestion && !gameState.isLoading && !gameState.gameCompleted) {
         return (
             <View style={styles.container}>
@@ -957,8 +928,8 @@ export default function ListeningScreen() {
         );
     }
 
-    // 游戏结束页面
     if (gameState.gameCompleted) {
+        const finalTime = gameState.totalTime;
         return (
             <View style={styles.container}>
                 <Stack.Screen
@@ -1031,19 +1002,17 @@ export default function ListeningScreen() {
                                 </View>
                             </View>
 
-                            {/* 显示总花费时间 */}
                             <View style={styles.resultStatItem}>
                                 <View style={styles.resultStatIcon}>
                                     <Ionicons name="time" size={24} color="#4b6cb7" />
                                 </View>
                                 <View style={styles.resultStatInfo}>
                                     <Text style={styles.resultStatLabel}>Total Time</Text>
-                                    <Text style={styles.resultStatValue}>{formatTime(gameState.totalTime)}</Text>
+                                    <Text style={styles.resultStatValue}>{formatTime(finalTime)}</Text>
                                 </View>
                             </View>
                         </View>
 
-                        {/* 每题得分详情 */}
                         <View style={styles.detailScoreContainer}>
                             <Text style={styles.detailScoreTitle}>📊 Per Question Score:</Text>
                             {gameState.questions.map((q, idx) => {
@@ -1085,7 +1054,7 @@ export default function ListeningScreen() {
         );
     }
 
-    // 游戏主界面 - 计时器放在游戏信息区右侧
+    // 游戏主界面
     return (
         <View style={styles.container}>
             <Stack.Screen
@@ -1106,7 +1075,6 @@ export default function ListeningScreen() {
                 contentContainerStyle={styles.fishingScrollContent}
                 showsVerticalScrollIndicator={false}
             >
-                {/* 游戏信息 - 包含计时器 */}
                 <View style={styles.fishingGameInfo}>
                     <View style={styles.fishingStats}>
                         <View style={styles.fishingStatBox}>
@@ -1126,7 +1094,6 @@ export default function ListeningScreen() {
                             <Text style={styles.fishingStatValue}>{gameState.streak}</Text>
                             <Text style={styles.fishingStatLabel}>Streak</Text>
                         </View>
-                        {/* 计时器放在最右边 */}
                         <View style={styles.fishingStatBox}>
                             <Ionicons name="time-outline" size={24} color="#4b6cb7" />
                             <Text style={styles.fishingStatValue}>{formatTime(elapsedTime)}</Text>
@@ -1135,9 +1102,7 @@ export default function ListeningScreen() {
                     </View>
                 </View>
 
-                {/* 钓鱼区域 */}
                 <View style={styles.fishingArea}>
-                    {/* 水波纹背景 */}
                     <RNAnimated.View
                         style={[
                             styles.waterBackground,
@@ -1152,7 +1117,6 @@ export default function ListeningScreen() {
                         ]}
                     />
 
-                    {/* 海草图片装饰 */}
                     <View style={styles.seaweedContainer} pointerEvents="none">
                         <Image
                             source={require('../../../assets/images/seaweed.png')}
@@ -1176,7 +1140,6 @@ export default function ListeningScreen() {
                         />
                     </View>
 
-                    {/* 浮标 */}
                     <RNAnimated.View
                         style={[
                             styles.bobber,
@@ -1196,7 +1159,6 @@ export default function ListeningScreen() {
                         </View>
                     </RNAnimated.View>
 
-                    {/* 游动的鱼 */}
                     {currentQuestion?.options.map((option, index) => {
                         const fishPos = fishPositions[index];
                         if (!fishPos) return null;
@@ -1257,7 +1219,6 @@ export default function ListeningScreen() {
                         );
                     })}
 
-                    {/* 涟漪效果 */}
                     {gameState.fishCaught && (
                         <RNAnimated.View
                             style={[
@@ -1270,7 +1231,6 @@ export default function ListeningScreen() {
                         />
                     )}
 
-                    {/* 钓起的鱼动画 */}
                     {gameState.fishCaught && (
                         <RNAnimated.View
                             style={[
@@ -1288,7 +1248,6 @@ export default function ListeningScreen() {
                     )}
                 </View>
 
-                {/* 音频控制区域 */}
                 <View style={styles.fishingAudioArea}>
                     <RNAnimated.View style={{ transform: [{ scale: scaleAnim }] }}>
                         <TouchableOpacity
@@ -1309,12 +1268,10 @@ export default function ListeningScreen() {
                     </Text>
                 </View>
 
-                {/* 进度条 */}
                 <View style={styles.fishingProgressBar}>
                     <RNAnimated.View style={[styles.fishingProgressFill, { width: progressAnim.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }) }]} />
                 </View>
 
-                {/* 反馈区域 */}
                 {gameState.isAnswered && (
                     <View style={[
                         styles.fishingFeedback,
@@ -1328,7 +1285,6 @@ export default function ListeningScreen() {
                     </View>
                 )}
 
-                {/* 提示区域 */}
                 {gameState.showHint && currentQuestion && (
                     <View style={styles.fishingHintArea}>
                         <View style={styles.fishingHintTitle}>
@@ -1339,7 +1295,6 @@ export default function ListeningScreen() {
                     </View>
                 )}
 
-                {/* 控制按钮 */}
                 <View style={styles.fishingControls}>
                     <TouchableOpacity
                         style={[styles.fishingControlButton, styles.fishingHintButton]}
@@ -1376,7 +1331,6 @@ export default function ListeningScreen() {
                 </View>
             </ScrollView>
 
-            {/* 准备动画覆盖层 */}
             <ReAnimated.View
                 style={[
                     styles.prepOverlay,
@@ -1391,665 +1345,116 @@ export default function ListeningScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#E8F4FD',
-    },
-    scrollContent: {
-        flexGrow: 1,
-    },
-    headerSection: {
-        alignItems: 'center',
-        paddingTop: 40,
-        paddingHorizontal: 20,
-        paddingBottom: 30,
-        backgroundColor: '#fff',
-    },
-    mainTitle: {
-        fontSize: 32,
-        fontWeight: '800',
-        color: '#1E293B',
-        textAlign: 'center',
-        marginBottom: 8,
-    },
-    subTitle: {
-        fontSize: 16,
-        color: '#64748B',
-        textAlign: 'center',
-        marginBottom: 10,
-    },
-    scoreInfoBox: {
-        backgroundColor: '#FFF8E1',
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 20,
-        marginTop: 8,
-    },
-    scoreInfoText: {
-        fontSize: 12,
-        color: '#FF9F4A',
-        fontWeight: '500',
-        textAlign: 'center',
-    },
-    menuGrid: {
-        width: '100%',
-        paddingHorizontal: 20,
-        gap: 20,
-    },
-    diffCard: {
-        flexDirection: 'row',
-        padding: 20,
-        borderRadius: 16,
-        borderWidth: 2,
-        gap: 15,
-        marginBottom: 20,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 3,
-    },
-    cardIconContainer: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        backgroundColor: 'rgba(255, 255, 255, 0.9)',
-        alignItems: 'center',
-        justifyContent: 'center',
-        elevation: 2,
-    },
-    cardIcon: {
-        fontSize: 32,
-    },
-    cardContent: {
-        flex: 1,
-    },
-    cardHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 8,
-    },
-    diffBtnText: {
-        fontSize: 20,
-        fontWeight: '700',
-    },
-    levelBadge: {
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 12,
-    },
-    levelBadgeText: {
-        fontSize: 10,
-        color: '#fff',
-        fontWeight: '600',
-    },
-    diffDesc: {
-        fontSize: 14,
-        color: '#64748B',
-        marginBottom: 12,
-        lineHeight: 20,
-    },
-    featuresList: {
-        marginBottom: 15,
-        gap: 6,
-    },
-    featureItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-    },
-    featureIcon: {
-        marginRight: 4,
-    },
-    featureText: {
-        fontSize: 12,
-        color: '#475569',
-    },
-    startButtonContainer: {
-        alignItems: 'flex-end',
-    },
-    startButton: {
-        paddingHorizontal: 20,
-        paddingVertical: 8,
-        borderRadius: 20,
-        minWidth: 120,
-        alignItems: 'center',
-    },
-    startButtonText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#fff',
-    },
-    backLink: {
-        marginTop: 20,
-        alignItems: 'center',
-    },
-    backLinkText: {
-        fontSize: 16,
-        color: '#4b6cb7',
-        fontWeight: '600',
-    },
-    loadingContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#f5f5f5',
-        padding: 20,
-    },
-    loadingText: {
-        marginTop: 20,
-        fontSize: 16,
-        color: '#4b6cb7',
-        textAlign: 'center',
-    },
-    errorText: {
-        fontSize: 18,
-        color: '#F44336',
-        marginTop: 16,
-        marginBottom: 16,
-        textAlign: 'center',
-    },
-    retryButton: {
-        backgroundColor: '#4b6cb7',
-        paddingHorizontal: 24,
-        paddingVertical: 12,
-        borderRadius: 8,
-        minWidth: 200,
-        alignItems: 'center',
-    },
-    retryButtonText: {
-        color: 'white',
-        fontSize: 16,
-        fontWeight: '600',
-    },
-    scrollView: {
-        flex: 1,
-    },
-    fishingScrollContent: {
-        flexGrow: 1,
-        paddingBottom: 30,
-    },
-    fishingGameInfo: {
-        backgroundColor: 'rgba(255,255,255,0.9)',
-        borderRadius: 20,
-        padding: 15,
-        marginHorizontal: 15,
-        marginTop: 15,
-        marginBottom: 10,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-    },
-    fishingStats: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-    },
-    fishingStatBox: {
-        alignItems: 'center',
-        gap: 5,
-        flex: 1,
-    },
-    fishingStatValue: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: '#4b6cb7',
-    },
-    fishingStatLabel: {
-        fontSize: 12,
-        color: '#666',
-    },
-    fishingArea: {
-        height: 400,
-        backgroundColor: '#6BB5FF',
-        borderRadius: 30,
-        marginHorizontal: 15,
-        marginVertical: 10,
-        overflow: 'hidden',
-        position: 'relative',
-        borderWidth: 2,
-        borderColor: '#4A90E2',
-    },
-    waterBackground: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: '#6BB5FF',
-        zIndex: 0,
-    },
-    seaweedContainer: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: 100,
-        zIndex: 1,
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        alignItems: 'flex-end',
-        paddingHorizontal: 10,
-    },
-    seaweedImage: {
-        width: 140,
-        height: 160,
-    },
-    seaweedImage1: {
-        height: 170,
-        width: 135,
-    },
-    seaweedImage2: {
-        height: 190,
-        width: 145,
-    },
-    seaweedImage3: {
-        height: 160,
-        width: 130,
-    },
-    seaweedImage4: {
-        height: 185,
-        width: 140,
-    },
-    bobber: {
-        position: 'absolute',
-        top: 20,
-        right: 30,
-        zIndex: 10,
-        alignItems: 'center',
-    },
-    bobberLine: {
-        width: 2,
-        height: 60,
-        backgroundColor: '#8B4513',
-    },
-    bobberFloat: {
-        width: 20,
-        height: 20,
-        backgroundColor: '#FF6B6B',
-        borderRadius: 10,
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#fff',
-    },
-    fish: {
-        position: 'absolute',
-        zIndex: 5,
-    },
-    fishBody: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 15,
-        paddingVertical: 10,
-        borderRadius: 30,
-        borderWidth: 2,
-        borderColor: '#fff',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 3,
-        elevation: 3,
-    },
-    fishEmoji: {
-        fontSize: 24,
-        marginRight: 8,
-    },
-    fishText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#fff',
-        textShadowColor: 'rgba(0,0,0,0.2)',
-        textShadowOffset: { width: 1, height: 1 },
-        textShadowRadius: 2,
-    },
-    fishBubble: {
-        position: 'absolute',
-        top: -15,
-        right: -10,
-        backgroundColor: 'rgba(255,255,255,0.9)',
-        borderRadius: 15,
-        paddingHorizontal: 6,
-        paddingVertical: 3,
-    },
-    bubbleText: {
-        fontSize: 12,
-        fontWeight: 'bold',
-        color: '#4b6cb7',
-    },
-    ripple: {
-        position: 'absolute',
-        width: 100,
-        height: 100,
-        borderRadius: 50,
-        backgroundColor: 'rgba(255,255,255,0.6)',
-        top: '50%',
-        left: '50%',
-        marginLeft: -50,
-        marginTop: -50,
-        zIndex: 20,
-    },
-    caughtFish: {
-        position: 'absolute',
-        top: '40%',
-        left: '50%',
-        marginLeft: -40,
-        zIndex: 30,
-    },
-    caughtFishEmoji: {
-        fontSize: 80,
-    },
-    fishingAudioArea: {
-        alignItems: 'center',
-        marginVertical: 15,
-    },
-    fishingPlayButton: {
-        width: 70,
-        height: 70,
-        borderRadius: 35,
-        backgroundColor: '#4b6cb7',
-        justifyContent: 'center',
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 5,
-    },
-    fishingPlayButtonPlaying: {
-        backgroundColor: '#182848',
-        transform: [{ scale: 1.05 }],
-    },
-    fishingAudioText: {
-        marginTop: 10,
-        fontSize: 14,
-        color: '#4b6cb7',
-        fontWeight: '500',
-    },
-    fishingProgressBar: {
-        height: 8,
-        backgroundColor: '#e0e0e0',
-        borderRadius: 4,
-        marginHorizontal: 20,
-        marginVertical: 10,
-        overflow: 'hidden',
-    },
-    fishingProgressFill: {
-        height: '100%',
-        backgroundColor: '#4b6cb7',
-        borderRadius: 4,
-    },
-    fishingFeedback: {
-        marginHorizontal: 20,
-        padding: 15,
-        borderRadius: 16,
-        marginVertical: 10,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    fishingFeedbackCorrect: {
-        backgroundColor: 'rgba(76, 175, 80, 0.2)',
-        borderWidth: 1,
-        borderColor: '#4CAF50',
-    },
-    fishingFeedbackIncorrect: {
-        backgroundColor: 'rgba(244, 67, 54, 0.2)',
-        borderWidth: 1,
-        borderColor: '#F44336',
-    },
-    fishingFeedbackText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#333',
-    },
-    fishingHintArea: {
-        backgroundColor: '#FFF8E7',
-        borderRadius: 16,
-        padding: 15,
-        marginHorizontal: 20,
-        marginVertical: 10,
-        borderLeftWidth: 4,
-        borderLeftColor: '#FFB300',
-    },
-    fishingHintTitle: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    fishingHintTitleText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#FF8F00',
-        marginLeft: 8,
-    },
-    fishingHintText: {
-        fontSize: 14,
-        color: '#5D4037',
-        lineHeight: 20,
-    },
-    fishingControls: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        gap: 15,
-        marginHorizontal: 20,
-        marginVertical: 10,
-    },
-    fishingControlButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingHorizontal: 20,
-        paddingVertical: 12,
-        borderRadius: 12,
-        flex: 1,
-        gap: 8,
-    },
-    fishingHintButton: {
-        backgroundColor: 'white',
-        borderWidth: 2,
-        borderColor: '#ddd',
-    },
-    fishingHintButtonText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#666',
-    },
-    fishingNextButton: {
-        backgroundColor: '#4b6cb7',
-    },
-    fishingNextButtonText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: 'white',
-    },
-    fishingHighScoreContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 10,
-        marginVertical: 10,
-    },
-    fishingHighScoreText: {
-        fontSize: 14,
-        color: '#666',
-    },
-    resultPageContainer: {
-        flexGrow: 1,
-        backgroundColor: '#f5f5f5',
-    },
-    resultHeader: {
-        alignItems: 'center',
-        paddingTop: 60,
-        paddingBottom: 40,
-        paddingHorizontal: 20,
-        borderBottomLeftRadius: 30,
-        borderBottomRightRadius: 30,
-        marginBottom: 20,
-    },
-    resultHeaderTitle: {
-        fontSize: 28,
-        fontWeight: 'bold',
-        color: '#fff',
-        marginTop: 16,
-    },
-    resultCard: {
-        backgroundColor: 'white',
-        borderRadius: 24,
-        marginHorizontal: 20,
-        marginBottom: 30,
-        padding: 24,
-        elevation: 3,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-    },
-    scoreCircle: {
-        alignItems: 'center',
-        marginBottom: 20,
-    },
-    scoreCircleNumber: {
-        fontSize: 72,
-        fontWeight: 'bold',
-        color: '#4b6cb7',
-    },
-    scoreCircleLabel: {
-        fontSize: 14,
-        color: '#666',
-        marginTop: -8,
-    },
-    resultStars: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        gap: 8,
-        marginBottom: 16,
-    },
-    resultMessage: {
-        fontSize: 16,
-        color: '#555',
-        textAlign: 'center',
-        marginBottom: 24,
-        lineHeight: 24,
-        paddingHorizontal: 16,
-    },
-    resultStats: {
-        backgroundColor: '#f8f9fa',
-        borderRadius: 16,
-        padding: 16,
-        marginBottom: 24,
-    },
-    resultStatItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: '#e0e0e0',
-    },
-    resultStatIcon: {
-        width: 40,
-        alignItems: 'center',
-    },
-    resultStatInfo: {
-        flex: 1,
-        marginLeft: 12,
-    },
-    resultStatLabel: {
-        fontSize: 14,
-        color: '#666',
-        marginBottom: 2,
-    },
-    resultStatValue: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: '#333',
-    },
-    detailScoreContainer: {
-        backgroundColor: '#f8f9fa',
-        borderRadius: 16,
-        padding: 16,
-        marginBottom: 24,
-    },
-    detailScoreTitle: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#333',
-        marginBottom: 12,
-    },
-    detailScoreItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 6,
-        borderBottomWidth: 1,
-        borderBottomColor: '#eee',
-    },
-    detailScoreNumber: {
-        width: 30,
-        fontSize: 12,
-        color: '#666',
-    },
-    detailScoreAnswer: {
-        flex: 1,
-        fontSize: 12,
-        color: '#333',
-    },
-    detailScoreValue: {
-        width: 50,
-        fontSize: 12,
-        fontWeight: '600',
-        textAlign: 'right',
-    },
-    correctScore: {
-        color: '#4CAF50',
-    },
-    incorrectScore: {
-        color: '#f44336',
-    },
-    resultButtons: {
-        gap: 12,
-    },
-    resultButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 14,
-        borderRadius: 12,
-        gap: 8,
-    },
-    playAgainButton: {
-        backgroundColor: '#4b6cb7',
-    },
-    changeDifficultyButton: {
-        backgroundColor: '#FF9800',
-    },
-    backToGameButton: {
-        backgroundColor: '#FF5722',
-    },
-    resultButtonText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: 'white',
-    },
-    prepOverlay: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0,0,0,0.7)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        zIndex: 1000,
-    },
-    prepText: {
-        fontSize: 80,
-        fontWeight: '900',
-        color: '#FFD700',
-        fontStyle: 'italic',
-    },
-    fishContent: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
+    container: { flex: 1, backgroundColor: '#E8F4FD' },
+    scrollContent: { flexGrow: 1 },
+    headerSection: { alignItems: 'center', paddingTop: 40, paddingHorizontal: 20, paddingBottom: 30, backgroundColor: '#fff' },
+    mainTitle: { fontSize: 32, fontWeight: '800', color: '#1E293B', textAlign: 'center', marginBottom: 8 },
+    subTitle: { fontSize: 16, color: '#64748B', textAlign: 'center', marginBottom: 10 },
+    scoreInfoBox: { backgroundColor: '#FFF8E1', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, marginTop: 8 },
+    scoreInfoText: { fontSize: 12, color: '#FF9F4A', fontWeight: '500', textAlign: 'center' },
+    menuGrid: { width: '100%', paddingHorizontal: 20, gap: 20 },
+    diffCard: { flexDirection: 'row', padding: 20, borderRadius: 16, borderWidth: 2, gap: 15, marginBottom: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 3 },
+    cardIconContainer: { width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center', elevation: 2 },
+    cardIcon: { fontSize: 32 },
+    cardContent: { flex: 1 },
+    cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+    diffBtnText: { fontSize: 20, fontWeight: '700' },
+    levelBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+    levelBadgeText: { fontSize: 10, color: '#fff', fontWeight: '600' },
+    diffDesc: { fontSize: 14, color: '#64748B', marginBottom: 12, lineHeight: 20 },
+    featuresList: { marginBottom: 15, gap: 6 },
+    featureItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    featureIcon: { marginRight: 4 },
+    featureText: { fontSize: 12, color: '#475569' },
+    startButtonContainer: { alignItems: 'flex-end' },
+    startButton: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, minWidth: 120, alignItems: 'center' },
+    startButtonText: { fontSize: 14, fontWeight: '600', color: '#fff' },
+    backLink: { marginTop: 20, alignItems: 'center' },
+    backLinkText: { fontSize: 16, color: '#4b6cb7', fontWeight: '600' },
+    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5', padding: 20 },
+    loadingText: { marginTop: 20, fontSize: 16, color: '#4b6cb7', textAlign: 'center' },
+    errorText: { fontSize: 18, color: '#F44336', marginTop: 16, marginBottom: 16, textAlign: 'center' },
+    retryButton: { backgroundColor: '#4b6cb7', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8, minWidth: 200, alignItems: 'center' },
+    retryButtonText: { color: 'white', fontSize: 16, fontWeight: '600' },
+    scrollView: { flex: 1 },
+    fishingScrollContent: { flexGrow: 1, paddingBottom: 30 },
+    fishingGameInfo: { backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: 20, padding: 15, marginHorizontal: 15, marginTop: 15, marginBottom: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
+    fishingStats: { flexDirection: 'row', justifyContent: 'space-around' },
+    fishingStatBox: { alignItems: 'center', gap: 5, flex: 1 },
+    fishingStatValue: { fontSize: 20, fontWeight: 'bold', color: '#4b6cb7' },
+    fishingStatLabel: { fontSize: 12, color: '#666' },
+    fishingArea: { height: 400, backgroundColor: '#6BB5FF', borderRadius: 30, marginHorizontal: 15, marginVertical: 10, overflow: 'hidden', position: 'relative', borderWidth: 2, borderColor: '#4A90E2' },
+    waterBackground: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#6BB5FF', zIndex: 0 },
+    seaweedContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 100, zIndex: 1, flexDirection: 'row', justifyContent: 'space-around', alignItems: 'flex-end', paddingHorizontal: 10 },
+    seaweedImage: { width: 140, height: 160 },
+    seaweedImage1: { height: 170, width: 135 },
+    seaweedImage2: { height: 190, width: 145 },
+    seaweedImage3: { height: 160, width: 130 },
+    seaweedImage4: { height: 185, width: 140 },
+    bobber: { position: 'absolute', top: 20, right: 30, zIndex: 10, alignItems: 'center' },
+    bobberLine: { width: 2, height: 60, backgroundColor: '#8B4513' },
+    bobberFloat: { width: 20, height: 20, backgroundColor: '#FF6B6B', borderRadius: 10, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#fff' },
+    fish: { position: 'absolute', zIndex: 5 },
+    fishBody: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 10, borderRadius: 30, borderWidth: 2, borderColor: '#fff', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3, elevation: 3 },
+    fishEmoji: { fontSize: 24, marginRight: 8 },
+    fishText: { fontSize: 14, fontWeight: '600', color: '#fff', textShadowColor: 'rgba(0,0,0,0.2)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 2 },
+    fishBubble: { position: 'absolute', top: -15, right: -10, backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: 15, paddingHorizontal: 6, paddingVertical: 3 },
+    bubbleText: { fontSize: 12, fontWeight: 'bold', color: '#4b6cb7' },
+    ripple: { position: 'absolute', width: 100, height: 100, borderRadius: 50, backgroundColor: 'rgba(255,255,255,0.6)', top: '50%', left: '50%', marginLeft: -50, marginTop: -50, zIndex: 20 },
+    caughtFish: { position: 'absolute', top: '40%', left: '50%', marginLeft: -40, zIndex: 30 },
+    caughtFishEmoji: { fontSize: 80 },
+    fishingAudioArea: { alignItems: 'center', marginVertical: 15 },
+    fishingPlayButton: { width: 70, height: 70, borderRadius: 35, backgroundColor: '#4b6cb7', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },
+    fishingPlayButtonPlaying: { backgroundColor: '#182848', transform: [{ scale: 1.05 }] },
+    fishingAudioText: { marginTop: 10, fontSize: 14, color: '#4b6cb7', fontWeight: '500' },
+    fishingProgressBar: { height: 8, backgroundColor: '#e0e0e0', borderRadius: 4, marginHorizontal: 20, marginVertical: 10, overflow: 'hidden' },
+    fishingProgressFill: { height: '100%', backgroundColor: '#4b6cb7', borderRadius: 4 },
+    fishingFeedback: { marginHorizontal: 20, padding: 15, borderRadius: 16, marginVertical: 10, justifyContent: 'center', alignItems: 'center' },
+    fishingFeedbackCorrect: { backgroundColor: 'rgba(76, 175, 80, 0.2)', borderWidth: 1, borderColor: '#4CAF50' },
+    fishingFeedbackIncorrect: { backgroundColor: 'rgba(244, 67, 54, 0.2)', borderWidth: 1, borderColor: '#F44336' },
+    fishingFeedbackText: { fontSize: 16, fontWeight: '600', color: '#333' },
+    fishingHintArea: { backgroundColor: '#FFF8E7', borderRadius: 16, padding: 15, marginHorizontal: 20, marginVertical: 10, borderLeftWidth: 4, borderLeftColor: '#FFB300' },
+    fishingHintTitle: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+    fishingHintTitleText: { fontSize: 16, fontWeight: '600', color: '#FF8F00', marginLeft: 8 },
+    fishingHintText: { fontSize: 14, color: '#5D4037', lineHeight: 20 },
+    fishingControls: { flexDirection: 'row', justifyContent: 'center', gap: 15, marginHorizontal: 20, marginVertical: 10 },
+    fishingControlButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12, flex: 1, gap: 8 },
+    fishingHintButton: { backgroundColor: 'white', borderWidth: 2, borderColor: '#ddd' },
+    fishingHintButtonText: { fontSize: 14, fontWeight: '600', color: '#666' },
+    fishingNextButton: { backgroundColor: '#4b6cb7' },
+    fishingNextButtonText: { fontSize: 14, fontWeight: '600', color: 'white' },
+    fishingHighScoreContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginVertical: 10 },
+    fishingHighScoreText: { fontSize: 14, color: '#666' },
+    resultPageContainer: { flexGrow: 1, backgroundColor: '#f5f5f5' },
+    resultHeader: { alignItems: 'center', paddingTop: 60, paddingBottom: 40, paddingHorizontal: 20, borderBottomLeftRadius: 30, borderBottomRightRadius: 30, marginBottom: 20 },
+    resultHeaderTitle: { fontSize: 28, fontWeight: 'bold', color: '#fff', marginTop: 16 },
+    resultCard: { backgroundColor: 'white', borderRadius: 24, marginHorizontal: 20, marginBottom: 30, padding: 24, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8 },
+    scoreCircle: { alignItems: 'center', marginBottom: 20 },
+    scoreCircleNumber: { fontSize: 72, fontWeight: 'bold', color: '#4b6cb7' },
+    scoreCircleLabel: { fontSize: 14, color: '#666', marginTop: -8 },
+    resultStars: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 16 },
+    resultMessage: { fontSize: 16, color: '#555', textAlign: 'center', marginBottom: 24, lineHeight: 24, paddingHorizontal: 16 },
+    resultStats: { backgroundColor: '#f8f9fa', borderRadius: 16, padding: 16, marginBottom: 24 },
+    resultStatItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#e0e0e0' },
+    resultStatIcon: { width: 40, alignItems: 'center' },
+    resultStatInfo: { flex: 1, marginLeft: 12 },
+    resultStatLabel: { fontSize: 14, color: '#666', marginBottom: 2 },
+    resultStatValue: { fontSize: 18, fontWeight: '600', color: '#333' },
+    detailScoreContainer: { backgroundColor: '#f8f9fa', borderRadius: 16, padding: 16, marginBottom: 24 },
+    detailScoreTitle: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 12 },
+    detailScoreItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#eee' },
+    detailScoreNumber: { width: 30, fontSize: 12, color: '#666' },
+    detailScoreAnswer: { flex: 1, fontSize: 12, color: '#333' },
+    detailScoreValue: { width: 50, fontSize: 12, fontWeight: '600', textAlign: 'right' },
+    correctScore: { color: '#4CAF50' },
+    incorrectScore: { color: '#f44336' },
+    resultButtons: { gap: 12 },
+    resultButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 12, gap: 8 },
+    playAgainButton: { backgroundColor: '#4b6cb7' },
+    changeDifficultyButton: { backgroundColor: '#FF9800' },
+    backToGameButton: { backgroundColor: '#FF5722' },
+    resultButtonText: { fontSize: 16, fontWeight: '600', color: 'white' },
+    prepOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
+    prepText: { fontSize: 80, fontWeight: '900', color: '#FFD700', fontStyle: 'italic' },
+    fishContent: { flexDirection: 'row', alignItems: 'center' },
 });

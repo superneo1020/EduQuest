@@ -166,6 +166,8 @@ const formatTime = (seconds: number): string => {
 export default function WritingScreen() {
     const { token } = useAuth();
     const [isSaving, setIsSaving] = useState(false);
+    // 防重複提交鎖
+    const isCompletingRef = useRef(false);
 
     // 狀態管理
     const [difficulty, setDifficulty] = useState<Difficulty | null>(null);
@@ -203,6 +205,11 @@ export default function WritingScreen() {
     const [finalElapsedSeconds, setFinalElapsedSeconds] = useState(0);
     const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const startTimeRef = useRef<number | null>(null);
+    // 紀錄最終時間的 ref（確保儲存時不會因 React 狀態異步而遺失）
+    const finalTimeRef = useRef<number>(0);
+
+    // ✅ 新增：專門給總結頁面顯示的最終時間（同步設定）
+    const [summaryTime, setSummaryTime] = useState(0);
 
     const textInputRef = useRef<TextInput>(null);
 
@@ -210,6 +217,7 @@ export default function WritingScreen() {
     const startTimer = () => {
         if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
         setElapsedSeconds(0);
+        finalTimeRef.current = 0;
         startTimeRef.current = Date.now();
         timerIntervalRef.current = setInterval(() => {
             if (startTimeRef.current) {
@@ -220,17 +228,20 @@ export default function WritingScreen() {
         }, 1000);
     };
 
-    const stopTimer = () => {
+    const stopTimer = (): number => {
+        let finalSeconds = 0;
+        if (startTimeRef.current) {
+            finalSeconds = Math.floor((Date.now() - startTimeRef.current) / 1000);
+        }
         if (timerIntervalRef.current) {
             clearInterval(timerIntervalRef.current);
             timerIntervalRef.current = null;
         }
-        if (startTimeRef.current) {
-            const finalSeconds = Math.floor((Date.now() - startTimeRef.current) / 1000);
-            setFinalElapsedSeconds(finalSeconds);
-            setElapsedSeconds(finalSeconds);
-        }
         startTimeRef.current = null;
+        setFinalElapsedSeconds(finalSeconds);
+        setElapsedSeconds(finalSeconds);
+        finalTimeRef.current = finalSeconds;
+        return finalSeconds;
     };
 
     const resetAndStartTimer = () => {
@@ -258,8 +269,13 @@ export default function WritingScreen() {
     }, [difficulty, currentScene, isFinished]);
 
     // ==================== 輔助函數 ====================
-    const saveScore = async (score: number) => {
+    const saveScore = async (score: number, totalSeconds: number) => {
         if (!token || !difficulty) return;
+        if (isCompletingRef.current) {
+            console.log("saveScore already in progress, skip");
+            return;
+        }
+        isCompletingRef.current = true;
         setIsSaving(true);
         try {
             const gameData = {
@@ -268,7 +284,7 @@ export default function WritingScreen() {
                 gameType: "ENGLISH",
                 gameDifficulty: difficulty === 'easy' ? 'EASY' : 'HARD'
             };
-            
+
             const questionsData = [{
                 id: 1,
                 question: currentScene?.prompt || 'Write about the scene',
@@ -279,13 +295,18 @@ export default function WritingScreen() {
                 timeSpent: 0
             }];
 
+            const totalTimeSeconds = totalSeconds;
+            const totalTimeFormatted = formatTime(totalTimeSeconds);
+
             const metadata: GameMetadata = createGameMetadata(
                 gameData.gameType,
                 gameData.gameDifficulty,
                 score,
                 {
                     totalWords: wordCount,
-                    correctWords: score // Assuming score represents correct words
+                    correctWords: score,
+                    totalTimeSeconds: totalTimeSeconds,
+                    totalTimeFormatted: totalTimeFormatted,
                 },
                 questionsData
             );
@@ -295,7 +316,7 @@ export default function WritingScreen() {
                 scores: gameData.scores,
                 metadata: convertToBackendMetadata(metadata)
             };
-            
+
             await axios.post('http://localhost:8080/api/user/game/score', backendRequest, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -304,6 +325,9 @@ export default function WritingScreen() {
             console.error("Failed to sync score:", e);
         } finally {
             setIsSaving(false);
+            setTimeout(() => {
+                isCompletingRef.current = false;
+            }, 500);
         }
     };
 
@@ -400,10 +424,10 @@ export default function WritingScreen() {
         setIsDrawingCard(false);
         setBonusEarned(false);
         setLastGrammarName('');
-        // 重置計時器（將在 useEffect 中自動啟動）
         stopTimer();
         setElapsedSeconds(0);
         setFinalElapsedSeconds(0);
+        setSummaryTime(0); // ✅ 重置總結時間
         setTimeout(() => textInputRef.current?.focus(), 100);
     };
 
@@ -424,7 +448,6 @@ export default function WritingScreen() {
         setChallengeCompleted(false);
         setIsDrawingCard(false);
         setBonusEarned(false);
-        // 重置計時器
         stopTimer();
         setElapsedSeconds(0);
         setFinalElapsedSeconds(0);
@@ -492,10 +515,12 @@ export default function WritingScreen() {
             setSessionHistory(prev => [...prev, newHistoryItem]);
             setHistory(prev => [newHistoryItem, ...prev.slice(0, 4)]);
             setFinalScore(overallScore);
-            // 停止計時並保存最終時間
-            stopTimer();
+
+            // ✅ 修正：用 stopTimer 回傳值直接設定 summaryTime
+            const finalTime = stopTimer();
+            setSummaryTime(finalTime);
             setIsFinished(true);
-            await saveScore(overallScore);
+            await saveScore(overallScore, finalTime);
 
         } catch (error) {
             Alert.alert('Analysis Failed', 'Unable to analyze your writing. Please try again.');
@@ -525,13 +550,16 @@ export default function WritingScreen() {
         setIsDrawingCard(false);
         setBonusEarned(false);
         setLastGrammarName('');
-        // 重置計時器
+        setSummaryTime(0); // ✅ 重置
         resetAndStartTimer();
         setTimeout(() => textInputRef.current?.focus(), 100);
     };
 
     const handleChangeDifficulty = async () => {
-        if (analysis && finalScore > 0 && difficulty) await saveScore(finalScore);
+        if (analysis && finalScore > 0 && difficulty) {
+            const savedTime = timerIntervalRef.current ? stopTimer() : finalTimeRef.current;
+            await saveScore(finalScore, savedTime);
+        }
         setIsFinished(false);
         setDifficulty(null);
         setCurrentScene(null);
@@ -547,13 +575,17 @@ export default function WritingScreen() {
         setIsDrawingCard(false);
         setBonusEarned(false);
         setLastGrammarName('');
+        setSummaryTime(0); // ✅ 重置
         stopTimer();
         setElapsedSeconds(0);
         setFinalElapsedSeconds(0);
     };
 
     const handleBackToGames = async () => {
-        if (analysis && finalScore > 0 && difficulty) await saveScore(finalScore);
+        if (analysis && finalScore > 0 && difficulty) {
+            const savedTime = timerIntervalRef.current ? stopTimer() : finalTimeRef.current;
+            await saveScore(finalScore, savedTime);
+        }
         router.back();
     };
 
@@ -690,7 +722,7 @@ export default function WritingScreen() {
         </SafeAreaView>
     );
 
-    // 渲染總結畫面（新增總耗時顯示）
+    // 渲染總結畫面（✅ 時間顯示改用 summaryTime）
     const renderSummaryPage = () => {
         const maxScore = difficulty ? DIFFICULTY_CONFIG[difficulty].maxScore : 100;
         return (
@@ -704,10 +736,10 @@ export default function WritingScreen() {
                             <Text style={styles.totalScoreMax}>/{maxScore}</Text>
                         </View>
                         <Text style={[styles.totalScoreFeedback, { color: getScoreColor(finalScore) }]}>{getScoreFeedback(finalScore)}</Text>
-                        {/* 顯示總耗時 */}
+                        {/* ✅ 使用 summaryTime 顯示總耗時 */}
                         <View style={styles.timeSpentContainer}>
                             <Ionicons name="timer-outline" size={20} color="#4b6cb7" />
-                            <Text style={styles.timeSpentText}>Total Time: {formatTime(finalElapsedSeconds)}</Text>
+                            <Text style={styles.timeSpentText}>Total Time: {formatTime(summaryTime)}</Text>
                         </View>
                         {bonusEarned && (
                             <View style={styles.bonusBadge}>
@@ -816,7 +848,7 @@ export default function WritingScreen() {
                     title: 'Writing',
                     headerStyle: { backgroundColor: '#4b6cb7' },
                     headerTintColor: '#fff',
-                    headerLeft: () => null, // 完全隱藏返回按鈕
+                    headerLeft: () => null,
                     headerRight: () => (
                         <View style={styles.timerContainer}>
                             <Ionicons name="timer-outline" size={20} color="#fff" />
@@ -943,7 +975,6 @@ const styles = StyleSheet.create({
     scrollContent: {
         paddingBottom: 30,
     },
-    // 計時器樣式
     timerContainer: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -975,7 +1006,6 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: '#4b6cb7',
     },
-    // 難度選擇頁面樣式
     headerSection: {
         alignItems: 'center',
         paddingTop: 40,
@@ -1167,7 +1197,6 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#999',
     },
-    // 主要內容橫向佈局
     mainContentRow: {
         flexDirection: 'row',
         marginHorizontal: 20,
@@ -1251,7 +1280,6 @@ const styles = StyleSheet.create({
         lineHeight: 22,
         padding: 0,
     },
-    // 挑戰卡牌樣式
     challengeCardContainer: {
         marginHorizontal: 20,
         marginBottom: 12,
@@ -1340,7 +1368,6 @@ const styles = StyleSheet.create({
         color: '#8D6E63',
         fontWeight: '500',
     },
-    // 寫作提示區樣式
     promptContainer: {
         backgroundColor: 'white',
         borderRadius: 16,
@@ -1420,7 +1447,6 @@ const styles = StyleSheet.create({
         marginTop: 2,
         textAlign: 'right',
     },
-    // 分析結果樣式
     analysisContainer: {
         backgroundColor: 'white',
         borderRadius: 16,
@@ -1558,7 +1584,6 @@ const styles = StyleSheet.create({
         color: '#999',
         fontStyle: 'italic',
     },
-    // 操作按鈕
     actionsContainer: {
         flexDirection: 'row',
         gap: 16,
@@ -1606,7 +1631,6 @@ const styles = StyleSheet.create({
         color: '#666',
         fontWeight: '500',
     },
-    // 歷史記錄
     historyContainer: {
         backgroundColor: 'white',
         borderRadius: 16,
@@ -1670,7 +1694,6 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#999',
     },
-    // 提示訊息
     tipsContainer: {
         flexDirection: 'row',
         alignItems: 'flex-start',
@@ -1689,7 +1712,6 @@ const styles = StyleSheet.create({
         lineHeight: 20,
         marginLeft: 8,
     },
-    // Modal 樣式
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -1768,7 +1790,6 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#999',
     },
-    // 總結頁面樣式
     summaryContainer: {
         flex: 1,
         backgroundColor: '#f5f5f5',

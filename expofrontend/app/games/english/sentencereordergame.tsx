@@ -34,7 +34,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 
-// --- 💥 浮動文字元件 (HIT / GREAT / OUCH) ---
+// --- 💥 浮动文字组件 (HIT / GREAT / OUCH) ---
 const FloatingText = ({ text, color, onComplete }: { text: string, color: string, onComplete: () => void }) => {
     const opacity = useSharedValue(1);
     const translateY = useSharedValue(0);
@@ -129,6 +129,8 @@ interface GameState {
 
 export default function SentenceReorderScreen() {
     const [isSaving, setIsSaving] = useState(false);
+    // 防重複提交鎖
+    const isCompletingRef = useRef(false);
     const { token } = useAuth();
 
     const [prepText, setPrepText] = useState<string | null>(null);
@@ -144,7 +146,7 @@ export default function SentenceReorderScreen() {
 
     const [highScore, setHighScore] = useState(0);
 
-    // ✅ 新增：當前題目是否已作答（用於鎖定操作並只顯示 "Next"）
+    // ✅ 當前題目是否已作答（用於鎖定操作並只顯示 "Next"）
     const [isAnswered, setIsAnswered] = useState(false);
 
     const formatTime = (totalSeconds: number): string => {
@@ -237,7 +239,7 @@ export default function SentenceReorderScreen() {
         setTimeout(() => {
             setPrepText(null);
             setGameActive(true);
-            setIsAnswered(false); // ✅ 新題目開始時重置作答狀態
+            setIsAnswered(false);
         }, 1600);
     }, [startTimerOnce]);
 
@@ -267,7 +269,7 @@ export default function SentenceReorderScreen() {
             feedback: '',
             isChecking: false
         }));
-        setIsAnswered(false); // ✅ 重置作答狀態
+        setIsAnswered(false);
     };
 
     const loadFirstQuestion = useCallback(async (difficulty: Difficulty) => {
@@ -308,6 +310,8 @@ export default function SentenceReorderScreen() {
 
     const initializeGame = useCallback(async (difficulty: Difficulty) => {
         const questionsCount = DIFFICULTY_LEVELS[difficulty].questionsPerGame;
+        // 重置計時器和完成鎖
+        isCompletingRef.current = false;
         timerStartedRef.current = false;
         setElapsedSeconds(0);
         stopTimer();
@@ -363,7 +367,6 @@ export default function SentenceReorderScreen() {
     }, [gameState.currentQuestionIndex, gameState.difficulty, generateQuestion, startPrepSequence]);
 
     const moveWord = (wordId: string, direction: 'left' | 'right') => {
-        // ✅ 若已作答則不可移動
         if (gameState.isChecking || !gameActive || isAnswered) return;
         const currentWords = [...gameState.words];
         const index = currentWords.findIndex(w => w.id === wordId);
@@ -462,7 +465,6 @@ export default function SentenceReorderScreen() {
                 feedback: `❌ Incorrect\nCorrect: "${originalSentence}"`
             }));
         }
-        // ✅ 標記為已作答，鎖定操作並切換為顯示 Next 按鈕
         setIsAnswered(true);
         setTimeout(() => {
             setFloatingText(null);
@@ -474,6 +476,66 @@ export default function SentenceReorderScreen() {
         setQuestionsHistory(prev => prev.filter(r => r.id !== gameState.currentQuestionIndex + 1));
         initializeQuestionWords(gameState.currentQuestion);
         startPrepSequence(false);
+    };
+
+    // 修改 saveScore：加入總時間及防重複鎖
+    const saveScore = async () => {
+        if (!token || !gameState.difficulty) return;
+        if (isCompletingRef.current) {
+            console.log("saveScore already in progress, skip");
+            return;
+        }
+        isCompletingRef.current = true;
+        setIsSaving(true);
+        try {
+            const gameData = {
+                gameName: "Sentence Reorder",
+                scores: gameState.score,
+                gameType: "ENGLISH",
+                gameDifficulty: DIFFICULTY_LEVELS[gameState.difficulty].label.toUpperCase()
+            };
+            const questionsData = questionsHistory.map(q => ({
+                id: q.id,
+                question: q.question,
+                correctAnswer: q.correctAnswer,
+                userAnswer: q.userAnswer,
+                isCorrect: q.isCorrect,
+                questionType: q.questionType,
+                options: q.options,
+                earnedPoints: q.earnedPoints,
+                timeSpent: 0
+            }));
+            const totalTimeSeconds = elapsedSeconds;
+            const totalTimeFormatted = formatTime(totalTimeSeconds);
+            const metadata: GameMetadata = createGameMetadata(
+                gameData.gameType,
+                gameData.gameDifficulty,
+                gameData.scores,
+                {
+                    totalSentences: gameState.totalQuestions,
+                    correctSentences: gameState.correctAnswers,
+                    totalTimeSeconds: totalTimeSeconds,
+                    totalTimeFormatted: totalTimeFormatted,
+                },
+                questionsData
+            );
+            const backendRequest = {
+                gameName: gameData.gameName,
+                scores: gameData.scores,
+                metadata: convertToBackendMetadata(metadata)
+            };
+            await axios.post('http://localhost:8080/api/user/game/score', backendRequest, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            console.log("Score synced to server!");
+        } catch (e) {
+            console.error("Failed to sync score:", e);
+        } finally {
+            setIsSaving(false);
+            setTimeout(() => {
+                isCompletingRef.current = false;
+            }, 500);
+        }
     };
 
     const nextQuestion = () => {
@@ -489,7 +551,7 @@ export default function SentenceReorderScreen() {
             }));
             if (gameState.difficulty) {
                 saveHighScore(gameState.score, gameState.difficulty);
-                saveScore();
+                saveScore(); // 只呼叫一次
             }
         }
     };
@@ -569,56 +631,10 @@ export default function SentenceReorderScreen() {
         return DIFFICULTY_LEVELS[difficulty].label;
     };
 
-    const saveScore = async () => {
-        if (!token || !gameState.difficulty) return;
-        setIsSaving(true);
-        try {
-            const gameData = {
-                gameName: "Sentence Reorder",
-                scores: gameState.score,
-                gameType: "ENGLISH",
-                gameDifficulty: getLevelLabel(gameState.difficulty).toUpperCase()
-            };
-            const questionsData = questionsHistory.map(q => ({
-                id: q.id,
-                question: q.question,
-                correctAnswer: q.correctAnswer,
-                userAnswer: q.userAnswer,
-                isCorrect: q.isCorrect,
-                questionType: q.questionType,
-                options: q.options,
-                earnedPoints: q.earnedPoints
-            }));
-            const metadata: GameMetadata = createGameMetadata(
-                gameData.gameType,
-                gameData.gameDifficulty,
-                gameData.scores,
-                {
-                    totalSentences: gameState.totalQuestions,
-                    correctSentences: gameState.correctAnswers
-                },
-                questionsData
-            );
-            const backendRequest = {
-                gameName: gameData.gameName,
-                scores: gameData.scores,
-                metadata: convertToBackendMetadata(metadata)
-            };
-            await axios.post('http://localhost:8080/api/user/game/score', backendRequest, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            console.log("Score synced to server!");
-        } catch (e) {
-            console.error("Failed to sync score:", e);
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
     const renderWordCard = (word: WordItem, index: number, total: number) => {
         const canMoveLeft = index > 0;
         const canMoveRight = index < total - 1;
-        const disabled = !gameActive || gameState.isChecking || isAnswered; // ✅ 已作答禁用箭頭
+        const disabled = !gameActive || gameState.isChecking || isAnswered;
         return (
             <View key={word.id} style={[styles.wordCard, disabled && styles.disabledCard]}>
                 <TouchableOpacity
@@ -883,7 +899,6 @@ export default function SentenceReorderScreen() {
                                 <Text style={styles.feedbackText}>{gameState.feedback}</Text>
                             </View>
                         )}
-                        {/* ✅ 根據是否已作答顯示不同按鈕群組 */}
                         {!isAnswered ? (
                             <View style={styles.controls}>
                                 <TouchableOpacity
