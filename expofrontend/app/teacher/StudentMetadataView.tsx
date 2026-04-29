@@ -34,7 +34,7 @@ interface GameRecord {
     createdAt: string;
 }
 
-export default function StudentMetadataView({ visible, onClose, student, token }: StudentMetadataViewProps) {
+export function StudentMetadataView({visible, onClose, student, token}: StudentMetadataViewProps) {
     const [loading, setLoading] = useState(false);
     const [gameRecords, setGameRecords] = useState<GameRecord[]>([]);
     const [selectedGame, setSelectedGame] = useState<GameRecord | null>(null);
@@ -57,18 +57,18 @@ export default function StudentMetadataView({ visible, onClose, student, token }
         setLoading(true);
         try {
             const response = await axios.get(`${getApiBaseUrl()}/api/educator/student/${student.id}/game/score`, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: {Authorization: `Bearer ${token}`}
             });
 
             if (response.data && response.data.content) {
                 console.log('Full API response:', response.data);
                 console.log('Sample record structure:', response.data.content[0]);
                 console.log('All fields in first record:', Object.keys(response.data.content[0]));
-                
+
                 const records = response.data.content.map((record: any) => {
                     console.log('Processing record:', record);
                     console.log('Available fields in this record:', Object.keys(record));
-                    
+
                     return {
                         id: record.id,
                         gameId: record.gameId || record.game_id || record.game?.id || record.gameId,  // Try multiple possible fields
@@ -115,7 +115,7 @@ export default function StudentMetadataView({ visible, onClose, student, token }
         try {
 
             const response = await axios.get(`${getApiBaseUrl()}/api/user/game/results`, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: {Authorization: `Bearer ${token}`}
             });
 
             // 后端返回的数据结构应该是 AiOverallResponse
@@ -138,42 +138,42 @@ export default function StudentMetadataView({ visible, onClose, student, token }
         // 游戏类型统计
         const gameTypeStats = records.reduce((acc, record) => {
             const type = record.metadata?.gameType || 'Unknown';
-            if (!acc[type]) acc[type] = { count: 0, totalScore: 0 };
+            if (!acc[type]) acc[type] = {count: 0, totalScore: 0};
             acc[type].count++;
             acc[type].totalScore += record.scores;
             return acc;
         }, {} as Record<string, { count: number; totalScore: number }>);
 
-        let result = `🧠 AI 学习分析报告\n`;
-        result += `👤 学生：${studentName}\n`;
-        result += `📅 分析时间：${new Date().toLocaleDateString('zh-TW')}\n\n`;
-        result += `📈 整体表现分析\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-        result += `🎮 游戏总数：${records.length} 场\n`;
-        result += `📊 平均得分：${averageScore.toFixed(1)} 分\n`;
-        result += `🎯 答题准确率：${accuracyRate.toFixed(1)}%\n\n`;
-        result += `📚 学习领域分析\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        let result = `🧠 AI Learning Analysis Report\n`;
+        result += `👤 Student：${studentName}\n`;
+        result += `📅 Analysis time：${new Date().toLocaleDateString('zh-TW')}\n\n`;
+        result += `📈 Overall performance analysis\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        result += `🎮 Total number of games：${records.length} game\n`;
+        result += `📊 Average score：${averageScore.toFixed(1)} point\n`;
+        result += `🎯 Answer accuracy：${accuracyRate.toFixed(1)}%\n\n`;
+        result += `📚 Learning domain analysis\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
         Object.entries(gameTypeStats).forEach(([type, stats]) => {
             const avgScore = stats.totalScore / stats.count;
-            result += `🔹 ${type}：${stats.count} 场，平均 ${avgScore.toFixed(1)} 分\n`;
+            result += `🔹 ${type}：${stats.count} games，average ${avgScore.toFixed(1)} point\n`;
         });
-        result += `\n💡 AI 学习建议\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        result += `\n💡 AI Learning suggestions\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
 
         if (aiData) {
             if (aiData.encouragementMessage) result += `🌟 ${aiData.encouragementMessage}\n\n`;
             if (aiData.analysis) result += `📊 ${aiData.analysis}\n\n`;
             if (aiData.strengths && Array.isArray(aiData.strengths)) {
-                result += `💪 优势：\n`;
-                aiData.strengths.forEach((s: string, idx: number) => result += `  ${idx+1}. ${s}\n`);
+                result += `💪 Advantages：\n`;
+                aiData.strengths.forEach((s: string, idx: number) => result += `  ${idx + 1}. ${s}\n`);
                 result += `\n`;
             }
             if (aiData.powerUpTips && Array.isArray(aiData.powerUpTips)) {
-                result += `⚡ 强化建议：\n`;
-                aiData.powerUpTips.forEach((t: string, idx: number) => result += `  ${idx+1}. ${t}\n`);
+                result += `⚡ Strengthening recommendations：\n`;
+                aiData.powerUpTips.forEach((t: string, idx: number) => result += `  ${idx + 1}. ${t}\n`);
                 result += `\n`;
             }
-            if (aiData.gamesForNextSteps) result += `🎮 下一步推荐：${aiData.gamesForNextSteps}\n`;
+            if (aiData.gamesForNextSteps) result += `🎮 Next recommendation：${aiData.gamesForNextSteps}\n`;
         } else {
-            result += `暂时无法获取 AI 分析，请稍后重试。\n`;
+            result += `AI analysis is temporarily unavailable. Please try again later.\n`;
         }
         return result;
     };
@@ -190,7 +190,7 @@ export default function StudentMetadataView({ visible, onClose, student, token }
         const gameTypeStats = records.reduce((acc, record) => {
             const type = record.metadata.gameType || 'Unknown';
             if (!acc[type]) {
-                acc[type] = { count: 0, totalScore: 0 };
+                acc[type] = {count: 0, totalScore: 0};
             }
             acc[type].count++;
             acc[type].totalScore += record.scores;
@@ -220,7 +220,6 @@ export default function StudentMetadataView({ visible, onClose, student, token }
         formattedResponse += `${aiResponse}\n\n`;
 
 
-
         return formattedResponse;
     };
 
@@ -232,7 +231,7 @@ export default function StudentMetadataView({ visible, onClose, student, token }
 
         setAnalyzingWithAi(true);
         setShowGameSelectionModal(false);
-        
+
         try {
             // Static mapping of game names to their IDs
             const gameNameToIdMap: { [key: string]: number } = {
@@ -249,15 +248,15 @@ export default function StudentMetadataView({ visible, onClose, student, token }
                 'ChineseSentenceGame': 11
                 // Add more mappings as needed
             };
-            
+
             const gameId = gameNameToIdMap[selectedGameForAnalysis] || 1;
-            
+
             console.log(`Analyzing game: ${selectedGameForAnalysis} with ID: ${gameId}`);
-            
+
             const response = await axios.get(
                 `${getApiBaseUrl()}/api/educator/student/${student.id}/game/${gameId}/result`,
                 {
-                    headers: { Authorization: `Bearer ${token}` }
+                    headers: {Authorization: `Bearer ${token}`}
                 }
             );
 
@@ -268,7 +267,7 @@ export default function StudentMetadataView({ visible, onClose, student, token }
             }
         } catch (error: any) {
             console.error('Error analyzing selected game with AI:', error);
-            
+
             let errorMessage = '無法載入AI分析，請稍後重試。';
             if (error.response?.status === 401) {
                 errorMessage = '認證已過期，請重新登入';
@@ -277,7 +276,7 @@ export default function StudentMetadataView({ visible, onClose, student, token }
             } else if (error.response?.status === 404) {
                 errorMessage = '找不到遊戲數據';
             }
-            
+
             // Show error in analysis modal
             setAiAnalysis(`❌ ${errorMessage}\n\n📊 遊戲信息：\n🎮 ${selectedGameForAnalysis}\n👤 學生：${student.username}\n📅 分析時間：${new Date().toLocaleDateString('zh-TW')}`);
             setShowAiAnalysis(true);
@@ -289,7 +288,7 @@ export default function StudentMetadataView({ visible, onClose, student, token }
 
     const generateFallbackAnalysis = () => {
         if (gameRecords.length === 0) {
-            setAiAnalysis('📊 暫無足夠的遊戲數據進行分析\n\n建議學生多參與不同類型的學習遊戲，積累更多學習記錄。');
+            setAiAnalysis('📊 There is currently insufficient game data for analysis.\n\nStudents are encouraged to participate in different types of learning games to accumulate more learning records.');
             setShowAiAnalysis(true);
             return;
         }
@@ -303,7 +302,7 @@ export default function StudentMetadataView({ visible, onClose, student, token }
         const gameTypeStats = gameRecords.reduce((acc, record) => {
             const type = record.metadata.gameType || 'Unknown';
             if (!acc[type]) {
-                acc[type] = { count: 0, totalScore: 0 };
+                acc[type] = {count: 0, totalScore: 0};
             }
             acc[type].count++;
             acc[type].totalScore += record.scores;
@@ -356,10 +355,14 @@ export default function StudentMetadataView({ visible, onClose, student, token }
 
     const getDifficultyColor = (difficulty: string) => {
         switch (difficulty?.toLowerCase()) {
-            case 'easy': return '#4CAF50';
-            case 'medium': return '#FF9800';
-            case 'hard': return '#FF4757';
-            default: return '#666';
+            case 'easy':
+                return '#4CAF50';
+            case 'medium':
+                return '#FF9800';
+            case 'hard':
+                return '#FF4757';
+            default:
+                return '#666';
         }
     };
 
@@ -375,22 +378,22 @@ export default function StudentMetadataView({ visible, onClose, student, token }
                 id: gameRecord.id,
                 game: (gameRecord as any).game?.id
             });
-            
+
             // The API expects gameId, not the score record id
             // Try multiple possible field names for the game ID
-            let gameId = gameRecord.gameId || 
-                        (gameRecord as any).game_id || 
-                        (gameRecord as any).game?.id ||
-                        (gameRecord as any).gameId ||
-                        gameRecord.id;
-            
+            let gameId = gameRecord.gameId ||
+                (gameRecord as any).game_id ||
+                (gameRecord as any).game?.id ||
+                (gameRecord as any).gameId ||
+                gameRecord.id;
+
             // If still no game ID, try to extract from metadata or other fields
             if (!gameId && gameRecord.metadata) {
-                gameId = (gameRecord.metadata as any).gameId || 
-                        (gameRecord.metadata as any).game_id ||
-                        (gameRecord.metadata as any).game?.id;
+                gameId = (gameRecord.metadata as any).gameId ||
+                    (gameRecord.metadata as any).game_id ||
+                    (gameRecord.metadata as any).game?.id;
             }
-            
+
             if (!gameId) {
                 // For now, let's try using a hardcoded game ID for testing
                 // This is a temporary solution to test the API flow
@@ -398,13 +401,13 @@ export default function StudentMetadataView({ visible, onClose, student, token }
                 gameId = 1; // Temporary fallback - replace with actual logic
                 console.warn('Using fallback game ID 1 for testing - this should be replaced with proper game ID extraction');
             }
-            
+
             console.log('Using gameId:', gameId);
-            
+
             const response = await axios.get(
                 `${getApiBaseUrl()}/api/educator/student/${student.id}/game/${gameId}/result`,
                 {
-                    headers: { Authorization: `Bearer ${token}` }
+                    headers: {Authorization: `Bearer ${token}`}
                 }
             );
 
@@ -415,7 +418,7 @@ export default function StudentMetadataView({ visible, onClose, student, token }
             }
         } catch (error: any) {
             console.error('Error analyzing game with AI:', error);
-            
+
             let errorMessage = '無法載入AI分析，請稍後重試。';
             if (error.response?.status === 401) {
                 errorMessage = '認證已過期，請重新登入';
@@ -424,7 +427,7 @@ export default function StudentMetadataView({ visible, onClose, student, token }
             } else if (error.response?.status === 404) {
                 errorMessage = '找不到遊戲數據';
             }
-            
+
             // Show error in analysis modal
             setAiAnalysis(`❌ ${errorMessage}\n\n📊 遊戲信息：\n🎮 ${gameRecord.gameName}\n📊 得分：${gameRecord.scores}\n📅 日期：${formatDate(gameRecord.createdAt)}`);
             setShowAiAnalysis(true);
@@ -438,13 +441,13 @@ export default function StudentMetadataView({ visible, onClose, student, token }
         result += `👤 Student：${student.username}\n`;
         result += `🎮 Game：${gameName}\n`;
         result += `📅 Analysis time：${new Date().toLocaleDateString('zh-TW')}\n\n`;
-        
+
         result += `📈 AIAnalysis results\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-        
+
         if (aiData.overallAnalysis) {
             result += `🎯 Overall performance：\n${aiData.overallAnalysis}\n\n`;
         }
-        
+
         if (aiData.strengths && Array.isArray(aiData.strengths)) {
             result += `💪 Advantages Analysis：\n`;
             aiData.strengths.forEach((strength: string, index: number) => {
@@ -452,7 +455,7 @@ export default function StudentMetadataView({ visible, onClose, student, token }
             });
             result += `\n`;
         }
-        
+
         if (aiData.weaknesses && Array.isArray(aiData.weaknesses)) {
             result += `🔍 Areas for improvement：\n`;
             aiData.weaknesses.forEach((weakness: string, index: number) => {
@@ -460,7 +463,7 @@ export default function StudentMetadataView({ visible, onClose, student, token }
             });
             result += `\n`;
         }
-        
+
         if (aiData.emotions && Array.isArray(aiData.emotions)) {
             result += `😊 Emotional state：\n`;
             aiData.emotions.forEach((emotion: string, index: number) => {
@@ -468,14 +471,14 @@ export default function StudentMetadataView({ visible, onClose, student, token }
             });
             result += `\n`;
         }
-        
+
         if (aiData.suggestions && Array.isArray(aiData.suggestions)) {
             result += `💡 Learning suggestions：\n`;
             aiData.suggestions.forEach((suggestion: string, index: number) => {
                 result += `• ${suggestion}\n`;
             });
         }
-        
+
         return result;
     };
 
@@ -490,7 +493,7 @@ export default function StudentMetadataView({ visible, onClose, student, token }
                     </View>
                     <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Difficulty:</Text>
-                        <Text style={[styles.detailValue, { color: getDifficultyColor(metadata.gameDifficulty) }]}>
+                        <Text style={[styles.detailValue, {color: getDifficultyColor(metadata.gameDifficulty)}]}>
                             {metadata.gameDifficulty}
                         </Text>
                     </View>
@@ -523,15 +526,16 @@ export default function StudentMetadataView({ visible, onClose, student, token }
                         <Text style={styles.detailTitle}>Questions Performance</Text>
                         <View style={styles.questionStats}>
                             <View style={styles.statItem}>
-                                <Target size={16} color="#4CAF50" />
+                                <Target size={16} color="#4CAF50"/>
                                 <Text style={styles.statText}>
                                     Correct: {metadata.questions.filter(q => q.isCorrect).length}/{metadata.questions.length}
                                 </Text>
                             </View>
                             <View style={styles.statItem}>
-                                <Trophy size={16} color="#FF9800" />
+                                <Trophy size={16} color="#FF9800"/>
                                 <Text style={styles.statText}>
-                                    Avg Score: {Math.round(metadata.questions.reduce((sum, q) => sum + (q.score || 0), 0) / metadata.questions.length)}
+                                    Avg
+                                    Score: {Math.round(metadata.questions.reduce((sum, q) => sum + (q.score || 0), 0) / metadata.questions.length)}
                                 </Text>
                             </View>
                         </View>
@@ -540,7 +544,8 @@ export default function StudentMetadataView({ visible, onClose, student, token }
                             <View key={question.id || index} style={styles.questionItem}>
                                 <View style={styles.questionHeader}>
                                     <Text style={styles.questionNumber}>Q{index + 1}</Text>
-                                    <Text style={[styles.questionResult, { color: question.isCorrect ? '#4CAF50' : '#FF4757' }]}>
+                                    <Text
+                                        style={[styles.questionResult, {color: question.isCorrect ? '#4CAF50' : '#FF4757'}]}>
                                         {question.isCorrect ? 'Correct' : 'Incorrect'}
                                     </Text>
                                 </View>
@@ -570,7 +575,8 @@ export default function StudentMetadataView({ visible, onClose, student, token }
                                 {question.score !== undefined && (
                                     <View style={styles.answerRow}>
                                         <Text style={styles.answerLabel}>Score:</Text>
-                                        <Text style={styles.answerValue}>{question.score}/{question.maxScore || 'N/A'}</Text>
+                                        <Text
+                                            style={styles.answerValue}>{question.score}/{question.maxScore || 'N/A'}</Text>
                                     </View>
                                 )}
                             </View>
@@ -601,7 +607,7 @@ export default function StudentMetadataView({ visible, onClose, student, token }
                                 onPress={() => setShowGameSelectionModal(true)}
                                 style={styles.gameSelectionButton}
                             >
-                                <Gamepad2 size={18} color="#fff" />
+                                <Gamepad2 size={18} color="#fff"/>
                                 <Text style={styles.gameSelectionButtonText}>Select Game</Text>
                             </TouchableOpacity>
                         )}
@@ -612,9 +618,9 @@ export default function StudentMetadataView({ visible, onClose, student, token }
                                 disabled={analyzingWithAi}
                             >
                                 {analyzingWithAi ? (
-                                    <ActivityIndicator size="small" color="#fff" />
+                                    <ActivityIndicator size="small" color="#fff"/>
                                 ) : (
-                                    <Brain size={20} color="#fff" />
+                                    <Brain size={20} color="#fff"/>
                                 )}
                                 <Text style={styles.aiAnalysisButtonText}>
                                     {analyzingWithAi ? '分析中...' : 'AI analysis'}
@@ -622,21 +628,21 @@ export default function StudentMetadataView({ visible, onClose, student, token }
                             </TouchableOpacity>
                         )}
                         <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                            <X size={24} color="#333" />
+                            <X size={24} color="#333"/>
                         </TouchableOpacity>
                     </View>
                 </View>
 
                 {loading ? (
                     <View style={styles.loadingContainer}>
-                        <ActivityIndicator size="large" color="#6C5CE7" />
+                        <ActivityIndicator size="large" color="#6C5CE7"/>
                         <Text style={styles.loadingText}>Loading game metadata...</Text>
                     </View>
                 ) : (
                     <ScrollView style={styles.content}>
                         {gameRecords.length === 0 ? (
                             <View style={styles.emptyState}>
-                                <Gamepad2 size={48} color="#ccc" />
+                                <Gamepad2 size={48} color="#ccc"/>
                                 <Text style={styles.emptyStateText}>No game records found</Text>
                             </View>
                         ) : (
@@ -656,7 +662,7 @@ export default function StudentMetadataView({ visible, onClose, student, token }
                                         </View>
                                         <View style={styles.gameActions}>
                                             <View style={styles.gameScore}>
-                                                <Trophy size={20} color="#FF9800" />
+                                                <Trophy size={20} color="#FF9800"/>
                                                 <Text style={styles.scoreText}>{record.scores}</Text>
                                             </View>
                                         </View>
@@ -670,7 +676,8 @@ export default function StudentMetadataView({ visible, onClose, student, token }
                                             </View>
                                             <View style={styles.previewItem}>
                                                 <Text style={styles.previewLabel}>Difficulty:</Text>
-                                                <Text style={[styles.previewValue, { color: getDifficultyColor(record.metadata.gameDifficulty) }]}>
+                                                <Text
+                                                    style={[styles.previewValue, {color: getDifficultyColor(record.metadata.gameDifficulty)}]}>
                                                     {record.metadata.gameDifficulty}
                                                 </Text>
                                             </View>
@@ -699,7 +706,7 @@ export default function StudentMetadataView({ visible, onClose, student, token }
                         <View style={styles.header}>
                             <Text style={styles.headerTitle}>{selectedGame?.gameName} Details</Text>
                             <TouchableOpacity onPress={() => setShowGameDetails(false)} style={styles.closeButton}>
-                                <X size={24} color="#333" />
+                                <X size={24} color="#333"/>
                             </TouchableOpacity>
                         </View>
                         {selectedGame && renderGameDetails(selectedGame.metadata)}
@@ -716,8 +723,9 @@ export default function StudentMetadataView({ visible, onClose, student, token }
                     <SafeAreaView style={styles.container}>
                         <View style={styles.header}>
                             <Text style={styles.headerTitle}>Select Game for AI Analysis</Text>
-                            <TouchableOpacity onPress={() => setShowGameSelectionModal(false)} style={styles.closeButton}>
-                                <X size={24} color="#333" />
+                            <TouchableOpacity onPress={() => setShowGameSelectionModal(false)}
+                                              style={styles.closeButton}>
+                                <X size={24} color="#333"/>
                             </TouchableOpacity>
                         </View>
 
@@ -738,7 +746,7 @@ export default function StudentMetadataView({ visible, onClose, student, token }
                                             onPress={() => setSelectedGameForAnalysis(gameName)}
                                         >
                                             <View style={styles.gameSelectionItemContent}>
-                                                <Gamepad2 size={20} color="#6C5CE7" />
+                                                <Gamepad2 size={20} color="#6C5CE7"/>
                                                 <Text style={styles.gameSelectionItemText}>{gameName}</Text>
                                             </View>
                                             <View style={[
@@ -746,7 +754,7 @@ export default function StudentMetadataView({ visible, onClose, student, token }
                                                 selectedGameForAnalysis === gameName && styles.gameSelectionRadioSelected
                                             ]}>
                                                 {selectedGameForAnalysis === gameName && (
-                                                    <View style={styles.gameSelectionRadioDot} />
+                                                    <View style={styles.gameSelectionRadioDot}/>
                                                 )}
                                             </View>
                                         </TouchableOpacity>
@@ -754,7 +762,7 @@ export default function StudentMetadataView({ visible, onClose, student, token }
                                 </ScrollView>
                             ) : (
                                 <View style={styles.emptyGameSelection}>
-                                    <Gamepad2 size={48} color="#ccc" />
+                                    <Gamepad2 size={48} color="#ccc"/>
                                     <Text style={styles.emptyGameSelectionText}>No games available</Text>
                                 </View>
                             )}
@@ -769,9 +777,9 @@ export default function StudentMetadataView({ visible, onClose, student, token }
                                     disabled={!selectedGameForAnalysis || analyzingWithAi}
                                 >
                                     {analyzingWithAi ? (
-                                        <ActivityIndicator size="small" color="#fff" />
+                                        <ActivityIndicator size="small" color="#fff"/>
                                     ) : (
-                                        <Brain size={18} color="#fff" />
+                                        <Brain size={18} color="#fff"/>
                                     )}
                                     <Text style={styles.analyzeSelectedGameButtonText}>
                                         {analyzingWithAi ? 'Analyzing...' : 'Analyze Selected Game'}
@@ -791,11 +799,11 @@ export default function StudentMetadataView({ visible, onClose, student, token }
                     <SafeAreaView style={styles.container}>
                         <View style={styles.header}>
                             <View style={styles.headerTitleContainer}>
-                                <Brain size={24} color="#6C5CE7" />
+                                <Brain size={24} color="#6C5CE7"/>
                                 <Text style={styles.headerTitle}>AI Learning Analysis Report</Text>
                             </View>
                             <TouchableOpacity onPress={() => setShowAiAnalysis(false)} style={styles.closeButton}>
-                                <X size={24} color="#333" />
+                                <X size={24} color="#333"/>
                             </TouchableOpacity>
                         </View>
                         <ScrollView style={styles.aiAnalysisContent}>

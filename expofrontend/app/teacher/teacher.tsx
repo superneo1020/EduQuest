@@ -51,7 +51,7 @@ import {
 import { ClassManagementPanel } from './ClassManagementPanel';
 import { ClassAnalyticsPanel } from './ClassAnalyticsPanel';
 import educatorService, { Course, StudentAnalytics } from './educatorService';
-import StudentMetadataView from './StudentMetadataView';
+import {StudentMetadataView} from './StudentMetadataView';
 import { getApiBaseUrl } from '@/src/api/client';
 import axios from 'axios';
 

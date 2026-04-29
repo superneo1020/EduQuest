@@ -81,15 +81,15 @@ export default function ClassAiAnalysisView({
             console.error('Error loading class AI analysis:', error);
             
             if (error.message?.includes('expired') || error.message?.includes('authentication')) {
-                setError('認證已過期，請重新登入');
+                setError('Your authentication has expired. Please log in again.');
                 // Optionally trigger sign out or navigation to login
                 setTimeout(() => {
                     Alert.alert(
-                        '認證過期',
-                        '您的登入已過期，請重新登入。',
+                        'Expired certification',
+                        'Your login has expired. Please log in again.',
                         [
                             {
-                                text: '確定',
+                                text: 'OK',
                                 onPress: () => {
                                     onClose();
                                     // You might want to navigate to login screen here
@@ -147,7 +147,7 @@ export default function ClassAiAnalysisView({
                         <Text style={styles.sectionTitle}>Overall performance analysis</Text>
                     </View>
                     <View style={styles.sectionContent}>
-                        <Text style={styles.analysisText}>{aiAnalysis.overallAnalysis || '暫無整體分析數據'}</Text>
+                        <Text style={styles.analysisText}>{aiAnalysis.overallAnalysis || 'No overall analysis data available.'}</Text>
                     </View>
                 </View>
 
@@ -159,16 +159,29 @@ export default function ClassAiAnalysisView({
                             <Text style={styles.sectionTitle}>Student Individual Analysis</Text>
                         </View>
                         <View style={styles.sectionContent}>
-                            {aiAnalysis.studentAnalysis.map((analysis, index) => (
-                                <View key={index} style={styles.studentAnalysisItem}>
-                                    <View style={styles.studentAnalysisHeader}>
-                                        <View style={styles.studentNumber}>
-                                            <Text style={styles.studentNumberText}>Student {index + 1}</Text>
+                            {aiAnalysis.studentAnalysis.map((analysis, index) => {
+                                // Extract student name from analysis text if it contains "Student {name}:"
+                                let studentName = `Student ${index + 1}`;
+                                let analysisText = analysis || 'No analysis data available.';
+                                
+                                // Check if analysis contains student name pattern like "Student qqq:"
+                                const studentNameMatch = analysis.match(/^Student\s+([^:]+):\s*(.*)$/s);
+                                if (studentNameMatch) {
+                                    studentName = studentNameMatch[1].trim();
+                                    analysisText = studentNameMatch[2].trim();
+                                }
+                                
+                                return (
+                                    <View key={index} style={styles.studentAnalysisItem}>
+                                        <View style={styles.studentAnalysisHeader}>
+                                            <View style={styles.studentNumber}>
+                                                <Text style={styles.studentNumberText}>{studentName}</Text>
+                                            </View>
                                         </View>
+                                        <Text style={styles.studentAnalysisText}>{analysisText}</Text>
                                     </View>
-                                    <Text style={styles.studentAnalysisText}>{analysis || '暫無分析數據'}</Text>
-                                </View>
-                            ))}
+                                );
+                            })}
                         </View>
                     </View>
                 )}
@@ -181,7 +194,7 @@ export default function ClassAiAnalysisView({
                         disabled={loading}
                     >
                         <Clock size={16} color="#6C5CE7" />
-                        <Text style={styles.refreshButtonText}>重新分析</Text>
+                        <Text style={styles.refreshButtonText}>Reanalysis</Text>
                     </TouchableOpacity>
                 </View>
             </View>
@@ -198,7 +211,7 @@ export default function ClassAiAnalysisView({
                 <View style={styles.header}>
                     <View style={styles.headerTitleContainer}>
                         <Brain size={24} color="#6C5CE7" />
-                        <Text style={styles.headerTitle}>班級AI分析報告</Text>
+                        <Text style={styles.headerTitle}>Class AI Analysis Report</Text>
                     </View>
                     <TouchableOpacity onPress={onClose} style={styles.closeButton}>
                         <X size={24} color="#333" />
@@ -208,7 +221,7 @@ export default function ClassAiAnalysisView({
                 {loading ? (
                     <View style={styles.loadingContainer}>
                         <ActivityIndicator size="large" color="#6C5CE7" />
-                        <Text style={styles.loadingText}>正在生成AI分析報告...</Text>
+                        <Text style={styles.loadingText}>Generating AI analysis report...</Text>
                     </View>
                 ) : error ? (
                     <View style={styles.errorContainer}>
@@ -219,7 +232,7 @@ export default function ClassAiAnalysisView({
                             style={styles.retryButton}
                             onPress={loadClassAiAnalysis}
                         >
-                            <Text style={styles.retryButtonText}>重試</Text>
+                            <Text style={styles.retryButtonText}>Retry</Text>
                         </TouchableOpacity>
                     </View>
                 ) : aiAnalysis ? (
@@ -229,7 +242,7 @@ export default function ClassAiAnalysisView({
                 ) : (
                     <View style={styles.emptyContainer}>
                         <Brain size={48} color="#ccc" />
-                        <Text style={styles.emptyText}>暫無分析數據</Text>
+                        <Text style={styles.emptyText}>No analysis data available.</Text>
                     </View>
                 )}
             </SafeAreaView>
