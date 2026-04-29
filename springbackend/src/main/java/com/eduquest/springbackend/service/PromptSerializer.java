@@ -72,7 +72,12 @@ public class PromptSerializer {
     public List<CourseGameLeanScore> getLeanDataForCourse(List<CourseGameScoreMini> originalList) {
         return originalList.stream().map(dto -> {
             // Extract the words from the correct answers (for praise).
-            var summary = processQuestions(dto.metadata().questions());
+            var summary = dto.metadata() != null
+                    ? processQuestions(dto.metadata().questions())
+                    : new QuestionSummary(
+                            List.of("No metadata available."),
+                            List.of("No metadata available.")
+                    );
 
             return new CourseGameLeanScore(
                     dto.username(),
