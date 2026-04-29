@@ -208,7 +208,7 @@ export default function ProfileScreen() {
                 headers: { Authorization: `Bearer ${token}` }
             });
             // Preserve points when updating profileData
-            setProfileData(prev => ({
+            setProfileData((prev: any) => ({
                 ...profileResponse.data,
                 points: prev?.points ?? userPoints ?? profileResponse.data.points ?? userPoints ?? 0,
                 userGameScores: prev?.userGameScores || profileResponse.data.userGameScores || []
@@ -293,7 +293,7 @@ export default function ProfileScreen() {
                 headers: { Authorization: `Bearer ${token}` }
             });
             // Preserve points when updating profileData
-            setProfileData(prev => ({
+            setProfileData((prev: any) => ({
                 ...profileResponse.data,
                 points: prev?.points ?? userPoints ?? profileResponse.data.points ?? userPoints ?? 0,
                 userGameScores: prev?.userGameScores || profileResponse.data.userGameScores || []
@@ -378,7 +378,7 @@ export default function ProfileScreen() {
                 headers: { Authorization: `Bearer ${token}` }
             });
             // Preserve points when updating profileData
-            setProfileData(prev => ({
+            setProfileData((prev: any) => ({
                 ...profileResponse.data,
                 points: prev?.points ?? userPoints ?? profileResponse.data.points ?? userPoints ?? 0,
                 userGameScores: prev?.userGameScores || profileResponse.data.userGameScores || []
@@ -727,7 +727,7 @@ export default function ProfileScreen() {
             });
         }
         if (gameHistory.length >= 5) {
-            const recentScores = gameHistory.slice(-5).map(g => g.scores || 0);
+            const recentScores = gameHistory.slice(-5).map((g: any) => g.scores || 0);
             const mean = recentScores.reduce((a: number, b: number) => a + b, 0) / recentScores.length;
             const scoreVariance = Math.sqrt(recentScores.reduce((sum: number, score: number) => sum + Math.pow(score - mean, 2), 0) / recentScores.length);
             if (scoreVariance > 20) {
@@ -1211,18 +1211,6 @@ export default function ProfileScreen() {
                 setAnalyzingWithAi(false);
                 return;
             }
-            
-            console.log('=== AI Analysis Debug ===');
-            console.log('API URL:', `${getApiBaseUrl()}/api/user/game/results`);
-            console.log('Token exists:', !!token);
-            console.log('Token length:', token?.length);
-            console.log('Token first 20 chars:', token?.substring(0, 20) + '...');
-            console.log('User logged in:', !!user);
-            console.log('User ID:', user?.id);
-            console.log('User roles:', userRoles);
-            console.log('User email:', user?.email);
-            console.log('User username:', user?.username);
-            console.log('========================');
             
             // Test authentication with a working API first
             try {
