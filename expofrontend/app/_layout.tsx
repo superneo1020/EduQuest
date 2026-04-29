@@ -108,6 +108,12 @@ export default function RootLayout() {
                         headerShown: false,
                     }}
                 />
+                <Stack.Screen
+                    name="analytics"
+                    options={{
+                        headerShown: false,
+                    }}
+                />
             </Stack>
         </AuthProvider>
     );
