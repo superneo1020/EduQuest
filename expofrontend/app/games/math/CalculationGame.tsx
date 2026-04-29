@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useLayoutEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useLayoutEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert, ActivityIndicator, Dimensions, ScrollView, Image } from 'react-native';
 import { createGameMetadata, GameMetadata } from '../../../types/GameMetadata';
 import { convertToBackendMetadata } from '../../utils/metadataConverter';
@@ -13,6 +13,9 @@ import axios from 'axios';
 import { useAuth } from "@/src/auth/AuthContext";
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// 可配置 API 地址（推荐在 .env 中定义 EXPO_PUBLIC_API_URL）
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8080';
 
 // 格式化時間為 mm:ss
 const formatTime = (seconds: number): string => {
@@ -78,9 +81,8 @@ const Projectile = ({
         ? require('../../../assets/images/spear.png')
         : require('../../../assets/images/fire.png');
 
-    // 根据类型设置不同的起始位置
     const containerStyle = type === 'spear'
-        ? { left: '20%' as const }  // TypeScript const assertion
+        ? { left: '20%' as const }
         : { left: '65%' as const };
 
     return (
@@ -133,7 +135,6 @@ const GAME_SCENES = {
     hard: { bg: ['#FEF2F2', '#FEE2E2'], boss: '🌋', color: '#EF4444' }
 } as const;
 
-// 图片资源（根据项目结构调整路径）
 const warriorImg = require('../../../assets/images/IMG_2911.png');
 const godzillaImg = require('../../../assets/images/IMG_2912.png');
 
@@ -142,12 +143,10 @@ export default function CalculationGame() {
     const navigation = useNavigation();
     const { token } = useAuth();
 
-    // 完全隐藏系统导航栏（包括返回按钮）
     useLayoutEffect(() => {
         navigation.setOptions({ headerShown: false });
     }, [navigation]);
 
-    // 遊戲狀態
     const [gameStarted, setGameStarted] = useState(false);
     const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard' | null>(null);
     const [loading, setLoading] = useState(false);
@@ -158,24 +157,23 @@ export default function CalculationGame() {
     const [gameEnded, setGameEnded] = useState(false);
     const [options, setOptions] = useState<string[]>([]);
     const [isSaving, setIsSaving] = useState(false);
+    // 新增：防重复提交标记
+    const isSavingRef = useRef(false);
+    const [hasAutoSaved, setHasAutoSaved] = useState(false);
 
-    // 倒數計時狀態
     const [prepText, setPrepText] = useState<string | null>(null);
     const prepScale = useSharedValue(0);
 
-    // 計時器狀態
     const [elapsedTime, setElapsedTime] = useState(0);
     const timerIntervalRef = useRef<number | null>(null);
     const [totalGameTime, setTotalGameTime] = useState(0);
 
-    // 戰鬥數值
     const [bossHP, setBossHP] = useState(100);
     const [playerHP, setPlayerHP] = useState(100);
     const [combo, setCombo] = useState(0);
     const [userAnswers, setUserAnswers] = useState<any[]>([]);
     const [floatingText, setFloatingText] = useState<{ id: number, text: string, color: string } | null>(null);
 
-    // 動畫 Shared Values
     const bossY = useSharedValue(0);
     const bossScale = useSharedValue(1);
     const screenShake = useSharedValue(0);
@@ -186,7 +184,6 @@ export default function CalculationGame() {
 
     const currentScene = useMemo(() => difficulty ? GAME_SCENES[difficulty] : GAME_SCENES.easy, [difficulty]);
 
-    // 动画样式（必须在组件顶层调用，确保 hooks 数量稳定）
     const animatedBossStyle = useAnimatedStyle(() => ({
         transform: [{ translateY: bossY.value }, { scale: bossScale.value }]
     }));
@@ -204,8 +201,20 @@ export default function CalculationGame() {
         transform: [{ scale: godzillaScale.value }]
     }));
 
+    // 组件卸载清理定时器
+    useEffect(() => {
+        return () => {
+            if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+        };
+    }, []);
 
-    // 啟動計時器
+    // 自动保存：游戏结束且未保存时自动触发
+    useEffect(() => {
+        if (gameEnded && !hasAutoSaved) {
+            saveScore();
+        }
+    }, [gameEnded, hasAutoSaved]);
+
     const startTimer = () => {
         if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
         setElapsedTime(0);
@@ -214,8 +223,6 @@ export default function CalculationGame() {
         }, 1000);
     };
 
-
-    // 停止計時器並記錄時間
     const stopTimerAndRecord = () => {
         if (timerIntervalRef.current) {
             clearInterval(timerIntervalRef.current);
@@ -224,7 +231,6 @@ export default function CalculationGame() {
         setTotalGameTime(elapsedTime);
     };
 
-    // 重置計時器
     const resetTimer = () => {
         if (timerIntervalRef.current) {
             clearInterval(timerIntervalRef.current);
@@ -237,22 +243,18 @@ export default function CalculationGame() {
         bossY.value = withRepeat(withTiming(-10, { duration: 2000 }), -1, true);
     }, []);
 
-
-
     const generateLocalQuestions = (difficulty: 'easy' | 'medium' | 'hard', count: number) => {
         const questions = [];
         for (let i = 0; i < count; i++) {
             let a, b, op, answer;
 
             if (difficulty === 'easy') {
-                // 加減法 20 以內
                 a = Math.floor(Math.random() * 15) + 1;
                 b = Math.floor(Math.random() * 10) + 1;
                 op = Math.random() > 0.5 ? '+' : '-';
-                if (op === '-' && a < b) [a, b] = [b, a]; // 確保結果非負
+                if (op === '-' && a < b) [a, b] = [b, a];
                 answer = op === '+' ? a + b : a - b;
             } else if (difficulty === 'medium') {
-                // 加減法 100 以內 或 簡單乘法
                 if (Math.random() > 0.3) {
                     a = Math.floor(Math.random() * 80) + 10;
                     b = Math.floor(Math.random() * 50) + 5;
@@ -266,21 +268,20 @@ export default function CalculationGame() {
                     answer = a * b;
                 }
             } else {
-                // 混合運算或大數乘除
                 const type = Math.floor(Math.random() * 3);
-                if (type === 0) { // 三數加減
+                if (type === 0) {
                     a = Math.floor(Math.random() * 50);
                     b = Math.floor(Math.random() * 30);
                     let c = Math.floor(Math.random() * 20);
                     answer = a + b - c;
                     op = `${a} + ${b} - ${c}`;
-                } else if (type === 1) { // 乘加
+                } else if (type === 1) {
                     a = Math.floor(Math.random() * 12) + 2;
                     b = Math.floor(Math.random() * 10) + 2;
                     let c = Math.floor(Math.random() * 20);
                     answer = a * b + c;
                     op = `${a} × ${b} + ${c}`;
-                } else { // 簡單除法
+                } else {
                     answer = Math.floor(Math.random() * 12) + 2;
                     b = Math.floor(Math.random() * 10) + 2;
                     a = answer * b;
@@ -297,17 +298,15 @@ export default function CalculationGame() {
     };
 
     const fetchQuestions = async (selectedDiff: 'easy' | 'medium' | 'hard') => {
-        setLoading(true); // 即使是本地，保留一點 Loading 感讓 UI 轉場更順
+        setLoading(true);
         setDifficulty(selectedDiff);
         resetTimer();
 
-        // --- 核心改動：不再叫 API ---
         setTimeout(() => {
             try {
                 const localData = generateLocalQuestions(selectedDiff, 10);
                 setQuestions(localData);
 
-                // 重置戰鬥狀態
                 setBossHP(100);
                 setPlayerHP(100);
                 setScore(0);
@@ -323,7 +322,7 @@ export default function CalculationGame() {
                 console.error(e);
                 setLoading(false);
             }
-        }, 500); // 稍微延遲 0.5s 讓 Loading 動畫跑一下
+        }, 500);
     };
 
     const startPrepSequence = () => {
@@ -344,7 +343,7 @@ export default function CalculationGame() {
         setTimeout(() => {
             setPrepText(null);
             setGameActive(true);
-            startTimer(); // 準備動畫結束後啟動計時器
+            startTimer();
         }, 1600);
     };
 
@@ -354,16 +353,15 @@ export default function CalculationGame() {
         const opts = new Set<string>([qData.answer]);
 
         while (opts.size < 4) {
-            // 根據正確答案的正負範圍隨機抖動
             const range = correct > 20 ? 15 : 5;
             const fake = (correct + (Math.floor(Math.random() * (range * 2)) - range)).toString();
-
             if (fake !== qData.answer) {
                 opts.add(fake);
             }
         }
         setOptions(Array.from(opts).sort(() => Math.random() - 0.5));
     };
+
     const handleAnswer = (selected: string) => {
         if (!gameActive || isSaving) return;
         const currentQ = questions[currentIndex];
@@ -373,27 +371,18 @@ export default function CalculationGame() {
 
         if (isCorrect) {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-
-            // 触发长矛投掷特效
             setProjectile({ id: Date.now(), type: 'spear' });
-
-            // 哥斯拉受击动画（延迟一点以配合长矛到达时间）
             setTimeout(() => {
                 godzillaScale.value = withSequence(withTiming(1.3, { duration: 100 }), withSpring(1));
                 setFloatingText({ id: Date.now(), text: 'HIT!', color: '#FFD700' });
             }, 300);
-
             setBossHP(prev => Math.max(0, prev - 15));
             setScore(prev => prev + 10 + combo);
             setCombo(prev => prev + 1);
             setTimeout(nextQuestion, 800);
         } else {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-
-            // 触发火球投掷特效
             setProjectile({ id: Date.now(), type: 'fire' });
-
-            // 勇士受击动画（延迟一点）
             setTimeout(() => {
                 warriorScale.value = withSequence(withTiming(1.3, { duration: 100 }), withSpring(1));
                 screenShake.value = withSequence(
@@ -402,7 +391,6 @@ export default function CalculationGame() {
                 );
                 setFloatingText({ id: Date.now(), text: 'OUCH!', color: '#FF4757' });
             }, 300);
-
             setPlayerHP(prev => {
                 const newHP = Math.max(0, prev - 20);
                 if (newHP <= 0) {
@@ -423,7 +411,6 @@ export default function CalculationGame() {
         if (currentIndex + 1 < 10 && playerHP > 0) {
             setupOptions(questions[currentIndex + 1]);
             setCurrentIndex(prev => prev + 1);
-            setElapsedTime(0); // Reset timer for next question
         } else {
             stopTimerAndRecord();
             setGameActive(false);
@@ -432,16 +419,20 @@ export default function CalculationGame() {
     };
 
     const saveScore = async () => {
+        // 防止重复保存
+        if (isSavingRef.current || isSaving) return;
+        isSavingRef.current = true;
         setIsSaving(true);
+
         try {
             const gameData = {
                 gameName: "Speed Calculation",
                 scores: score,
                 gameType: "MATH",
-                gameDifficulty: difficulty || "MEDIUM"
+                gameDifficulty: difficulty?.toUpperCase() || "MEDIUM"
             };
-            
-            const questions = userAnswers.map((answer, index) => ({
+
+            const questionsForMetadata = userAnswers.map((answer, index) => ({
                 id: index + 1,
                 question: answer.question,
                 correctAnswer: answer.answer,
@@ -451,16 +442,21 @@ export default function CalculationGame() {
                 timeSpent: answer.timeSpent || 0
             }));
 
+            const totalCorrect = userAnswers.filter(a => a.isCorrect).length;
+            const totalTimeSeconds = totalGameTime;
+            const totalTimeFormatted = formatTime(totalGameTime);
+
             const metadata: GameMetadata = createGameMetadata(
                 gameData.gameType,
                 gameData.gameDifficulty,
                 gameData.scores,
                 {
-                    totalTime: totalGameTime,
-                    correctAnswers: userAnswers.filter(a => a.isCorrect).length,
-                    totalQuestions: userAnswers.length
+                    totalProblems: userAnswers.length,
+                    correctProblems: totalCorrect,
+                    totalTimeSeconds: totalTimeSeconds,
+                    totalTimeFormatted: totalTimeFormatted,
                 },
-                questions
+                questionsForMetadata
             );
 
             const backendRequest = {
@@ -468,12 +464,25 @@ export default function CalculationGame() {
                 scores: gameData.scores,
                 metadata: convertToBackendMetadata(metadata)
             };
-            
-            await axios.post('http://localhost:8080/api/user/game/score', backendRequest, { headers: { 'Authorization': `Bearer ${token}` } });
-            router.push('/rank/leaderboard');
-        } catch (e) { 
-            console.error('Failed to save score:', e);
-            router.push('/'); 
+
+            await axios.post(`${API_BASE_URL}/api/user/game/score`, backendRequest, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            setHasAutoSaved(true);
+            Alert.alert('Success', 'Score saved!', [
+                { text: 'Leaderboard', onPress: () => router.push('/rank/leaderboard') },
+                { text: 'Back', onPress: () => router.push('/') }
+            ]);
+        } catch (e: any) {
+            console.error('Save failed:', e.response?.data || e.message);
+            Alert.alert('Save Failed', 'Could not save score. Check network or console log.');
+        } finally {
+            setIsSaving(false);
+            // 延迟释放锁，避免快速重入
+            setTimeout(() => {
+                isSavingRef.current = false;
+            }, 500);
         }
     };
 
@@ -481,6 +490,8 @@ export default function CalculationGame() {
         resetTimer();
         if (router.canGoBack()) {
             router.back();
+        } else {
+            router.push('/');
         }
     };
 
@@ -493,13 +504,12 @@ export default function CalculationGame() {
         setUserAnswers([]);
         setTotalGameTime(0);
         setElapsedTime(0);
+        setHasAutoSaved(false);
     };
 
-    // --- 難度選擇頁面渲染 ---
     const renderDifficultySelect = () => (
         <SafeAreaView style={styles.container}>
             <ScrollView contentContainerStyle={styles.scrollContent}>
-                {/* 頂部標題區域 */}
                 <View style={styles.headerSection}>
                     <Brain size={60} color="#F59E0B" style={{ marginBottom: 20 }} />
                     <Text style={styles.mainTitle}>Math Boss Battle</Text>
@@ -508,7 +518,6 @@ export default function CalculationGame() {
                     </Text>
                 </View>
 
-                {/* 難度選擇卡片列表 */}
                 <View style={styles.menuGrid}>
                     {difficultyOptions.map((option) => (
                         <TouchableOpacity
@@ -523,7 +532,6 @@ export default function CalculationGame() {
                             <View style={styles.cardIconContainer}>
                                 <Text style={styles.cardIcon}>{option.icon}</Text>
                             </View>
-
                             <View style={styles.cardContent}>
                                 <View style={styles.cardHeader}>
                                     <Text style={[styles.diffBtnText, { color: option.color }]}>
@@ -533,9 +541,7 @@ export default function CalculationGame() {
                                         <Text style={styles.levelBadgeText}>{option.badgeText}</Text>
                                     </View>
                                 </View>
-
                                 <Text style={styles.diffDesc}>{option.description}</Text>
-
                                 <View style={styles.startButtonContainer}>
                                     <View style={[styles.startButton, { backgroundColor: option.color }]}>
                                         <Text style={styles.startButtonText}>Start Battle →</Text>
@@ -546,23 +552,17 @@ export default function CalculationGame() {
                     ))}
                 </View>
 
-                <TouchableOpacity
-                    style={styles.backLink}
-                    onPress={() => router.back()}
-                >
+                <TouchableOpacity style={styles.backLink} onPress={() => router.back()}>
                     <Text style={styles.backLinkText}>← Back to Game Library</Text>
                 </TouchableOpacity>
             </ScrollView>
         </SafeAreaView>
     );
 
-    // --- 結果頁面渲染（新增總時間顯示）---
     const renderResult = () => (
         <SafeAreaView style={styles.resultContainer}>
             <Text style={styles.resultTitle}>{playerHP > 0 ? "🏆 VICTORY!" : "💀 DEFEATED"}</Text>
             <Text style={styles.resultScore}>Final Score: {score}</Text>
-
-            {/* 顯示總花費時間 */}
             <View style={styles.totalTimeContainer}>
                 <Timer size={24} color="#4b6cb7" />
                 <Text style={styles.totalTimeText}>Total Time: {formatTime(totalGameTime)}</Text>
@@ -576,10 +576,17 @@ export default function CalculationGame() {
                     </View>
                 ))}
             </ScrollView>
-            <TouchableOpacity style={styles.saveBtn} onPress={saveScore}>
-                <Text style={styles.saveBtnText}>BACK TO LOBBY</Text>
+
+            <TouchableOpacity
+                style={[styles.saveBtn, hasAutoSaved && { opacity: 0.6 }]}
+                onPress={hasAutoSaved ? undefined : saveScore}
+                disabled={isSaving || hasAutoSaved}
+            >
+                <Text style={styles.saveBtnText}>
+                    {hasAutoSaved ? 'SCORE SAVED ✓' : isSaving ? 'SAVING...' : 'SAVE SCORE & CONTINUE'}
+                </Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.saveBtn} onPress={handleBackToGames}>
+            <TouchableOpacity style={[styles.saveBtn, { backgroundColor: '#64748B' }]} onPress={handleBackToGames}>
                 <Text style={styles.saveBtnText}>BACK TO GAME LIST</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.saveBtn, { backgroundColor: '#22C55E' }]} onPress={handleRestart}>
@@ -588,12 +595,10 @@ export default function CalculationGame() {
         </SafeAreaView>
     );
 
-    // --- 遊戲進行中渲染（在題目右邊增加計時器）---
     const renderPlaying = () => (
         <LinearGradient colors={currentScene.bg} style={{ flex: 1 }}>
             <Animated.View style={[{ flex: 1 }, animatedScreenStyle]}>
                 <SafeAreaView style={styles.gameContainer}>
-                    {/* 血条区域，新增勇士和哥斯拉头像 */}
                     <View style={styles.hpHeader}>
                         <Image source={warriorImg} style={styles.hpAvatar} />
                         <View style={{ flex: 1 }}>
@@ -613,21 +618,18 @@ export default function CalculationGame() {
                     </View>
 
                     <View style={styles.battleArena}>
-                        {/* 題目卡片 + 計時器並排 */}
                         <View style={styles.questionHeader}>
                             <View style={styles.questionCard}>
                                 <Text style={[styles.questionMain, !gameActive && { color: '#CBD5E1' }]}>
                                     {gameActive ? questions[currentIndex]?.question : "---"}
                                 </Text>
                             </View>
-                            {/* 計時器放在題目右邊 */}
                             <View style={styles.timerCard}>
                                 <Timer size={28} color={currentScene.color} />
                                 <Text style={[styles.timerText, { color: currentScene.color }]}>{formatTime(elapsedTime)}</Text>
                             </View>
                         </View>
 
-                        {/* 中央战斗区域：移除云，改为勇士和哥斯拉左右站立 */}
                         <View style={styles.fightersRow}>
                             <Animated.View style={[styles.fighterContainer, warriorAnimatedStyle]}>
                                 <Image source={warriorImg} style={styles.fighterImage} />
@@ -637,7 +639,6 @@ export default function CalculationGame() {
                             </Animated.View>
                         </View>
 
-                        {/* 投掷物特效层 */}
                         {projectile && (
                             <Projectile
                                 key={projectile.id}
@@ -646,7 +647,6 @@ export default function CalculationGame() {
                             />
                         )}
 
-                        {/* 浮层文字和准备动画覆盖在中央区域 */}
                         {prepText && (
                             <Animated.View style={[styles.prepOverlay, animatedPrepStyle]}>
                                 <Text style={styles.prepText}>{prepText}</Text>
@@ -685,7 +685,6 @@ export default function CalculationGame() {
 }
 
 const styles = StyleSheet.create({
-    // 容器
     container: {
         flex: 1,
         backgroundColor: '#F5F7FA',
@@ -696,8 +695,6 @@ const styles = StyleSheet.create({
     scrollContent: {
         padding: 20,
     },
-
-    // 難度選擇頁面樣式
     headerSection: {
         alignItems: 'center',
         paddingTop: 50,
@@ -810,8 +807,6 @@ const styles = StyleSheet.create({
         color: '#F59E0B',
         fontWeight: '600',
     },
-
-    // 加載樣式
     centerContainer: {
         flex: 1,
         justifyContent: 'center',
@@ -824,8 +819,6 @@ const styles = StyleSheet.create({
         fontWeight: '800',
         color: '#64748B',
     },
-
-    // 遊戲進行中樣式
     hpHeader: {
         flexDirection: 'row',
         padding: 20,
@@ -918,7 +911,6 @@ const styles = StyleSheet.create({
     projectileContainer: {
         position: 'absolute',
         top: '40%',
-        // left: '35%',
         zIndex: 200,
     },
     projectileImage: {
@@ -972,8 +964,6 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: '#334155',
     },
-
-    // 結果頁面樣式
     resultContainer: {
         flex: 1,
         padding: 25,
