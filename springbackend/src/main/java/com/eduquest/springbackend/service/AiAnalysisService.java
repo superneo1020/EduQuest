@@ -36,8 +36,8 @@ public class AiAnalysisService {
 
     private final List<String> fieldLibrary = List.of(
             "\"encouragementMessage\": Two sentences. If 'achievements' has items, praise a specific one. If empty, praise their high scores or effort, and motivate for tomorrow.",
-            "\"analysis\": Summary: most played 'Category', highest score, and one general improvement area.",
-            "\"strengths\": Bullet points on question types correctly answered in 'achievements'. If empty, list general strengths based on their high scores.",
+            "\"analysis\": Friendly summary: most played 'Category', highest score, and one general improvement area.",
+            "\"strengths\": Bullet points on question types correctly answered in 'achievements' to engage and motivate. If empty, list general strengths based on their high scores.",
             "\"powerUpTips\": If 'challenges' has items, use the 'Description' of those failed games to provide 2 specific pedagogical tips. If empty, provide 2 general tips to keep up the good work.",
             "\"gamesForNextSteps\": Recommend a game from the 'Available Games' list where the 'Core Skill' matches the student's weakest area or expands their current skills. Explain why based on its 'Description'."
     );
