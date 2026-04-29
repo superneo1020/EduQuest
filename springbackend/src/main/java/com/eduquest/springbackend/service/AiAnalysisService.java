@@ -3,106 +3,176 @@ package com.eduquest.springbackend.service;
 import com.eduquest.springbackend.dao.GameRepository;
 import com.eduquest.springbackend.dao.UserGameScoreRepository;
 import com.eduquest.springbackend.dao.UserRepository;
-import com.eduquest.springbackend.dto.AiAnalysisRequest;
 import com.eduquest.springbackend.dto.AiAnalysisResponse;
-import com.eduquest.springbackend.dto.AiOverallRequest;
 import com.eduquest.springbackend.dto.AiOverallResponse;
+import com.eduquest.springbackend.dto.FastAPIAnalysisRequest;
+import com.eduquest.springbackend.dto.GameLeanScore;
+import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
+import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.prompt.ChatOptions;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.chat.prompt.PromptTemplate;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
 public class AiAnalysisService {
 
+    @Value("classpath:/prompts/game-analysis.st")
+    private Resource analysisPromptResource;
+
     private final List<String> fieldLibrary = List.of(
-            "\"encouragementMessage\": Two sentences: one praising a specific achievement and one motivating them for tomorrow.",
-            "\"analysis\": A three-part summary: identify their most played category, their highest score, and their biggest improvement area.",
-            "\"strengths\": Two bullet points describing *how* they succeeded (e.g., 'Your speed in Math is increasing').",
-            "\"powerUpTips\": Two actionable tips based on their actual mistakes (e.g., 'Slow down on the long sentences in Chinese').",
-            "\"gamesForNextSteps\": One recommendation explaining *why* it fits their current skill level."
+            "\"encouragementMessage\": Two sentences. If 'achievements' has items, praise a specific one. If empty, praise their high scores or effort, and motivate for tomorrow.",
+            "\"analysis\": Summary: most played 'Category', highest score, and one general improvement area.",
+            "\"strengths\": Bullet points on question types correctly answered in 'achievements'. If empty, list general strengths based on their high scores.",
+            "\"powerUpTips\": If 'challenges' has items, use the 'Description' of those failed games to provide 2 specific pedagogical tips. If empty, provide 2 general tips to keep up the good work.",
+            "\"gamesForNextSteps\": Recommend a game from the 'Available Games' list where the 'Core Skill' matches the student's weakest area or expands their current skills. Explain why based on its 'Description'."
     );
 
-    private final String NEXT_STEPS_FIELD = "5. \"gamesForNextSteps\": One short recommendation from the game catalog.";
-
-    private final ChatClient chatClient;
+    private ChatClient chatClient;
+    private final ChatClient.Builder chatClientBuilder;
     private final UserGameScoreRepository userGameScoreRepo;
     private final UserRepository userRepo;
-    private final DtoMapper dtoMapper;
+    private final GameRepository gameRepo;
+    private final ExternalAiService externalAiService;
+    private final PromptSerializer promptSerializer;
+    private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
-    public AiAnalysisService(ChatClient.Builder builder,
-                             UserGameScoreRepository userGameScoreRepo,
-                             UserRepository userRepo,
-                             GameRepository gameRepo,
-                             DtoMapper dtoMapper) {
-        var games = gameRepo.findAllGameRecords().stream()
-                .map(g -> String.format("- %s (Type: %s, Difficulty: %s, Description: %s)",
-                        g.name(), g.type(), g.difficulty(), g.description()
-                ))
-                .collect(Collectors.joining("\n"));
-        this.chatClient = builder
-                .defaultSystem("You are an encouraging, friendly AI mentor of EduQuest for " +
-                        "primary school students. Your goal is to make students feel proud of " +
-                        "their progress, even if they fail. Use simple language, plenty of positive " +
-                        "reinforcement, and a growth-mindset tone. Always provide feedback in " +
-                        "structured JSON format. Available games: %s".formatted(games)).build();
+    public AiAnalysisService(
+            ChatClient.Builder chatClientBuilder,
+            UserGameScoreRepository userGameScoreRepo,
+            UserRepository userRepo,
+            GameRepository gameRepo,
+            ExternalAiService externalAiService,
+            PromptSerializer promptSerializer
+    ) {
+        this.chatClientBuilder = chatClientBuilder;
         this.userGameScoreRepo = userGameScoreRepo;
         this.userRepo = userRepo;
-        this.dtoMapper = dtoMapper;
+        this.gameRepo = gameRepo;
+        this.externalAiService = externalAiService;
+        this.promptSerializer = promptSerializer;
+    }
+
+    @PostConstruct
+    public void initGameLibrary() {
+        // Build games list
+        String games = gameRepo.findAllGameRecords().stream()
+                .map(g -> String.format(
+                        "- %s: [Category: %s] [Description: %s]",
+                        g.name(),
+                        g.type(),
+                        g.description()
+                ))
+                .collect(Collectors.joining(", "));
+
+        // Build full system prompt
+        String fullSystemPrompt = """
+            You are an encouraging, friendly AI mentor of EduQuest for primary school students.
+            Your goal is to make students feel proud of their progress.
+            Always use simple language and a growth-mindset tone.
+            
+            Current Available Games for reference: %s
+            """.formatted(games);
+
+        this.chatClient = chatClientBuilder
+                .defaultSystem(fullSystemPrompt)
+                .defaultAdvisors(new SimpleLoggerAdvisor())
+                .build();
+
+        logger.info("AiAnalysisService: Game library context cached successfully!");
     }
 
     public AiAnalysisResponse analyzeGame(Long gameId, Long userId, Pageable pageable) {
+        // Calculate time context
         Instant now = Instant.now();
         Instant studentCreatedAt = userRepo.findCreatedAtById(userId).orElseThrow(
                 () -> new RuntimeException("User not found"));
-        var userGameScores = userGameScoreRepo.findUserGameScoresByUserIdAndGameId(userId, gameId, pageable);
-        var page = dtoMapper.toPageResponse(userGameScores);
-        var request = new AiAnalysisRequest(now, studentCreatedAt, page);
-        String prompt = buildPrompt("history for one specific game", request, buildInstructions(0, 1, 2, 3));
-        return chatClient.prompt()
-                .user(prompt)
-                .options(ChatOptions.builder().temperature(0.7).maxTokens(1000).build())
-                .call()
-                .entity(AiAnalysisResponse.class);
-    }
+        long daysSinceJoined = ChronoUnit.DAYS.between(studentCreatedAt, now);
 
-    public AiOverallResponse analyzeGameOverall(Long userId) {
-        Instant now = Instant.now();
-        Instant studentCreatedAt = userRepo.findCreatedAtById(userId).orElseThrow(
-                () -> new RuntimeException("User not found"));
-        Instant twentyFourHoursAgo = Instant.now().minus(1, ChronoUnit.DAYS);
-        var userGameScores = userGameScoreRepo.findUserGameScoresByUserIdAndCreatedAtAfter(userId, twentyFourHoursAgo);
-        var request = new AiOverallRequest(now, studentCreatedAt, userGameScores);
-        String prompt = buildPrompt("game history for today", request, buildInstructions(0, 1, 2, 3, 4));
-        return chatClient.prompt()
-                .user(prompt)
-                .options(ChatOptions.builder().temperature(0.7).maxTokens(1000).build())
-                .call()
-                .entity(AiOverallResponse.class);
-    }
+        // Get user game scores
+        var userGameScores = userGameScoreRepo.findGameRecordMiniByUserIdAndGameId(userId, gameId, pageable);
+        var formattedLeanData = promptSerializer.simplifyForAi(userGameScores.getContent());
 
-    private String buildPrompt(String intro, Record data, String instructions) {
-        return String.format("""
-                Analyze this primary student's %s: %s \s
-                Please generate a supportive response with the following JSON fields: %s \s
-                Tone Rule: Use 'Growth Mindset' language. Use words like 'Explorer', 'Champion', and 'Brilliant'. \s
-                Critical: Keep the total response short so the JSON does not get cut off!
-                """, intro, data, instructions);
-    }
+        // Build request
+        PromptTemplate userTemplate = new PromptTemplate(analysisPromptResource);
+        Message userMessage = userTemplate.createMessage(Map.of(
+                "intro", "process for a specific game",
+                "data", formattedLeanData,
+                "instructions", promptSerializer.buildInstructions(fieldLibrary,0, 1, 2, 3),
+                "daysSinceJoined", daysSinceJoined,
+                "now", now
+        ));
 
-    private String buildInstructions(int... indices) {
-        StringBuilder sb = new StringBuilder("Please return a JSON object with these fields:\n");
-        for (int i = 0; i < indices.length; i++) {
-            int fieldIndex = indices[i];
-            if (fieldIndex >= 0 && fieldIndex < fieldLibrary.size()) {
-                sb.append(String.format("%d. %s\n", i + 1, fieldLibrary.get(fieldIndex)));
-            }
+        try {
+            return chatClient.prompt(new Prompt(userMessage))
+                    .options(ChatOptions.builder().temperature(0.7).maxTokens(1500).build())
+                    .call()
+                    .entity(AiAnalysisResponse.class);
+        } catch (Exception e) {
+            return new AiAnalysisResponse("Keep it up! You're the best explorer!", "Data Analysis Buddy is temporarily on break.", List.of(), List.of());
         }
-        return sb.toString();
+    }
+
+    public AiOverallResponse analyzeGameDaily(Long userId, Pageable pageable) {
+        Instant now = Instant.now();
+        Instant studentCreatedAt = userRepo.findCreatedAtById(userId).orElseThrow(
+                () -> new RuntimeException("User not found"));
+        long daysSinceJoined = ChronoUnit.DAYS.between(studentCreatedAt, now);
+        Instant twentyFourHoursAgo = Instant.now().minus(1, ChronoUnit.DAYS);
+
+        var userGameScores = userGameScoreRepo.findUserGameScoresByUserIdAndCreatedAtAfter(userId, twentyFourHoursAgo, pageable);
+        var formattedLeanData = promptSerializer.simplifyForAi(userGameScores.getContent());
+
+        // Build request
+        PromptTemplate userTemplate = new PromptTemplate(analysisPromptResource);
+        Message userMessage = userTemplate.createMessage(Map.of(
+                "intro", "daily progress",
+                "data", formattedLeanData,
+                "instructions", promptSerializer.buildInstructions(fieldLibrary,0, 1, 2, 3, 4),
+                "daysSinceJoined", daysSinceJoined,
+                "now", now
+        ));
+
+        try {
+            return chatClient.prompt(new Prompt(userMessage))
+                    .options(ChatOptions.builder().temperature(0.7).maxTokens(1500).build())
+                    .call()
+                    .entity(AiOverallResponse.class);
+        } catch (Exception e) {
+            return new AiOverallResponse("Keep it up! You're the best explorer!", "Data Analysis Buddy is temporarily on break.", List.of(), List.of(), "");
+        }
+    }
+
+    public void prepareAndSendToFastApi(Long userId, Long gameId, Pageable pageable) {
+        // Calculate time context
+        Instant studentCreatedAt = userRepo.findCreatedAtById(userId).orElseThrow(
+                () -> new RuntimeException("User not found"));
+        long daysJoined = ChronoUnit.DAYS.between(studentCreatedAt, Instant.now());
+        String profile = String.format("Joined for %d days.", daysJoined);
+
+        // Get user game scores (no need formatting)
+        var userGameScores = userGameScoreRepo.findGameRecordMiniByUserIdAndGameId(userId, gameId, pageable);
+        List<GameLeanScore> leanData = promptSerializer.getLeanData(userGameScores.getContent());
+
+        // format request
+        String sessionId = UUID.randomUUID().toString();
+        FastAPIAnalysisRequest request = new FastAPIAnalysisRequest(sessionId, userId, leanData, profile);
+
+        // call to fastapi
+        externalAiService.postAnalysisRequest(request);
     }
 }
