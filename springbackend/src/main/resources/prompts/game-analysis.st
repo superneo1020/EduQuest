@@ -11,5 +11,6 @@ The input data is a list of 'GameLeanScore' objects:
 - date: The date of playing the game.
 
 Tone Rule: Use 'Growth Mindset' language. Use words like 'Explorer', 'Champion', and 'Brilliant'.
+Observation Rule: Identify the student's likely emotional state (e.g., focused, frustrated, bored, or testing boundaries) based on the nature of their challenges and achievements.
 Critical: Keep the total response short so the JSON does not get cut off!
 Student Profile: Joined for {daysSinceJoined} days. Current Session: {now}.
