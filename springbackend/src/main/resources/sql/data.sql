@@ -11,9 +11,6 @@ VALUES
 ON CONFLICT (name) DO NOTHING;
 ;;;
 
--- Delete only the default classes that will be reinserted
-DELETE FROM classes
-WHERE school_id IN (SELECT id FROM schools WHERE name IN ('EduQuest Academy', 'Tech Institute', 'Science High School'));
 -- Insert sample classes (using new schema with grade, suffix, and generated full_name)
 INSERT INTO classes (school_id, grade, suffix, academic_year)
 VALUES
@@ -32,7 +29,10 @@ VALUES
     ((SELECT id FROM schools WHERE name = 'Science High School'), 'L9', 'A', '2024-2025'),
     ((SELECT id FROM schools WHERE name = 'Science High School'), 'L10', 'A', '2024-2025'),
     ((SELECT id FROM schools WHERE name = 'Science High School'), 'L11', 'D', '2024-2025')
-ON CONFLICT (school_id, grade, suffix, academic_year) DO NOTHING;
+ON CONFLICT (school_id, grade, suffix, academic_year) DO UPDATE SET
+    grade = EXCLUDED.grade,
+    suffix = EXCLUDED.suffix,
+    academic_year = EXCLUDED.academic_year;
 ;;;
 
 -- Insert sample roles
@@ -135,9 +135,14 @@ VALUES
     ('CHINESE', 'ChineseGame', 'MEDIUM', 'Character', '中文學習遊戲，提升中文能力。'),
     ('CHINESE', 'ChineseSentenceGame', 'HARD', 'Scroll', '中文句子遊戲，學習中文句型結構。')
 ON CONFLICT (name) DO UPDATE SET
-                                 type = EXCLUDED.type,
-                                 difficulty = EXCLUDED.difficulty,
-                                 description = EXCLUDED.description;
+     type = EXCLUDED.type,
+     difficulty = EXCLUDED.difficulty,
+     description = EXCLUDED.description;
+;;;
+
+-- Delete only the default user game scores that will be reinserted
+DELETE FROM user_game_scores
+WHERE user_id IN (SELECT id FROM users WHERE username IN ('student1', 'student2', 'student3', 'tech_teacher1', 'admin', 'edu_teacher1', 'edu_teacher2'));
 ;;;
 
 -- Insert comprehensive missions
@@ -147,146 +152,31 @@ VALUES
     ('ENGLISH', 'Daily Reader', 'EASY', 'Book', 'Read for 15 minutes and complete a comprehension quiz', 10),
     ('MATH', 'Daily Math Practice', 'EASY', 'Calculator', 'Complete 5 math problems of any difficulty', 10),
     ('SCIENCE', 'Science Fact Finder', 'EASY', 'Atom', 'Learn one new science fact and answer a question', 10),
-    ('MEMORY', 'Memory Warm-up', 'EASY', 'Brain', 'Complete one memory game to start your day', 10),
+    ('CHINESE', 'Memory Warm-up', 'EASY', 'Brain', 'Complete one memory game to start your day', 10),
 
     -- Weekly Missions
     ('ENGLISH', 'Word Collector', 'MEDIUM', 'Languages', 'Learn 20 new vocabulary words this week', 30),
     ('MATH', 'Math Marathon', 'MEDIUM', 'Calculator', 'Complete 15 math problems across all difficulties', 30),
     ('SCIENCE', 'Science Explorer', 'MEDIUM', 'Atom', 'Complete 5 different science games', 30),
-    ('MEMORY', 'Memory Champion', 'MEDIUM', 'Brain', 'Achieve a score of 80% or higher in 3 memory games', 30),
+    ('CHINESE', 'Memory Champion', 'MEDIUM', 'Brain', 'Achieve a score of 80% or higher in 3 memory games', 30),
 
     -- Achievement Missions
     ('ENGLISH', 'Grammar Guru', 'HARD', 'Languages', 'Complete all English games with 90% accuracy', 50),
     ('MATH', 'Math Wizard', 'HARD', 'Calculator', 'Master all math difficulty levels', 50),
     ('SCIENCE', 'Science Master', 'HARD', 'Atom', 'Complete every science game at least once', 50),
-    ('MEMORY', 'Memory Master', 'HARD', 'Brain', 'Achieve perfect scores in all memory games', 50),
+    ('CHINESE', 'Memory Master', 'HARD', 'Brain', 'Achieve perfect scores in all memory games', 50),
 
     -- Special Missions
     ('MATH', 'Speed Demon', 'HARD', 'Calculator', 'Complete 10 math problems in under 2 minutes', 40),
     ('ENGLISH', 'Storyteller', 'MEDIUM', 'Languages', 'Write a short story using 10 vocabulary words', 35),
     ('SCIENCE', 'Experiment Log', 'MEDIUM', 'Atom', 'Document and explain 3 scientific concepts', 35),
-    ('MEMORY', 'Lightning Fast', 'HARD', 'Brain', 'Complete a memory game in record time', 40)
+    ('CHINESE', 'Lightning Fast', 'HARD', 'Brain', 'Complete a memory game in record time', 40)
 ON CONFLICT (name) DO NOTHING;
-;;;
-
--- Insert sample activities using new schema
-INSERT INTO activities (creator_id, name, start_date, end_date, score, icon, description)
-VALUES
-    -- Teacher1 activities
-    ((SELECT id FROM users WHERE username = 'tech_teacher1'), 'Math Challenge Week', CURRENT_DATE, CURRENT_DATE + INTERVAL '7 days', 50, 'Calculator', 'Complete math problems and earn points!'),
-    ((SELECT id FROM users WHERE username = 'tech_teacher1'), 'Science Fair Project', CURRENT_DATE + INTERVAL '1 day', CURRENT_DATE + INTERVAL '14 days', 100, 'Microscope', 'Create and present a science project'),
-
-    -- Admin activities
-    ((SELECT id FROM users WHERE username = 'admin'), 'Reading Marathon', CURRENT_DATE, CURRENT_DATE + INTERVAL '30 days', 75, 'Book', 'Read books and complete comprehension quizzes'),
-    ((SELECT id FROM users WHERE username = 'admin'), 'Coding Competition', CURRENT_DATE + INTERVAL '3 days', CURRENT_DATE + INTERVAL '10 days', 150, 'Code', 'Solve programming challenges and win prizes')
-ON CONFLICT (creator_id, name) DO NOTHING;
-;;;
-
--- Insert user activity participation
-INSERT INTO user_activities (activity_id, user_id, role_in_group, completed)
-VALUES
-    -- Math Challenge Week participants
-    ((SELECT id FROM activities WHERE name = 'Math Challenge Week'), (SELECT id FROM users WHERE username = 'student1'), 'participant', FALSE),
-    ((SELECT id FROM activities WHERE name = 'Math Challenge Week'), (SELECT id FROM users WHERE username = 'student2'), 'participant', TRUE),
-    ((SELECT id FROM activities WHERE name = 'Math Challenge Week'), (SELECT id FROM users WHERE username = 'student3'), 'participant', FALSE),
-
-    -- Science Fair Project participants
-    ((SELECT id FROM activities WHERE name = 'Science Fair Project'), (SELECT id FROM users WHERE username = 'student1'), 'researcher', FALSE),
-    ((SELECT id FROM activities WHERE name = 'Science Fair Project'), (SELECT id FROM users WHERE username = 'student3'), 'presenter', TRUE),
-
-    -- Reading Marathon participants
-    ((SELECT id FROM activities WHERE name = 'Reading Marathon'), (SELECT id FROM users WHERE username = 'student2'), 'reader', TRUE),
-    ((SELECT id FROM activities WHERE name = 'Reading Marathon'), (SELECT id FROM users WHERE username = 'admin'), 'organizer', TRUE),
-
-    -- Coding Competition participants
-    ((SELECT id FROM activities WHERE name = 'Coding Competition'), (SELECT id FROM users WHERE username = 'student1'), 'coder', FALSE),
-    ((SELECT id FROM activities WHERE name = 'Coding Competition'), (SELECT id FROM users WHERE username = 'tech_teacher1'), 'mentor', TRUE)
-ON CONFLICT (activity_id, user_id) DO NOTHING;
-;;;
-
--- Delete only the default user game scores that will be reinserted
-DELETE FROM user_game_scores
-WHERE user_id IN (SELECT id FROM users WHERE username IN ('student1', 'student2', 'student3', 'tech_teacher1', 'admin'));
-;;;
--- Insert sample game scores for leaderboard display
-INSERT INTO user_game_scores (user_id, game_id, scores)
-VALUES
-    -- Speed Calculation (EASY)
-    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM games WHERE name = 'Speed Calculation'), 95),
-    ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM games WHERE name = 'Speed Calculation'), 88),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM games WHERE name = 'Speed Calculation'), 100),
-
-    -- AI Math Adventure (HARD)
-    ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM games WHERE name = 'AI Math Adventure'), 75),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM games WHERE name = 'AI Math Adventure'), 92),
-
-    -- Writing Game (EASY)
-    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM games WHERE name = 'Writing Game'), 98),
-    ((SELECT id FROM users WHERE username = 'student3'), (SELECT id FROM games WHERE name = 'Writing Game'), 70),
-
-    -- Sentence Reorder (HARD)
-    ((SELECT id FROM users WHERE username = 'tech_teacher1'), (SELECT id FROM games WHERE name = 'Sentence Reorder'), 95),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM games WHERE name = 'Sentence Reorder'), 88),
-
-    -- Animal Catcher (EASY)
-    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM games WHERE name = 'Animal Catcher'), 85),
-    ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM games WHERE name = 'Animal Catcher'), 92)
-ON CONFLICT DO NOTHING;
 ;;;
 
 -- Delete only the default user missions that will be reinserted
 DELETE FROM user_missions
-WHERE user_id IN (SELECT id FROM users WHERE username IN ('student1', 'student2', 'student3', 'tech_teacher1', 'admin'));
-;;;
--- Sample user mission completions
-INSERT INTO user_missions (user_id, mission_id, completed)
-VALUES
-    -- Student1 completed missions
-    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM missions WHERE name = 'Daily Reader'), TRUE),
-    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM missions WHERE name = 'Daily Math Practice'), TRUE),
-    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM missions WHERE name = 'Memory Warm-up'), TRUE),
-    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM missions WHERE name = 'Word Collector'), FALSE),
-
-    -- Student2 completed missions (more advanced)
-    ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM missions WHERE name = 'Daily Reader'), TRUE),
-    ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM missions WHERE name = 'Daily Math Practice'), TRUE),
-    ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM missions WHERE name = 'Science Fact Finder'), TRUE),
-    ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM missions WHERE name = 'Word Collector'), TRUE),
-    ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM missions WHERE name = 'Math Marathon'), TRUE),
-    ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM missions WHERE name = 'Memory Champion'), FALSE),
-
-    -- Student3 completed missions (beginner)
-    ((SELECT id FROM users WHERE username = 'student3'), (SELECT id FROM missions WHERE name = 'Daily Math Practice'), TRUE),
-    ((SELECT id FROM users WHERE username = 'student3'), (SELECT id FROM missions WHERE name = 'Memory Warm-up'), TRUE),
-    ((SELECT id FROM users WHERE username = 'student3'), (SELECT id FROM missions WHERE name = 'Daily Reader'), FALSE),
-
-    -- Teacher1 completed missions (demonstration purposes)
-    ((SELECT id FROM users WHERE username = 'tech_teacher1'), (SELECT id FROM missions WHERE name = 'Daily Reader'), TRUE),
-    ((SELECT id FROM users WHERE username = 'tech_teacher1'), (SELECT id FROM missions WHERE name = 'Daily Math Practice'), TRUE),
-    ((SELECT id FROM users WHERE username = 'tech_teacher1'), (SELECT id FROM missions WHERE name = 'Science Fact Finder'), TRUE),
-    ((SELECT id FROM users WHERE username = 'tech_teacher1'), (SELECT id FROM missions WHERE name = 'Word Collector'), TRUE),
-    ((SELECT id FROM users WHERE username = 'tech_teacher1'), (SELECT id FROM missions WHERE name = 'Math Marathon'), TRUE),
-    ((SELECT id FROM users WHERE username = 'tech_teacher1'), (SELECT id FROM missions WHERE name = 'Science Explorer'), TRUE),
-    ((SELECT id FROM users WHERE username = 'tech_teacher1'), (SELECT id FROM missions WHERE name = 'Grammar Guru'), TRUE),
-
-    -- Admin completed missions (all missions)
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Daily Reader'), TRUE),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Daily Math Practice'), TRUE),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Science Fact Finder'), TRUE),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Memory Warm-up'), TRUE),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Word Collector'), TRUE),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Math Marathon'), TRUE),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Science Explorer'), TRUE),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Memory Champion'), TRUE),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Grammar Guru'), TRUE),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Math Wizard'), TRUE),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Science Master'), TRUE),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Memory Master'), TRUE),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Speed Demon'), TRUE),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Storyteller'), TRUE),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Experiment Log'), TRUE),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM missions WHERE name = 'Lightning Fast'), TRUE)
-ON CONFLICT DO NOTHING;
+WHERE user_id IN (SELECT id FROM users WHERE username IN ('student1', 'student2', 'student3', 'tech_teacher1', 'admin', 'edu_teacher1', 'edu_teacher2'));
 ;;;
 
 -- Insert sample items for the shop (AVATAR, BACKGROUND, BADGE only - no POWERUP)
@@ -334,73 +224,5 @@ ON CONFLICT (name) DO NOTHING;
 
 -- Delete only the default user items that will be reinserted
 DELETE FROM user_items
-WHERE user_id IN (SELECT id FROM users WHERE username IN ('student1', 'student2', 'student3', 'tech_teacher1', 'admin'));
-;;;
--- Insert sample user items
-INSERT INTO user_items (user_id, item_id)
-VALUES
-    -- Student1 items
-    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM items WHERE name = 'Cool Hat')),
-    ((SELECT id FROM users WHERE username = 'student1'), (SELECT id FROM items WHERE name = 'Space Theme')),
-
-    -- Student2 items
-    ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM items WHERE name = 'Science Glasses')),
-    ((SELECT id FROM users WHERE username = 'student2'), (SELECT id FROM items WHERE name = 'Math Champion')),
-
-    -- Student3 items
-    -- No items for student3 (beginner user)
-
-    -- Teacher1 items
-    ((SELECT id FROM users WHERE username = 'tech_teacher1'), (SELECT id FROM items WHERE name = 'Superhero Cape')),
-    ((SELECT id FROM users WHERE username = 'tech_teacher1'), (SELECT id FROM items WHERE name = 'Forest Adventure')),
-    ((SELECT id FROM users WHERE username = 'tech_teacher1'), (SELECT id FROM items WHERE name = 'Reading Star')),
-
-    -- Admin items (all items for demonstration)
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM items WHERE name = 'Cool Hat')),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM items WHERE name = 'Superhero Cape')),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM items WHERE name = 'Science Glasses')),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM items WHERE name = 'Sports Jersey')),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM items WHERE name = 'Space Theme')),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM items WHERE name = 'Ocean View')),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM items WHERE name = 'Forest Adventure')),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM items WHERE name = 'City Skyline')),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM items WHERE name = 'Math Champion')),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM items WHERE name = 'Reading Star')),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM items WHERE name = 'Science Explorer')),
-    ((SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM items WHERE name = 'Memory Master'))
-ON CONFLICT DO NOTHING;
-;;;
-
--- Insert user profiles with proper JSONB structure
-INSERT INTO user_profiles (user_id, nickname, equipped_items, preferences, privacy_settings)
-VALUES
-    ((SELECT id FROM users WHERE username = 'student1'), 'MathWhiz',
-     '{"AVATAR": null, "BADGE": null, "BACKGROUND": null}',
-     '{"theme": "DARK", "sound": true, "notifications": false}',
-     '{"show_email": false, "show_school": true, "show_class": true}'),
-
-    ((SELECT id FROM users WHERE username = 'student2'), 'ScienceStar',
-     '{"AVATAR": 3, "BADGE": 9, "BACKGROUND": null}',
-     '{"theme": "LIGHT", "sound": true, "notifications": true}',
-     '{"show_email": false, "show_school": true, "show_class": false}'),
-
-    ((SELECT id FROM users WHERE username = 'student3'), 'Bookworm',
-     '{"AVATAR": null, "BADGE": null, "BACKGROUND": null}',
-     '{"theme": "DARK", "sound": false, "notifications": true}',
-     '{"show_email": true, "show_school": false, "show_class": true}'),
-
-    ((SELECT id FROM users WHERE username = 'tech_teacher1'), 'ProfTech',
-     '{"AVATAR": 2, "BADGE": 10, "BACKGROUND": 7}',
-     '{"theme": "LIGHT", "sound": true, "notifications": true}',
-     '{"show_email": true, "show_school": true, "show_class": true}'),
-
-    ((SELECT id FROM users WHERE username = 'admin'), 'SuperAdmin',
-     '{"AVATAR": 3, "BADGE": null, "BACKGROUND": 5}',
-     '{"theme": "DARK", "sound": false, "notifications": false}',
-     '{"show_email": false, "show_school": false, "show_class": false}')
-ON CONFLICT (user_id) DO UPDATE SET
-                                    nickname = EXCLUDED.nickname,
-                                    equipped_items = EXCLUDED.equipped_items,
-                                    preferences = EXCLUDED.preferences,
-                                    privacy_settings = EXCLUDED.privacy_settings;
+WHERE user_id IN (SELECT id FROM users WHERE username IN ('student1', 'student2', 'student3', 'tech_teacher1', 'admin', 'edu_teacher1', 'edu_teacher2'));
 ;;;
