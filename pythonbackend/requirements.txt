@@ -13,6 +13,7 @@ python-dotenv>=1.0.0
 # ---------- Google GenAI SDK ----------
 google-genai>=1.0.0
 google-auth>=2.23.0
+google-cloud-aiplatform>=1.40.0
 
 # ---------- LangChain (Modern with langchain_core) ----------
 # These versions guarantee langchain_core is available as separate package
@@ -43,3 +44,5 @@ ollama>=0.1.0
 sentence-transformers>=2.2.0
 
 static-ffmpeg
+Pillow
+google-cloud-aiplatform
