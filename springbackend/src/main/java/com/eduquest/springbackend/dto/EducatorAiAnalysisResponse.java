@@ -6,6 +6,7 @@ public record EducatorAiAnalysisResponse(
         String overallAnalysis,
         List<String> strengths,
         List<String> weaknesses,
+        List<String> emotions,
         List<String> suggestions
 ) {
 }

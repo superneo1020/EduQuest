@@ -32,10 +32,11 @@ public class EducatorAiAnalysisService {
 
     private final List<String> fieldLibrary = List.of(
             "\"overallAnalysis\": Summary: most played 'Category', highest score, and one general improvement area.",
-            "\"studentAnalysis\": Student's performance summary and suggestions based on their top 3 achievements and top 3 challenges at most.",
+            "\"studentAnalysis\": Summary and suggestions: each student's performance based on their top 3 achievements and top 3 challenges at most.",
             "\"strengths\": List of strengths based on student's achievements.",
             "\"weaknesses\": List of weaknesses based on student's challenges.",
-            "\"suggestions\": List of suggestions for improvement based on student's weaknesses."
+            "\"emotions\": List of the student's likely emotional state (e.g., vocabulary is inappropriate: Boundary Testing; correctness is low but attempts are high: Struggling; correctness is high but answers are nonsensical: Disengaged/Bored; progress is consistent: Focused) based on the nature of their challenges and achievements",
+            "\"suggestions\": List of suggestions for improvement based on student's results."
     );
 
     private ChatClient chatClient;
@@ -96,16 +97,16 @@ public class EducatorAiAnalysisService {
         Message userMessage = userTemplate.createMessage(Map.of(
                 "intro", "a student's process for a specific game",
                 "data", formattedLeanData,
-                "instructions", promptSerializer.buildInstructions(fieldLibrary,0, 2, 3, 4)
+                "instructions", promptSerializer.buildInstructions(fieldLibrary,0, 2, 3, 4, 5)
         ));
 
         try {
             return chatClient.prompt(new Prompt(userMessage))
-                    .options(ChatOptions.builder().temperature(0.7).maxTokens(1500).build())
+                    .options(ChatOptions.builder().temperature(0.2).maxTokens(1500).build())
                     .call()
                     .entity(EducatorAiAnalysisResponse.class);
         } catch (Exception e) {
-            return new EducatorAiAnalysisResponse("We encountered an unexpected error while processing your ai analysis request. Please refresh the page or try again in a few minutes.", List.of(), List.of(), List.of());
+            return new EducatorAiAnalysisResponse("We encountered an unexpected error while processing your ai analysis request. Please refresh the page or try again in a few minutes.", List.of(), List.of(), List.of(), List.of());
         }
     }
 
@@ -124,7 +125,7 @@ public class EducatorAiAnalysisService {
 
         try {
             return chatClient.prompt(new Prompt(userMessage))
-                    .options(ChatOptions.builder().temperature(0.7).maxTokens(1500).build())
+                    .options(ChatOptions.builder().temperature(0.2).maxTokens(1500).build())
                     .call()
                     .entity(EducatorAiOverallResponse.class);
         } catch (Exception e) {

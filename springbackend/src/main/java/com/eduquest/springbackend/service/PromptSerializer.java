@@ -88,12 +88,12 @@ public class PromptSerializer {
     private QuestionSummary processQuestions(List<GameQuestionRecord> questions) {
         var achievements = questions.stream()
                 .filter(GameQuestionRecord::isCorrect)
-                .map(GameQuestionRecord::content)
+                .map(q -> String.format("Q: %s, Time spent:%ds", q.content(), q.timeSpent()))
                 .toList();
 
         var challenges = questions.stream()
                 .filter(q -> !q.isCorrect())
-                .map(q -> String.format("Q: %s, My Ans: %s", q.content(), q.userAnswer()))
+                .map(q -> String.format("Q: %s, My Ans: %s, Time spent:%ds", q.content(), q.userAnswer(), q.timeSpent()))
                 .toList();
 
         return new QuestionSummary(
