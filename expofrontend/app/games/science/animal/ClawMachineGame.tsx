@@ -114,6 +114,8 @@ const ClawMachineGame: React.FC = () => {
     const navigation = useNavigation();
     const { token } = useAuth();
     const [isSaving, setIsSaving] = useState(false);
+    // 防重複提交鎖
+    const isCompletingRef = useRef(false);
 
     useLayoutEffect(() => {
         navigation.setOptions({ headerShown: false });
@@ -210,9 +212,14 @@ const ClawMachineGame: React.FC = () => {
         return 0;
     };
 
-    // ========== 💾 保存分數 ==========
-    const saveScore = async (finalScore: number) => {
+    // ========== 💾 保存分數（加入總時間） ==========
+    const saveScore = async (finalScore: number, totalSeconds: number) => {
         if (!token) return;
+        if (isCompletingRef.current) {
+            console.log("saveScore already in progress, skip");
+            return;
+        }
+        isCompletingRef.current = true;
         setIsSaving(true);
         try {
             const gameData = {
@@ -230,11 +237,18 @@ const ClawMachineGame: React.FC = () => {
                 questionType: 'claw-machine',
                 timeSpent: 0
             }));
+            const totalTimeSeconds = totalSeconds;
+            const totalTimeFormatted = formatTime(totalTimeSeconds);
             const metadata: GameMetadata = createGameMetadata(
                 gameData.gameType,
                 gameData.gameDifficulty,
                 finalScore,
-                { totalAttempts: answerCount, caughtAnimals: correctCatches },
+                {
+                    totalAttempts: answerCount,
+                    caughtAnimals: correctCatches,
+                    totalTimeSeconds: totalTimeSeconds,
+                    totalTimeFormatted: totalTimeFormatted,
+                },
                 questionsData
             );
             const backendRequest = {
@@ -249,6 +263,9 @@ const ClawMachineGame: React.FC = () => {
             console.error("Failed to sync score:", e);
         } finally {
             setIsSaving(false);
+            setTimeout(() => {
+                isCompletingRef.current = false;
+            }, 500);
         }
     };
 
@@ -476,10 +493,11 @@ const ClawMachineGame: React.FC = () => {
     const endGameAndShowReport = async (finalScore: number) => {
         if (gameComplete || showReport) return;
         stopTimer();
+        const finalTime = elapsedSeconds; // 取得最終時間
         setGameComplete(true);
         setWaitingForNext(false); // 确保按钮消失
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        await saveScore(finalScore);
+        await saveScore(finalScore, finalTime);
         setShowReport(true);
     };
 
@@ -631,7 +649,7 @@ const ClawMachineGame: React.FC = () => {
 
     const showReportPage = async () => {
         stopTimer();
-        await saveScore(Math.round(score));
+        await saveScore(Math.round(score), elapsedSeconds);
         setShowReport(true);
     };
 

@@ -72,11 +72,14 @@ const BodyPartsMatchingGame = () => {
     const navigation = useNavigation();
     const { token } = useAuth();
     const [isSaving, setIsSaving] = useState(false);
+    // 防重複提交鎖
+    const isCompletingRef = useRef(false);
     const { width: screenWidth, height: screenHeight } = useWindowDimensions();
     const [isPortrait, setIsPortrait] = useState(screenHeight > screenWidth);
-    const startTimeRef = useRef<number>(Date.now());
+    // 移除 startTimeRef，統一使用 elapsedSeconds
+    // const startTimeRef = useRef<number>(Date.now());
 
-    // ========== 🕒 新增：計時器相關狀態 ==========
+    // ========== 🕒 計時器相關狀態 ==========
     const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
     const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -104,11 +107,9 @@ const BodyPartsMatchingGame = () => {
         }, 1000);
     }, [stopTimer]);
 
-    // ⭐ 完全隐藏系统导航栏（包括返回按钮和标题）
+    // 完全隐藏系统导航栏
     useLayoutEffect(() => {
-        navigation.setOptions({
-            headerShown: false,
-        });
+        navigation.setOptions({ headerShown: false });
     }, [navigation]);
 
     // 監聽屏幕方向變化
@@ -141,10 +142,14 @@ const BodyPartsMatchingGame = () => {
         };
     }, []);
 
-    // ========== 💾 保存分數到伺服器 ==========
-    const saveScore = async (finalScore: number) => {
+    // ========== 💾 保存分數到伺服器（加入總時間） ==========
+    const saveScore = async (finalScore: number, totalSeconds: number) => {
         if (!token) return;
-
+        if (isCompletingRef.current) {
+            console.log("saveScore already in progress, skip");
+            return;
+        }
+        isCompletingRef.current = true;
         setIsSaving(true);
         try {
             const gameData = {
@@ -153,15 +158,19 @@ const BodyPartsMatchingGame = () => {
                 gameType: "SCIENCE",
                 gameDifficulty: "MEDIUM"
             };
-            
+
             const questionsData = BODY_PARTS.map((part, index) => ({
                 id: index + 1,
                 question: `Match ${part.name}`,
                 correctAnswer: part.name,
                 userAnswer: 'User matched correctly',
-                isCorrect: true, // Simplified - assume all matches are correct for this game type
-                questionType: 'matching'
+                isCorrect: true,
+                questionType: 'matching',
+                timeSpent: 0
             }));
+
+            const totalTimeSeconds = totalSeconds;
+            const totalTimeFormatted = formatTime(totalTimeSeconds);
 
             const metadata: GameMetadata = createGameMetadata(
                 gameData.gameType,
@@ -169,7 +178,9 @@ const BodyPartsMatchingGame = () => {
                 finalScore,
                 {
                     totalParts: BODY_PARTS.length,
-                    correctMatches: score
+                    correctMatches: score,
+                    totalTimeSeconds: totalTimeSeconds,
+                    totalTimeFormatted: totalTimeFormatted,
                 },
                 questionsData
             );
@@ -179,7 +190,7 @@ const BodyPartsMatchingGame = () => {
                 scores: gameData.scores,
                 metadata: convertToBackendMetadata(metadata)
             };
-            
+
             await axios.post('http://localhost:8080/api/user/game/score', backendRequest, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -188,34 +199,36 @@ const BodyPartsMatchingGame = () => {
             console.error("Failed to sync score:", e);
         } finally {
             setIsSaving(false);
+            setTimeout(() => {
+                isCompletingRef.current = false;
+            }, 500);
         }
     };
 
     // 計算完成時間並生成分數
     const calculateScoreAndReport = async () => {
         stopTimer(); // 遊戲結束時停止計時器
-        const endTime = Date.now();
-        const timeSpent = (endTime - startTimeRef.current) / 1000; // 秒數
+        const totalSeconds = elapsedSeconds; // 直接使用計時器累計秒數
         let finalScore = 0;
         let summary = '';
 
-        if (timeSpent <= 50) {
+        if (totalSeconds <= 50) {
             finalScore = 100;
-            summary = `🎉 Awesome! You are in ${Math.round(timeSpent)} Finished the game in seconds and got a perfect score of 100! Super fast matching speed, amazing memory!`;
-        } else if (timeSpent <= 60) {
+            summary = `🎉 Awesome! You are in ${Math.round(totalSeconds)} Finished the game in seconds and got a perfect score of 100! Super fast matching speed, amazing memory!`;
+        } else if (totalSeconds <= 60) {
             finalScore = 90;
-            summary = `😊 Not bad! You are at ${Math.round(timeSpent)} Finished the game in seconds and scored 90 points! If I could be a little faster, I could get a perfect score!`;
+            summary = `😊 Not bad! You are at ${Math.round(totalSeconds)} Finished the game in seconds and scored 90 points! If I could be a little faster, I could get a perfect score!`;
         } else {
-            const extraTime = Math.floor((timeSpent - 60) / 15);
+            const extraTime = Math.floor((totalSeconds - 60) / 15);
             const deduction = Math.min(extraTime * 10, 80);
             finalScore = Math.max(0, 100 - deduction);
-            summary = `⏱️ You spent ${Math.round(timeSpent)} Complete the game in seconds. After more than 1 minute, 10 points are deducted every 15 seconds. The final score is ${finalScore} Points. Next time, you can try to speed up the matching!`;
+            summary = `⏱️ You spent ${Math.round(totalSeconds)} Complete the game in seconds. After more than 1 minute, 10 points are deducted every 15 seconds. The final score is ${finalScore} Points. Next time, you can try to speed up the matching!`;
         }
 
-        // 保存分數到伺服器
-        await saveScore(finalScore);
+        // 保存分數到伺服器（傳入總秒數）
+        await saveScore(finalScore, totalSeconds);
 
-        setFinalReport({ summary, finalScore, timeSpent });
+        setFinalReport({ summary, finalScore, timeSpent: totalSeconds });
         setIsFinished(true);
     };
 
@@ -228,18 +241,17 @@ const BodyPartsMatchingGame = () => {
 
     // 重置遊戲
     const resetGame = () => {
-        stopTimer(); // 重置時停止舊計時器
+        stopTimer();
         setCards(generateCards());
         setSelectedIndex(null);
         setLockBoard(false);
         setScore(0);
         setMatches(0);
         setIsFinished(false);
-        startTimeRef.current = Date.now();
         startTimer(); // 重新開始計時
     };
 
-    // ⭐ 返回上一頁函數
+    // 返回上一頁函數
     const handleGoBack = () => {
         stopTimer();
         navigation.goBack();
@@ -373,7 +385,6 @@ const BodyPartsMatchingGame = () => {
         const totalTimeFormatted = formatTime(Math.round(finalReport.timeSpent));
         return (
             <ScrollView style={styles.container}>
-                {/* 簡化頂部欄 - 只保留標題 */}
                 <View style={styles.headerBarSimplified}>
                     <Text style={styles.headerTitle}>Body Parts Matching</Text>
                 </View>
@@ -386,13 +397,11 @@ const BodyPartsMatchingGame = () => {
                         <Text style={styles.scoreCircleLabel}>/ 100</Text>
                     </View>
 
-                    {/* 新增：顯示總花費時間 */}
                     <View style={styles.reportTimeBox}>
                         <Text style={styles.reportScoreLabel}>⏱️ Total Time</Text>
                         <Text style={styles.reportTimeValue}>{totalTimeFormatted}</Text>
                     </View>
 
-                    {/* 保存中指示器 */}
                     {isSaving && (
                         <View style={styles.savingIndicator}>
                             <ActivityIndicator size="small" color="#4CAF50" />
@@ -455,7 +464,6 @@ const BodyPartsMatchingGame = () => {
     // 遊戲主頁面 - 右上角增加计时器
     const renderContent = () => (
         <>
-            {/* 修改頂部欄 - 標題在左，計時器在右 */}
             <View style={styles.headerBarWithTimer}>
                 <Text style={styles.headerTitle}>Body Parts Matching</Text>
                 <View style={styles.timerContainer}>
@@ -465,7 +473,6 @@ const BodyPartsMatchingGame = () => {
             </View>
 
             <ScrollView contentContainerStyle={styles.scrollContent}>
-                {/* 遊戲標題和計分板 */}
                 <View style={styles.header}>
                     <Text style={styles.title}>🧩 Body Parts Matching Game</Text>
                     <View style={styles.scoreContainer}>
@@ -477,7 +484,6 @@ const BodyPartsMatchingGame = () => {
                     </View>
                 </View>
 
-                {/* 遊戲說明 */}
                 <View style={styles.instructions}>
                     <Text style={styles.instructionsText}>
                         Click on a card to flip it over, and find two matching parts to make a pair. Successfully matching gives 10 points, failing deducts 2 points.
@@ -485,12 +491,10 @@ const BodyPartsMatchingGame = () => {
                     </Text>
                 </View>
 
-                {/* 卡片網格 */}
                 <View style={styles.gridContainer}>
                     {renderCards()}
                 </View>
 
-                {/* 控制按鈕 */}
                 <View style={styles.controls}>
                     <TouchableOpacity
                         style={[styles.button, styles.resetButton]}
@@ -527,7 +531,6 @@ const styles = StyleSheet.create({
         padding: 20,
         paddingBottom: 40,
     },
-    // 簡化頂部欄樣式（只保留標題）
     headerBarSimplified: {
         alignItems: 'center',
         paddingHorizontal: 16,
@@ -537,7 +540,6 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: '#e0e0e0',
     },
-    // 新增：帶計時器的頂部欄樣式
     headerBarWithTimer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -554,7 +556,6 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: '#333',
     },
-    // 計時器樣式
     timerContainer: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -575,7 +576,6 @@ const styles = StyleSheet.create({
         color: '#333',
         fontFamily: Platform.OS === 'web' ? 'monospace' : 'Courier',
     },
-    // 遊戲主頁面樣式
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -709,7 +709,6 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
     },
-    // 報告頁面樣式
     reportContainer: {
         padding: 20,
     },
@@ -735,7 +734,6 @@ const styles = StyleSheet.create({
         color: '#666',
         marginTop: -5,
     },
-    // 新增：總結頁面的時間顯示樣式
     reportTimeBox: {
         backgroundColor: '#fff',
         padding: 16,
