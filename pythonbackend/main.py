@@ -69,7 +69,7 @@ class Settings(BaseSettings):
     gemini_api_key: str = "AQ.Ab8RN6LRCyCveOXOfmbpbpGofO_WqyYEjtRRjhGjNvGvpClqRw"
     gemini_model: str = "gemini-2.5-flash-lite"
     gemini_location: str = "us-central1"
-    gemini_project: str = ""
+    gemini_project: str = "mimetic-campus-488707-k7"
 
     # Ollama Configuration for Embeddings
     ollama_host: str = "http://localhost:11434"
@@ -681,22 +681,22 @@ class PgVectorStore:
 
         # Documents table - stores document metadata
         create_documents_table_sql = """
-        CREATE TABLE IF NOT EXISTS documents (
-            id SERIAL PRIMARY KEY,
-            source_uri TEXT NOT NULL UNIQUE,
-            display_name TEXT,
-            file_type TEXT,
-            total_pages INTEGER DEFAULT 0,
-            total_chunks INTEGER DEFAULT 0,
-            metadata JSONB DEFAULT '{}',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        
-        -- Index on source_uri for fast lookups
-        CREATE INDEX IF NOT EXISTS idx_documents_source_uri
-            ON documents(source_uri); \
-        """
+                                     CREATE TABLE IF NOT EXISTS documents (
+                                                                              id SERIAL PRIMARY KEY,
+                                                                              source_uri TEXT NOT NULL UNIQUE,
+                                                                              display_name TEXT,
+                                                                              file_type TEXT,
+                                                                              total_pages INTEGER DEFAULT 0,
+                                                                              total_chunks INTEGER DEFAULT 0,
+                                                                              metadata JSONB DEFAULT '{}',
+                                                                              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                                                              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                                     );
+
+                                     -- Index on source_uri for fast lookups
+                                     CREATE INDEX IF NOT EXISTS idx_documents_source_uri
+                                         ON documents(source_uri); \
+                                     """
 
         # Chunks table - stores text chunks with embeddings
         create_chunks_table_sql = f"""
@@ -1131,17 +1131,17 @@ class RAGService:
     def _build_rag_prompt(self, question: str, context_block: str, results: List[Dict]) -> str:
 
 
-    # Extract document metadata for context awareness
-         doc_types = list(set([
-             r.get('file_type', 'unknown') if r.get('file_type')
-             else Path(r.get('source_uri', '')).suffix.lstrip('.') or 'unknown'
-             for r in results
-         ]))
+        # Extract document metadata for context awareness
+        doc_types = list(set([
+            r.get('file_type', 'unknown') if r.get('file_type')
+            else Path(r.get('source_uri', '')).suffix.lstrip('.') or 'unknown'
+            for r in results
+        ]))
 
-         source_names = list(set([r['display_name'] for r in results]))
-         total_pages = max([r.get('page_number', 0) for r in results] or [0])
+        source_names = list(set([r['display_name'] for r in results]))
+        total_pages = max([r.get('page_number', 0) for r in results] or [0])
 
-         prompt = f"""You are an expert educational assistant with deep analytical capabilities. Your task is to answer questions based on provided document context with high accuracy and relevance.
+        prompt = f"""You are an expert educational assistant with deep analytical capabilities. Your task is to answer questions based on provided document context with high accuracy and relevance.
 
                     ## PHASE 1: DOCUMENT ANALYSIS
                     Before answering, analyze the document context:
@@ -1189,7 +1189,7 @@ Based on your analysis above, generate a comprehensive answer following these ru
 
 ## YOUR RESPONSE:
 """
-         return prompt
+        return prompt
 
     def list_documents(self) -> List[Dict]:
         """List all uploaded documents."""
