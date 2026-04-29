@@ -13,7 +13,7 @@ from psycopg2.extras import execute_values
 from typing import Any, List, Dict, Optional
 from contextlib import asynccontextmanager
 from pathlib import Path
-from datetime import datetime  # FIXED: Added import
+from datetime import datetime
 
 from fastapi import FastAPI, HTTPException, status, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,6 +27,10 @@ from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 
+import base64
+from io import BytesIO
+from PIL import Image as PILImage, ImageEnhance, ImageDraw, ImageFont
+from fastapi.staticfiles import StaticFiles
 # ---------------------------------------------------------------------
 # Configuration: Gemini 2.5 Flash Lite for LLM, Ollama for Embeddings
 # ---------------------------------------------------------------------
@@ -62,20 +66,25 @@ class Settings(BaseSettings):
     port: int = 8000
 
     # Gemini Configuration (REQUIRED for LLM)
-    gemini_api_key: str = "AQ.Ab8RN6LRCyCveOXOfmbpbpGofO_WqyYEjtRRjhGjNvGvpClqRw"  # Your Vertex AI API key
+    gemini_api_key: str = "AQ.Ab8RN6LRCyCveOXOfmbpbpGofO_WqyYEjtRRjhGjNvGvpClqRw"
     gemini_model: str = "gemini-2.5-flash-lite"
-    gemini_location: str = "us-central1"  # or your preferred region
-    gemini_project: str = "mimetic-campus-488707-k7"
+    gemini_location: str = "us-central1"
+    gemini_project: str = ""
 
     # Ollama Configuration for Embeddings
     ollama_host: str = "http://localhost:11434"
     ollama_embed_model: str = "nomic-embed-text"
 
-    # Legacy Ollama config (kept for compatibility, ignored if USE_GEMINI_API=True)
-    model: str = "gemma3:latest"  # Fallback only
+    # Legacy Ollama config
+    model: str = "gemma3:latest"
 
     cors_origins: list[str] = Field(default_factory=lambda: ["*"])
     log_level: str = "INFO"
+
+    # Image Generation Settings
+    image_output_dir: str = "generated_images"
+    image_max_width: int = 1024
+    image_max_height: int = 1024
 
     # pgvector Database Configuration
     pg_host: str = "localhost"
@@ -144,7 +153,36 @@ class OllamaEmbeddingClient:
     def get_embedding_dim(self) -> int:
         return self.embedding_dim
 
+class ImageGenRequest(BaseModel):
+    prompt: str = Field(..., min_length=1, max_length=1000)
+    style: str = Field(default="animated")
+    width: int = Field(default=1024, ge=512, le=2048)
+    height: int = Field(default=1024, ge=512, le=2048)
 
+class ImageGenResponse(BaseModel):
+    image_url: str
+    prompt_used: str
+    style: str
+    width: int
+    height: int
+
+class EducationalIllustrationRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=2000)
+    use_rag_context: bool = Field(default=False)
+    document_id: Optional[int] = Field(None)
+    style: str = Field(default="diagram")
+    width: int = Field(default=1024, ge=512, le=2048)
+    height: int = Field(default=1024, ge=512, le=2048)
+
+class EducationalIllustrationResponse(BaseModel):
+    explanation: str
+    image_url: str
+    concept_prompt: str
+    style: str
+    width: int
+    height: int
+    used_rag: bool
+    sources: list[str] = []
 # ---------------------------------------------------------------------
 # Gemini API Client (For LLM - unchanged)
 # ---------------------------------------------------------------------
@@ -272,6 +310,331 @@ gemini_client = GeminiClient(
     model=settings.gemini_model,
     location=settings.gemini_location
 )
+
+ollama_embed_client = OllamaEmbeddingClient(
+    host=settings.ollama_host,
+    model=settings.ollama_embed_model
+)
+
+
+# ---------------------------------------------------------------------
+# Vertex AI Imagen Client (Direct REST via Express API Key)
+# ---------------------------------------------------------------------
+class VertexAIImagenClient:
+    """
+    Uses direct REST API calls matching your GeminiClient setup.
+    Bypasses SDK validation errors for Vertex Express API Keys.
+    """
+    def __init__(self, api_key: str, location: str = "us-central1"):
+        self.api_key = api_key
+        self.location = location
+        self.model = "imagen-3.0-generate-001"
+
+
+        # This endpoint matches the exact working format of your GeminiClient!
+        self.endpoint = (
+            f"https://{self.location}-aiplatform.googleapis.com/v1/"
+            f"publishers/google/models/{self.model}:predict?key={self.api_key}"
+        )
+
+        if self.api_key:
+            logger.info("✓ Vertex AI Imagen client initialized (Express REST Mode)")
+        else:
+            logger.warning("[Imagen] No API key provided, will use Pollinations fallback.")
+
+    def _generate_placeholder(self, prompt: str, width: int = 1024, height: int = 1024) -> bytes:
+        """Generate a styled educational placeholder image using PIL."""
+        img = PILImage.new('RGB', (width, height), color=(25, 55, 95))
+        draw = ImageDraw.Draw(img)
+        draw.rectangle([20, 20, width - 20, height - 20], outline=(80, 130, 220), width=4)
+
+        try:
+            font_title = ImageFont.truetype("arial.ttf", 52)
+            font_body = ImageFont.truetype("arial.ttf", 32)
+            font_footer = ImageFont.truetype("arial.ttf", 24)
+        except Exception:
+            font_title = ImageFont.load_default()
+            font_body = ImageFont.load_default()
+            font_footer = ImageFont.load_default()
+
+        draw.text((width // 2, 80), "EduQuest Visualization",
+                  fill=(255, 255, 255), font=font_title, anchor="mm")
+
+        words = prompt.split()
+        lines_text, current = [], ""
+        for word in words:
+            test = f"{current} {word}".strip()
+            if len(test) <= 48:
+                current = test
+            else:
+                lines_text.append(current)
+                current = word
+        if current:
+            lines_text.append(current)
+
+        y = 160
+        for line in lines_text[:14]:
+            draw.text((width // 2, y), line,
+                      fill=(210, 225, 255), font=font_body, anchor="mm")
+            y += 44
+
+        draw.text((width // 2, height - 60), "Generated by EduQuest AI",
+                  fill=(150, 150, 150), font=font_footer, anchor="mm")
+
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+        return buf.getvalue()
+
+    def generate_image(self, prompt: str, width: int = 1024, height: int = 1024,
+                       number_of_images: int = 1, aspect_ratio: str = "1:1") -> bytes:
+        """
+        Generate image using Vertex AI Express REST API.
+        Falls back to Pollinations.ai (free) if it fails.
+        """
+        if self.api_key:
+            try:
+                ratio_map = {
+                    (1024, 1024): "1:1",
+                    (1024, 768): "4:3",
+                    (768, 1024): "3:4",
+                    (1024, 576): "16:9",
+                    (576, 1024): "9:16"
+                }
+                mapped_ratio = ratio_map.get((width, height), aspect_ratio)
+
+                logger.info(f"[Imagen] Generating via Vertex Express REST API...")
+
+                headers = {"Content-Type": "application/json"}
+                payload = {
+                    "instances": [{"prompt": prompt}],
+                    "parameters": {
+                        "sampleCount": number_of_images,
+                        "aspectRatio": mapped_ratio,
+                        "personGeneration": "allow_adult"
+                    }
+                }
+
+                response = requests.post(self.endpoint, headers=headers, json=payload, timeout=120)
+
+                if response.status_code == 200:
+                    data = response.json()
+                    if "predictions" in data and len(data["predictions"]) > 0:
+                        prediction = data["predictions"][0]
+                        if "bytesBase64Encoded" in prediction:
+                            image_bytes = base64.b64decode(prediction["bytesBase64Encoded"])
+                            logger.info(f"[Imagen] Vertex AI generated image: {len(image_bytes)} bytes")
+                            return image_bytes
+                else:
+                    logger.warning(f"[Imagen] Vertex API failed with status {response.status_code}: {response.text}")
+
+            except Exception as e:
+                logger.warning(f"[Imagen] Vertex REST API failed: {e}")
+
+
+
+
+        # Last resort: PIL placeholder
+        logger.warning("[Imagen] All image generation methods failed. Using PIL placeholder.")
+        return self._generate_placeholder(prompt, width, height)
+
+
+
+# Initialize clients
+gemini_client = GeminiClient(
+    api_key=settings.gemini_api_key,
+    model=settings.gemini_model,
+    location=settings.gemini_location
+)
+
+imagen_client = VertexAIImagenClient(
+    api_key=settings.gemini_api_key,
+    location=settings.gemini_location
+)
+
+
+
+# ---------------------------------------------------------------------
+# Image Generation Service
+# ---------------------------------------------------------------------
+class ImageGenerationService:
+    """Service for generating educational images from chat context."""
+
+    def __init__(self):
+        self.output_dir = Path(settings.image_output_dir)
+        self.output_dir.mkdir(exist_ok=True)
+        logger.info(f"✓ Image output directory: {self.output_dir.absolute()}")
+
+    def generate_from_context(self, chat_context: str, style: str = "animated") -> Dict:
+        logger.info(f"[ImageGen] Generating image for context: {chat_context[:100]}...")
+
+        image_prompt = self._create_image_prompt(chat_context)
+        logger.info(f"[ImageGen] Optimized prompt: {image_prompt[:150]}...")
+
+        image_bytes = imagen_client.generate_image(image_prompt, width=1024, height=1024)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"edu_image_{timestamp}.png"
+        filepath = self.output_dir / filename
+
+        img = PILImage.open(BytesIO(image_bytes))
+
+        if img.width > settings.image_max_width or img.height > settings.image_max_height:
+            img.thumbnail((settings.image_max_width, settings.image_max_height), PILImage.LANCZOS)
+
+        if style == "animated":
+            img = self._apply_animated_style(img)
+
+        img.save(filepath, "PNG")
+        logger.info(f"[ImageGen] Image saved: {filepath}")
+
+        return {
+            "image_path": str(filepath),
+            "filename": filename,
+            "prompt_used": image_prompt,
+            "style": style,
+            "width": img.width,
+            "height": img.height
+        }
+
+    def _create_image_prompt(self, context: str) -> str:
+        prompt_creation = (
+            f"You are a technical illustrator who draws with picture related to teach primary student . "
+            f"Given an educational query, describe a clean DIAGRAM-STYLE drawing. "
+            f"The drawing should look like a scientific sketch made of dots and lines — "
+            f"simple iconic shapes that are instantly recognizable, arranged in a clear layout."
+            f"Query: {context} "
+            f"Your description MUST specify:"
+            f"1. ICONIC SHAPES: Draw real objects as simple outlines — "
+            f"2. ARROWS: Show direction with dashed arrows, flowing streams, or pulsing dotted lines  "
+            f"3. LABEL ZONES: Leave clean areas where labels would go (don't write the labels, just describe the space as related picture ) "
+            f"4. COLOR CODE: Assign 4-5 specific colors to different parts  "
+            f"5. LAYOUT: Describe top-to-bottom or left-to-right flow with clear spacing between elements"
+
+        )
+
+        optimized = gemini_client.generate(prompt_creation, temperature=0.3, max_tokens=200)
+        return optimized.strip()
+
+    def _apply_animated_style(self, img: PILImage.Image) -> PILImage.Image:
+        enhancer = ImageEnhance.Color(img)
+        img = enhancer.enhance(1.3)
+        enhancer = ImageEnhance.Contrast(img)
+        img = enhancer.enhance(1.1)
+        enhancer = ImageEnhance.Sharpness(img)
+        img = enhancer.enhance(1.2)
+        return img
+
+    def generate_educational_illustration(
+            self,
+            query: str,
+            explanation: str = "",
+            style: str = "diagram",
+            width: int = 1024,
+            height: int = 1024
+    ) -> Dict:
+        logger.info(f"[EduIllustration] Generating illustration for: {query[:80]}...")
+
+        if not explanation:
+            explanation = gemini_client.generate(
+                prompt=(
+                    f"Explain the following educational concept clearly and concisely "
+                    f"in 2-4 sentences suitable for a student. Focus on the core mechanism or structure:\n\n"
+                    f"Concept: {query}\n\nExplanation:"
+                ),
+                temperature=0.3,
+                max_tokens=300
+            )
+            logger.info(f"[EduIllustration] Generated explanation: {explanation[:100]}...")
+
+        diagram_prompt = self._create_educational_diagram_prompt(query, explanation, style)
+        logger.info(f"[EduIllustration] Diagram prompt: {diagram_prompt[:150]}...")
+
+        image_bytes = imagen_client.generate_image(
+            prompt=diagram_prompt,
+            width=width,
+            height=height
+        )
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"edu_illustration_{timestamp}.png"
+        filepath = self.output_dir / filename
+
+        img = PILImage.open(BytesIO(image_bytes))
+
+        if img.width > settings.image_max_width or img.height > settings.image_max_height:
+            img.thumbnail((settings.image_max_width, settings.image_max_height), PILImage.LANCZOS)
+
+        img = self._apply_educational_style(img, style)
+
+        img.save(filepath, "PNG")
+        logger.info(f"[EduIllustration] Saved: {filepath}")
+
+        return {
+            "explanation": explanation,
+            "image_path": str(filepath),
+            "filename": filename,
+            "image_url": f"/generated-images/{filename}",
+            "concept_prompt": diagram_prompt,
+            "style": style,
+            "width": img.width,
+            "height": img.height
+        }
+
+    def _create_educational_diagram_prompt(self, query: str, explanation: str, style: str) -> str:
+        style_instructions = {
+            "diagram": "a clean scientific diagram with labeled parts, arrows showing relationships, and distinct color-coded zones",
+            "infographic": "an educational infographic with icons, step-by-step numbered sections, and bold headers",
+            "flowchart": "a logical flowchart with decision diamonds, process boxes, and directional arrows",
+            "sketch": "a hand-drawn sketch style with annotations, cross-sections, and dimensional guides"
+        }
+
+        style_desc = style_instructions.get(style, style_instructions["diagram"])
+
+        prompt_engineering = (
+            f"You are an expert technical illustrator specializing in educational visuals.\n\n"
+            f"TASK: Convert the following concept into a precise image generation prompt "
+            f"for an AI image model (Imagen). The image should be {style_desc}.\n\n"
+            f"CONCEPT: {query}\n"
+            f"EXPLANATION: {explanation}\n\n"
+            f"RULES FOR THE PROMPT:\n"
+            f"1. Describe specific visual elements: shapes, positions (top/middle/bottom/left/right), and spatial relationships\n"
+            f"2. Include directional arrows, connectors, or flow lines between elements\n"
+            f"3. Specify 4-5 distinct colors for different components (e.g., blue for input, green for process, orange for output)\n"
+            f"4. Mention label zones or areas (do not write the actual text, just describe where labels appear with drawing)\n"
+            f"5. Use clear lighting: soft studio lighting, white or light gradient background, high contrast for readability\n"
+            f"6. Style: educational textbook illustration, vector-art clean lines, minimalist, no clutter\n"
+            f"7. Keep the prompt under 80 words and highly descriptive\n\n"
+            f"OUTPUT ONLY THE IMAGE PROMPT, NO EXTRA TEXT:"
+        )
+
+        optimized_prompt = gemini_client.generate(prompt_engineering, temperature=0.2, max_tokens=250)
+        return optimized_prompt.strip()
+
+    def _apply_educational_style(self, img: PILImage.Image, style: str) -> PILImage.Image:
+        if style in ("diagram", "flowchart"):
+            enhancer = ImageEnhance.Contrast(img)
+            img = enhancer.enhance(1.2)
+            enhancer = ImageEnhance.Sharpness(img)
+            img = enhancer.enhance(1.4)
+            enhancer = ImageEnhance.Color(img)
+            img = enhancer.enhance(1.1)
+        elif style == "infographic":
+            enhancer = ImageEnhance.Color(img)
+            img = enhancer.enhance(1.4)
+            enhancer = ImageEnhance.Contrast(img)
+            img = enhancer.enhance(1.15)
+        elif style == "sketch":
+            enhancer = ImageEnhance.Color(img)
+            img = enhancer.enhance(0.85)
+            enhancer = ImageEnhance.Contrast(img)
+            img = enhancer.enhance(1.1)
+        else:
+            img = self._apply_animated_style(img)
+        return img
+
+# Initialize image generation service
+image_service = ImageGenerationService()
 
 ollama_embed_client = OllamaEmbeddingClient(
     host=settings.ollama_host,
@@ -725,6 +1088,7 @@ class RAGService:
             "status": "success"
         }
 
+
     def query(self, question: str, top_k: int = 5, document_id: Optional[int] = None) -> Dict:
         """Query the RAG system using Ollama embeddings for retrieval and Gemini for generation."""
         try:
@@ -742,19 +1106,16 @@ class RAGService:
                 }
 
             # 3. Context Construction
-            context_block = "\n---\n".join([r['content'] for r in results])
+            context_block = "\n---\n".join([
+                f"[Source: {r['display_name']} | Page: {r['page_number']}]\n{r['content']}"
+                for r in results
+            ])
 
             # 4. Prompt Engineering for Gemini
-            prompt = (
-                f"You are a helpful educational assistant. Use the following snippets from "
-                f"documents to answer the question. If the answer isn't in the context, say so.\n\n"
-                f"CONTEXT:\n{context_block}\n\n"
-                f"QUESTION: {question}\n\n"
-                f"ANSWER:"
-            )
+            prompt = self._build_rag_prompt(question, context_block, results)
 
             # 5. Generate answer using Gemini
-            answer = gemini_client.generate(prompt, temperature=0.3)
+            answer = gemini_client.generate(prompt, temperature=0.3, max_tokens=2048)
 
             return {
                 "answer": answer,
@@ -766,6 +1127,69 @@ class RAGService:
         except Exception as e:
             logger.error(f"RAG Query failed: {e}")
             raise HTTPException(status_code=500, detail="Search failed")
+
+    def _build_rag_prompt(self, question: str, context_block: str, results: List[Dict]) -> str:
+
+
+    # Extract document metadata for context awareness
+         doc_types = list(set([
+             r.get('file_type', 'unknown') if r.get('file_type')
+             else Path(r.get('source_uri', '')).suffix.lstrip('.') or 'unknown'
+             for r in results
+         ]))
+
+         source_names = list(set([r['display_name'] for r in results]))
+         total_pages = max([r.get('page_number', 0) for r in results] or [0])
+
+         prompt = f"""You are an expert educational assistant with deep analytical capabilities. Your task is to answer questions based on provided document context with high accuracy and relevance.
+
+                    ## PHASE 1: DOCUMENT ANALYSIS
+                    Before answering, analyze the document context:
+
+                   - **Document Type(s):** {', '.join(doc_types)}
+                    - **Source Document(s):** {', '.join(source_names)}
+                     - **Content Span:** {total_pages}+ pages referenced
+                     - **Retrieved Chunks:** {len(results)} relevant passages
+
+                     ## PHASE 2: QUERY INTENT ANALYSIS
+                       Analyze the user's question to understand:
+                    - **Question Type:** Is this asking for facts, explanations, comparisons, steps/procedures, causes/effects, or summaries?
+                     - **Key Entities:** What specific topics, names, dates, or concepts are being asked about?
+                       - **Expected Depth:** Does this require a brief answer, detailed explanation, or step-by-step breakdown?
+- **Implicit Needs:** What underlying knowledge might the user need to fully understand the answer?
+
+**User Question:** {question}
+
+## PHASE 3: CONTEXT SYNTHESIS
+Below are relevant passages from the documents. Each passage includes its source and location for citation:
+
+{context_block}
+
+## PHASE 4: ANSWER GENERATION RULES
+Based on your analysis above, generate a comprehensive answer following these rules:
+
+1. **RELEVANCE FIRST:** Only use information from the provided context. If the answer isn't in the context, clearly state: "The provided documents do not contain sufficient information to answer this question."
+
+2. **STRUCTURED RESPONSE:**
+   - Start with a **direct answer** (1-2 sentences)
+   - Follow with **detailed explanation** using document evidence
+   - Use bullet points or numbered steps for complex topics
+   - Include **examples from the text** where helpful
+
+3. **CITE SOURCES:** Reference specific documents and page numbers when making claims:
+   - Correct: "According to [Document Name, Page 5]..."
+   - Correct: "As stated on page 12 of the lecture notes..."
+
+4. **CONFIDENCE INDICATOR:** After your answer, rate your confidence:
+   - **[High Confidence]** - Direct evidence found in multiple passages
+   - **[Medium Confidence]** - Partial evidence, some inference required
+   - **[Low Confidence]** - Minimal evidence, answer is mostly general knowledge
+
+5. **GAPS & CLARIFICATIONS:** If the context is incomplete or ambiguous, note what additional information would help answer better.
+
+## YOUR RESPONSE:
+"""
+         return prompt
 
     def list_documents(self) -> List[Dict]:
         """List all uploaded documents."""
@@ -793,6 +1217,12 @@ async def lifespan(app: FastAPI):
     global rag_service
 
     logger.info("Initializing EduQuest AI Service with Gemini 2.5 Flash Lite + Ollama Embeddings...")
+
+    # Check image generation status
+    if imagen_client.api_key:
+        logger.info("✓ Vertex AI Imagen client loaded — using API Key for image generation")
+    else:
+        logger.info("⚠ Vertex AI Imagen API key missing — using Pollinations.ai (free) for image generation")
 
     # Verify Gemini API connectivity
     try:
@@ -839,7 +1269,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
+# Serve generated images statically
+app.mount("/generated-images", StaticFiles(directory=settings.image_output_dir), name="generated-images")
 # ---------------------------------------------------------------------
 # Schemas
 # ---------------------------------------------------------------------
@@ -943,6 +1374,107 @@ def chat_stream(req: ChatRequest) -> StreamingResponse:
         media_type="text/plain",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )
+# ---------------------------------------------------------------------
+# Image Generation Routes
+# ---------------------------------------------------------------------
+@app.post("/generate-image", response_model=ImageGenResponse)
+async def generate_educational_image(req: ImageGenRequest):
+    try:
+        result = image_service.generate_from_context(req.prompt, req.style)
+        image_url = f"/generated-images/{result['filename']}"
+
+        return ImageGenResponse(
+            image_url=image_url,
+            prompt_used=result["prompt_used"],
+            style=result["style"],
+            width=result["width"],
+            height=result["height"]
+        )
+
+    except Exception as e:
+        logger.exception("Image generation error")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Image generation failed: {str(e)}"
+        )
+
+@app.post("/generate-educational-illustration", response_model=EducationalIllustrationResponse)
+async def generate_educational_illustration_endpoint(req: EducationalIllustrationRequest):
+    try:
+        explanation = ""
+        sources = []
+        used_rag = False
+
+        if req.use_rag_context and rag_service is not None:
+            try:
+                rag_result = rag_service.query(req.query, top_k=3, document_id=req.document_id)
+                if rag_result.get("contexts"):
+                    context_block = "\n---\n".join([r['content'] for r in rag_result["contexts"]])
+                    enrich_prompt = (
+                        f"Based on the following document context, explain the concept clearly:\n\n"
+                        f"CONTEXT:\n{context_block}\n\n"
+                        f"QUESTION: {req.query}\n\n"
+                        f"Provide a concise 2-3 sentence explanation suitable for a student:"
+                    )
+                    explanation = gemini_client.generate(enrich_prompt, temperature=0.3, max_tokens=300)
+                    sources = list(set(r['display_name'] for r in rag_result["contexts"]))
+                    used_rag = True
+                    logger.info(f"[EduIllustration] RAG enriched with {len(sources)} sources")
+            except Exception as e:
+                logger.warning(f"[EduIllustration] RAG enrichment failed, falling back to pure Gemini: {e}")
+
+        result = image_service.generate_educational_illustration(
+            query=req.query,
+            explanation=explanation,
+            style=req.style,
+            width=req.width,
+            height=req.height
+        )
+
+        return EducationalIllustrationResponse(
+            explanation=result["explanation"],
+            image_url=result["image_url"],
+            concept_prompt=result["concept_prompt"],
+            style=result["style"],
+            width=result["width"],
+            height=result["height"],
+            used_rag=used_rag,
+            sources=sources
+        )
+
+    except Exception as e:
+        logger.exception("Educational illustration generation failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate educational illustration: {str(e)}"
+        )
+
+@app.get("/generated-images/list")
+def list_generated_images():
+    try:
+        output_dir = Path(settings.image_output_dir)
+        if not output_dir.exists():
+            return {"images": []}
+
+        images = []
+        for img_file in sorted(output_dir.glob("edu_image_*.png"), reverse=True):
+            stat = img_file.stat()
+            images.append({
+                "filename": img_file.name,
+                "url": f"/generated-images/{img_file.name}",
+                "created_at": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                "size_bytes": stat.st_size
+            })
+
+        return {"images": images, "total": len(images)}
+
+    except Exception as e:
+        logger.error(f"Failed to list images: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list images: {str(e)}"
+        )
+
 
 # ---------------------------------------------------------------------
 # RAG Routes (Updated with separate tables and Ollama embeddings)
@@ -1081,7 +1613,9 @@ def rag_status():
         "ollama_model": settings.ollama_embed_model,
         "embedding_dim": ollama_embed_client.get_embedding_dim() if rag_service else None,
         "database": f"{settings.pg_host}:{settings.pg_port}/{settings.pg_database}" if rag_service else None,
-        "tables": ["documents", "document_chunks"] if rag_service else None
+        "tables": ["documents", "document_chunks"] if rag_service else None,
+        "image_generation": True,
+        "image_output_dir": settings.image_output_dir
     }
 
 # ---------------------------------------------------------------------
@@ -1307,6 +1841,7 @@ async def speech_to_text(file: UploadFile = File(...)):
             status_code=500,
             detail=f"Speech recognition failed: {str(e)}"
         )
+
 
 # ---------------------------------------------------------------------
 # Main entry point
