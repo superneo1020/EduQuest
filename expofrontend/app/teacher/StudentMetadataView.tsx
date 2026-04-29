@@ -27,6 +27,7 @@ interface StudentMetadataViewProps {
 
 interface GameRecord {
     id: number;
+    gameId?: number;  // Add gameId for AI analysis API
     gameName: string;
     scores: number;
     metadata: GameMetadata;
@@ -41,6 +42,10 @@ export default function StudentMetadataView({ visible, onClose, student, token }
     const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
     const [showAiAnalysis, setShowAiAnalysis] = useState(false);
     const [analyzingWithAi, setAnalyzingWithAi] = useState(false);
+    // Game selection modal state
+    const [showGameSelectionModal, setShowGameSelectionModal] = useState(false);
+    const [availableGames, setAvailableGames] = useState<string[]>([]);
+    const [selectedGameForAnalysis, setSelectedGameForAnalysis] = useState<string | null>(null);
 
     useEffect(() => {
         if (visible && student) {
@@ -56,19 +61,29 @@ export default function StudentMetadataView({ visible, onClose, student, token }
             });
 
             if (response.data && response.data.content) {
-                const records = response.data.content.map((record: any) => ({
-                    id: record.id,
-                    gameName: record.name,
-                    scores: record.scores,
-                    metadata: {
-                        ...record.metadata,
-                        questions: record.metadata?.questions?.map((q: any) => ({
-                            ...q,
-                            question: q.content || q.question
-                        })) || []
-                    },
-                    createdAt: record.createdAt
-                }));
+                console.log('Full API response:', response.data);
+                console.log('Sample record structure:', response.data.content[0]);
+                console.log('All fields in first record:', Object.keys(response.data.content[0]));
+                
+                const records = response.data.content.map((record: any) => {
+                    console.log('Processing record:', record);
+                    console.log('Available fields in this record:', Object.keys(record));
+                    
+                    return {
+                        id: record.id,
+                        gameId: record.gameId || record.game_id || record.game?.id || record.gameId,  // Try multiple possible fields
+                        gameName: record.name,
+                        scores: record.scores,
+                        metadata: {
+                            ...record.metadata,
+                            questions: record.metadata?.questions?.map((q: any) => ({
+                                ...q,
+                                question: q.content || q.question
+                            })) || []
+                        },
+                        createdAt: record.createdAt
+                    };
+                });
                 setGameRecords(records);
             }
         } catch (error) {
@@ -209,6 +224,69 @@ export default function StudentMetadataView({ visible, onClose, student, token }
         return formattedResponse;
     };
 
+    const analyzeSelectedGameWithAI = async () => {
+        if (!selectedGameForAnalysis) {
+            Alert.alert('Error', 'Please select a game first');
+            return;
+        }
+
+        setAnalyzingWithAi(true);
+        setShowGameSelectionModal(false);
+        
+        try {
+            // Static mapping of game names to their IDs
+            const gameNameToIdMap: { [key: string]: number } = {
+                'Speed Calculation': 1,
+                'AI Math Adventure': 2,
+                'Listening Game': 3,
+                'Writing Game': 4,
+                'Sentence Reorder': 5,
+                'Animal Catcher': 6,
+                'Animal Classification': 7,
+                'Body Parts Matching': 8,
+                'Human organs': 9,
+                'ChineseGame': 10,
+                'ChineseSentenceGame': 11
+                // Add more mappings as needed
+            };
+            
+            const gameId = gameNameToIdMap[selectedGameForAnalysis] || 1;
+            
+            console.log(`Analyzing game: ${selectedGameForAnalysis} with ID: ${gameId}`);
+            
+            const response = await axios.get(
+                `${getApiBaseUrl()}/api/educator/student/${student.id}/game/${gameId}/result`,
+                {
+                    headers: { Authorization: `Bearer ${token}` }
+                }
+            );
+
+            if (response.data) {
+                const analysis = formatGameAIAnalysis(response.data, selectedGameForAnalysis);
+                setAiAnalysis(analysis);
+                setShowAiAnalysis(true);
+            }
+        } catch (error: any) {
+            console.error('Error analyzing selected game with AI:', error);
+            
+            let errorMessage = '無法載入AI分析，請稍後重試。';
+            if (error.response?.status === 401) {
+                errorMessage = '認證已過期，請重新登入';
+            } else if (error.response?.status === 403) {
+                errorMessage = '無權限查看此學生的遊戲分析';
+            } else if (error.response?.status === 404) {
+                errorMessage = '找不到遊戲數據';
+            }
+            
+            // Show error in analysis modal
+            setAiAnalysis(`❌ ${errorMessage}\n\n📊 遊戲信息：\n🎮 ${selectedGameForAnalysis}\n👤 學生：${student.username}\n📅 分析時間：${new Date().toLocaleDateString('zh-TW')}`);
+            setShowAiAnalysis(true);
+        } finally {
+            setAnalyzingWithAi(false);
+            setSelectedGameForAnalysis(null);
+        }
+    };
+
     const generateFallbackAnalysis = () => {
         if (gameRecords.length === 0) {
             setAiAnalysis('📊 暫無足夠的遊戲數據進行分析\n\n建議學生多參與不同類型的學習遊戲，積累更多學習記錄。');
@@ -242,7 +320,7 @@ export default function StudentMetadataView({ visible, onClose, student, token }
         analysis += `🎮 遊戲總數：${totalGames} 場\n`;
         analysis += `📈 平均分數：${averageScore.toFixed(1)} 分\n`;
         analysis += `🎯 答題準確率：${accuracyRate.toFixed(1)}%\n\n`;
-        
+
         analysis += `📚 學習領域：\n`;
         Object.entries(gameTypeStats).forEach(([type, stats]) => {
             const avgScore = stats.totalScore / stats.count;
@@ -250,7 +328,7 @@ export default function StudentMetadataView({ visible, onClose, student, token }
         });
 
         analysis += `\n💡 學習建議：\n`;
-        
+
         if (accuracyRate < 60) {
             analysis += `• 建議加強基礎概念的理解\n`;
             analysis += `• 可以嘗試較低難度的遊戲建立信心\n`;
@@ -283,6 +361,122 @@ export default function StudentMetadataView({ visible, onClose, student, token }
             case 'hard': return '#FF4757';
             default: return '#666';
         }
+    };
+
+    const analyzeGameWithAI = async (gameRecord: GameRecord) => {
+        setAnalyzingWithAi(true);
+        try {
+            // Debug logging to see what fields are available
+            console.log('GameRecord structure:', gameRecord);
+            console.log('Available fields:', Object.keys(gameRecord));
+            console.log('Game ID values:', {
+                gameId: gameRecord.gameId,
+                game_id: (gameRecord as any).game_id,
+                id: gameRecord.id,
+                game: (gameRecord as any).game?.id
+            });
+            
+            // The API expects gameId, not the score record id
+            // Try multiple possible field names for the game ID
+            let gameId = gameRecord.gameId || 
+                        (gameRecord as any).game_id || 
+                        (gameRecord as any).game?.id ||
+                        (gameRecord as any).gameId ||
+                        gameRecord.id;
+            
+            // If still no game ID, try to extract from metadata or other fields
+            if (!gameId && gameRecord.metadata) {
+                gameId = (gameRecord.metadata as any).gameId || 
+                        (gameRecord.metadata as any).game_id ||
+                        (gameRecord.metadata as any).game?.id;
+            }
+            
+            if (!gameId) {
+                // For now, let's try using a hardcoded game ID for testing
+                // This is a temporary solution to test the API flow
+                console.log('No game ID found, using fallback for testing');
+                gameId = 1; // Temporary fallback - replace with actual logic
+                console.warn('Using fallback game ID 1 for testing - this should be replaced with proper game ID extraction');
+            }
+            
+            console.log('Using gameId:', gameId);
+            
+            const response = await axios.get(
+                `${getApiBaseUrl()}/api/educator/student/${student.id}/game/${gameId}/result`,
+                {
+                    headers: { Authorization: `Bearer ${token}` }
+                }
+            );
+
+            if (response.data) {
+                const analysis = formatGameAIAnalysis(response.data, gameRecord);
+                setAiAnalysis(analysis);
+                setShowAiAnalysis(true);
+            }
+        } catch (error: any) {
+            console.error('Error analyzing game with AI:', error);
+            
+            let errorMessage = '無法載入AI分析，請稍後重試。';
+            if (error.response?.status === 401) {
+                errorMessage = '認證已過期，請重新登入';
+            } else if (error.response?.status === 403) {
+                errorMessage = '無權限查看此學生的遊戲分析';
+            } else if (error.response?.status === 404) {
+                errorMessage = '找不到遊戲數據';
+            }
+            
+            // Show error in analysis modal
+            setAiAnalysis(`❌ ${errorMessage}\n\n📊 遊戲信息：\n🎮 ${gameRecord.gameName}\n📊 得分：${gameRecord.scores}\n📅 日期：${formatDate(gameRecord.createdAt)}`);
+            setShowAiAnalysis(true);
+        } finally {
+            setAnalyzingWithAi(false);
+        }
+    };
+
+    const formatGameAIAnalysis = (aiData: any, gameName: string): string => {
+        let result = `🧠 Individual Game AI Analysis Report\n`;
+        result += `👤 Student：${student.username}\n`;
+        result += `🎮 Game：${gameName}\n`;
+        result += `📅 Analysis time：${new Date().toLocaleDateString('zh-TW')}\n\n`;
+        
+        result += `📈 AIAnalysis results\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        
+        if (aiData.overallAnalysis) {
+            result += `🎯 Overall performance：\n${aiData.overallAnalysis}\n\n`;
+        }
+        
+        if (aiData.strengths && Array.isArray(aiData.strengths)) {
+            result += `💪 Advantages Analysis：\n`;
+            aiData.strengths.forEach((strength: string, index: number) => {
+                result += `• ${strength}\n`;
+            });
+            result += `\n`;
+        }
+        
+        if (aiData.weaknesses && Array.isArray(aiData.weaknesses)) {
+            result += `🔍 Areas for improvement：\n`;
+            aiData.weaknesses.forEach((weakness: string, index: number) => {
+                result += `• ${weakness}\n`;
+            });
+            result += `\n`;
+        }
+        
+        if (aiData.emotions && Array.isArray(aiData.emotions)) {
+            result += `😊 Emotional state：\n`;
+            aiData.emotions.forEach((emotion: string, index: number) => {
+                result += `• ${emotion}\n`;
+            });
+            result += `\n`;
+        }
+        
+        if (aiData.suggestions && Array.isArray(aiData.suggestions)) {
+            result += `💡 Learning suggestions：\n`;
+            aiData.suggestions.forEach((suggestion: string, index: number) => {
+                result += `• ${suggestion}\n`;
+            });
+        }
+        
+        return result;
     };
 
     const renderGameDetails = (metadata: GameMetadata) => {
@@ -341,7 +535,7 @@ export default function StudentMetadataView({ visible, onClose, student, token }
                                 </Text>
                             </View>
                         </View>
-                        
+
                         {metadata.questions.slice(0, 5).map((question, index) => (
                             <View key={question.id || index} style={styles.questionItem}>
                                 <View style={styles.questionHeader}>
@@ -351,7 +545,7 @@ export default function StudentMetadataView({ visible, onClose, student, token }
                                     </Text>
                                 </View>
                                 <Text style={styles.questionText}>{question.question}</Text>
-                                
+
                                 {/*  Game Type and Time Info */}
                                 <View style={styles.questionMeta}>
                                     <View style={styles.metaItem}>
@@ -403,8 +597,17 @@ export default function StudentMetadataView({ visible, onClose, student, token }
                     <Text style={styles.headerTitle}>Game Metadata - {student.username}</Text>
                     <View style={styles.headerButtons}>
                         {gameRecords.length > 0 && (
-                            <TouchableOpacity 
-                                onPress={analyzeWithAi} 
+                            <TouchableOpacity
+                                onPress={() => setShowGameSelectionModal(true)}
+                                style={styles.gameSelectionButton}
+                            >
+                                <Gamepad2 size={18} color="#fff" />
+                                <Text style={styles.gameSelectionButtonText}>Select Game</Text>
+                            </TouchableOpacity>
+                        )}
+                        {gameRecords.length > 0 && (
+                            <TouchableOpacity
+                                onPress={analyzeWithAi}
                                 style={[styles.aiAnalysisButton, analyzingWithAi && styles.aiAnalysisButtonDisabled]}
                                 disabled={analyzingWithAi}
                             >
@@ -451,12 +654,14 @@ export default function StudentMetadataView({ visible, onClose, student, token }
                                             <Text style={styles.gameName}>{record.gameName}</Text>
                                             <Text style={styles.gameDate}>{formatDate(record.createdAt)}</Text>
                                         </View>
-                                        <View style={styles.gameScore}>
-                                            <Trophy size={20} color="#FF9800" />
-                                            <Text style={styles.scoreText}>{record.scores}</Text>
+                                        <View style={styles.gameActions}>
+                                            <View style={styles.gameScore}>
+                                                <Trophy size={20} color="#FF9800" />
+                                                <Text style={styles.scoreText}>{record.scores}</Text>
+                                            </View>
                                         </View>
                                     </View>
-                                    
+
                                     {record.metadata && (
                                         <View style={styles.gamePreview}>
                                             <View style={styles.previewItem}>
@@ -498,6 +703,82 @@ export default function StudentMetadataView({ visible, onClose, student, token }
                             </TouchableOpacity>
                         </View>
                         {selectedGame && renderGameDetails(selectedGame.metadata)}
+                    </SafeAreaView>
+                </Modal>
+
+                {/* Game Selection Modal */}
+                <Modal
+                    visible={showGameSelectionModal}
+                    animationType="slide"
+                    presentationStyle="pageSheet"
+                    onRequestClose={() => setShowGameSelectionModal(false)}
+                >
+                    <SafeAreaView style={styles.container}>
+                        <View style={styles.header}>
+                            <Text style={styles.headerTitle}>Select Game for AI Analysis</Text>
+                            <TouchableOpacity onPress={() => setShowGameSelectionModal(false)} style={styles.closeButton}>
+                                <X size={24} color="#333" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.gameSelectionContent}>
+                            <Text style={styles.gameSelectionSubtitle}>
+                                Choose a game to analyze {student.username}'s performance
+                            </Text>
+
+                            {gameRecords.length > 0 ? (
+                                <ScrollView style={styles.gameListContainer}>
+                                    {Array.from(new Set(gameRecords.map(record => record.gameName))).map((gameName, index) => (
+                                        <TouchableOpacity
+                                            key={index}
+                                            style={[
+                                                styles.gameSelectionItem,
+                                                selectedGameForAnalysis === gameName && styles.gameSelectionItemSelected
+                                            ]}
+                                            onPress={() => setSelectedGameForAnalysis(gameName)}
+                                        >
+                                            <View style={styles.gameSelectionItemContent}>
+                                                <Gamepad2 size={20} color="#6C5CE7" />
+                                                <Text style={styles.gameSelectionItemText}>{gameName}</Text>
+                                            </View>
+                                            <View style={[
+                                                styles.gameSelectionRadio,
+                                                selectedGameForAnalysis === gameName && styles.gameSelectionRadioSelected
+                                            ]}>
+                                                {selectedGameForAnalysis === gameName && (
+                                                    <View style={styles.gameSelectionRadioDot} />
+                                                )}
+                                            </View>
+                                        </TouchableOpacity>
+                                    ))}
+                                </ScrollView>
+                            ) : (
+                                <View style={styles.emptyGameSelection}>
+                                    <Gamepad2 size={48} color="#ccc" />
+                                    <Text style={styles.emptyGameSelectionText}>No games available</Text>
+                                </View>
+                            )}
+
+                            <View style={styles.gameSelectionActions}>
+                                <TouchableOpacity
+                                    style={[
+                                        styles.analyzeSelectedGameButton,
+                                        (!selectedGameForAnalysis || analyzingWithAi) && styles.analyzeSelectedGameButtonDisabled
+                                    ]}
+                                    onPress={() => selectedGameForAnalysis && analyzeSelectedGameWithAI()}
+                                    disabled={!selectedGameForAnalysis || analyzingWithAi}
+                                >
+                                    {analyzingWithAi ? (
+                                        <ActivityIndicator size="small" color="#fff" />
+                                    ) : (
+                                        <Brain size={18} color="#fff" />
+                                    )}
+                                    <Text style={styles.analyzeSelectedGameButtonText}>
+                                        {analyzingWithAi ? 'Analyzing...' : 'Analyze Selected Game'}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
                     </SafeAreaView>
                 </Modal>
 
@@ -606,6 +887,11 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#666',
     },
+    gameActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
     gameScore: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -619,6 +905,13 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: 'bold',
         color: '#FF9800',
+    },
+    aiAnalysisBtn: {
+        backgroundColor: '#F0F4FF',
+        padding: 8,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#D1D5FF',
     },
     gamePreview: {
         flexDirection: 'row',
@@ -808,5 +1101,109 @@ const styles = StyleSheet.create({
         fontSize: 16,
         lineHeight: 24,
         color: '#2D3436',
+    },
+    // Game Selection Modal Styles
+    gameSelectionContent: {
+        flex: 1,
+        padding: 20,
+    },
+    gameSelectionSubtitle: {
+        fontSize: 16,
+        color: '#666',
+        marginBottom: 20,
+        textAlign: 'center',
+    },
+    gameListContainer: {
+        flex: 1,
+        marginBottom: 20,
+    },
+    gameSelectionItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: 16,
+        backgroundColor: '#fff',
+        borderRadius: 12,
+        marginBottom: 8,
+        borderWidth: 1,
+        borderColor: '#e9ecef',
+    },
+    gameSelectionItemSelected: {
+        backgroundColor: '#f0f4ff',
+        borderColor: '#6C5CE7',
+    },
+    gameSelectionItemContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    gameSelectionItemText: {
+        fontSize: 16,
+        fontWeight: '500',
+        color: '#2D3436',
+    },
+    gameSelectionRadio: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        borderWidth: 2,
+        borderColor: '#ddd',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    gameSelectionRadioSelected: {
+        borderColor: '#6C5CE7',
+    },
+    gameSelectionRadioDot: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        backgroundColor: '#6C5CE7',
+    },
+    emptyGameSelection: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    emptyGameSelectionText: {
+        fontSize: 16,
+        color: '#999',
+        marginTop: 16,
+    },
+    gameSelectionActions: {
+        paddingTop: 20,
+        borderTopWidth: 1,
+        borderTopColor: '#e9ecef',
+    },
+    gameSelectionButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: '#6C5CE7',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderRadius: 8,
+    },
+    gameSelectionButtonText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#fff',
+    },
+    analyzeSelectedGameButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        backgroundColor: '#6C5CE7',
+        paddingVertical: 14,
+        borderRadius: 8,
+    },
+    analyzeSelectedGameButtonDisabled: {
+        backgroundColor: '#ccc',
+    },
+    analyzeSelectedGameButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#fff',
     },
 });

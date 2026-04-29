@@ -75,9 +75,10 @@ export default function AnalyticsScreen() {
             setRecentGames(gamesData);
         } catch (error) {
             console.error('Failed to load analytics data:', error);
-            if (error.response) {
-                console.error('Error status:', error.response.status);
-                console.error('Error data:', error.response.data);
+            if (error instanceof Error && 'response' in error) {
+                const axiosError = error as any;
+                console.error('Error status:', axiosError.response?.status);
+                console.error('Error data:', axiosError.response?.data);
             }
         } finally {
             setLoading(false);

@@ -23,6 +23,7 @@ import { useAuth } from '@/src/auth/AuthContext';
 import { ApiListHandler, DetailedListResponse } from './ApiListHandler';
 import axios from 'axios';
 import { useRouter } from 'expo-router';
+import ClassAiAnalysisView from './ClassAiAnalysisView';
 
 interface ClassManagementPanelProps {
     onBack?: () => void;
@@ -63,6 +64,9 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
     // Member game data state
     const [memberGameData, setMemberGameData] = useState<Record<number, GameScore[]>>({});
     const [loadingMemberData, setLoadingMemberData] = useState(false);
+    // Class AI Analysis state
+    const [showClassAiAnalysisModal, setShowClassAiAnalysisModal] = useState(false);
+    const [selectedClassForAiAnalysis, setSelectedClassForAiAnalysis] = useState<Course | null>(null);
 
     
     useEffect(() => {
@@ -576,6 +580,16 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                         }}
                     >
                         <Users2 size={16} color="#6C5CE7" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.actionBtn}
+                        onPress={(e) => {
+                            e.stopPropagation();
+                            setSelectedClassForAiAnalysis(classItem);
+                            setShowClassAiAnalysisModal(true);
+                        }}
+                    >
+                        <Brain size={16} color="#FF9800" />
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={styles.actionBtn}
@@ -1276,6 +1290,18 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                     </View>
                 </View>
             </Modal>
+
+            {/* Class AI Analysis Modal */}
+            <ClassAiAnalysisView
+                visible={showClassAiAnalysisModal}
+                onClose={() => {
+                    setShowClassAiAnalysisModal(false);
+                    setSelectedClassForAiAnalysis(null);
+                }}
+                classId={selectedClassForAiAnalysis?.id || 0}
+                className={selectedClassForAiAnalysis ? `${selectedClassForAiAnalysis.grade} ${selectedClassForAiAnalysis.suffix}` : ''}
+                token={token || ''}
+            />
         </View>
     );
 };
