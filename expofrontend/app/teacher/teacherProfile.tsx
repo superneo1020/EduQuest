@@ -35,6 +35,7 @@ export default function TeacherProfile() {
     const { user, token, signOut } = useAuth();
     const [loading, setLoading] = useState(true);
     const [editModalVisible, setEditModalVisible] = useState(false);
+    const [logoutModalVisible, setLogoutModalVisible] = useState(false);
     
     // Real profile data from backend
     const [profileData, setProfileData] = useState({
@@ -200,28 +201,26 @@ export default function TeacherProfile() {
 
     const handleLogout = () => {
         console.log('Logout button pressed');
-        Alert.alert(
-            'Logout',
-            'Are you sure you want to logout?',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Logout',
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            console.log('Logout confirmed, signing out...');
-                            await signOut();
-                            console.log('SignOut successful, navigating to login...');
-                            router.replace('/Profile/Login');
-                        } catch (error) {
-                            console.error('Logout error:', error);
-                            Alert.alert('Error', 'Failed to logout. Please try again.');
-                        }
-                    }
-                }
-            ]
-        );
+        console.log('Current user before logout:', user);
+        console.log('Current token before logout:', token);
+        setLogoutModalVisible(true);
+    };
+
+    const handleConfirmLogout = async () => {
+        try {
+            console.log('Logout confirmed, signing out...');
+            await signOut();
+            console.log('SignOut successful, navigating to login...');
+            setLogoutModalVisible(false);
+            router.replace('/Profile/Login');
+        } catch (error) {
+            console.error('Logout error:', error);
+            Alert.alert('Error', 'Failed to logout. Please try again.');
+        }
+    };
+
+    const handleCancelLogout = () => {
+        setLogoutModalVisible(false);
     };
 
     const InfoCard = ({ title, value, icon: Icon, color }: any) => (
@@ -405,6 +404,41 @@ export default function TeacherProfile() {
                                 onPress={saveProfile}
                             >
                                 <Text style={styles.saveBtnText}>Save</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Logout Confirmation Modal */}
+            <Modal
+                visible={logoutModalVisible}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={handleCancelLogout}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.confirmModal}>
+                        <View style={styles.confirmModalHeader}>
+                            <LogOut size={24} color="#FF4757" />
+                            <Text style={styles.confirmModalTitle}>Logout</Text>
+                        </View>
+                        <Text style={styles.confirmModalMessage}>
+                            Are you sure you want to logout? You will need to login again to access your account.
+                        </Text>
+                        <View style={styles.confirmModalActions}>
+                            <TouchableOpacity
+                                style={[styles.confirmModalBtn, styles.cancelModalBtn]}
+                                onPress={handleCancelLogout}
+                            >
+                                <Text style={styles.cancelModalBtnText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.confirmModalBtn, styles.logoutModalBtn]}
+                                onPress={handleConfirmLogout}
+                            >
+                                <LogOut size={18} color="white" />
+                                <Text style={styles.logoutModalBtnText}>Logout</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -802,5 +836,68 @@ const styles = StyleSheet.create({
     },
     toggleDotActive: {
         left: 22,
+    },
+    // Logout Confirmation Modal Styles
+    confirmModal: {
+        backgroundColor: 'white',
+        borderRadius: 20,
+        padding: 24,
+        width: '85%',
+        maxWidth: 320,
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.25,
+        shadowRadius: 20,
+        elevation: 10,
+    },
+    confirmModalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 16,
+        gap: 12,
+    },
+    confirmModalTitle: {
+        fontSize: 20,
+        fontWeight: '800',
+        color: '#2D3436',
+    },
+    confirmModalMessage: {
+        fontSize: 16,
+        color: '#666',
+        textAlign: 'center',
+        lineHeight: 24,
+        marginBottom: 24,
+    },
+    confirmModalActions: {
+        flexDirection: 'row',
+        width: '100%',
+        gap: 12,
+    },
+    confirmModalBtn: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 14,
+        borderRadius: 12,
+        gap: 8,
+    },
+    cancelModalBtn: {
+        backgroundColor: '#F0F0F0',
+    },
+    cancelModalBtnText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#666',
+    },
+    logoutModalBtn: {
+        backgroundColor: '#FF4757',
+    },
+    logoutModalBtnText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: 'white',
     },
 });

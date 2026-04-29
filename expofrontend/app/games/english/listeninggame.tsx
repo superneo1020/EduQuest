@@ -1,6 +1,7 @@
 // games/english/listeninggame.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import { createGameMetadata, GameMetadata } from '../../../types/GameMetadata';
+import { convertToBackendMetadata } from '../../utils/metadataConverter';
 import {
     View,
     Text,
@@ -801,7 +802,7 @@ export default function ListeningScreen() {
             const backendRequest = {
                 gameName: gameData.gameName,
                 scores: gameData.scores,
-                metadata: metadata
+                metadata: convertToBackendMetadata(metadata)
             };
             
             await axios.post('http://localhost:8080/api/user/game/score', backendRequest, {
