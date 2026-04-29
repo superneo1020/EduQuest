@@ -229,7 +229,7 @@ export default function GameAnalysisScreen() {
                                 <Text style={styles.statsTitle}>📈 Game Statistics</Text>
                                 <View style={styles.statsGrid}>
                                     <View style={styles.statItem}>
-                                        <Text style={styles.statValue}>{safeRender(gameData?.scores, 0)}</Text>
+                                        <Text style={styles.statValue}>{safeRender(gameData?.scores, '0')}</Text>
                                         <Text style={styles.statLabel}>Latest Score</Text>
                                     </View>
                                     <View style={styles.statItem}>
@@ -237,7 +237,7 @@ export default function GameAnalysisScreen() {
                                         <Text style={styles.statLabel}>Difficulty</Text>
                                     </View>
                                     <View style={styles.statItem}>
-                                        <Text style={styles.statValue}>{safeRender(gameData?.totalPlays, 1)}</Text>
+                                        <Text style={styles.statValue}>{safeRender(gameData?.totalPlays, '1')}</Text>
                                         <Text style={styles.statLabel}>Times Played</Text>
                                     </View>
                                 </View>
