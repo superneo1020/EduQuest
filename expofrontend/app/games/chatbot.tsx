@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     SafeAreaView, TextInput, Text, ScrollView, StyleSheet, View,
-    TouchableOpacity, ActivityIndicator, Modal, FlatList, Alert, Platform
+    TouchableOpacity, ActivityIndicator, Modal, FlatList, Alert, Platform,
+    Image, Dimensions
 } from 'react-native';
 import * as Speech from 'expo-speech';
 import { Audio } from 'expo-av';
@@ -27,6 +28,12 @@ interface Document {
     totalPages: number;
     chunks: number;
     createdAt: string;
+}
+
+interface GeneratedImage {
+    url: string;
+    prompt: string;
+    timestamp: number;
 }
 
 export default function Chatbot() {
@@ -55,6 +62,12 @@ export default function Chatbot() {
         visible: boolean;
         doc: Document | null;
     }>({ visible: false, doc: null });
+
+    // Image generation states
+    const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
+    const [generatingImage, setGeneratingImage] = useState(false);
+    const [showImageModal, setShowImageModal] = useState(false);
+    const [selectedImage, setSelectedImage] = useState<GeneratedImage | null>(null);
 
     // Check RAG status and load documents on mount
     useEffect(() => {
@@ -309,6 +322,43 @@ export default function Chatbot() {
         }
     };
 
+    /*  ---------- Image Generation  ----------  */
+
+    const generateExplanationImage = async (contextText: string) => {
+        if (generatingImage) return;
+
+        setGeneratingImage(true);
+        try {
+            const { data } = await axios.post(`${BACKEND}/generate-image`, {
+                prompt: contextText,
+                style: "animated",
+                width: 1024,
+                height: 1024
+            });
+
+            const newImage: GeneratedImage = {
+                url: `${BACKEND}${data.image_url}`,
+                prompt: data.prompt_used,
+                timestamp: Date.now()
+            };
+
+            setGeneratedImages(prev => [newImage, ...prev]);
+
+            // Auto-show the new image
+            setSelectedImage(newImage);
+            setShowImageModal(true);
+
+        } catch (err: any) {
+            console.error('Image generation failed', err);
+            Alert.alert(
+                'Image Generation Failed',
+                err.response?.data?.detail || 'Could not generate image'
+            );
+        } finally {
+            setGeneratingImage(false);
+        }
+    };
+
     /*  ---------- Speech-to-Text  ----------  */
 
     const uriToBlob = async (uri: string) => {
@@ -479,6 +529,21 @@ export default function Chatbot() {
                 </View>
             )}
 
+            {/* Image generation button for bot responses */}
+            {msg.role === 'bot' && (
+                <TouchableOpacity
+                    style={styles.imageGenButton}
+                    onPress={() => generateExplanationImage(msg.content)}
+                    disabled={generatingImage}
+                >
+                    {generatingImage ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                        <Text style={styles.imageGenButtonText}>🎨 Visualize</Text>
+                    )}
+                </TouchableOpacity>
+            )}
+
             {msg.role === 'bot' && (
                 <TouchableOpacity
                     onPress={() => handleSpeak(msg.content, idx)}
@@ -595,6 +660,30 @@ export default function Chatbot() {
                     <TouchableOpacity onPress={() => setSelectedDocId(null)}>
                         <Text style={styles.clearSelection}>✕</Text>
                     </TouchableOpacity>
+                </View>
+            )}
+
+            {/* Generated Images Gallery */}
+            {generatedImages.length > 0 && (
+                <View style={styles.imageGallery}>
+                    <Text style={styles.imageGalleryTitle}>🎨 Generated Images</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                        {generatedImages.map((img, idx) => (
+                            <TouchableOpacity
+                                key={idx}
+                                onPress={() => {
+                                    setSelectedImage(img);
+                                    setShowImageModal(true);
+                                }}
+                            >
+                                <Image
+                                    source={{ uri: img.url }}
+                                    style={styles.thumbnail}
+                                    resizeMode="cover"
+                                />
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
                 </View>
             )}
 
@@ -728,6 +817,40 @@ export default function Chatbot() {
                         >
                             <Text style={styles.closeModalText}>Close</Text>
                         </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Image Viewer Modal */}
+            <Modal
+                visible={showImageModal}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowImageModal(false)}
+            >
+                <View style={styles.imageModalOverlay}>
+                    <View style={styles.imageModalContent}>
+                        <TouchableOpacity
+                            style={styles.closeImageButton}
+                            onPress={() => setShowImageModal(false)}
+                        >
+                            <Text style={styles.closeImageText}>✕</Text>
+                        </TouchableOpacity>
+
+                        {selectedImage && (
+                            <>
+                                <Image
+                                    source={{ uri: selectedImage.url }}
+                                    style={styles.fullImage}
+                                    resizeMode="contain"
+                                />
+                                <View style={styles.imageInfo}>
+                                    <Text style={styles.imagePrompt} numberOfLines={3}>
+                                        {selectedImage.prompt}
+                                    </Text>
+                                </View>
+                            </>
+                        )}
                     </View>
                 </View>
             </Modal>
@@ -1205,5 +1328,88 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 16,
         fontWeight: '600',
+    },
+    // Image generation styles
+    imageGenButton: {
+        marginTop: 8,
+        paddingVertical: 8,
+        paddingHorizontal: 14,
+        backgroundColor: '#9c36b5',
+        borderRadius: 8,
+        alignSelf: 'flex-start',
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    imageGenButtonText: {
+        color: '#fff',
+        fontSize: 13,
+        fontWeight: '600',
+    },
+    imageGallery: {
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        backgroundColor: '#f3f0ff',
+        borderTopWidth: 1,
+        borderTopColor: '#d0bfff',
+    },
+    imageGalleryTitle: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#5f3dc4',
+        marginBottom: 8,
+    },
+    thumbnail: {
+        width: 80,
+        height: 80,
+        borderRadius: 8,
+        marginRight: 8,
+        borderWidth: 2,
+        borderColor: '#d0bfff',
+    },
+    imageModalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.9)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    imageModalContent: {
+        width: '100%',
+        maxHeight: '90%',
+        backgroundColor: '#1a1a1a',
+        borderRadius: 16,
+        overflow: 'hidden',
+        alignItems: 'center',
+    },
+    fullImage: {
+        width: Dimensions.get('window').width - 40,
+        height: Dimensions.get('window').width - 40,
+        maxHeight: 500,
+    },
+    imageInfo: {
+        padding: 16,
+        width: '100%',
+    },
+    imagePrompt: {
+        color: '#ccc',
+        fontSize: 12,
+        fontStyle: 'italic',
+    },
+    closeImageButton: {
+        position: 'absolute',
+        top: 10,
+        right: 10,
+        zIndex: 10,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    closeImageText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: 'bold',
     },
 });
