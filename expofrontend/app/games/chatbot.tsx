@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { getApiBaseUrl } from '@/src/api/client';
+import { useAuth } from '@/src/auth/AuthContext';
 import {
     SafeAreaView, TextInput, Text, ScrollView, StyleSheet, View,
     TouchableOpacity, ActivityIndicator, Modal, FlatList, Alert, Platform,
@@ -37,6 +39,7 @@ interface GeneratedImage {
 }
 
 export default function Chatbot() {
+    const { token } = useAuth();
     // Chat states
     const [prompt, setPrompt] = useState('');
     const [messages, setMessages] = useState<Message[]>([]);
@@ -101,7 +104,12 @@ export default function Chatbot() {
     const fetchDocuments = useCallback(async () => {
         try {
             setRefreshingDocs(true);
-            const { data } = await axios.get(`${BACKEND}/rag/documents`);
+            const { data } = await axios.get(`${getApiBaseUrl()}/api/user/rag/documents`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
             const mappedDocs = data.documents.map((doc: any) => ({
                 id: doc.id,
                 name: doc.display_name || doc.source_uri,
@@ -117,7 +125,7 @@ export default function Chatbot() {
         } finally {
             setRefreshingDocs(false);
         }
-    }, []);
+    }, [token]);
 
     const handleDeleteDocument = useCallback((doc: Document) => {
         console.log('[FRONTEND] Delete button clicked for:', doc.name);
@@ -145,8 +153,13 @@ export default function Chatbot() {
             console.log('[FRONTEND] Sending delete request to backend...');
             console.log('[FRONTEND] Request payload:', { source_uri: doc.sourceUri });
 
-            const response = await axios.post(`${BACKEND}/rag/delete`, {
+            const response = await axios.post(`${getApiBaseUrl()}/api/user/rag/delete`, {
                 source_uri: doc.sourceUri
+            }, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
             });
 
             console.log('[FRONTEND] Delete response received:', response.data);
@@ -215,10 +228,11 @@ export default function Chatbot() {
 
             formData.append('display_name', file.name);
 
-            const uploadResponse = await fetch(`${BACKEND}/rag/upload-file`, {
+            const uploadResponse = await fetch(`${getApiBaseUrl()}/api/user/rag/upload-file`, {
                 method: 'POST',
                 body: formData,
                 headers: {
+                    'Authorization': `Bearer ${token}`,
                     'Accept': 'application/json',
                 },
             });
@@ -270,7 +284,12 @@ export default function Chatbot() {
                 payload.document_id = selectedDocId;
             }
 
-            const { data } = await axios.post(`${BACKEND}/rag/query`, payload);
+            const { data } = await axios.post(`${getApiBaseUrl()}/api/user/rag/query`, payload, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
 
             const botMessage: Message = {
                 role: 'bot',
@@ -486,7 +505,7 @@ export default function Chatbot() {
                     await Speech.stop();
                 }
                 setSpeakingIndex(messageIndex);
-                await Speech.speak(text, {
+                Speech.speak(text, {
                     language: 'en-US',
                     rate: 0.9,
                     onDone: () => setSpeakingIndex(null),
