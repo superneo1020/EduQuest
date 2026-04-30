@@ -69,7 +69,7 @@ class Settings(BaseSettings):
     gemini_api_key: str = "AQ.Ab8RN6LRCyCveOXOfmbpbpGofO_WqyYEjtRRjhGjNvGvpClqRw"
     gemini_model: str = "gemini-2.5-flash-lite"
     gemini_location: str = "us-central1"
-    gemini_project: str = ""
+    gemini_project: str = "mimetic-campus-488707-k7"
 
     # Ollama Configuration for Embeddings
     ollama_host: str = "http://localhost:11434"
