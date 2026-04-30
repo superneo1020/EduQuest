@@ -208,7 +208,7 @@ export default function ProfileScreen() {
                 headers: { Authorization: `Bearer ${token}` }
             });
             // Preserve points when updating profileData
-            setProfileData(prev => ({
+            setProfileData((prev: any) => ({
                 ...profileResponse.data,
                 points: prev?.points ?? userPoints ?? profileResponse.data.points ?? userPoints ?? 0,
                 userGameScores: prev?.userGameScores || profileResponse.data.userGameScores || []
@@ -293,7 +293,7 @@ export default function ProfileScreen() {
                 headers: { Authorization: `Bearer ${token}` }
             });
             // Preserve points when updating profileData
-            setProfileData(prev => ({
+            setProfileData((prev: any) => ({
                 ...profileResponse.data,
                 points: prev?.points ?? userPoints ?? profileResponse.data.points ?? userPoints ?? 0,
                 userGameScores: prev?.userGameScores || profileResponse.data.userGameScores || []
@@ -378,7 +378,7 @@ export default function ProfileScreen() {
                 headers: { Authorization: `Bearer ${token}` }
             });
             // Preserve points when updating profileData
-            setProfileData(prev => ({
+            setProfileData((prev: any) => ({
                 ...profileResponse.data,
                 points: prev?.points ?? userPoints ?? profileResponse.data.points ?? userPoints ?? 0,
                 userGameScores: prev?.userGameScores || profileResponse.data.userGameScores || []
@@ -727,7 +727,7 @@ export default function ProfileScreen() {
             });
         }
         if (gameHistory.length >= 5) {
-            const recentScores = gameHistory.slice(-5).map(g => g.scores || 0);
+            const recentScores = gameHistory.slice(-5).map((g: any) => g.scores || 0);
             const mean = recentScores.reduce((a: number, b: number) => a + b, 0) / recentScores.length;
             const scoreVariance = Math.sqrt(recentScores.reduce((sum: number, score: number) => sum + Math.pow(score - mean, 2), 0) / recentScores.length);
             if (scoreVariance > 20) {
@@ -1212,18 +1212,6 @@ export default function ProfileScreen() {
                 return;
             }
             
-            console.log('=== AI Analysis Debug ===');
-            console.log('API URL:', `${getApiBaseUrl()}/api/user/game/results`);
-            console.log('Token exists:', !!token);
-            console.log('Token length:', token?.length);
-            console.log('Token first 20 chars:', token?.substring(0, 20) + '...');
-            console.log('User logged in:', !!user);
-            console.log('User ID:', user?.id);
-            console.log('User roles:', userRoles);
-            console.log('User email:', user?.email);
-            console.log('User username:', user?.username);
-            console.log('========================');
-            
             // Test authentication with a working API first
             try {
                 const testResponse = await axios.get(`${getApiBaseUrl()}/api/user/profile`, {
@@ -1595,76 +1583,10 @@ export default function ProfileScreen() {
                         ) : (
                             <View style={styles.masterInfoCard}>
                                 {/* 卡片標題 */}
-                                <View style={styles.cardHeader}>
-                                    <Text style={[styles.cardTitle, { color: cardTextColor }]}>👤 My Profile</Text>
-                                    <TouchableOpacity
-                                        style={styles.editCardBtn}
-                                        onPress={() => setShowEditProfileModal(true)}
-                                    >
-                                        <Edit size={16} color={cardTextColor} />
-                                    </TouchableOpacity>
-                                </View>
+
                                 
                                 {/* 基本資訊區域 - 緊湊網格布局 */}
-                                <View style={styles.infoSection}>
-                                    <Text style={[styles.sectionLabel, { color: cardTextColor }]}>Basic Info</Text>
-                                    <View style={styles.compactInfoGrid}>
-                                        <View style={styles.infoRow}>
-                                            <View style={styles.compactInfoItem}>
-                                                <UserIcon size={12} color="rgba(255,255,255,0.7)" />
-                                                <View style={styles.compactInfoContent}>
-                                                    <Text style={[styles.compactInfoLabel, { color: cardTextColor }]}>Username</Text>
-                                                    <Text style={[styles.compactInfoValue, { color: cardTextColor }]}>{displayUser?.username || 'N/A'}</Text>
-                                                </View>
-                                            </View>
-                                            <View style={styles.compactInfoItem}>
-                                                <Trophy size={12} color="rgba(255,255,255,0.7)" />
-                                                <View style={styles.compactInfoContent}>
-                                                    <Text style={[styles.compactInfoLabel, { color: cardTextColor }]}>Points</Text>
-                                                    <Text style={[styles.compactInfoValue, { color: cardTextColor }]}>{displayUser?.points || 0} XP</Text>
-                                                </View>
-                                            </View>
-                                        </View>
-                                        <View style={styles.infoRow}>
-                                            <View style={styles.compactInfoItem}>
-                                                <Mail size={12} color="rgba(255,255,255,0.7)" />
-                                                <View style={styles.compactInfoContent}>
-                                                    <Text style={[styles.compactInfoLabel, { color: cardTextColor }]}>Email</Text>
-                                                    <Text style={[styles.compactInfoValue, { color: cardTextColor }]} numberOfLines={1}>{displayUser?.email || 'N/A'}</Text>
-                                                </View>
-                                            </View>
-                                            <View style={styles.compactInfoItem}>
-                                                <Gamepad2 size={12} color="rgba(255,255,255,0.7)" />
-                                                <View style={styles.compactInfoContent}>
-                                                    <Text style={[styles.compactInfoLabel, { color: cardTextColor }]}>Games</Text>
-                                                    <Text style={[styles.compactInfoValue, { color: cardTextColor }]}>{gameHistory.length}</Text>
-                                                </View>
-                                            </View>
-                                        </View>
-                                        {(currentSchool || userRoles.length > 0) && (
-                                            <View style={styles.infoRow}>
-                                                {currentSchool && (
-                                                    <View style={styles.compactInfoItem}>
-                                                        <BookOpen size={12} color="rgba(255,255,255,0.7)" />
-                                                        <View style={styles.compactInfoContent}>
-                                                            <Text style={[styles.compactInfoLabel, { color: cardTextColor }]}>School</Text>
-                                                            <Text style={[styles.compactInfoValue, { color: cardTextColor }]}>{currentSchool}</Text>
-                                                        </View>
-                                                    </View>
-                                                )}
-                                                {userRoles.length > 0 && (
-                                                    <View style={styles.compactInfoItem}>
-                                                        <Award size={12} color="rgba(255,255,255,0.7)" />
-                                                        <View style={styles.compactInfoContent}>
-                                                            <Text style={[styles.compactInfoLabel, { color: cardTextColor }]}>Role</Text>
-                                                            <Text style={[styles.compactInfoValue, { color: cardTextColor }]}>{userRoles.join(', ')}</Text>
-                                                        </View>
-                                                    </View>
-                                                )}
-                                            </View>
-                                        )}
-                                    </View>
-                                </View>
+
                                 
                                 {/* 徽章和背景組合區域 - 善用空間 */}
                                 {(ownedBadges.length > 0 || ownedBackgrounds.length > 0) && (
@@ -1774,93 +1696,244 @@ export default function ProfileScreen() {
                             </View>
                         )}
 
+                    {/* 統一大卡片容器 - 包含所有內容 */}
+                    {isSpecialBackground ? (
+                        <LinearGradient
+                            colors={gradientColors}
+                            style={styles.unifiedCardContainer}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                        >
+                        {/* 卡片標題 */}
+
+
+
+
+                        {/* Segmented Control */}
+                        <LinearGradient
+                            colors={gradientColors}
+                            style={styles.segmentedControl}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                        >
+                            <TouchableOpacity
+                                onPress={() => setRecordMode('recent')}
+                                style={[styles.segmentBtn, recordMode === 'recent' && styles.activeSegment]}
+                            >
+                                <Text style={[styles.segmentText, recordMode === 'recent' && styles.activeSegmentText, { color: cardTextColor }]}>RECENT</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => setRecordMode('best')}
+                                style={[styles.segmentBtn, recordMode === 'best' && styles.activeSegment]}
+                            >
+                                <Text style={[styles.segmentText, recordMode === 'best' && styles.activeSegmentText, { color: cardTextColor }]}>BEST</Text>
+                            </TouchableOpacity>
+                        </LinearGradient>
+
+                        <LinearGradient
+                            colors={gradientColors}
+                            style={styles.activityList}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                        >
+                            {displayList.length > 0 ? displayList.map((record: any, index: number) => (
+                                <View key={index} style={styles.activityCard}>
+                                    <View style={styles.gameIconBg}>
+                                        {recordMode === 'best' ? <Trophy size={18} color="#F1C40F" /> : renderGameIcon(record.gameType)}
+                                    </View>
+                                    <View style={{ flex: 1, marginLeft: 12 }}>
+                                        <Text style={[styles.activityName, { color: cardTextColor }]}>{record.name}</Text>
+                                        <Text style={[styles.activityDate, { color: cardTextColor }]}>{new Date(record.createdAt).toLocaleDateString()}</Text>
+                                    </View>
+                                    <View style={styles.scoreContainer}>
+                                        <Text style={[styles.activityScore, { color: cardTextColor }, recordMode === 'best' && { color: '#F1C40F' }]}>
+                                            {recordMode === 'best' ? 'BEST' : `Score: ${record.scores || 0}`}
+                                        </Text>
+                                    </View>
+                                </View>
+                            )) : <Text style={styles.emptyText}>No records found.</Text>}
+                        </LinearGradient>
+
+                        {/* AI Analysis Button */}
+                        <LinearGradient
+                            colors={['#6C5CE7', '#A29BFE']}
+                            style={styles.aiAnalysisBtn}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                        >
+                            <TouchableOpacity
+                                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16 }}
+                                onPress={analyzeWithAi}
+                                disabled={analyzingWithAi}
+                            >
+                                {analyzingWithAi ? (
+                                    <ActivityIndicator size="small" color="#fff" />
+                                ) : (
+                                    <Brain size={20} color="#fff" />
+                                )}
+                                <Text style={styles.aiAnalysisBtnText}>
+                                    {analyzingWithAi ? '分析中...' : 'AI 學習分析'}
+                                </Text>
+                                <ChevronRight size={20} color="#fff" />
+                            </TouchableOpacity>
+                        </LinearGradient>
+
+                        {/* Analytics Button */}
+                        <LinearGradient
+                            colors={['#6C5CE7', '#A29BFE']}
+                            style={styles.analyticsBtn}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                        >
+                            <TouchableOpacity
+                                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16 }}
+                                onPress={() => router.push('/analytics')}
+                            >
+                            <BarChart3 size={20} color="#fff" />
+                                <Text style={styles.analyticsBtnText}>📊 Analytics</Text>
+                                <ChevronRight size={20} color="#fff" />
+                            </TouchableOpacity>
+                        </LinearGradient>
+
+                        {/* View All Game Records Button */}
+                        <LinearGradient
+                            colors={gradientColors}
+                            style={styles.viewAllRecordsBtn}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                        >
+                            <TouchableOpacity
+                                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16 }}
+                                onPress={() => router.push('/Profile/GameRecords')}
+                            >
+                            <List size={20} color="#4CAF50" />
+                                <Text style={[styles.viewAllRecordsText, { color: cardTextColor }]}>View All Game Records</Text>
+                                <ChevronRight size={20} color={cardTextColor} />
+                            </TouchableOpacity>
+                        </LinearGradient>
+
+                        <TouchableOpacity style={styles.logoutBtn} onPress={signOut}>
+                            <Text style={styles.logoutText}>Sign Out</Text>
+                        </TouchableOpacity>
+                        </LinearGradient>
+                    ) : (
+                        <View style={styles.unifiedCardContainer}>
+                        {/* 卡片標題 */}
+
+
+
+
+                        {/* Segmented Control */}
+                        <LinearGradient
+                            colors={gradientColors}
+                            style={styles.segmentedControl}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                        >
+                            <TouchableOpacity
+                                onPress={() => setRecordMode('recent')}
+                                style={[styles.segmentBtn, recordMode === 'recent' && styles.activeSegment]}
+                            >
+                                <Text style={[styles.segmentText, recordMode === 'recent' && styles.activeSegmentText, { color: cardTextColor }]}>RECENT</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => setRecordMode('best')}
+                                style={[styles.segmentBtn, recordMode === 'best' && styles.activeSegment]}
+                            >
+                                <Text style={[styles.segmentText, recordMode === 'best' && styles.activeSegmentText, { color: cardTextColor }]}>BEST</Text>
+                            </TouchableOpacity>
+                        </LinearGradient>
+
+                        <LinearGradient
+                            colors={gradientColors}
+                            style={styles.activityList}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                        >
+                            {displayList.length > 0 ? displayList.map((record: any, index: number) => (
+                                <View key={index} style={styles.activityCard}>
+                                    <View style={styles.gameIconBg}>
+                                        {recordMode === 'best' ? <Trophy size={18} color="#F1C40F" /> : renderGameIcon(record.gameType)}
+                                    </View>
+                                    <View style={{ flex: 1, marginLeft: 12 }}>
+                                        <Text style={[styles.activityName, { color: cardTextColor }]}>{record.name}</Text>
+                                        <Text style={[styles.activityDate, { color: cardTextColor }]}>{new Date(record.createdAt).toLocaleDateString()}</Text>
+                                    </View>
+                                    <View style={styles.scoreContainer}>
+                                        <Text style={[styles.activityScore, { color: cardTextColor }, recordMode === 'best' && { color: '#F1C40F' }]}>
+                                            {recordMode === 'best' ? 'BEST' : `Score: ${record.scores || 0}`}
+                                        </Text>
+                                    </View>
+                                </View>
+                            )) : <Text style={styles.emptyText}>No records found.</Text>}
+                        </LinearGradient>
+
+                        {/* AI Analysis Button */}
+                        <LinearGradient
+                            colors={['#6C5CE7', '#A29BFE']}
+                            style={styles.aiAnalysisBtn}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                        >
+                            <TouchableOpacity
+                                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16 }}
+                                onPress={analyzeWithAi}
+                                disabled={analyzingWithAi}
+                            >
+                                {analyzingWithAi ? (
+                                    <ActivityIndicator size="small" color="#fff" />
+                                ) : (
+                                    <Brain size={20} color="#fff" />
+                                )}
+                                <Text style={styles.aiAnalysisBtnText}>
+                                    {analyzingWithAi ? '分析中...' : 'AI 學習分析'}
+                                </Text>
+                                <ChevronRight size={20} color="#fff" />
+                            </TouchableOpacity>
+                        </LinearGradient>
+
+                        {/* Analytics Button */}
+                        <LinearGradient
+                            colors={['#6C5CE7', '#A29BFE']}
+                            style={styles.analyticsBtn}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                        >
+                            <TouchableOpacity
+                                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16 }}
+                                onPress={() => router.push('/analytics')}
+                            >
+                            <BarChart3 size={20} color="#fff" />
+                                <Text style={styles.analyticsBtnText}>📊 Analytics</Text>
+                                <ChevronRight size={20} color="#fff" />
+                            </TouchableOpacity>
+                        </LinearGradient>
+
+                        {/* View All Game Records Button */}
+                        <LinearGradient
+                            colors={gradientColors}
+                            style={styles.viewAllRecordsBtn}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                        >
+                            <TouchableOpacity
+                                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16 }}
+                                onPress={() => router.push('/Profile/GameRecords')}
+                            >
+                            <List size={20} color="#4CAF50" />
+                                <Text style={[styles.viewAllRecordsText, { color: cardTextColor }]}>View All Game Records</Text>
+                                <ChevronRight size={20} color={cardTextColor} />
+                            </TouchableOpacity>
+                        </LinearGradient>
+
+                        <TouchableOpacity style={styles.logoutBtn} onPress={signOut}>
+                            <Text style={styles.logoutText}>Sign Out</Text>
+                        </TouchableOpacity>
                     </View>
-
-                    {/* Segmented Control */}
-                    <LinearGradient
-                        colors={gradientColors}
-                        style={styles.segmentedControl}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                    >
-                        <TouchableOpacity
-                            onPress={() => setRecordMode('recent')}
-                            style={[styles.segmentBtn, recordMode === 'recent' && styles.activeSegment]}
-                        >
-                            <Text style={[styles.segmentText, recordMode === 'recent' && styles.activeSegmentText, { color: cardTextColor }]}>RECENT</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            onPress={() => setRecordMode('best')}
-                            style={[styles.segmentBtn, recordMode === 'best' && styles.activeSegment]}
-                        >
-                            <Text style={[styles.segmentText, recordMode === 'best' && styles.activeSegmentText, { color: cardTextColor }]}>BEST</Text>
-                        </TouchableOpacity>
-                    </LinearGradient>
-
-                    <View style={styles.activityList}>
-                        {displayList.length > 0 ? displayList.map((record: any, index: number) => (
-                            <View key={index} style={styles.activityCard}>
-                                <View style={styles.gameIconBg}>
-                                    {recordMode === 'best' ? <Trophy size={18} color="#F1C40F" /> : renderGameIcon(record.gameType)}
-                                </View>
-                                <View style={{ flex: 1, marginLeft: 12 }}>
-                                    <Text style={[styles.activityName, { color: cardTextColor }]}>{record.name}</Text>
-                                    <Text style={[styles.activityDate, { color: cardTextColor }]}>{new Date(record.createdAt).toLocaleDateString()}</Text>
-                                </View>
-                                <View style={styles.scoreContainer}>
-                                    <Text style={[styles.activityScore, { color: cardTextColor }, recordMode === 'best' && { color: '#F1C40F' }]}>
-                                        {recordMode === 'best' ? 'BEST' : `Score: ${record.scores || 0}`}
-                                    </Text>
-                                </View>
-                            </View>
-                        )) : <Text style={styles.emptyText}>No records found.</Text>}
+                    )}
                     </View>
-
-                    {/* AI Analysis Button */}
-                    <LinearGradient
-                        colors={['#6C5CE7', '#A29BFE']}
-                        style={styles.aiAnalysisBtn}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                    >
-                        <TouchableOpacity
-                            style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16 }}
-                            onPress={analyzeWithAi}
-                            disabled={analyzingWithAi}
-                        >
-                            {analyzingWithAi ? (
-                                <ActivityIndicator size="small" color="#fff" />
-                            ) : (
-                                <Brain size={20} color="#fff" />
-                            )}
-                            <Text style={styles.aiAnalysisBtnText}>
-                                {analyzingWithAi ? '分析中...' : 'AI 學習分析'}
-                            </Text>
-                            <ChevronRight size={20} color="#fff" />
-                        </TouchableOpacity>
-                    </LinearGradient>
-
-                    {/* View All Game Records Button */}
-                    <LinearGradient
-                        colors={gradientColors}
-                        style={styles.viewAllRecordsBtn}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                    >
-                        <TouchableOpacity
-                            style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16 }}
-                            onPress={() => router.push('/Profile/GameRecords')}
-                        >
-                        <List size={20} color="#4CAF50" />
-                            <Text style={[styles.viewAllRecordsText, { color: cardTextColor }]}>View All Game Records</Text>
-                            <ChevronRight size={20} color={cardTextColor} />
-                        </TouchableOpacity>
-                    </LinearGradient>
-
-                    <TouchableOpacity style={styles.logoutBtn} onPress={signOut}>
-                        <Text style={styles.logoutText}>Sign Out</Text>
-                    </TouchableOpacity>
                 </ScrollView>
+
 
                 {/* AI Analysis Modal */}
                 <Modal
@@ -2807,7 +2880,7 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(0,0,0,0.08)',
         marginVertical: 16,
     },
-    unifiedProfileContainer: { marginHorizontal: 32, marginTop: 20 },
+    unifiedProfileContainer: { marginHorizontal: 20, marginTop: 20 },
     profileCover: {
         height: 200,
         borderRadius: 24,
@@ -2870,7 +2943,7 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         padding: 16,  // 減少padding，善用空間
         marginTop: 20,
-        marginHorizontal: 32,  // 統一寬度
+        marginHorizontal: 20,  // 統一寬度
         elevation: 4,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
@@ -2920,12 +2993,12 @@ const styles = StyleSheet.create({
         maxHeight: 130,   // 减小最大高度
     },
     sectionTitle: { fontSize: 16, fontWeight: '800', alignSelf: 'flex-start', marginBottom: 10 },
-    segmentedControl: { flexDirection: 'row', backgroundColor: '#FFFFFF', marginHorizontal: 32, marginTop: 20, padding: 4, borderRadius: 16, borderWidth: 2, borderColor: '#4CAF50' },
+    segmentedControl: { flexDirection: 'row', backgroundColor: '#FFFFFF', marginHorizontal: 0, marginTop: 0, padding: 4, borderRadius: 16, borderWidth: 2, borderColor: '#4CAF50' },
     segmentBtn: { flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: 'center' },
     activeSegment: { backgroundColor: '#4CAF50', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
     segmentText: { fontSize: 14, fontWeight: '800', color: '#64748B' },
     activeSegmentText: { color: '#4CAF50', fontSize: 14, fontWeight: '800' },
-    activityList: { marginHorizontal: 32, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 16, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+    activityList: { marginHorizontal: 0, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 16, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
     activityCard: { flexDirection: 'row', alignItems: 'center', paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.2)' },
     scrollContent: { paddingHorizontal: 20, paddingBottom: 20 },
     gameIconBg: { width: 42, height: 42, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
@@ -2937,10 +3010,10 @@ const styles = StyleSheet.create({
     scoreContainer: { alignItems: 'flex-end' },
     activityScore: { fontSize: 16, fontWeight: '900', color: '#FFFFFF' },
     activityScoreValue: { fontSize: 10, color: 'rgba(255,255,255,0.85)', fontWeight: '600' },
-    logoutBtn: { margin: 20, padding: 15, backgroundColor: '#FFF', borderRadius: 20, alignItems: 'center' },
+    logoutBtn: { margin: 0, marginTop: 20, padding: 15, backgroundColor: '#FFF', borderRadius: 20, alignItems: 'center' },
     logoutText: { color: '#FF4757', fontWeight: '800', fontSize: 18 },
     emptyText: { textAlign: 'center', padding: 20, color: 'rgba(255,255,255,0.85)' },
-    viewAllRecordsBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FFFFFF', padding: 18, borderRadius: 12, borderWidth: 2, borderColor: '#4CAF50', marginVertical: 15, marginHorizontal: 32 },
+    viewAllRecordsBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FFFFFF', padding: 18, borderRadius: 12, borderWidth: 2, borderColor: '#4CAF50', marginVertical: 15, marginHorizontal: 0 },
     viewAllRecordsText: { fontSize: 18, fontWeight: '700', color: '#4CAF50', flex: 1, textAlign: 'center' },
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center' },
     modalContent: { backgroundColor: '#FFF', borderRadius: 24, padding: 25, width: '85%', maxWidth: 400 },
@@ -3123,12 +3196,44 @@ const styles = StyleSheet.create({
     quickActionBtn: { alignItems: 'center', padding: 8 },
     quickActionText: { fontSize: 11, fontWeight: '700', color: '#2D3436', marginTop: 4 },
 
+    // 統一大卡片容器樣式
+    unifiedCardContainer: {
+        backgroundColor: 'rgba(255,255,255,0.95)',
+        borderRadius: 24,
+        marginHorizontal: 20,
+        marginTop: 20,
+        padding: 20,
+        elevation: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.8)',
+    },
+
+    // Analytics Button styles
+    analyticsBtn: {
+        borderRadius: 12,
+        marginBottom: 15,
+        borderWidth: 1,
+        borderColor: 'rgba(108, 92, 231, 0.3)',
+        marginHorizontal: 0, // 移除水平邊距，適應大卡片
+    },
+    analyticsBtnText: {
+        color: '#fff',
+        fontSize: 18,
+        fontWeight: '700',
+        marginLeft: 8,
+    },
+
     // AI Analysis Modal styles
     aiAnalysisBtn: {
         borderRadius: 12,
         marginBottom: 15,
         borderWidth: 1,
         borderColor: 'rgba(108, 92, 231, 0.3)',
+        marginHorizontal: 0,
     },
     aiAnalysisBtnText: {
         color: '#fff',
