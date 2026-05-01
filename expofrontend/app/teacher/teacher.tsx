@@ -518,8 +518,9 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
             const response = await axios.post(`${getApiBaseUrl()}/api/auth/register`, {
                 username: newStudent.username,
                 email: newStudent.email,
-                password: 'defaultPassword123', // You may want to generate or ask for this
+                password: 'defaultPassword123', // Default password for new students
                 isEducator: false, // This is a student, not educator
+                schoolName: user?.school || '', // Include teacher's school name
             }, {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -541,7 +542,7 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
                 setFilteredStudents([newStudentData, ...filteredStudents]);
                 setShowAddModal(false);
                 setNewStudent({});
-                Alert.alert('Success', 'Student added successfully');
+                Alert.alert('Success', 'Student added successfully\n\nDefault password: defaultPassword123\n\nPlease share this password with the student for their first login.');
             }
         } catch (error) {
             console.error('Error adding student:', error);
@@ -1082,13 +1083,16 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
                                     placeholder="Enter email"
                                     keyboardType="email-address"
                                 />
-                                <Text style={styles.inputLabel}>Initial Points</Text>
+
+                                <Text style={styles.inputLabel}>School Name</Text>
                                 <TextInput
                                     style={styles.input}
-                                    value={String(newStudent.points || 0)}
-                                    onChangeText={(text) => setNewStudent({ ...newStudent, points: parseInt(text) || 0 })}
-                                    keyboardType="numeric"
+                                    value={user?.school || ''}
+                                    editable={false}
+                                    placeholder="Your school will be assigned automatically"
                                 />
+
+                                <Text style={styles.inputLabel}>Default password for new students is 'defaultPassword123'</Text>
                             </View>
                             <TouchableOpacity style={styles.saveBtn} onPress={addStudent}>
                                 <Text style={styles.saveBtnText}>Add Student</Text>
