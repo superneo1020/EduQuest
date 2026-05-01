@@ -169,13 +169,13 @@ export default function LandscapeOptimizedHome() {
                         </View>
                         <View style={styles.userMeta}>
                             <Text style={styles.userNameText}>{profileData?.nickname || user?.username || 'Guest'}</Text>
-                            <Text style={styles.userRoleText}>{(user?.roles?.includes('teacher') || user?.roles === 'teacher') ? 'Teacher' : 'Student'}</Text>
+                            <Text style={styles.userRoleText}>{user?.roles?.includes('teacher') ? 'Teacher' : 'Student'}</Text>
                         </View>
                     </TouchableOpacity>
 
                     {/* 新增的教师页面按钮 */}
                     {/* 新增的教师页面按钮 - 只对教师身份显示 */}
-                    {(user?.roles?.includes('teacher') || user?.roles === 'teacher') && (
+                    {user?.roles?.includes('teacher') && (
                         <TouchableOpacity
                             style={styles.teacherBtn}
                             onPress={() => router.push('/teacher/teacher' as any)}
