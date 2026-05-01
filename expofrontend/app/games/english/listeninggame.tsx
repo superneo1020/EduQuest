@@ -43,6 +43,7 @@ type Option = {
 interface ExtendedQuestion extends Question {
     maxPoints: number;
     earnedPoints?: number;
+    timeSpent?: number; // 新增：本题耗时（秒）
 }
 
 type FishPosition = {
@@ -70,7 +71,7 @@ type GameState = {
     isLoading: boolean;
     questions: ExtendedQuestion[];
     fishCaught: boolean;
-    totalTime: number; // 保留，现在存储真实秒数
+    totalTime: number;
 };
 
 const DIFFICULTY_CONFIG: Record<Difficulty, { label: string; color: string; description: string; hint: string; icon: string }> = {
@@ -150,8 +151,12 @@ export default function ListeningScreen() {
     const prepScale = useSharedValue(0);
     const prepTriggered = useRef(false);
 
-    // 新增：记录游戏真正的开始时间戳
+    // 新增：记录游戏真正的开始时间戳（绝对时间）
     const startTimeRef = useRef<number>(0);
+    // 新增：记录当前题目开始时的 elapsedTime（秒）
+    const questionStartTimeRef = useRef<number>(0);
+    // 标记当前题目是否已经开始计时（避免重复记录）
+    const hasStartedQuestionRef = useRef<boolean>(false);
 
     const prepAnimatedStyle = useAnimatedStyle(() => ({
         transform: [{ scale: prepScale.value }],
@@ -225,6 +230,8 @@ export default function ListeningScreen() {
     const resetTimer = () => {
         stopTimer();
         setElapsedTime(0);
+        questionStartTimeRef.current = 0;
+        hasStartedQuestionRef.current = false;
     };
 
     useEffect(() => {
@@ -289,6 +296,22 @@ export default function ListeningScreen() {
         }
     };
 
+    // 记录当前题目开始时间（应在题目可见时调用）
+    const recordCurrentQuestionStart = () => {
+        if (!hasStartedQuestionRef.current && !gameState.isAnswered && !gameState.gameCompleted) {
+            questionStartTimeRef.current = elapsedTime;
+            hasStartedQuestionRef.current = true;
+            console.log(`[Time] Question ${gameState.currentQuestionIndex + 1} started at ${elapsedTime}s`);
+        }
+    };
+
+    // 当题目可见时触发布置（prepText消失且题目已加载）
+    useEffect(() => {
+        if (!prepText && !gameState.isLoading && gameState.questions.length > 0 && !gameState.isAnswered && !gameState.gameCompleted) {
+            recordCurrentQuestionStart();
+        }
+    }, [prepText, gameState.isLoading, gameState.questions.length, gameState.currentQuestionIndex, gameState.isAnswered, gameState.gameCompleted]);
+
     const initFishPositions = (options: Option[]) => {
         const positions: FishPosition[] = [];
         const speedMultiplier = gameState.currentLevel === 'easy' ? 0.5 :
@@ -351,7 +374,7 @@ export default function ListeningScreen() {
                 emoji: FISH_EMOJIS[idx % FISH_EMOJIS.length],
             }));
 
-            return { ...question, options: coloredOptions, maxPoints };
+            return { ...question, options: coloredOptions, maxPoints, timeSpent: 0 };
         } catch (error) {
             console.error(`Failed to generate question at index ${index}:`, error);
             return null;
@@ -379,6 +402,8 @@ export default function ListeningScreen() {
                     fishCaught: false,
                 }));
                 progressAnim.setValue(0);
+                // 重置题目开始标记，等待 prepText 结束后记录
+                hasStartedQuestionRef.current = false;
             } else {
                 setGameState(prev => ({ ...prev, isLoading: false }));
             }
@@ -389,7 +414,7 @@ export default function ListeningScreen() {
     };
 
     const startPrepSequence = () => {
-        // ✅ 修复：在显示 READY 前记录游戏真正开始的时间戳
+        // 记录绝对开始时间
         startTimeRef.current = Date.now();
 
         setPrepText('READY');
@@ -401,7 +426,9 @@ export default function ListeningScreen() {
             prepScale.value = withSpring(1.5);
             setTimeout(() => {
                 setPrepText(null);
-                startTimer(); // UI 计时器从 GO 结束后开始（仅用于展示）
+                startTimer(); // UI 计时器开始
+                // 重置题目开始标记，准备记录第一题时间
+                hasStartedQuestionRef.current = false;
             }, 600);
         }, 1000);
     };
@@ -469,6 +496,7 @@ export default function ListeningScreen() {
         }));
 
         progressAnim.setValue(0);
+        hasStartedQuestionRef.current = false;
         await loadFirstQuestion(gameState.currentLevel);
     };
 
@@ -501,6 +529,7 @@ export default function ListeningScreen() {
             totalTime: 0,
         });
         setFishPositions([]);
+        hasStartedQuestionRef.current = false;
     };
 
     const goBackToGames = () => {
@@ -568,6 +597,10 @@ export default function ListeningScreen() {
     const catchFish = (option: Option, index: number) => {
         if (gameState.isAnswered || gameState.gameCompleted || gameState.fishCaught || prepText !== null) return;
 
+        // 计算本题耗时（秒）
+        const timeSpentForThis = Math.max(0, elapsedTime - questionStartTimeRef.current);
+        console.log(`[Time] Question ${gameState.currentQuestionIndex + 1} answered, spent ${timeSpentForThis}s`);
+
         stopAudio();
 
         const isCorrect = option.correct;
@@ -628,9 +661,11 @@ export default function ListeningScreen() {
             useNativeDriver: false,
         }).start();
 
+        // 更新当前题目的 timeSpent 和 earnedPoints
         const updatedQuestions = [...gameState.questions];
         if (updatedQuestions[gameState.currentQuestionIndex]) {
             updatedQuestions[gameState.currentQuestionIndex].earnedPoints = pointsEarned;
+            updatedQuestions[gameState.currentQuestionIndex].timeSpent = timeSpentForThis;
             setGameState(prev => ({ ...prev, questions: updatedQuestions }));
         }
     };
@@ -645,6 +680,9 @@ export default function ListeningScreen() {
             endGame();
             return;
         }
+
+        // 重置题目开始标记，下一题准备记录
+        hasStartedQuestionRef.current = false;
 
         if (gameState.questions.length > nextIndex) {
             setGameState(prev => ({
@@ -688,9 +726,8 @@ export default function ListeningScreen() {
     };
 
     const endGame = async () => {
-        stopTimer(); // 停止 UI 计时器
+        stopTimer();
 
-        // ✅ 修复：基于绝对时间戳计算真实游玩秒数，至少 1 秒
         const realSeconds = Math.max(1, Math.round((Date.now() - startTimeRef.current) / 1000));
 
         setGameState(prev => ({ ...prev, gameCompleted: true, totalTime: realSeconds }));
@@ -744,16 +781,17 @@ export default function ListeningScreen() {
                 gameDifficulty: getLevelLabel(gameState.currentLevel!).toUpperCase()
             };
 
+            // 使用 questions 中保存的 timeSpent
             const questionsData = gameState.questions.map((q, index) => ({
                 id: index + 1,
                 question: q.question,
                 correctAnswer: q.answer,
-                userAnswer: q.userAnswer,
-                isCorrect: q.isCorrect,
+                userAnswer: q.userAnswer || "",
+                isCorrect: q.isCorrect || false,
                 questionType: 'listening-audio',
                 options: q.options,
                 earnedPoints: q.earnedPoints || 0,
-                timeSpent: 0 // 可后续逐题细化
+                timeSpent: q.timeSpent !== undefined ? q.timeSpent : 0
             }));
 
             const totalTimeFormatted = formatTime(totalSeconds);
@@ -1018,6 +1056,7 @@ export default function ListeningScreen() {
                             {gameState.questions.map((q, idx) => {
                                 const earned = q.earnedPoints || 0;
                                 const maxPts = q.maxPoints;
+                                const timeSpent = q.timeSpent || 0;
                                 return (
                                     <View key={idx} style={styles.detailScoreItem}>
                                         <Text style={styles.detailScoreNumber}>{idx + 1}.</Text>
@@ -1026,6 +1065,9 @@ export default function ListeningScreen() {
                                         </Text>
                                         <Text style={[styles.detailScoreValue, earned > 0 ? styles.correctScore : styles.incorrectScore]}>
                                             {earned > 0 ? `${earned}/${maxPts}` : '0'}
+                                        </Text>
+                                        <Text style={styles.detailTimeSpent}>
+                                            {formatTime(timeSpent)}
                                         </Text>
                                     </View>
                                 );
@@ -1446,6 +1488,7 @@ const styles = StyleSheet.create({
     detailScoreNumber: { width: 30, fontSize: 12, color: '#666' },
     detailScoreAnswer: { flex: 1, fontSize: 12, color: '#333' },
     detailScoreValue: { width: 50, fontSize: 12, fontWeight: '600', textAlign: 'right' },
+    detailTimeSpent: { width: 50, fontSize: 12, color: '#666', textAlign: 'right' },
     correctScore: { color: '#4CAF50' },
     incorrectScore: { color: '#f44336' },
     resultButtons: { gap: 12 },

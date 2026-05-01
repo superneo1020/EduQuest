@@ -18,8 +18,6 @@ const { width: screenWidth } = Dimensions.get('window');
 const MACHINE_WIDTH = Math.min(760, screenWidth - 40);
 const GAME_WIDTH = MACHINE_WIDTH - 40;
 const GAME_HEIGHT = 240;
-
-// 统一物件框尺寸
 const ITEM_WIDTH = 60;
 const ITEM_HEIGHT = 64;
 
@@ -32,7 +30,7 @@ interface AnimalType {
     isAnimal: boolean;
 }
 
-// ========== 🐾 完整动物列表（22 种） ==========
+// 完整动物列表（22 种）
 const ALL_ANIMAL_TYPES: AnimalType[] = [
     { name: 'Bear', icon: '🐻', width: 44, height: 52, isAnimal: true },
     { name: 'Bunny', icon: '🐰', width: 44, height: 56, isAnimal: true },
@@ -76,7 +74,17 @@ interface Item {
     isAnimal: boolean;
 }
 
-// ========== 🎯 浮動文字元件 ==========
+// 问题结果记录（含耗时）
+interface QuestionResult {
+    id: number;
+    question: string;
+    correctAnswer: string;
+    userAnswer: string;
+    isCorrect: boolean;
+    timeSpent: number; // 秒
+}
+
+// 浮动文字组件
 interface FloatingTextProps {
     text: string;
     color: string;
@@ -89,16 +97,8 @@ const FloatingText: React.FC<FloatingTextProps> = ({ text, color, onComplete }) 
 
     useEffect(() => {
         Animated.parallel([
-            Animated.timing(translateY, {
-                toValue: -80,
-                duration: 800,
-                useNativeDriver: true,
-            }),
-            Animated.timing(opacity, {
-                toValue: 0,
-                duration: 800,
-                useNativeDriver: true,
-            }),
+            Animated.timing(translateY, { toValue: -80, duration: 800, useNativeDriver: true }),
+            Animated.timing(opacity, { toValue: 0, duration: 800, useNativeDriver: true }),
         ]).start(() => onComplete());
     }, []);
 
@@ -109,12 +109,10 @@ const FloatingText: React.FC<FloatingTextProps> = ({ text, color, onComplete }) 
     );
 };
 
-// ========== 🎮 主遊戲元件 ==========
 const ClawMachineGame: React.FC = () => {
     const navigation = useNavigation();
     const { token } = useAuth();
     const [isSaving, setIsSaving] = useState(false);
-    // 防重複提交鎖
     const isCompletingRef = useRef(false);
 
     useLayoutEffect(() => {
@@ -149,12 +147,6 @@ const ClawMachineGame: React.FC = () => {
     const screenShake = useRef(new Animated.Value(0)).current;
     const [prepText, setPrepText] = useState<string | null>(null);
     const prepScale = useRef(new Animated.Value(0)).current;
-
-    const [particles, setParticles] = useState<Array<{
-        id: number; x: number; y: number; vx: number; vy: number; life: number; color: string; size: number; emoji?: string;
-    }>>([]);
-
-    // 动画值
     const dropAnim = useRef(new Animated.Value(0)).current;
     const clawScaleAnim = useRef(new Animated.Value(1)).current;
     const suctionAnim = useRef(new Animated.Value(0)).current;
@@ -167,15 +159,17 @@ const ClawMachineGame: React.FC = () => {
 
     const MAX_ANSWERS = 3;
     const [answerCount, setAnswerCount] = useState<number>(0);
-
-    // ========== 等待手动下一题 ==========
     const [waitingForNext, setWaitingForNext] = useState<boolean>(false);
     const [nextQuestion, setNextQuestion] = useState<AIQuestion | null>(null);
 
+    // 题目耗时记录
+    const [questionResults, setQuestionResults] = useState<QuestionResult[]>([]);
+    const questionStartTimeSecRef = useRef<number | null>(null);
+
     // 计时器
-    const [startTime, setStartTime] = useState<number | null>(null);
     const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
     const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const elapsedSecondsRef = useRef<number>(0); // 避免闭包旧值
 
     const formatTime = (totalSeconds: number): string => {
         const minutes = Math.floor(totalSeconds / 60);
@@ -192,10 +186,14 @@ const ClawMachineGame: React.FC = () => {
 
     const startTimer = useCallback(() => {
         stopTimer();
-        setStartTime(Date.now());
         setElapsedSeconds(0);
+        elapsedSecondsRef.current = 0;
         timerIntervalRef.current = setInterval(() => {
-            setElapsedSeconds(prev => prev + 1);
+            setElapsedSeconds(prev => {
+                const next = prev + 1;
+                elapsedSecondsRef.current = next;
+                return next;
+            });
         }, 1000);
     }, [stopTimer]);
 
@@ -212,13 +210,10 @@ const ClawMachineGame: React.FC = () => {
         return 0;
     };
 
-    // ========== 💾 保存分數（加入總時間） ==========
+    // 保存分数（timeSpent 以整数秒数传递，由转换层处理）
     const saveScore = async (finalScore: number, totalSeconds: number) => {
         if (!token) return;
-        if (isCompletingRef.current) {
-            console.log("saveScore already in progress, skip");
-            return;
-        }
+        if (isCompletingRef.current) return;
         isCompletingRef.current = true;
         setIsSaving(true);
         try {
@@ -228,17 +223,18 @@ const ClawMachineGame: React.FC = () => {
                 gameType: "SCIENCE",
                 gameDifficulty: "EASY"
             };
-            const questionsData = Array.from({ length: answerCount }, (_, index) => ({
-                id: index + 1,
-                question: currentQuestion?.description || 'Catch the correct animal',
-                correctAnswer: currentQuestion?.targetAnimal || 'Unknown',
-                userAnswer: index < correctCatches ? 'Correct catch' : 'Wrong catch',
-                isCorrect: index < correctCatches,
+
+            const questionsData = questionResults.map((qr, idx) => ({
+                id: idx + 1,
+                question: qr.question,
+                correctAnswer: qr.correctAnswer,
+                userAnswer: qr.userAnswer,
+                isCorrect: qr.isCorrect,
                 questionType: 'claw-machine',
-                timeSpent: 0
+                timeSpent: qr.timeSpent, // 直接数字秒数
             }));
-            const totalTimeSeconds = totalSeconds;
-            const totalTimeFormatted = formatTime(totalTimeSeconds);
+
+            const totalTimeFormatted = formatTime(totalSeconds);
             const metadata: GameMetadata = createGameMetadata(
                 gameData.gameType,
                 gameData.gameDifficulty,
@@ -246,7 +242,7 @@ const ClawMachineGame: React.FC = () => {
                 {
                     totalAttempts: answerCount,
                     caughtAnimals: correctCatches,
-                    totalTimeSeconds: totalTimeSeconds,
+                    totalTimeSeconds: totalSeconds,
                     totalTimeFormatted: totalTimeFormatted,
                 },
                 questionsData
@@ -263,13 +259,11 @@ const ClawMachineGame: React.FC = () => {
             console.error("Failed to sync score:", e);
         } finally {
             setIsSaving(false);
-            setTimeout(() => {
-                isCompletingRef.current = false;
-            }, 500);
+            setTimeout(() => { isCompletingRef.current = false; }, 500);
         }
     };
 
-    // ========== 🎬 螢幕震動 ==========
+    // 屏幕震动等辅助函数
     const triggerScreenShake = () => {
         Animated.sequence([
             Animated.timing(screenShake, { toValue: 10, duration: 50, useNativeDriver: true }),
@@ -289,48 +283,30 @@ const ClawMachineGame: React.FC = () => {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
             triggerScreenShake();
         }
-        setFloatingText({
-            id: Date.now(),
-            text: isCorrect ? 'HIT!' : 'OUCH!',
-            color: isCorrect ? '#FFD700' : '#FF4757',
-        });
+        setFloatingText({ id: Date.now(), text: isCorrect ? 'HIT!' : 'OUCH!', color: isCorrect ? '#FFD700' : '#FF4757' });
     };
 
-    // 持久反馈（不清除，直到Next）
     const showPersistentFeedback = (message: string, type: 'correct' | 'wrong') => {
         setFeedbackMessage({ text: message, type });
         feedbackAnim.setValue(0);
-        Animated.timing(feedbackAnim, {
-            toValue: 1,
-            duration: 200,
-            useNativeDriver: true,
-        }).start();
+        Animated.timing(feedbackAnim, { toValue: 1, duration: 200, useNativeDriver: true }).start();
     };
 
-    // ========== 后台预生成下一题 ==========
+    // 预加载下一题
     const preloadNextQuestionWithAnimals = useCallback(async (animals: string[]) => {
         if (gameComplete || showReport || animals.length === 0) return;
         if (preloadPromiseRef.current) return;
-
         const promise = (async () => {
-            console.log('Preloading next question with', animals);
             try {
                 const newQ = await clawAIService.generateQuestionAsync(animals);
-                if (newQ) {
-                    setNextQuestion(newQ);
-                    console.log('Preloaded:', newQ.description);
-                }
-            } catch (e) {
-                console.error('Preload failed:', e);
-            } finally {
-                preloadPromiseRef.current = null;
-            }
+                if (newQ) setNextQuestion(newQ);
+            } catch (e) { console.error('Preload failed:', e); }
+            finally { preloadPromiseRef.current = null; }
         })();
-
         preloadPromiseRef.current = promise;
     }, [gameComplete, showReport]);
 
-    // ========== 🎪 倒數準備動畫 ==========
+    // 倒计时准备动画
     const startPrepSequence = () => {
         setTimeout(() => {
             setPrepText('READY');
@@ -350,31 +326,24 @@ const ClawMachineGame: React.FC = () => {
         }, 1600);
     };
 
-    // ========== 🧠 刷新 AI 題目 ==========
+    // 刷新 AI 题目
     const refreshAIQuestion = useCallback(async () => {
         if (gameComplete || showReport) return;
         if (refreshAIPromiseRef.current) return refreshAIPromiseRef.current;
-
         const promise = (async () => {
             const availableAnimals = getAvailableAnimalNames();
             if (availableAnimals.length === 0) return;
             setIsAiThinking(true);
             try {
                 const newQuestion = await clawAIService.generateQuestionAsync(availableAnimals);
-                if (newQuestion && newQuestion.description && newQuestion.targetAnimal) {
-                    setCurrentQuestion(newQuestion);
-                } else {
+                if (newQuestion && newQuestion.description && newQuestion.targetAnimal) setCurrentQuestion(newQuestion);
+                else {
                     const fallback = clawAIService.generateQuestionWithAvailableAnimals(availableAnimals);
                     if (fallback) setCurrentQuestion(fallback);
                 }
-            } catch (error) {
-                console.error('Failed to generate AI question:', error);
-            } finally {
-                setIsAiThinking(false);
-                refreshAIPromiseRef.current = null;
-            }
+            } catch (error) { console.error('Failed to generate AI question:', error); }
+            finally { setIsAiThinking(false); refreshAIPromiseRef.current = null; }
         })();
-
         refreshAIPromiseRef.current = promise;
         return promise;
     }, [getAvailableAnimalNames, gameComplete, showReport]);
@@ -388,7 +357,7 @@ const ClawMachineGame: React.FC = () => {
         const shuffledAnimals = [...ALL_ANIMAL_TYPES].sort(() => 0.5 - Math.random());
         const selectedAnimals = shuffledAnimals.slice(0, animalCount);
         const startX = 20;
-        const bottomY = GAME_HEIGHT - ITEM_HEIGHT - 5; // 确保框体不超出区域
+        const bottomY = GAME_HEIGHT - ITEM_HEIGHT - 5;
         const spacingX = (GAME_WIDTH - 40) / itemCount;
         for (let i = 0; i < selectedAnimals.length; i++) {
             const animalType = selectedAnimals[i];
@@ -423,10 +392,12 @@ const ClawMachineGame: React.FC = () => {
         setAnswerCount(0);
         setWaitingForNext(false);
         setNextQuestion(null);
+        setQuestionResults([]);
+        questionStartTimeSecRef.current = null;
+        elapsedSecondsRef.current = 0;
         preloadPromiseRef.current = null;
         stopTimer();
         setElapsedSeconds(0);
-        setStartTime(null);
         clawAIService.resetGame();
         setCurrentQuestion(null);
     };
@@ -451,18 +422,14 @@ const ClawMachineGame: React.FC = () => {
         ]).start();
     };
 
-    // 移動邏輯
+    // 移动逻辑
     useEffect(() => {
         if (leftPressed && !isDropping && !gameOver && !gameComplete && !showReport && prepText === null && !processing && !isAiThinking && !waitingForNext) {
-            const interval = setInterval(() => {
-                setClawX(prev => Math.max(8, prev - 12));
-            }, 50);
+            const interval = setInterval(() => setClawX(prev => Math.max(8, prev - 12)), 50);
             setMoveInterval(interval);
             return () => clearInterval(interval);
         } else if (rightPressed && !isDropping && !gameOver && !gameComplete && !showReport && prepText === null && !processing && !isAiThinking && !waitingForNext) {
-            const interval = setInterval(() => {
-                setClawX(prev => Math.min(GAME_WIDTH - 44, prev + 12));
-            }, 50);
+            const interval = setInterval(() => setClawX(prev => Math.min(GAME_WIDTH - 44, prev + 12)), 50);
             setMoveInterval(interval);
             return () => clearInterval(interval);
         } else if (moveInterval) {
@@ -475,6 +442,20 @@ const ClawMachineGame: React.FC = () => {
         return () => { if (moveInterval) clearInterval(moveInterval); };
     }, [moveInterval]);
 
+    // 题目计时开始（使用 ref 避免依赖 state）
+    useEffect(() => {
+        if (
+            currentQuestion &&
+            !waitingForNext &&
+            !gameComplete &&
+            !showReport &&
+            prepText === null &&
+            questionStartTimeSecRef.current === null
+        ) {
+            questionStartTimeSecRef.current = elapsedSecondsRef.current;
+        }
+    }, [currentQuestion, waitingForNext, gameComplete, showReport, prepText]);
+
     const checkSuction = (): Item | null => {
         const clawCenterX = clawX + 18;
         const clawBottomY = GAME_HEIGHT - 20;
@@ -482,9 +463,7 @@ const ClawMachineGame: React.FC = () => {
             if (item.caught) continue;
             const itemCenterX = item.x + ITEM_WIDTH / 2;
             const itemCenterY = item.y + ITEM_HEIGHT / 2;
-            const distance = Math.sqrt(
-                Math.pow(clawCenterX - itemCenterX, 2) + Math.pow(clawBottomY - itemCenterY, 2)
-            );
+            const distance = Math.sqrt(Math.pow(clawCenterX - itemCenterX, 2) + Math.pow(clawBottomY - itemCenterY, 2));
             if (distance < 42) return item;
         }
         return null;
@@ -493,15 +472,15 @@ const ClawMachineGame: React.FC = () => {
     const endGameAndShowReport = async (finalScore: number) => {
         if (gameComplete || showReport) return;
         stopTimer();
-        const finalTime = elapsedSeconds; // 取得最終時間
+        const finalTime = elapsedSeconds;
         setGameComplete(true);
-        setWaitingForNext(false); // 确保按钮消失
+        setWaitingForNext(false);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         await saveScore(finalScore, finalTime);
         setShowReport(true);
     };
 
-    // ========== 🎯 处理抓取结果 ==========
+    // 处理抓取结果（计算真实耗时）
     const processCatch = async (caughtItem: Item) => {
         setProcessing(true);
         try {
@@ -509,7 +488,7 @@ const ClawMachineGame: React.FC = () => {
                 showPersistentFeedback(`❌ ${caughtItem.type.name} It's not an animal! Try again.`, 'wrong');
                 showHitFeedback(false);
                 setProcessing(false);
-                return; // 不刷新题目，不增加次数
+                return;
             }
 
             if (!currentQuestion) {
@@ -518,10 +497,29 @@ const ClawMachineGame: React.FC = () => {
                 return;
             }
 
+            // 计算本题耗时（秒）
+            let timeSpentSec = 0;
+            if (questionStartTimeSecRef.current !== null) {
+                timeSpentSec = elapsedSecondsRef.current - questionStartTimeSecRef.current;
+                if (timeSpentSec < 0) timeSpentSec = 0;
+                questionStartTimeSecRef.current = null;
+            }
+
             const aiResult = await clawAIService.checkAnswer(caughtItem.type.name);
             const isCorrect = aiResult.isCorrect;
 
-            setAiFeedback(aiResult); // 持久显示
+            // 保存问题结果（含耗时）
+            const newResult: QuestionResult = {
+                id: answerCount + 1,
+                question: currentQuestion.description,
+                correctAnswer: currentQuestion.targetAnimal,
+                userAnswer: caughtItem.type.name,
+                isCorrect: isCorrect,
+                timeSpent: timeSpentSec,
+            };
+            setQuestionResults(prev => [...prev, newResult]);
+
+            setAiFeedback(aiResult);
             showPersistentFeedback(aiResult.message, isCorrect ? 'correct' : 'wrong');
             showHitFeedback(isCorrect);
 
@@ -535,23 +533,18 @@ const ClawMachineGame: React.FC = () => {
                 setScore(newScore);
                 animateScore();
 
-                setItems(prev => prev.map(i =>
-                    i.id === caughtItem.id ? { ...i, caught: true } : i
-                ));
+                setItems(prev => prev.map(i => i.id === caughtItem.id ? { ...i, caught: true } : i));
                 setCollectedAnimals(prev => [...prev, caughtItem]);
             }
 
-            // 冻结操作，等待Next
             setWaitingForNext(true);
 
-            // 如果不是最后一题，则后台预生成下一题
             if (newCount < MAX_ANSWERS) {
                 const updatedAvailable = items
                     .filter(item => item.isAnimal && !item.caught && item.id !== caughtItem.id)
                     .map(item => item.type.name);
                 preloadNextQuestionWithAnimals(updatedAvailable);
             }
-            // 最后一题无需预生成
         } catch (error) {
             console.error('Handle catch error:', error);
             showPersistentFeedback('System error, please try again.', 'wrong');
@@ -562,9 +555,7 @@ const ClawMachineGame: React.FC = () => {
         }
     };
 
-    // ========== 手动进入下一题或结束游戏 ==========
     const handleNextQuestion = useCallback(async () => {
-        // 如果已经回答了所有题目，则跳转总结报告
         if (answerCount >= MAX_ANSWERS) {
             setFeedbackMessage(null);
             setAiFeedback(null);
@@ -572,18 +563,15 @@ const ClawMachineGame: React.FC = () => {
             return;
         }
 
-        // 否则加载下一题
         setFeedbackMessage(null);
         setAiFeedback(null);
         setWaitingForNext(false);
 
         if (nextQuestion) {
-            console.log('Using preloaded question');
             setCurrentQuestion(nextQuestion);
             setNextQuestion(null);
             setClawX((GAME_WIDTH - 36) / 2);
         } else {
-            console.log('No preloaded question, generating now');
             await refreshAIQuestion();
             setClawX((GAME_WIDTH - 36) / 2);
         }
@@ -604,15 +592,11 @@ const ClawMachineGame: React.FC = () => {
                     Animated.timing(clawScaleAnim, { toValue: 1.4, duration: 100, useNativeDriver: true }),
                     Animated.timing(clawScaleAnim, { toValue: 1, duration: 100, useNativeDriver: true }),
                 ]).start();
-                setTimeout(() => {
-                    processCatch(caughtItem);
-                }, 200);
+                setTimeout(() => processCatch(caughtItem), 200);
             } else {
                 showPersistentFeedback('❌ Didn\'t catch it! Try moving the claw over the item again.', 'wrong');
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setTimeout(() => {
-                    setIsDropping(false);
-                }, 350);
+                setTimeout(() => setIsDropping(false), 350);
             }
             setTimeout(() => {
                 Animated.timing(dropAnim, { toValue: 0, duration: 350, useNativeDriver: false }).start();
@@ -640,17 +624,14 @@ const ClawMachineGame: React.FC = () => {
         setAnswerCount(0);
         setWaitingForNext(false);
         setNextQuestion(null);
+        setQuestionResults([]);
+        questionStartTimeSecRef.current = null;
+        elapsedSecondsRef.current = 0;
         preloadPromiseRef.current = null;
         dropAnim.setValue(0);
         clawAIService.resetGame();
         setProcessing(false);
         setTimeout(() => startPrepSequence(), 500);
-    };
-
-    const showReportPage = async () => {
-        stopTimer();
-        await saveScore(Math.round(score), elapsedSeconds);
-        setShowReport(true);
     };
 
     const handleGoBack = () => {
@@ -674,7 +655,7 @@ const ClawMachineGame: React.FC = () => {
         opacity: prepScale.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 1, 1] }),
     };
 
-    // ========== 总结报告页面 ==========
+    // 总结报告页面
     if (showReport) {
         const totalTimeFormatted = formatTime(elapsedSeconds);
         return (
@@ -706,9 +687,7 @@ const ClawMachineGame: React.FC = () => {
                             <View style={styles.reportStatItem}>
                                 <Text style={styles.reportStatEmoji}>🎯</Text>
                                 <Text style={styles.reportStatLabel}>Accuracy</Text>
-                                <Text style={styles.reportStatValue}>
-                                    {Math.round((correctCatches / MAX_ANSWERS) * 100)}%
-                                </Text>
+                                <Text style={styles.reportStatValue}>{Math.round((correctCatches / MAX_ANSWERS) * 100)}%</Text>
                             </View>
                         </View>
                         <View style={styles.reportButtonGroup}>
@@ -730,7 +709,6 @@ const ClawMachineGame: React.FC = () => {
 
     return (
         <Animated.View style={[styles.container, screenShakeStyle]}>
-            {/* 浮动层 */}
             {prepText && (
                 <Animated.View style={[styles.prepOverlay, prepAnimatedStyle]}>
                     <View style={styles.prepCard}>
@@ -740,9 +718,7 @@ const ClawMachineGame: React.FC = () => {
                     </View>
                 </Animated.View>
             )}
-            {floatingText && (
-                <FloatingText key={floatingText.id} text={floatingText.text} color={floatingText.color} onComplete={() => setFloatingText(null)} />
-            )}
+            {floatingText && <FloatingText key={floatingText.id} text={floatingText.text} color={floatingText.color} onComplete={() => setFloatingText(null)} />}
             {feedbackMessage && (
                 <Animated.View style={[styles.feedbackContainer, { opacity: feedbackOpacity }]}>
                     <View style={[styles.feedbackBox, feedbackMessage.type === 'correct' ? styles.feedbackCorrect : styles.feedbackWrong]}>
@@ -767,7 +743,6 @@ const ClawMachineGame: React.FC = () => {
                     </View>
                 </View>
 
-
                 {/* AI 问题面板 */}
                 <View style={styles.aiQuestionPanel}>
                     {isAiThinking && !waitingForNext ? (
@@ -784,9 +759,7 @@ const ClawMachineGame: React.FC = () => {
                                 <TouchableOpacity style={styles.hintButton} onPress={() => setShowQuestionHint(!showQuestionHint)}>
                                     <Text style={styles.hintButtonText}>💡 Hint</Text>
                                 </TouchableOpacity>
-                                {showQuestionHint && (
-                                    <Text style={styles.hintText}>🔍 {currentQuestion.hint}</Text>
-                                )}
+                                {showQuestionHint && <Text style={styles.hintText}>🔍 {currentQuestion.hint}</Text>}
                             </View>
                             {aiFeedback && (
                                 <Animated.View style={[styles.aiFeedbackBox, aiFeedback.isCorrect ? styles.feedbackCorrectBox : styles.feedbackWrongBox]}>
@@ -843,8 +816,7 @@ const ClawMachineGame: React.FC = () => {
                                 onPressIn={() => setLeftPressed(true)}
                                 onPressOut={() => setLeftPressed(false)}
                                 disabled={isDropping || gameOver || gameComplete || showReport || prepText !== null || processing || isAiThinking || waitingForNext}
-                                activeOpacity={0.7}
-                            >
+                                activeOpacity={0.7}>
                                 <Text style={styles.btnText}>◀</Text>
                             </TouchableOpacity>
                             <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
@@ -852,8 +824,7 @@ const ClawMachineGame: React.FC = () => {
                                     style={[styles.controlBtn, styles.grabBtn]}
                                     onPress={dropClaw}
                                     disabled={isDropping || gameOver || gameComplete || showReport || prepText !== null || processing || isAiThinking || waitingForNext}
-                                    activeOpacity={0.7}
-                                >
+                                    activeOpacity={0.7}>
                                     <Text style={styles.grabBtnText}>⚡ Scraping ⚡</Text>
                                 </TouchableOpacity>
                             </Animated.View>
@@ -862,8 +833,7 @@ const ClawMachineGame: React.FC = () => {
                                 onPressIn={() => setRightPressed(true)}
                                 onPressOut={() => setRightPressed(false)}
                                 disabled={isDropping || gameOver || gameComplete || showReport || prepText !== null || processing || isAiThinking || waitingForNext}
-                                activeOpacity={0.7}
-                            >
+                                activeOpacity={0.7}>
                                 <Text style={styles.btnText}>▶</Text>
                             </TouchableOpacity>
                         </View>
@@ -872,7 +842,6 @@ const ClawMachineGame: React.FC = () => {
                             <TouchableOpacity style={styles.resetBtn} onPress={resetGame}>
                                 <Text style={styles.resetBtnText}>⟳ Start over</Text>
                             </TouchableOpacity>
-
                             {waitingForNext ? (
                                 <TouchableOpacity style={styles.nextBtn} onPress={handleNextQuestion}>
                                     <Text style={styles.nextBtnText}>➡️ Next</Text>

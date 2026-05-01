@@ -108,6 +108,7 @@ interface QuestionRecord {
     questionType: string;
     options: any[];
     earnedPoints: number;
+    timeSpent: number; // 新增：本题耗时（秒）
 }
 
 interface GameState {
@@ -144,11 +145,46 @@ export default function SentenceReorderScreen() {
     const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const timerStartedRef = useRef<boolean>(false);
 
+    // ✅ 新增：记录当前题目开始时的 elapsedSeconds
+    const questionStartTimeRef = useRef<number>(0);
+    const hasStartedQuestionRef = useRef<boolean>(false);
+
     const [highScore, setHighScore] = useState(0);
 
     // ✅ 當前題目是否已作答（用於鎖定操作並只顯示 "Next"）
     const [isAnswered, setIsAnswered] = useState(false);
 
+    // ========== 状态定义（必须放在使用它的函数之前）==========
+    const [gameState, setGameState] = useState<GameState>({
+        currentQuestionIndex: 0,
+        totalQuestions: 3,
+        score: 0,
+        words: [],
+        feedback: '',
+        isChecking: false,
+        correctAnswers: 0,
+        wrongAnswers: 0,
+        currentQuestion: null,
+        isLoading: false,
+        isLoadingNext: false,
+        difficulty: null,
+        gameStarted: false,
+        gameFinished: false
+    });
+
+    const [questionsHistory, setQuestionsHistory] = useState<QuestionRecord[]>([]);
+
+    // ========== 动画样式 ==========
+    const animatedScreenStyle = useAnimatedStyle(() => ({
+        transform: [{ translateX: screenShake.value }]
+    }));
+
+    const animatedPrepStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: prepScale.value }],
+        opacity: withTiming(prepText ? 1 : 0)
+    }));
+
+    // ========== 辅助函数 ==========
     const formatTime = (totalSeconds: number): string => {
         const minutes = Math.floor(totalSeconds / 60);
         const seconds = totalSeconds % 60;
@@ -171,34 +207,23 @@ export default function SentenceReorderScreen() {
         }, 1000);
     }, []);
 
-    const [gameState, setGameState] = useState<GameState>({
-        currentQuestionIndex: 0,
-        totalQuestions: 3,
-        score: 0,
-        words: [],
-        feedback: '',
-        isChecking: false,
-        correctAnswers: 0,
-        wrongAnswers: 0,
-        currentQuestion: null,
-        isLoading: false,
-        isLoadingNext: false,
-        difficulty: null,
-        gameStarted: false,
-        gameFinished: false
-    });
+    // ✅ 记录当前题目开始时间（应在题目可见时调用）
+    const recordCurrentQuestionStart = useCallback(() => {
+        if (!hasStartedQuestionRef.current && gameActive && !isAnswered && !gameState.gameFinished) {
+            questionStartTimeRef.current = elapsedSeconds;
+            hasStartedQuestionRef.current = true;
+            console.log(`[Time] Question ${gameState.currentQuestionIndex + 1} started at ${elapsedSeconds}s`);
+        }
+    }, [gameActive, isAnswered, gameState.gameFinished, gameState.currentQuestionIndex, elapsedSeconds]);
 
-    const [questionsHistory, setQuestionsHistory] = useState<QuestionRecord[]>([]);
+    // 当游戏活跃且未作答时，尝试记录开始时间（每道题只记录一次）
+    useEffect(() => {
+        if (gameActive && !isAnswered && !gameState.gameFinished && gameState.currentQuestion) {
+            recordCurrentQuestionStart();
+        }
+    }, [gameActive, isAnswered, gameState.gameFinished, gameState.currentQuestion, recordCurrentQuestionStart]);
 
-    const animatedScreenStyle = useAnimatedStyle(() => ({
-        transform: [{ translateX: screenShake.value }]
-    }));
-
-    const animatedPrepStyle = useAnimatedStyle(() => ({
-        transform: [{ scale: prepScale.value }],
-        opacity: withTiming(prepText ? 1 : 0)
-    }));
-
+    // ========== 核心游戏逻辑 ==========
     const loadHighScore = async (difficulty: Difficulty) => {
         try {
             const saved = await AsyncStorage.getItem(`sentence_reorder_high_score_${difficulty}`);
@@ -221,6 +246,8 @@ export default function SentenceReorderScreen() {
 
     const startPrepSequence = useCallback((isFirstTime: boolean = true) => {
         setGameActive(false);
+        // 重置题目开始标记，等待新题目出现后重新记录
+        hasStartedQuestionRef.current = false;
         setTimeout(() => {
             setPrepText('READY');
             prepScale.value = 0;
@@ -240,6 +267,7 @@ export default function SentenceReorderScreen() {
             setPrepText(null);
             setGameActive(true);
             setIsAnswered(false);
+            // gameActive 变为 true 后，recordCurrentQuestionStart 会被 useEffect 触发
         }, 1600);
     }, [startTimerOnce]);
 
@@ -270,6 +298,8 @@ export default function SentenceReorderScreen() {
             isChecking: false
         }));
         setIsAnswered(false);
+        // 重置题目开始标记，等待 gameActive 变为 true 后重新记录
+        hasStartedQuestionRef.current = false;
     };
 
     const loadFirstQuestion = useCallback(async (difficulty: Difficulty) => {
@@ -314,6 +344,7 @@ export default function SentenceReorderScreen() {
         isCompletingRef.current = false;
         timerStartedRef.current = false;
         setElapsedSeconds(0);
+        hasStartedQuestionRef.current = false;
         stopTimer();
         setGameState(prev => ({
             ...prev,
@@ -413,6 +444,11 @@ export default function SentenceReorderScreen() {
 
     const checkAnswer = () => {
         if (gameState.isChecking || !gameActive || !gameState.currentQuestion) return;
+
+        // 计算本题耗时
+        const timeSpentForThis = Math.max(0, elapsedSeconds - questionStartTimeRef.current);
+        console.log(`[Time] Question ${gameState.currentQuestionIndex + 1} answered, spent ${timeSpentForThis}s`);
+
         setGameState(prev => ({ ...prev, isChecking: true }));
         const currentOrder = [...gameState.words]
             .sort((a, b) => a.currentIndex - b.currentIndex)
@@ -431,6 +467,7 @@ export default function SentenceReorderScreen() {
             questionType: 'sentence-reorder',
             options: [],
             earnedPoints: pointsEarned,
+            timeSpent: timeSpentForThis,
         };
         setQuestionsHistory(prev => {
             const existingIndex = prev.findIndex(r => r.id === gameState.currentQuestionIndex + 1);
@@ -478,7 +515,6 @@ export default function SentenceReorderScreen() {
         startPrepSequence(false);
     };
 
-    // 修改 saveScore：加入總時間及防重複鎖
     const saveScore = async () => {
         if (!token || !gameState.difficulty) return;
         if (isCompletingRef.current) {
@@ -503,7 +539,7 @@ export default function SentenceReorderScreen() {
                 questionType: q.questionType,
                 options: q.options,
                 earnedPoints: q.earnedPoints,
-                timeSpent: 0
+                timeSpent: q.timeSpent !== undefined ? q.timeSpent : 0
             }));
             const totalTimeSeconds = elapsedSeconds;
             const totalTimeFormatted = formatTime(totalTimeSeconds);
@@ -551,12 +587,13 @@ export default function SentenceReorderScreen() {
             }));
             if (gameState.difficulty) {
                 saveHighScore(gameState.score, gameState.difficulty);
-                saveScore(); // 只呼叫一次
+                saveScore();
             }
         }
     };
 
     const restartGame = () => {
+        hasStartedQuestionRef.current = false;
         if (gameState.difficulty) {
             initializeGame(gameState.difficulty);
         } else {
@@ -583,6 +620,7 @@ export default function SentenceReorderScreen() {
         stopTimer();
         timerStartedRef.current = false;
         setElapsedSeconds(0);
+        hasStartedQuestionRef.current = false;
         setGameState(prev => ({
             ...prev,
             gameStarted: false,
@@ -631,6 +669,7 @@ export default function SentenceReorderScreen() {
         return DIFFICULTY_LEVELS[difficulty].label;
     };
 
+    // ========== 渲染函数 ==========
     const renderWordCard = (word: WordItem, index: number, total: number) => {
         const canMoveLeft = index > 0;
         const canMoveRight = index < total - 1;
@@ -937,6 +976,7 @@ export default function SentenceReorderScreen() {
         );
     };
 
+    // ========== 条件渲染 ==========
     if (gameState.isLoading) {
         return (
             <View style={styles.loadingContainer}>
@@ -955,6 +995,7 @@ export default function SentenceReorderScreen() {
     return renderGameScreen();
 }
 
+// ========== 样式 ==========
 const styles = StyleSheet.create({
     container: {
         flex: 1,
