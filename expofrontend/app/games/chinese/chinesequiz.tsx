@@ -317,19 +317,19 @@ const ChineseRestaurantGame = () => {
         }, 1000);
     };
 
-    // ✅ 记录当前题目的开始时间（存储到题目对象自身的 startTime 上）
-    const recordQuestionStartTime = () => {
-        if (!gameComplete && !nextQuestionDelay && currentIndex < questions.length) {
-            setQuestions(prev => {
-                const updated = [...prev];
-                updated[currentIndex] = {
-                    ...updated[currentIndex],
+    // ✅ 1. 加入 targetIndex 參數
+    const recordQuestionStartTime = (targetIndex: number) => {
+        setQuestions(prev => {
+            const updated = [...prev];
+            if (targetIndex < updated.length) {
+                updated[targetIndex] = {
+                    ...updated[targetIndex],
                     startTime: elapsedSecondsRef.current,
                 };
-                return updated;
-            });
-            console.log(`[Time] Question ${currentIndex + 1} started at ${elapsedSecondsRef.current}s`);
-        }
+            }
+            return updated;
+        });
+        console.log(`[Time] Question ${targetIndex + 1} started at ${elapsedSecondsRef.current}s`);
     };
 
     // ✅ 获取当前题目的耗时（秒）
@@ -504,7 +504,8 @@ const ChineseRestaurantGame = () => {
             const questionsData = questionsToSave.map((q, index) => ({
                 id: index + 1,
                 question: q.question,
-                correctAnswer: q.answer,
+                // ✅ 修正：利用 correctAnswer 这个 index 去 options 里面取出真正的文字
+                correctAnswer: q.options[q.correctAnswer],
                 userAnswer: q.userAnswer || "",
                 isCorrect: q.isAnsweredCorrectly || false,
                 questionType: 'multiple-choice',
@@ -545,8 +546,8 @@ const ChineseRestaurantGame = () => {
         }
     };
 
-    // 倒數準備序列
-    const startPrepSequence = (isFirstTime: boolean = true) => {
+    // ✅ 2. 加入 targetIndex 參數，並傳遞下去
+    const startPrepSequence = (isFirstTime: boolean = true, targetIndex: number = 0) => {
         setGameActive(false);
         setTimeout(() => {
             setPrepText('READY');
@@ -576,13 +577,13 @@ const ChineseRestaurantGame = () => {
         setTimeout(() => {
             setPrepText(null);
             setGameActive(true);
-            // ✅ 题目可见，记录开始时间
-            recordQuestionStartTime();
+            // ✅ 傳入正確的 index
+            recordQuestionStartTime(targetIndex);
         }, 1600);
     };
 
-    // ✅ 游戏结束处理：补录最后一道题的时间
-    const handleGameComplete = async (scoreOverride?: number) => {
+    // ✅ 4. 修改 handleGameComplete 接收最新狀態
+    const handleGameComplete = async (scoreOverride?: number, questionsOverride?: ExtendedQuestion[]) => {
         if (isCompletingRef.current) return;
         isCompletingRef.current = true;
         try {
@@ -593,24 +594,26 @@ const ChineseRestaurantGame = () => {
             setGameComplete(true);
             setNextQuestionDelay(false);
 
+            // ✅ 優先使用傳入的最即時陣列
+            const finalQuestions = questionsOverride ? [...questionsOverride] : [...questions];
+
             // 确保最后一道题也有 timeSpent
-            const updatedQuestions = [...questions];
-            if (currentIndex < updatedQuestions.length) {
-                const q = updatedQuestions[currentIndex];
+            if (currentIndex < finalQuestions.length) {
+                const q = finalQuestions[currentIndex];
                 if (q.timeSpent === undefined || q.timeSpent === 0) {
                     const timeSpentThis = getTimeSpentForCurrent();
-                    updatedQuestions[currentIndex] = {
+                    finalQuestions[currentIndex] = {
                         ...q,
                         timeSpent: timeSpentThis,
                     };
-                    setQuestions(updatedQuestions);
+                    setQuestions(finalQuestions);
                 }
             }
 
-            await saveScore(finalScore, updatedQuestions);
+            await saveScore(finalScore, finalQuestions);
 
-            const totalQuestions = updatedQuestions.length;
-            const correctCount = updatedQuestions.filter(q => q.isAnsweredCorrectly).length;
+            const totalQuestions = finalQuestions.length;
+            const correctCount = finalQuestions.filter(q => q.isAnsweredCorrectly).length;
             const accuracy = totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0;
 
             let feedback = '';
@@ -632,6 +635,7 @@ const ChineseRestaurantGame = () => {
         }
     };
 
+    // ✅ 3. 修改 handleItemClick（將最新的陣列往後傳）
     const handleItemClick = async (item: ConveyorItem) => {
         if (!isGameActive || gameComplete || nextQuestionDelay || !gameActive) return;
 
@@ -695,9 +699,11 @@ const ChineseRestaurantGame = () => {
                 setItems([]);
                 setCustomerState('waiting');
                 setNextQuestionDelay(false);
-                startPrepSequence(false);
+                // ✅ 明確傳遞下一題的 index
+                startPrepSequence(false, currentIndex + 1);
             } else {
-                handleGameComplete(updatedScore);
+                // ✅ 直接把已經含有最後一題 timeSpent 與 userAnswer 的陣列傳進去
+                handleGameComplete(updatedScore, updatedQuestions);
             }
         }, 800);
     };
@@ -726,7 +732,8 @@ const ChineseRestaurantGame = () => {
             resetGame();
             setGameState('playing');
             setIsGameActive(true);
-            startPrepSequence(true);
+            // ✅ 明確傳入第一題的 index: 0
+            startPrepSequence(true, 0);
         } catch (error) {
             console.error('Failed to load questions:', error);
             Alert.alert('錯誤', '無法載入菜單，請稍後再試');
