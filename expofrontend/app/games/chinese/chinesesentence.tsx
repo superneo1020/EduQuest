@@ -23,8 +23,10 @@ type Question = {
     userAnswer: string;
     isCorrect: boolean;
     feedback?: string;
-    score?: number; // 实际得分
-    maxScore?: number; // 本题满分
+    score?: number;
+    maxScore?: number;
+    timeSpent?: number;      // 该题花费时间（秒）
+    startTime?: number;      // 前端计时开始时间戳（毫秒），不上传
 };
 
 type Difficulty = 'easy' | 'medium' | null;
@@ -138,7 +140,6 @@ export default function ChineseSentenceGame() {
     // 动画值
     const bounceAnim = useRef(new Animated.Value(0)).current;
     const shakeAnim = useRef(new Animated.Value(0)).current;
-    const feedbackAnim = useRef(new Animated.Value(0)).current;
 
     // 倒数计时状态
     const [prepText, setPrepText] = useState<string | null>(null);
@@ -150,27 +151,8 @@ export default function ChineseSentenceGame() {
     const timerIntervalRef = useRef<number | null>(null);
     const timerStartedRef = useRef<boolean>(false);
 
-    const formatTime = (totalSeconds: number): string => {
-        const minutes = Math.floor(totalSeconds / 60);
-        const seconds = totalSeconds % 60;
-        return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-    };
-
-    const stopTimer = () => {
-        if (timerIntervalRef.current) {
-            clearInterval(timerIntervalRef.current);
-            timerIntervalRef.current = null;
-        }
-    };
-
-    const startTimerOnce = () => {
-        if (timerStartedRef.current) return;
-        timerStartedRef.current = true;
-        setElapsedSeconds(0);
-        timerIntervalRef.current = setInterval(() => {
-            setElapsedSeconds(prev => prev + 1);
-        }, 1000);
-    };
+    // 题目开始时间 ref（修复 timeSpent 为 0 的问题）
+    const questionStartTimeRef = useRef<number | null>(null);
 
     // 特效状态
     const [floatingText, setFloatingText] = useState<{ id: number, text: string, color: string } | null>(null);
@@ -192,91 +174,28 @@ export default function ChineseSentenceGame() {
     const [characterState, setCharacterState] = useState<keyof typeof CHARACTER_STATES>('idle');
     const [encouragementText, setEncouragementText] = useState('');
 
-    // 保存分数到服务器（加入游玩总时间）
-    const saveScore = async (finalScore: number) => {
-        if (!token || !difficulty) return;
-        if (isCompletingRef.current) {
-            console.log("saveScore already in progress, skip");
-            return;
-        }
-        isCompletingRef.current = true;
-        setIsSaving(true);
-        try {
-            const gameData = {
-                gameName: "ChineseSentenceGame",
-                scores: finalScore,
-                gameType: "CHINESE",
-                gameDifficulty: difficulty === 'easy' ? 'EASY' : 'MEDIUM'
-            };
+    // ---------- 已移除原来的 useEffect，改为在 startPrepSequence 中同步记录开始时间 ----------
 
-            const questionsData = questions.map((q, index) => ({
-                id: index + 1,
-                question: q.sentence,
-                correctAnswer: q.correctAnswer,
-                userAnswer: q.userAnswer,
-                isCorrect: q.isCorrect,
-                questionType: 'sentence-completion',
-                score: q.score || 0,
-                maxScore: q.maxScore || (difficulty === 'easy' ? 50 : 60),
-                timeSpent: 0
-            }));
+    const formatTime = (totalSeconds: number): string => {
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    };
 
-            const totalTimeSeconds = elapsedSeconds;
-            const totalTimeFormatted = formatTime(totalTimeSeconds);
-
-            const metadata: GameMetadata = createGameMetadata(
-                gameData.gameType,
-                gameData.gameDifficulty,
-                finalScore,
-                {
-                    totalSentences: questions.length,
-                    correctSentences: questions.filter(q => q.isCorrect).length,
-                    totalTimeSeconds: totalTimeSeconds,
-                    totalTimeFormatted: totalTimeFormatted,
-                },
-                questionsData
-            );
-
-            const backendRequest = {
-                gameName: gameData.gameName,
-                scores: gameData.scores,
-                metadata: convertToBackendMetadata(metadata)
-            };
-
-            await axios.post('http://localhost:8080/api/user/game/score', backendRequest, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            console.log("Score synced to server!");
-        } catch (e) {
-            console.error("Failed to sync score:", e);
-        } finally {
-            setIsSaving(false);
-            setTimeout(() => {
-                isCompletingRef.current = false;
-            }, 500);
+    const stopTimer = () => {
+        if (timerIntervalRef.current) {
+            clearInterval(timerIntervalRef.current);
+            timerIntervalRef.current = null;
         }
     };
 
-    const startPrepSequence = (isFirstTime: boolean = true) => {
-        setGameActive(false);
-        setTimeout(() => {
-            setPrepText('GO!');
-            prepScale.setValue(0);
-            Animated.spring(prepScale, {
-                toValue: 1.5,
-                friction: 3,
-                tension: 150,
-                useNativeDriver: true,
-            }).start();
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            if (isFirstTime) {
-                startTimerOnce();
-            }
-        }, 100);
-        setTimeout(() => {
-            setPrepText(null);
-            setGameActive(true);
-        }, 1200);
+    const startTimerOnce = () => {
+        if (timerStartedRef.current) return;
+        timerStartedRef.current = true;
+        setElapsedSeconds(0);
+        timerIntervalRef.current = setInterval(() => {
+            setElapsedSeconds(prev => prev + 1);
+        }, 1000);
     };
 
     const triggerScreenShake = () => {
@@ -325,12 +244,112 @@ export default function ChineseSentenceGame() {
         }
     };
 
+    const getMaxScoreForQuestion = (difficulty: Difficulty, index: number): number => {
+        if (difficulty === 'easy') return 50;
+        return 60;
+    };
+
+    // 保存分数到服务器（加入游玩总时间）
+    const saveScore = async (finalScore: number, questionsToSave?: Question[]) => {
+        if (!token || !difficulty) return;
+        if (isCompletingRef.current) {
+            console.log("saveScore already in progress, skip");
+            return;
+        }
+        isCompletingRef.current = true;
+        setIsSaving(true);
+        try {
+            const gameData = {
+                gameName: "ChineseSentenceGame",
+                scores: finalScore,
+                gameType: "CHINESE",
+                gameDifficulty: difficulty === 'easy' ? 'EASY' : 'MEDIUM'
+            };
+
+            // 使用傳入的 questionsToSave（如果有），否則使用當前 state
+            const questionsArray = questionsToSave || questions;
+            const questionsData = questionsArray.map((q, index) => ({
+                id: index + 1,
+                question: q.sentence,
+                correctAnswer: q.correctAnswer,
+                userAnswer: q.userAnswer,
+                isCorrect: q.isCorrect,
+                questionType: 'sentence-completion',
+                score: q.score || 0,
+                maxScore: q.maxScore || (difficulty === 'easy' ? 50 : 60),
+                timeSpent: q.timeSpent ?? 0  // 使用记录的花费时间（秒）
+            }));
+
+            const totalTimeSeconds = elapsedSeconds;
+            const totalTimeFormatted = formatTime(totalTimeSeconds);
+
+            const metadata: GameMetadata = createGameMetadata(
+                gameData.gameType,
+                gameData.gameDifficulty,
+                finalScore,
+                {
+                    totalSentences: questions.length,
+                    correctSentences: questions.filter(q => q.isCorrect).length,
+                    totalTimeSeconds: totalTimeSeconds,
+                    totalTimeFormatted: totalTimeFormatted,
+                },
+                questionsData
+            );
+
+            const backendRequest = {
+                gameName: gameData.gameName,
+                scores: gameData.scores,
+                metadata: convertToBackendMetadata(metadata)
+            };
+
+            console.log("[Debug] Saving questions with timeSpent:", questionsData.map(q => ({ id: q.id, timeSpent: q.timeSpent })));
+
+            await axios.post('http://localhost:8080/api/user/game/score', backendRequest, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            console.log("Score synced to server!");
+        } catch (e) {
+            console.error("Failed to sync score:", e);
+        } finally {
+            setIsSaving(false);
+            setTimeout(() => {
+                isCompletingRef.current = false;
+            }, 500);
+        }
+    };
+
+    // 🔥 修复后的倒计时开始：同步记录题目开始时间，避免竞态
+    const startPrepSequence = (isFirstTime: boolean = true) => {
+        setGameActive(false);
+        setTimeout(() => {
+            setPrepText('GO!');
+            prepScale.setValue(0);
+            Animated.spring(prepScale, {
+                toValue: 1.5,
+                friction: 3,
+                tension: 150,
+                useNativeDriver: true,
+            }).start();
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            if (isFirstTime) {
+                startTimerOnce();
+            }
+        }, 100);
+        setTimeout(() => {
+            setPrepText(null);
+            // 在激活游戏前同步记录当前题目的开始时间（这是关键修复）
+            questionStartTimeRef.current = Date.now();
+            setGameActive(true);
+        }, 1200);
+    };
+
     const startGame = (selectedDifficulty: Difficulty) => {
         // 重置完成锁
         isCompletingRef.current = false;
         timerStartedRef.current = false;
         setElapsedSeconds(0);
         stopTimer();
+        questionStartTimeRef.current = null;  // 重置开始时间 ref
 
         setDifficulty(selectedDifficulty);
         setGameState('playing');
@@ -343,11 +362,6 @@ export default function ChineseSentenceGame() {
         setGameActive(false);
         updateCharacterState('idle');
         loadFirstQuestion(selectedDifficulty);
-    };
-
-    const getMaxScoreForQuestion = (difficulty: Difficulty, index: number): number => {
-        if (difficulty === 'easy') return 50;
-        return 60;
     };
 
     const loadFirstQuestion = async (selectedDifficulty: Difficulty) => {
@@ -368,7 +382,9 @@ export default function ChineseSentenceGame() {
                 explanation: response.explanation,
                 userAnswer: '',
                 isCorrect: false,
-                maxScore: getMaxScoreForQuestion(selectedDifficulty, 0)
+                maxScore: getMaxScoreForQuestion(selectedDifficulty, 0),
+                timeSpent: 0,
+                startTime: undefined
             }]);
             updateCharacterState('idle');
             startPrepSequence(true);
@@ -391,6 +407,7 @@ export default function ChineseSentenceGame() {
 
         setLoading(true);
         setGameActive(false);
+        questionStartTimeRef.current = null;  // 清除旧题计时
         try {
             const response = await chineseSentenceAIService.generateSentence({
                 previousAnswers: questions.map(q => ({
@@ -415,7 +432,9 @@ export default function ChineseSentenceGame() {
                 explanation: response.explanation,
                 userAnswer: '',
                 isCorrect: false,
-                maxScore: nextMaxScore
+                maxScore: nextMaxScore,
+                timeSpent: 0,
+                startTime: undefined
             }]);
 
             setCurrentIndex(prev => prev + 1);
@@ -435,12 +454,12 @@ export default function ChineseSentenceGame() {
 
     const handleSubmit = async () => {
         if (!gameActive) {
-            Alert.alert('Prompt', 'Please wait, the game is being prepared！');
+            Alert.alert('提示', '请等待游戏准备就绪！');
             return;
         }
         if (!inputText.trim()) {
-            Alert.alert('Prompt', 'Please enter the answer');
-            updateCharacterState('thinking', '💭 Enter your answer！');
+            Alert.alert('提示', '请输入答案');
+            updateCharacterState('thinking', '💭 输入你的答案吧！');
             return;
         }
 
@@ -459,6 +478,20 @@ export default function ChineseSentenceGame() {
             let questionScore = Math.round((result.score / 100) * maxScoreForThis);
             questionScore = Math.min(questionScore, maxScoreForThis);
 
+            // 🔥 计算花费时间：优先使用 ref（最早时间点），后备为状态中的 startTime
+            const effectiveStartTime = questionStartTimeRef.current ?? currentQuestion.startTime;
+            const spentSeconds = effectiveStartTime
+                ? Math.floor((Date.now() - effectiveStartTime) / 1000)
+                : 0;
+
+            console.log(`[Debug] Question ${currentIndex + 1} time calculation:`, {
+                questionStartTimeRef: questionStartTimeRef.current,
+                currentQuestionStartTime: currentQuestion.startTime,
+                effectiveStartTime,
+                spentSeconds,
+                now: Date.now()
+            });
+
             setQuestions(prev => prev.map((q, idx) =>
                 idx === currentIndex
                     ? {
@@ -466,7 +499,9 @@ export default function ChineseSentenceGame() {
                         userAnswer: inputText.trim(),
                         isCorrect: result.isCorrect,
                         feedback: result.feedback,
-                        score: questionScore
+                        score: questionScore,
+                        timeSpent: spentSeconds,
+                        startTime: undefined
                     }
                     : q
             ));
@@ -530,8 +565,27 @@ export default function ChineseSentenceGame() {
         const percentage = score.percentage;
         const maxScore = score.maxScore;
 
-        // 只保存一次
-        await saveScore(score.totalScore);
+        // 確保最後一題的 timeSpent 被正確設定（修復 timeSpent 為 0 的問題）
+        const updatedQuestions = [...questions];
+        if (currentIndex < updatedQuestions.length) {
+            const q = updatedQuestions[currentIndex];
+            if (q.timeSpent === undefined || q.timeSpent === 0) {
+                // 使用 questionStartTimeRef 計算時間，或回退到總時間
+                const effectiveStartTime = questionStartTimeRef.current ?? Date.now() - (elapsedSeconds * 1000);
+                const timeSpentThis = effectiveStartTime
+                    ? Math.floor((Date.now() - effectiveStartTime) / 1000)
+                    : elapsedSeconds;
+                updatedQuestions[currentIndex] = {
+                    ...q,
+                    timeSpent: timeSpentThis,
+                };
+                // 更新狀態以供後續使用
+                setQuestions(updatedQuestions);
+            }
+        }
+
+        // 只保存一次（傳遞更新後的 questions 以確保 timeSpent 正確）
+        await saveScore(score.totalScore, updatedQuestions);
 
         let feedback = '';
         if (score.correct === TOTAL_QUESTIONS) {
@@ -553,10 +607,27 @@ export default function ChineseSentenceGame() {
         stopTimer();
         timerStartedRef.current = false;
         setElapsedSeconds(0);
+        questionStartTimeRef.current = null;
         if (gameState === 'playing' && questions.length > 0) {
             const currentScore = calculateScore();
             if (currentScore.totalScore > 0 && !isCompletingRef.current) {
-                await saveScore(currentScore.totalScore);
+                // 確保當前題目的 timeSpent 被正確設定
+                const updatedQuestions = [...questions];
+                if (currentIndex < updatedQuestions.length) {
+                    const q = updatedQuestions[currentIndex];
+                    if ((q.timeSpent === undefined || q.timeSpent === 0) && q.userAnswer) {
+                        // 用戶已回答但 timeSpent 未設定，使用 questionStartTimeRef 或總時間計算
+                        const effectiveStartTime = questionStartTimeRef.current ?? Date.now() - (elapsedSeconds * 1000);
+                        const timeSpentThis = effectiveStartTime
+                            ? Math.floor((Date.now() - effectiveStartTime) / 1000)
+                            : elapsedSeconds;
+                        updatedQuestions[currentIndex] = {
+                            ...q,
+                            timeSpent: timeSpentThis,
+                        };
+                    }
+                }
+                await saveScore(currentScore.totalScore, updatedQuestions);
             }
         }
         setGameState('difficulty_select');
@@ -606,8 +677,25 @@ export default function ChineseSentenceGame() {
                             stopTimer();
                             const currentScore = calculateScore();
                             if (currentScore.totalScore > 0 && !isCompletingRef.current) {
-                                await saveScore(currentScore.totalScore);
+                                // 確保當前題目的 timeSpent 被正確設定
+                                const updatedQuestions = [...questions];
+                                if (currentIndex < updatedQuestions.length) {
+                                    const q = updatedQuestions[currentIndex];
+                                    if ((q.timeSpent === undefined || q.timeSpent === 0) && q.userAnswer) {
+                                        // 用戶已回答但 timeSpent 未設定
+                                        const effectiveStartTime = questionStartTimeRef.current ?? Date.now() - (elapsedSeconds * 1000);
+                                        const timeSpentThis = effectiveStartTime
+                                            ? Math.floor((Date.now() - effectiveStartTime) / 1000)
+                                            : elapsedSeconds;
+                                        updatedQuestions[currentIndex] = {
+                                            ...q,
+                                            timeSpent: timeSpentThis,
+                                        };
+                                    }
+                                }
+                                await saveScore(currentScore.totalScore, updatedQuestions);
                             }
+                            questionStartTimeRef.current = null;
                             setGameState('difficulty_select');
                             setDifficulty(null);
                             setQuestions([]);
@@ -1023,6 +1111,8 @@ export default function ChineseSentenceGame() {
         </>
     );
 }
+
+// 样式部分保持不变，此处省略...
 
 const styles = StyleSheet.create({
     container: {

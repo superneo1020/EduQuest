@@ -76,12 +76,14 @@ const BodyPartsMatchingGame = () => {
     const isCompletingRef = useRef(false);
     const { width: screenWidth, height: screenHeight } = useWindowDimensions();
     const [isPortrait, setIsPortrait] = useState(screenHeight > screenWidth);
-    // 移除 startTimeRef，統一使用 elapsedSeconds
-    // const startTimeRef = useRef<number>(Date.now());
 
     // ========== 🕒 計時器相關狀態 ==========
     const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+    const elapsedSecondsRef = useRef<number>(0);   // ✅ 同步最新秒數，避免閉包陷阱
     const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+    // ✅ 記錄每個身體部位完成匹配時的秒數
+    const matchTimesRef = useRef<{ [partId: string]: number }>({});
 
     // 格式化時間 (MM:SS)
     const formatTime = (totalSeconds: number): string => {
@@ -102,8 +104,13 @@ const BodyPartsMatchingGame = () => {
     const startTimer = useCallback(() => {
         stopTimer();
         setElapsedSeconds(0);
+        elapsedSecondsRef.current = 0;
         timerIntervalRef.current = setInterval(() => {
-            setElapsedSeconds(prev => prev + 1);
+            setElapsedSeconds(prev => {
+                const newVal = prev + 1;
+                elapsedSecondsRef.current = newVal;   // ✅ 同步 ref
+                return newVal;
+            });
         }, 1000);
     }, [stopTimer]);
 
@@ -142,8 +149,12 @@ const BodyPartsMatchingGame = () => {
         };
     }, []);
 
-    // ========== 💾 保存分數到伺服器（加入總時間） ==========
-    const saveScore = async (finalScore: number, totalSeconds: number) => {
+    // ========== 💾 保存分數到伺服器（加入每題真實用時） ==========
+    const saveScore = async (
+        finalScore: number,
+        totalSeconds: number,
+        matchTimes: { [partId: string]: number }
+    ) => {
         if (!token) return;
         if (isCompletingRef.current) {
             console.log("saveScore already in progress, skip");
@@ -159,6 +170,7 @@ const BodyPartsMatchingGame = () => {
                 gameDifficulty: "MEDIUM"
             };
 
+            // ✅ 根據 matchTimes 填入每題的實際耗時（秒）
             const questionsData = BODY_PARTS.map((part, index) => ({
                 id: index + 1,
                 question: `Match ${part.name}`,
@@ -166,7 +178,7 @@ const BodyPartsMatchingGame = () => {
                 userAnswer: 'User matched correctly',
                 isCorrect: true,
                 questionType: 'matching',
-                timeSpent: 0
+                timeSpent: matchTimes[part.id] ?? totalSeconds, // 若有記錄則用，否則用總時間（理論上都會有記錄）
             }));
 
             const totalTimeSeconds = totalSeconds;
@@ -207,8 +219,8 @@ const BodyPartsMatchingGame = () => {
 
     // 計算完成時間並生成分數
     const calculateScoreAndReport = async () => {
-        stopTimer(); // 遊戲結束時停止計時器
-        const totalSeconds = elapsedSeconds; // 直接使用計時器累計秒數
+        stopTimer();
+        const totalSeconds = elapsedSecondsRef.current; // 使用 ref 中最新秒數
         let finalScore = 0;
         let summary = '';
 
@@ -225,8 +237,8 @@ const BodyPartsMatchingGame = () => {
             summary = `⏱️ You spent ${Math.round(totalSeconds)} Complete the game in seconds. After more than 1 minute, 10 points are deducted every 15 seconds. The final score is ${finalScore} Points. Next time, you can try to speed up the matching!`;
         }
 
-        // 保存分數到伺服器（傳入總秒數）
-        await saveScore(finalScore, totalSeconds);
+        // ✅ 傳入 matchTimesRef.current
+        await saveScore(finalScore, totalSeconds, { ...matchTimesRef.current });
 
         setFinalReport({ summary, finalScore, timeSpent: totalSeconds });
         setIsFinished(true);
@@ -248,7 +260,8 @@ const BodyPartsMatchingGame = () => {
         setScore(0);
         setMatches(0);
         setIsFinished(false);
-        startTimer(); // 重新開始計時
+        matchTimesRef.current = {};   // ✅ 清空匹配時間記錄
+        startTimer();
     };
 
     // 返回上一頁函數
@@ -284,6 +297,10 @@ const BodyPartsMatchingGame = () => {
 
         const isMatch = firstCard.partId === secondCard.partId;
         if (isMatch) {
+            // ✅ 記錄該身體部位匹配成功時的時間
+            const matchTime = elapsedSecondsRef.current;
+            matchTimesRef.current[firstCard.partId] = matchTime;
+
             setCards(prev => {
                 const newCards = [...prev];
                 newCards[selectedIndex!].isMatched = true;
@@ -380,7 +397,7 @@ const BodyPartsMatchingGame = () => {
         return rows;
     };
 
-    // 總結頁面 - 显示总时间
+    // 总结页面
     if (isFinished) {
         const totalTimeFormatted = formatTime(Math.round(finalReport.timeSpent));
         return (
@@ -461,7 +478,7 @@ const BodyPartsMatchingGame = () => {
         );
     }
 
-    // 遊戲主頁面 - 右上角增加计时器
+    // 遊戲主頁面
     const renderContent = () => (
         <>
             <View style={styles.headerBarWithTimer}>

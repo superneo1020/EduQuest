@@ -1147,17 +1147,17 @@ class RAGService:
     def _build_rag_prompt(self, question: str, context_block: str, results: List[Dict]) -> str:
 
 
-        # Extract document metadata for context awareness
-        doc_types = list(set([
-            r.get('file_type', 'unknown') if r.get('file_type')
-            else Path(r.get('source_uri', '')).suffix.lstrip('.') or 'unknown'
-            for r in results
-        ]))
+    # Extract document metadata for context awareness
+         doc_types = list(set([
+             r.get('file_type', 'unknown') if r.get('file_type')
+             else Path(r.get('source_uri', '')).suffix.lstrip('.') or 'unknown'
+             for r in results
+         ]))
 
-        source_names = list(set([r['display_name'] for r in results]))
-        total_pages = max([r.get('page_number', 0) for r in results] or [0])
+         source_names = list(set([r['display_name'] for r in results]))
+         total_pages = max([r.get('page_number', 0) for r in results] or [0])
 
-        prompt = f"""You are an expert educational assistant with deep analytical capabilities. Your task is to answer questions based on provided document context with high accuracy and relevance.
+         prompt = f"""You are an expert educational assistant with deep analytical capabilities. Your task is to answer questions based on provided document context with high accuracy and relevance.
 
                     ## PHASE 1: DOCUMENT ANALYSIS
                     Before answering, analyze the document context:
@@ -1205,7 +1205,7 @@ Based on your analysis above, generate a comprehensive answer following these ru
 
 ## YOUR RESPONSE:
 """
-        return prompt
+         return prompt
 
     def list_documents(self, user_id: int) -> List[Dict]:
         """List all uploaded documents."""

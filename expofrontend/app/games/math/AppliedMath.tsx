@@ -17,7 +17,7 @@ const MAX_STEPS = 2;
 const MAX_SCORE = 100;          // 满分100分
 const SCORE_PER_QUESTION = MAX_SCORE / MAX_STEPS;  // 每题50分
 
-// 格式化時間為 mm:ss
+// 格式化时间 mm:ss
 const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -66,7 +66,7 @@ const AppliedMath = () => {
         navigation.setOptions({ headerShown: false });
     }, [navigation]);
 
-    // 原有狀態
+    // 原有状态
     const [loading, setLoading] = useState(false);
     const [difficulty, setDifficulty] = useState<string | null>(null);
     const [data, setData] = useState<any>(null);
@@ -78,35 +78,39 @@ const AppliedMath = () => {
     const [isFinished, setIsFinished] = useState(false);
     const [finalReport, setFinalReport] = useState({ summary: '', accuracy: 0, totalTime: 0 });
 
-    // 計時器狀態
+    // 计时器状态
     const [elapsedTime, setElapsedTime] = useState(0);
     const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-    // 防重複提交鎖
+    // 防重复提交锁
     const isCompletingRef = useRef(false);
 
-    // 遊戲化狀態
+    // 游戏化状态
     const [prepText, setPrepText] = useState<string | null>(null);
     const prepScale = useSharedValue(0);
     const prepAnimatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: prepScale.value }] }));
 
-    // 組件卸載時清理計時器
+    // 新增：记录每道题开始的时间点（相对于 elapsedTime）
+    const [questionStartTime, setQuestionStartTime] = useState<number>(0);
+
+    // 组件卸载时清理计时器
     useEffect(() => {
         return () => {
             if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
         };
     }, []);
 
-    // 啟動計時器
+    // 启动计时器（重置总时间，并记录第一题开始时间为0）
     const startTimer = () => {
         if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
         setElapsedTime(0);
+        setQuestionStartTime(0);         // 第一题开始时间点为0
         timerIntervalRef.current = setInterval(() => {
             setElapsedTime(prev => prev + 1);
         }, 1000);
     };
 
-    // 停止計時器並返回當前秒數
+    // 停止计时器并返回当前秒数
     const stopTimerAndGetElapsed = (): number => {
         if (timerIntervalRef.current) {
             clearInterval(timerIntervalRef.current);
@@ -115,13 +119,14 @@ const AppliedMath = () => {
         return elapsedTime;
     };
 
-    // 重置計時器（不啟動）
+    // 重置计时器（不启动）
     const resetTimer = () => {
         if (timerIntervalRef.current) {
             clearInterval(timerIntervalRef.current);
             timerIntervalRef.current = null;
         }
         setElapsedTime(0);
+        setQuestionStartTime(0);
     };
 
     const startPrepSequence = () => {
@@ -138,7 +143,7 @@ const AppliedMath = () => {
         setTimeout(() => {
             setPrepText(null);
             prepScale.value = 0;
-            startTimer(); // 開始計時
+            startTimer(); // 开始计时
         }, 1600);
     };
 
@@ -151,9 +156,17 @@ const AppliedMath = () => {
             setAiFeedback({ isCorrect: null, message: '' });
             setUserFinalAnswer('');
             setUserSteps('');
-            if (selectedDiff) startPrepSequence(); // 僅在初次選擇難度時啟動準備動畫和計時器
+
+            // 处理每道题的开始时间记录
+            if (selectedDiff) {
+                // 初次选择难度：预备序列会启动计时器，计时器启动时已设置 questionStartTime = 0
+                startPrepSequence();
+            } else {
+                // 后续题目：计时器已经在运行，记录当前时刻作为本题开始时间
+                setQuestionStartTime(elapsedTime);
+            }
         } catch (e) {
-            alert("AI 賢者正在冥想中，請重試。");
+            alert("AI 贤者正在冥想中，请重试。");
         } finally {
             setLoading(false);
         }
@@ -161,6 +174,12 @@ const AppliedMath = () => {
 
     const handleCheckAnswer = async () => {
         if (!userFinalAnswer.trim()) return;
+
+        // 计算本题耗时
+        const currentQuestionTime = elapsedTime - questionStartTime;
+        // 安全性保障（如果因异常导致负数，则设为0）
+        const timeSpentForThis = currentQuestionTime >= 0 ? currentQuestionTime : 0;
+
         setLoading(true);
         try {
             const payload = {
@@ -176,25 +195,29 @@ const AppliedMath = () => {
             if (is_correct) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             else Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
 
+            // 保存到 sessionHistory，新增 timeSpent 字段
             setSessionHistory(prev => [...prev, {
-                question: data.question, user_answer: userFinalAnswer, is_correct: is_correct
+                question: data.question,
+                user_answer: userFinalAnswer,
+                is_correct: is_correct,
+                timeSpent: timeSpentForThis,      // 记录本题耗时（秒）
             }]);
         } catch (e) {
-            setAiFeedback({ isCorrect: false, message: "解析失敗，請再試一次" });
+            setAiFeedback({ isCorrect: false, message: "解析失败，请再试一次" });
         } finally {
             setLoading(false);
         }
     };
 
     const generateFinalSummary = async () => {
-        // 防止重複提交
+        // 防止重复提交
         if (isCompletingRef.current) {
             console.log("generateFinalSummary already in progress, skip");
             return;
         }
         isCompletingRef.current = true;
 
-        // 停止計時並取得實際花費秒數
+        // 停止计时并取得实际花费秒数
         const finalTime = stopTimerAndGetElapsed();
 
         setLoading(true);
@@ -202,15 +225,15 @@ const AppliedMath = () => {
             const res = await axios.post('http://localhost:8000/api/math/final_report', { history: sessionHistory });
             const reportData = res.data;
 
-            // 計算正確題數和分數（滿分100分，每題50分）
+            // 计算正确题数和分数（满分100分，每题50分）
             const totalCorrect = sessionHistory.filter(item => item.is_correct).length;
             const finalScore = Math.round(totalCorrect * SCORE_PER_QUESTION);
             const accuracy = (totalCorrect / sessionHistory.length) * 100 || 0;
 
-            // 保存最終報告（使用前端計算的準確率）
+            // 保存最终报告
             setFinalReport({ summary: reportData.summary, accuracy: accuracy, totalTime: finalTime });
 
-            // 組裝上傳資料，加入總時間
+            // 组装上传数据，加入总时间
             const gameData = {
                 gameName: "AI Math Adventure",
                 scores: finalScore,
@@ -218,6 +241,7 @@ const AppliedMath = () => {
                 gameDifficulty: difficulty?.toUpperCase() || "MEDIUM"
             };
 
+            // 构建 questions 数据，使用 sessionHistory 中保存的 timeSpent
             const questionsData = sessionHistory.map((item, index) => ({
                 id: index + 1,
                 question: item.question,
@@ -225,7 +249,7 @@ const AppliedMath = () => {
                 userAnswer: item.user_answer,
                 isCorrect: item.is_correct,
                 questionType: 'applied-math',
-                timeSpent: 0
+                timeSpent: item.timeSpent !== undefined ? item.timeSpent : 0     // 使用记录的实际耗时
             }));
 
             const totalTimeSeconds = finalTime;
@@ -256,7 +280,7 @@ const AppliedMath = () => {
             setIsFinished(true);
         } catch (e) {
             console.error(e);
-            alert("存檔過程出現問題，請檢查網路連接。");
+            alert("存档过程出现问题，请检查网络连接。");
             setIsFinished(true);
         } finally {
             setLoading(false);
@@ -278,13 +302,12 @@ const AppliedMath = () => {
         setIsFinished(false);
         setDifficulty(null);
         setElapsedTime(0);
-        // 重置鎖
+        setQuestionStartTime(0);     // 重置每道题开始时间
         isCompletingRef.current = false;
     };
 
-    // 總結頁面
+    // 总结页面
     if (isFinished) {
-        // 根據 sessionHistory 重新計算最終分數（用於顯示）
         const totalCorrect = sessionHistory.filter(item => item.is_correct).length;
         const finalScoreDisplay = Math.round(totalCorrect * SCORE_PER_QUESTION);
 
@@ -322,7 +345,7 @@ const AppliedMath = () => {
         );
     }
 
-    // 難度選擇
+    // 难度选择
     if (!difficulty) {
         return (
             <SafeAreaView style={styles.container}>
@@ -360,7 +383,7 @@ const AppliedMath = () => {
         );
     }
 
-    // 遊戲主介面（包含右上角即時計時器）
+    // 游戏主界面
     return (
         <View style={{ flex: 1, backgroundColor: '#fff' }}>
             <SafeAreaView style={styles.gameHeader}>
@@ -371,7 +394,6 @@ const AppliedMath = () => {
                             <View style={[styles.barFill, { width: `${(currentStep / MAX_STEPS) * 100}%` }]} />
                         </View>
                     </View>
-                    {/* 即時計時器 */}
                     <View style={styles.timerContainer}>
                         <Text style={styles.timerIcon}>⏱️</Text>
                         <Text style={styles.timerText}>{formatTime(elapsedTime)}</Text>
