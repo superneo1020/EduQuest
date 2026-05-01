@@ -21,6 +21,9 @@ public class AdminController {
         this.adminService = adminService;
     }
 
+    /**
+     * Searches for users across the system using dynamic filters and pagination.
+     */
     @GetMapping("/filter/user")
     public ResponseEntity<UtilPageResponse<AdminFilterForUserResponse>> findAllUserByFilter(
             @Valid AdminFilterForUserRequest req,
@@ -29,16 +32,25 @@ public class AdminController {
         return ResponseEntity.ok(adminService.findAllUserByFilter(req, pageable));
     }
 
+    /**
+     * Activates a user account, typically used for approving new registrations.
+     */
     @PatchMapping("/user/{id}/activate")
     public ResponseEntity<OperationResult> activateUser(@PathVariable Long id) {
         return ResponseEntity.ok(adminService.activateUser(id));
     }
 
+    /**
+     * Rejects an educator's application and prevents account activation.
+     */
     @PatchMapping("/user/{id}/reject")
     public ResponseEntity<OperationResult> rejectEducator(@PathVariable Long id) {
         return ResponseEntity.ok(adminService.rejectEducator(id));
     }
 
+    /**
+     * Returns the total count of game records across the entire platform for analytics.
+     */
     @GetMapping("/user/game/count")
     public ResponseEntity<Long> countAllUserGameScore() {
         return ResponseEntity.ok(adminService.countAllUserGameScore());

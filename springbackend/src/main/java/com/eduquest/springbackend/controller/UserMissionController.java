@@ -19,6 +19,10 @@ public class UserMissionController {
         this.userMissionService = userMissionService;
     }
 
+    /**
+     * Retrieves missions for the current user based on completion status.
+     * Returns either completed or pending missions depending on the status parameter.
+     */
     @GetMapping("/{completed}")
     public ResponseEntity<?> getMyMission(
             @AuthenticationPrincipal AppUserDetails userDetails,
