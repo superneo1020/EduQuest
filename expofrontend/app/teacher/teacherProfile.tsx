@@ -200,17 +200,12 @@ export default function TeacherProfile() {
     };
 
     const handleLogout = () => {
-        console.log('Logout button pressed');
-        console.log('Current user before logout:', user);
-        console.log('Current token before logout:', token);
         setLogoutModalVisible(true);
     };
 
     const handleConfirmLogout = async () => {
         try {
-            console.log('Logout confirmed, signing out...');
             await signOut();
-            console.log('SignOut successful, navigating to login...');
             setLogoutModalVisible(false);
             router.replace('/Profile/Login');
         } catch (error) {
