@@ -681,28 +681,35 @@ class PgVectorStore:
 
         # Documents table - stores document metadata
         create_documents_table_sql = """
-                                     CREATE TABLE IF NOT EXISTS documents (
-                                                                              id SERIAL PRIMARY KEY,
-                                                                              source_uri TEXT NOT NULL UNIQUE,
-                                                                              display_name TEXT,
-                                                                              file_type TEXT,
-                                                                              total_pages INTEGER DEFAULT 0,
-                                                                              total_chunks INTEGER DEFAULT 0,
-                                                                              metadata JSONB DEFAULT '{}',
-                                                                              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                                                                              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                                     );
-
-                                     -- Index on source_uri for fast lookups
-                                     CREATE INDEX IF NOT EXISTS idx_documents_source_uri
-                                         ON documents(source_uri); \
-                                     """
+            CREATE TABLE IF NOT EXISTS documents (
+                id BIGSERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                source_uri TEXT NOT NULL,
+                display_name TEXT,
+                file_type TEXT,
+                total_pages INTEGER DEFAULT 0,
+                total_chunks INTEGER DEFAULT 0,
+                metadata JSONB DEFAULT '{}',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                -- Composite unique constraint for user+source_uri
+                UNIQUE(user_id, source_uri)
+        );
+        
+        -- Index on user_id for fast filtering
+        CREATE INDEX IF NOT EXISTS idx_documents_user_id 
+            ON documents(user_id);
+        
+        -- Index on source_uri for fast lookups
+        CREATE INDEX IF NOT EXISTS idx_documents_source_uri
+            ON documents(source_uri); \
+        """
 
         # Chunks table - stores text chunks with embeddings
         create_chunks_table_sql = f"""
         CREATE TABLE IF NOT EXISTS document_chunks (
-            id SERIAL PRIMARY KEY,
-            document_id INTEGER REFERENCES documents(id) ON DELETE CASCADE,
+            id BIGSERIAL PRIMARY KEY,
+            document_id BIGINT REFERENCES documents(id) ON DELETE CASCADE,
             content TEXT NOT NULL,
             embedding VECTOR({self.embedding_dim}),
             chunk_index INTEGER DEFAULT 0,
@@ -728,24 +735,24 @@ class PgVectorStore:
             self.conn.commit()
             logger.info("✓ Documents and chunks tables created with HNSW index")
 
-    def insert_document(self, source_uri: str, display_name: str, file_type: str,
+    def insert_document(self, user_id: int, source_uri: str, display_name: str, file_type: str,
                         total_pages: int, total_chunks: int, metadata: dict = None) -> int:
         """Insert document metadata and return document_id."""
         insert_sql = """
-                     INSERT INTO documents (source_uri, display_name, file_type, total_pages, total_chunks, metadata)
-                     VALUES (%s, %s, %s, %s, %s, %s)
-                         ON CONFLICT (source_uri) 
-            DO UPDATE SET
-                         display_name = EXCLUDED.display_name,
-                                            total_pages = EXCLUDED.total_pages,
-                                            total_chunks = EXCLUDED.total_chunks,
-                                            metadata = EXCLUDED.metadata,
-                                            updated_at = CURRENT_TIMESTAMP
-                                            RETURNING id; \
-                     """
+        INSERT INTO documents (user_id, source_uri, display_name, file_type, total_pages, total_chunks, metadata)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (user_id, source_uri) 
+        DO UPDATE SET
+            display_name = EXCLUDED.display_name,
+            total_pages = EXCLUDED.total_pages,
+            total_chunks = EXCLUDED.total_chunks,
+            metadata = EXCLUDED.metadata,
+            updated_at = CURRENT_TIMESTAMP
+        RETURNING id; \
+        """
 
         with self.conn.cursor() as cur:
-            cur.execute(insert_sql, (source_uri, display_name, file_type, total_pages, total_chunks, json.dumps(metadata or {})))
+            cur.execute(insert_sql, (user_id, source_uri, display_name, file_type, total_pages, total_chunks, json.dumps(metadata or {})))
             doc_id = cur.fetchone()[0]
             self.conn.commit()
             return doc_id
@@ -788,20 +795,20 @@ class PgVectorStore:
 
         return ids
 
-    def delete_document_by_source(self, source_uri: str) -> tuple[bool, Optional[int]]:
+    def delete_document_by_source(self, user_id: int, source_uri: str) -> tuple[bool, Optional[int]]:
         """Delete document and all its chunks by source URI (cascade delete)."""
         logger.info(f"[DELETE] Starting delete operation for source_uri: '{source_uri}'")
 
         with self.conn.cursor() as cur:
             # First get the document ID before deleting
             logger.info(f"[DELETE] Executing SELECT to find document ID for source_uri: '{source_uri}'")
-            cur.execute("SELECT id FROM documents WHERE source_uri = %s", (source_uri,))
+            cur.execute("SELECT id FROM documents WHERE user_id = %s AND source_uri = %s", (user_id, source_uri))
             result = cur.fetchone()
 
             logger.info(f"[DELETE] SELECT result: {result}")
 
             if not result:
-                logger.warning(f"[DELETE] No document found with source_uri: '{source_uri}'")
+                logger.warning(f"[DELETE] No document found with user_id: {user_id}, source_uri: '{source_uri}'")
                 # Let's check what documents exist
                 cur.execute("SELECT source_uri FROM documents LIMIT 5")
                 existing = cur.fetchall()
@@ -819,7 +826,7 @@ class PgVectorStore:
             # Delete will cascade to chunks due to ON DELETE CASCADE
             # Use RETURNING to get the ID back, but check rowcount properly
             logger.info(f"[DELETE] Executing DELETE for source_uri: '{source_uri}'")
-            cur.execute("DELETE FROM documents WHERE source_uri = %s RETURNING id", (source_uri,))
+            cur.execute("DELETE FROM documents WHERE user_id = %s AND source_uri = %s RETURNING id", (user_id, source_uri))
             deleted_row = cur.fetchone()
             self.conn.commit()
 
@@ -852,47 +859,51 @@ class PgVectorStore:
             return None
 
     def similarity_search(self, query_embedding: List[float], top_k: int = 5,
-                          document_id: Optional[int] = None) -> List[Dict]:
-        """Retrieve relevant chunks using cosine similarity, optionally filtered by document."""
+                          document_id: Optional[int] = None, user_id: Optional[int] = None) -> List[Dict]:
+        """Retrieve relevant chunks using cosine similarity, optionally filtered by document and user."""
         vector_str = f"[{','.join(map(str, query_embedding))}]"
 
-        if document_id:
-            # Search within specific document
+        if document_id and user_id:
+            # Search within specific document for specific user
             search_sql = """
-                         SELECT
-                             dc.id,
-                             dc.document_id,
-                             d.source_uri,
-                             d.display_name,
-                             dc.content,
-                             dc.chunk_index,
-                             dc.page_number,
-                             1 - (dc.embedding <=> %s::vector) as similarity_score
-                         FROM document_chunks dc
-                                  JOIN documents d ON dc.document_id = d.id
-                         WHERE dc.document_id = %s
-                         ORDER BY dc.embedding <=> %s::vector
-                             LIMIT %s; \
-                         """
-            params = (vector_str, document_id, vector_str, top_k)
+                SELECT
+                    dc.id,
+                    dc.document_id,
+                    d.source_uri,
+                    d.display_name,
+                    dc.content,
+                    dc.chunk_index,
+                    dc.page_number,
+                    1 - (dc.embedding <=> %s::vector) as similarity_score
+                FROM document_chunks dc
+                         JOIN documents d ON dc.document_id = d.id
+                WHERE dc.document_id = %s AND d.user_id = %s
+                ORDER BY dc.embedding <=> %s::vector
+                    LIMIT %s;
+            """
+            params = (vector_str, document_id, user_id, vector_str, top_k)
+        elif user_id:
+            # Search across all documents for specific user
+            search_sql = """
+                SELECT
+                    dc.id,
+                    dc.document_id,
+                    d.source_uri,
+                    d.display_name,
+                    dc.content,
+                    dc.chunk_index,
+                    dc.page_number,
+                    1 - (dc.embedding <=> %s::vector) as similarity_score
+                FROM document_chunks dc
+                         JOIN documents d ON dc.document_id = d.id
+                WHERE d.user_id = %s
+                ORDER BY dc.embedding <=> %s::vector
+                    LIMIT %s;
+            """
+            params = (vector_str, user_id, vector_str, top_k)
         else:
-            # Search across all documents
-            search_sql = """
-                         SELECT
-                             dc.id,
-                             dc.document_id,
-                             d.source_uri,
-                             d.display_name,
-                             dc.content,
-                             dc.chunk_index,
-                             dc.page_number,
-                             1 - (dc.embedding <=> %s::vector) as similarity_score
-                         FROM document_chunks dc
-                                  JOIN documents d ON dc.document_id = d.id
-                         ORDER BY dc.embedding <=> %s::vector
-                             LIMIT %s; \
-                         """
-            params = (vector_str, vector_str, top_k)
+            # user_id is required for security
+            raise ValueError("user_id must be provided for all searches")
 
         with self.conn.cursor() as cur:
             cur.execute(search_sql, params)
@@ -912,14 +923,15 @@ class PgVectorStore:
             for row in rows
         ]
 
-    def list_documents(self) -> List[Dict]:
+    def list_documents(self, user_id: int) -> List[Dict]:
         """List all documents with metadata."""
         with self.conn.cursor() as cur:
             cur.execute("""
                         SELECT id, source_uri, display_name, file_type, total_pages, total_chunks, created_at
                         FROM documents
+                        WHERE user_id = %s
                         ORDER BY created_at DESC
-                        """)
+                        """, (user_id,))
             rows = cur.fetchall()
 
         return [
@@ -1005,7 +1017,7 @@ class RAGService:
         # Ensure tables exist on startup
         self.db.create_tables()
 
-    def upload_document(self, file_path: str, display_name: Optional[str] = None) -> Dict:
+    def upload_document(self, user_id: int, file_path: str, display_name: Optional[str] = None) -> Dict:
         """
         Upload pipeline: Load with LangChain -> Split -> Embed with Ollama -> Store in pgvector.
         Stores documents and chunks in separate tables.
@@ -1045,6 +1057,7 @@ class RAGService:
             "processed_at": str(datetime.now())
         }
         document_id = self.db.insert_document(
+            user_id=user_id,
             source_uri=source_uri,
             display_name=display_name,
             file_type=file_ext.lstrip('.'),
@@ -1074,10 +1087,11 @@ class RAGService:
         except Exception as e:
             logger.error(f"Chunk insertion failed: {e}")
             # Rollback document if chunks fail
-            self.db.delete_document_by_source(source_uri)
+            self.db.delete_document_by_source(user_id, source_uri)
             raise HTTPException(status_code=500, detail="Failed to store document chunks")
 
         return {
+            "user_id": user_id,
             "document_id": document_id,
             "document_name": display_name,
             "source_uri": source_uri,
@@ -1089,20 +1103,21 @@ class RAGService:
         }
 
 
-    def query(self, question: str, top_k: int = 5, document_id: Optional[int] = None) -> Dict:
+    def query(self, user_id: int, question: str, top_k: int = 5, document_id: Optional[int] = None) -> Dict:
         """Query the RAG system using Ollama embeddings for retrieval and Gemini for generation."""
         try:
             # 1. Embed the user question using Ollama
             question_embedding = ollama_embed_client.get_embeddings([question])[0]
 
             # 2. Semantic Search (optionally filtered by document_id)
-            results = self.db.similarity_search(question_embedding, top_k, document_id)
+            results = self.db.similarity_search(question_embedding, top_k, document_id, user_id)
 
             if not results:
                 return {
                     "answer": "I couldn't find any relevant information in the uploaded documents.",
                     "contexts": [],
-                    "sources": []
+                    "sources": [],
+                    "user_id": user_id
                 }
 
             # 3. Context Construction
@@ -1121,7 +1136,8 @@ class RAGService:
                 "answer": answer,
                 "contexts": results,
                 "sources": list(set([r['display_name'] for r in results])),
-                "document_ids": list(set([r['document_id'] for r in results]))
+                "document_ids": list(set([r['document_id'] for r in results])),
+                "user_id": user_id
             }
 
         except Exception as e:
@@ -1191,21 +1207,21 @@ Based on your analysis above, generate a comprehensive answer following these ru
 """
          return prompt
 
-    def list_documents(self) -> List[Dict]:
+    def list_documents(self, user_id: int) -> List[Dict]:
         """List all uploaded documents."""
-        return self.db.list_documents()
+        return self.db.list_documents(user_id)
 
-    def delete_document(self, source_uri: str) -> Dict:
+    def delete_document(self, user_id: int, source_uri: str) -> Dict:
         """Delete a document and all its chunks."""
-        logger.info(f"[RAGService] delete_document called with source_uri: '{source_uri}'")
-        deleted, doc_id = self.db.delete_document_by_source(source_uri)
+        logger.info(f"[RAGService] delete_document called with user_id: {user_id}, source_uri: '{source_uri}'")
+        deleted, doc_id = self.db.delete_document_by_source(user_id, source_uri)
         logger.info(f"[RAGService] delete_document_by_source returned: deleted={deleted}, doc_id={doc_id}")
 
         if deleted:
-            logger.info(f"[RAGService] Document deleted successfully: '{source_uri}' (ID: {doc_id})")
-            return {"status": "deleted", "document_id": doc_id, "source_uri": source_uri}
+            logger.info(f"[RAGService] Document deleted successfully: user_id={user_id}, source_uri: '{source_uri}' (ID: {doc_id})")
+            return {"status": "deleted", "user_id": user_id, "document_id": doc_id, "source_uri": source_uri}
 
-        logger.warning(f"[RAGService] Document not found for deletion: '{source_uri}'")
+        logger.warning(f"[RAGService] Document not found for deletion: user_id={user_id}, source_uri: '{source_uri}'")
         raise HTTPException(status_code=404, detail=f"Document not found: {source_uri}")
 
 
@@ -1311,10 +1327,12 @@ class AvatarResponse(BaseModel):
 
 # RAG Schemas
 class RAGUploadRequest(BaseModel):
+    user_id: int = Field(..., description="User ID from Spring backend")
     file_path: str = Field(..., description="Local file path to upload")
     display_name: Optional[str] = Field(None, description="Optional display name")
 
 class RAGUploadResponse(BaseModel):
+    user_id: int
     document_id: int
     document_name: str
     source_uri: str
@@ -1324,6 +1342,7 @@ class RAGUploadResponse(BaseModel):
     status: str
 
 class RAGQueryRequest(BaseModel):
+    user_id: int = Field(..., description="User ID from Spring backend")
     question: str = Field(..., min_length=1, max_length=2000)
     top_k: int = Field(default=5, ge=1, le=20)
     document_id: Optional[int] = Field(None, description="Optional: filter by specific document")
@@ -1338,10 +1357,12 @@ class RAGListResponse(BaseModel):
     documents: list[dict]
 
 class RAGDeleteRequest(BaseModel):
+    user_id: int = Field(..., description="User ID from Spring backend")
     source_uri: str
 
 class RAGDeleteResponse(BaseModel):
     status: str
+    user_id: int
     document_id: Optional[int] = None
     source_uri: str
 
@@ -1492,7 +1513,7 @@ def rag_upload(req: RAGUploadRequest):
         )
 
     try:
-        result = rag_service.upload_document(req.file_path, req.display_name)
+        result = rag_service.upload_document(req.user_id, req.file_path, req.display_name)
         return RAGUploadResponse(**result)
     except FileNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -1506,9 +1527,9 @@ def rag_upload(req: RAGUploadRequest):
         )
 
 @app.post("/rag/upload-file")
-def rag_upload_file(file: UploadFile = File(...), display_name: Optional[str] = None):
+def rag_upload_file(user_id: int, file: UploadFile = File(...), display_name: Optional[str] = None):
     """
-    Upload a file directly via HTTP to the RAG knowledge base.
+    Upload a file directly via HTTP to the RAG knowledge base with user_id.
     Uses LangChain for processing and Ollama for embeddings.
     """
     if rag_service is None:
@@ -1524,7 +1545,7 @@ def rag_upload_file(file: UploadFile = File(...), display_name: Optional[str] = 
         tmp_path = tmp.name
 
     try:
-        result = rag_service.upload_document(tmp_path, display_name or file.filename)
+        result = rag_service.upload_document(user_id, tmp_path, display_name or file.filename)
         return RAGUploadResponse(**result)
     except Exception as e:
         raise HTTPException(
@@ -1547,7 +1568,7 @@ def rag_query(req: RAGQueryRequest):
         )
 
     try:
-        result = rag_service.query(req.question, req.top_k, req.document_id)
+        result = rag_service.query(req.user_id, req.question, req.top_k, req.document_id)
         return RAGQueryResponse(**result)
     except Exception as e:
         logger.exception("RAG query error")
@@ -1557,7 +1578,7 @@ def rag_query(req: RAGQueryRequest):
         )
 
 @app.get("/rag/documents", response_model=RAGListResponse)
-def rag_list_documents():
+def rag_list_documents(user_id: int):
     """List all uploaded documents with metadata."""
     if rag_service is None:
         raise HTTPException(
@@ -1566,7 +1587,7 @@ def rag_list_documents():
         )
 
     try:
-        documents = rag_service.list_documents()
+        documents = rag_service.list_documents(user_id)
         return RAGListResponse(documents=documents)
     except Exception as e:
         raise HTTPException(
@@ -1577,7 +1598,7 @@ def rag_list_documents():
 @app.post("/rag/delete", response_model=RAGDeleteResponse)
 def rag_delete(req: RAGDeleteRequest):
     """Delete a document and all its chunks by source URI."""
-    logger.info(f"[API] rag_delete endpoint called with source_uri: '{req.source_uri}'")
+    logger.info(f"[API] rag_delete endpoint called with user_id: {req.user_id}, source_uri: '{req.source_uri}'")
     logger.info(f"[API] Request body: {req.model_dump()}")
 
     if rag_service is None:
@@ -1588,14 +1609,14 @@ def rag_delete(req: RAGDeleteRequest):
         )
 
     try:
-        result = rag_service.delete_document(req.source_uri)
+        result = rag_service.delete_document(req.user_id, req.source_uri)
         logger.info(f"[API] Delete successful, returning: {result}")
         return RAGDeleteResponse(**result)
     except HTTPException as he:
         logger.warning(f"[API] HTTPException raised during delete: {he.status_code} - {he.detail}")
         raise
     except Exception as e:
-        logger.exception(f"[API] RAG delete error for source_uri: '{req.source_uri}'")
+        logger.exception(f"[API] RAG delete error for user_id: {req.user_id}, source_uri: '{req.source_uri}'")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Delete failed: {str(e)}"

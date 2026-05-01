@@ -17,6 +17,10 @@ public class AiConfig {
     public WebClient.Builder webClientBuilder() {
         return WebClient.builder()
                 .defaultHeader("Content-Type", "application/json")
-                .defaultHeader("Accept", "application/json");
+                .defaultHeader("Accept", "application/json")
+                .codecs(configurer -> configurer
+                        .defaultCodecs()
+                        .maxInMemorySize(50 * 1024 * 1024)
+                );
     }
 }
