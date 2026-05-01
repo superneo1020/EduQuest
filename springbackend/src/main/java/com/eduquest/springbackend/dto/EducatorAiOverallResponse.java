@@ -4,11 +4,11 @@ import java.util.List;
 
 /**
  * Educator AI overall response for recent game records to a user
- * @param overallAnalysis Briefly explanation for all students from analysis
- * @param studentAnalysis points of analysis for each student gathered by AI
+ * @param overallAnalysis
+ * @param gameAnalysis
  */
 public record EducatorAiOverallResponse(
         String overallAnalysis,
-        List<String> studentAnalysis
+        List<String> gameAnalysis
 ) {
 }

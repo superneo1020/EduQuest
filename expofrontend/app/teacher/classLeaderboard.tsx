@@ -49,11 +49,6 @@ export default function ClassLeaderboard() {
     const classId = params.classId as string;
     const className = params.className as string;
     
-    // Debug: Check user roles and token
-    console.log('ClassLeaderboard - User:', user);
-    console.log('ClassLeaderboard - Token:', token ? 'exists' : 'missing');
-    console.log('ClassLeaderboard - User roles:', user?.roles);
-    console.log('ClassLeaderboard - URL params:', { classId, className });
     
     const [loading, setLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
@@ -66,17 +61,13 @@ export default function ClassLeaderboard() {
 
     useEffect(() => {
         // Load games when token is available
-        console.log('ClassLeaderboard - Token check:', { token: token ? 'exists' : 'missing', tokenLength: token?.length });
         if (token) {
             loadGames();
-        } else {
-            console.log('ClassLeaderboard - No token available, waiting for authentication...');
         }
     }, [token]);
 
     useEffect(() => {
         if (selectedGame && classId && token) {
-            console.log('ClassLeaderboard - Loading leaderboard for game:', selectedGame, 'classId:', classId);
             loadLeaderboard(true);
         }
     }, [selectedGame, classId, token]);
@@ -96,8 +87,7 @@ export default function ClassLeaderboard() {
             { id: 10, name: 'ChineseGame'},
             { id: 11, name: 'ChineseSentenceGame'}
         ];
-        
-        console.log('ClassLeaderboard - Using hardcoded games:', hardcodedGames);
+
         setGames(hardcodedGames);
         if (hardcodedGames.length > 0) {
             setSelectedGame(hardcodedGames[0].name);
@@ -105,10 +95,7 @@ export default function ClassLeaderboard() {
     };
 
     const loadLeaderboard = async (reset = false) => {
-        console.log('ClassLeaderboard - loadLeaderboard called with:', { selectedGame, classId, reset, token: token ? 'exists' : 'missing' });
-        
         if (!selectedGame || !classId) {
-            console.log('ClassLeaderboard - Missing required data, returning');
             return;
         }
         if (!token || token.trim() === '') {
@@ -125,16 +112,12 @@ export default function ClassLeaderboard() {
 
             const encodedGameName = encodeURIComponent(selectedGame);
             const url = `${getApiBaseUrl()}/api/user/game/${encodedGameName}/leaderboard/class/${classId}?page=${reset ? 0 : page}&size=${pageSize}`;
-            console.log('ClassLeaderboard - Making request to:', url);
-            
+
             const response = await axios.get(url, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            
-            console.log('ClassLeaderboard - Response received:', response.status, response.data);
 
             const newEntries = response.data.slice || [];
-            console.log('ClassLeaderboard - Extracted entries:', newEntries);
             
             if (reset) {
                 setLeaderboard(newEntries);

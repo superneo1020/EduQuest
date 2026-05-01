@@ -91,11 +91,15 @@ export default function AnalyticsScreen() {
         try {
             console.log(`=== FETCHING GAME ANALYSIS FOR: ${gameIdentifier} ===`);
             
-            // Get game ID using game name mapping
-            const gameId = await getGameIdByName(gameIdentifier);
+            // Extract pure game name from gameData for ID lookup
+            const gameName = gameData.gameName || gameData.name || 'Unknown Game';
+            console.log(`=== EXTRACTED GAME NAME: ${gameName} ===`);
+            
+            // Get game ID using the pure game name
+            const gameId = await getGameIdByName(gameName);
             
             if (gameId) {
-                console.log(`=== USING GAME ID: ${gameId} FOR ${gameIdentifier} ===`);
+                console.log(`=== USING GAME ID: ${gameId} FOR ${gameName} ===`);
                 const response = await axios.get(
                     `${getApiBaseUrl()}/api/user/game/results/${gameId}`,
                     { headers: { Authorization: `Bearer ${token}` } }
@@ -108,7 +112,7 @@ export default function AnalyticsScreen() {
                     [gameIdentifier]: response.data
                 }));
             } else {
-                throw new Error(`Game ID not found for ${gameIdentifier}`);
+                throw new Error(`Game ID not found for ${gameName}`);
             }
         } catch (error: any) {
             console.error(`=== FAILED TO FETCH ANALYSIS FOR ${gameIdentifier} ===`);
@@ -170,7 +174,10 @@ export default function AnalyticsScreen() {
     };
 
     const toggleGameExpansion = async (gameData: any) => {
-        const gameIdentifier = gameData.gameName || gameData.name || gameData.gameId || gameData.id;
+        // Create a unique identifier using game name + timestamp
+        const gameName = gameData.gameName || gameData.name || 'Unknown Game';
+        const createdAt = gameData.createdAt || gameData.timestamp || Date.now().toString();
+        const gameIdentifier = `${gameName}_${createdAt}`;
         
         // DEBUG: Log game data immediately
         console.log(`=== TOGGLE EXPANSION DEBUG ===`);
@@ -180,7 +187,8 @@ export default function AnalyticsScreen() {
         console.log(`ID fields:`, {
             id: gameData.id,
             gameId: gameData.gameId,
-            game_id: gameData.game_id
+            game_id: gameData.game_id,
+            createdAt: gameData.createdAt
         });
         
         setExpandedGames(prev => {
@@ -268,10 +276,21 @@ export default function AnalyticsScreen() {
                     
                     {recentGames.length > 0 ? (
                         recentGames.map((game, index) => {
-                            const gameIdentifier = game.gameName || game.name || game.gameId || game.id;
+                            // Create the same unique identifier as in toggleGameExpansion
+                            const gameName = game.gameName || game.name || 'Unknown Game';
+                            const createdAt = game.createdAt || game.timestamp || Date.now().toString();
+                            const gameIdentifier = `${gameName}_${createdAt}`;
                             const isExpanded = expandedGames.has(gameIdentifier);
                             const analysis = gameAnalyses[gameIdentifier];
                             const hasScoreData = game.scores !== undefined && game.scores !== null;
+                            
+                            // Debug info
+                            console.log(`=== RENDER DEBUG FOR ${gameIdentifier} ===`);
+                            console.log(`isExpanded: ${isExpanded}`);
+                            console.log(`hasScoreData: ${hasScoreData}`);
+                            console.log(`analysis:`, analysis);
+                            console.log(`gameAnalyses keys:`, Object.keys(gameAnalyses));
+                            console.log(`expandedGames:`, Array.from(expandedGames));
                             
                             return (
                                 <View key={index} style={styles.gameCardContainer}>
@@ -307,21 +326,23 @@ export default function AnalyticsScreen() {
                                     </TouchableOpacity>
                                     
                                     {/* Expanded Analysis Section */}
+                                    {isExpanded && (() => {
+                                        console.log(`=== EXPANDED SECTION RENDERING FOR ${gameIdentifier} ===`);
+                                        console.log(`hasScoreData: ${hasScoreData}, analysis exists: ${!!analysis}`);
+                                        return null;
+                                    })()}
                                     {isExpanded && (
                                         <View style={styles.expandedAnalysis}>
                                             {hasScoreData ? (
                                                 analysis ? (
+                                                    (() => {
+                                                        console.log(`=== ANALYSIS DATA: ${JSON.stringify(analysis, null, 2)} ===`);
+                                                        return null;
+                                                    })(),
                                                     analysis.error ? (
                                                         <View style={styles.errorContainer}>
                                                             <Text style={styles.errorText}>⚠️ {analysis.message}</Text>
-                                                            <Text style={styles.errorSubtext}>請稍後再試或查看完整分析</Text>
-                                                            <TouchableOpacity
-                                                                style={styles.viewFullAnalysisButton}
-                                                                onPress={() => navigateToGameAnalysis(game)}
-                                                            >
-                                                                <Text style={styles.viewFullAnalysisText}>查看完整分析</Text>
-                                                                <ChevronRight size={14} color="#4CAF50" />
-                                                            </TouchableOpacity>
+                                                            <Text style={styles.errorSubtext}>請稍後再試</Text>
                                                         </View>
                                                     ) : (
                                                         <View style={styles.analysisContent}>
@@ -340,22 +361,23 @@ export default function AnalyticsScreen() {
                                                             {analysis.strengths && (
                                                                 <View style={styles.analysisItem}>
                                                                     <TrendingUp size={16} color="#2196F3" />
-                                                                    <Text style={styles.analysisText}>{analysis.strengths}</Text>
+                                                                    <Text style={styles.analysisText}>
+                                                                        {Array.isArray(analysis.strengths) 
+                                                                            ? analysis.strengths.join('\n') 
+                                                                            : analysis.strengths}
+                                                                    </Text>
                                                                 </View>
                                                             )}
                                                             {analysis.powerUpTips && (
                                                                 <View style={styles.analysisItem}>
                                                                     <Zap size={16} color="#FF9800" />
-                                                                    <Text style={styles.analysisText}>{analysis.powerUpTips}</Text>
+                                                                    <Text style={styles.analysisText}>
+                                                                        {Array.isArray(analysis.powerUpTips) 
+                                                                            ? analysis.powerUpTips.join('\n') 
+                                                                            : analysis.powerUpTips}
+                                                                    </Text>
                                                                 </View>
                                                             )}
-                                                            <TouchableOpacity
-                                                                style={styles.viewFullAnalysisButton}
-                                                                onPress={() => navigateToGameAnalysis(game)}
-                                                            >
-                                                                <Text style={styles.viewFullAnalysisText}>查看完整分析</Text>
-                                                                <ChevronRight size={14} color="#4CAF50" />
-                                                            </TouchableOpacity>
                                                         </View>
                                                     )
                                                 ) : (

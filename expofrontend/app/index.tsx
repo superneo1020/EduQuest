@@ -12,11 +12,33 @@ import {
     Dimensions,
     Platform,
     StatusBar,
-    Modal
+    Modal,
+    Image
 } from 'react-native';
-import { Calculator, Languages, Atom, Brain, LogOut, User, Trophy, Clock, Target, Sparkles, Star, Zap, GraduationCap, Rocket, ShoppingCart } from 'lucide-react-native';
+import {
+    Calculator,
+    Languages,
+    Atom,
+    Brain,
+    LogOut,
+    User,
+    Trophy,
+    Clock,
+    Target,
+    Sparkles,
+    Star,
+    Zap,
+    GraduationCap,
+    Rocket,
+    ShoppingCart,
+    Users
+} from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/src/auth/AuthContext';
+import axios from 'axios';
+import { getApiBaseUrl } from '@/src/api/client';
+import { renderAvatar, avatarOptions } from "@/app/Profile/AvatarSelector";
+import { badgeIconNameMapping } from "@/app/Profile/BadgeSelector";
 
 import {Bot} from "lucide-react-native/icons";
 
@@ -25,8 +47,90 @@ export default function LandscapeOptimizedHome() {
     const [showLogoutModal, setShowLogoutModal] = useState(false);
     const { width, height } = useWindowDimensions();
 
-
     const { token, loading, signOut, user } = useAuth();
+    const [profileData, setProfileData] = useState<any>(null);
+    const [selectedAvatar, setSelectedAvatar] = useState<string>('default');
+    const [userItems, setUserItems] = useState<any[]>([]);
+
+    // 獲取用戶資料和 avatar
+    useEffect(() => {
+        const fetchUserProfile = async () => {
+            if (!token || !user) {
+                console.log('No token or user available, skipping profile fetch');
+                return;
+            }
+            
+            try {
+                console.log('Fetching user profile with token:', token.substring(0, 20) + '...');
+                
+                // 獲取用戶資料 - 使用正確的API端點
+                const profileResponse = await axios.get(`${getApiBaseUrl()}/api/auth/me`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                console.log('Profile response:', profileResponse.data);
+                setProfileData(profileResponse.data);
+
+                // 獲取用戶物品
+                try {
+                    const itemsResponse = await axios.get(`${getApiBaseUrl()}/api/user/item`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+                    const rawItems = itemsResponse.data?.items || itemsResponse.data || [];
+                    const userItemsList = Array.isArray(rawItems) ? rawItems : [];
+                    setUserItems(userItemsList);
+
+                    // 獲取裝備的 avatar
+                    const equippedAvatarId = profileResponse.data?.equipped_items?.AVATAR
+                        || profileResponse.data?.equippedItems?.AVATAR;
+                    
+                    if (equippedAvatarId) {
+                        const equippedItem = userItemsList.find((item: any) => {
+                            const itemData = item.item || item;
+                            return itemData.id === equippedAvatarId || itemData.itemId === equippedAvatarId;
+                        });
+                        
+                        if (equippedItem) {
+                            const itemData = equippedItem.item || equippedItem;
+                            if (itemData.icon) {
+                                setSelectedAvatar(itemData.icon);
+                            }
+                        }
+                    } else {
+                        setSelectedAvatar('default');
+                    }
+                } catch (itemsError) {
+                    console.warn('Failed to fetch user items:', itemsError);
+                    setUserItems([]);
+                    setSelectedAvatar('default');
+                }
+            } catch (error: any) {
+                console.error('Failed to fetch user profile:', error);
+                
+                // 如果是401錯誤，使用已存的用戶數據而不是登出
+                if (error.response?.status === 401) {
+                    console.log('Profile endpoint not accessible, using stored user data');
+                    setProfileData(user);
+                    setSelectedAvatar('default');
+                    return;
+                }
+                
+                // 如果是404，嘗試使用用戶登錄時的基本信息
+                if (error.response?.status === 404) {
+                    console.log('Profile endpoint not found, using basic user data');
+                    setProfileData(user);
+                    setSelectedAvatar('default');
+                    return;
+                }
+                
+                // 其他錯誤也使用基本用戶數據
+                console.log('Using fallback user data due to API error');
+                setProfileData(user);
+                setSelectedAvatar('default');
+            }
+        };
+
+        fetchUserProfile();
+    }, [token, user]);
 
     // Debug: 檢查用戶角色數據
     console.log('User data:', user);
@@ -92,7 +196,11 @@ export default function LandscapeOptimizedHome() {
                 {/* 左側：Logo 與 名稱 */}
                 <View style={styles.headerLeft}>
                     <View style={styles.logoIcon}>
-                        <Sparkles size={20} color="white" fill="white" />
+                        <Image 
+                            source={require('../assets/images/icon/EduQuest_icon.png')} 
+                            style={styles.logoImage}
+                            resizeMode="contain"
+                        />
                     </View>
                     <Text style={styles.headerTitle}>EduQuest</Text>
                 </View>
@@ -106,25 +214,34 @@ export default function LandscapeOptimizedHome() {
                         onPress={() => router.push('/Profile/profile' as any)}
                     >
                         <View style={styles.avatarCircle}>
-                            <Text style={styles.avatarLetter}>
-                                {user?.username?.charAt(0).toUpperCase() || 'U'}
-                            </Text>
+                            {renderAvatar(selectedAvatar, 34)}
                         </View>
                         <View style={styles.userMeta}>
-                            <Text style={styles.userNameText}>{user?.username || 'Guest'}</Text>
-                            <Text style={styles.userRoleText}>{(user?.roles?.includes('teacher') || user?.roles === 'teacher') ? 'Teacher' : 'Student'}</Text>
+                            <Text style={styles.userNameText}>{profileData?.nickname || user?.username || 'Guest'}</Text>
+                            <Text style={styles.userRoleText}>{user?.roles?.some((role: string) => role === 'ROLE_EDUCATOR' || role === 'EDUCATOR' || role === 'teacher') ? 'Teacher' : 'Student'}</Text>
                         </View>
                     </TouchableOpacity>
 
                     {/* 新增的教师页面按钮 */}
                     {/* 新增的教师页面按钮 - 只对教师身份显示 */}
-                    {(user?.roles?.includes('teacher') || user?.roles === 'teacher') && (
+                    {user?.roles?.some((role: string) => role === 'ROLE_EDUCATOR' || role === 'EDUCATOR' || role === 'teacher') && (
                         <TouchableOpacity
                             style={styles.teacherBtn}
                             onPress={() => router.push('/teacher/teacher' as any)}
                         >
                             <GraduationCap size={22} color="#6C5CE7" />
                             <Text style={styles.teacherText}>Teacher</Text>
+                        </TouchableOpacity>
+                    )}
+
+                    {/* 新增的学生班级按钮 - 只对学生身份显示 */}
+                    {!user?.roles?.some((role: string) => role === 'ROLE_EDUCATOR' || role === 'EDUCATOR' || role === 'teacher') && (
+                        <TouchableOpacity
+                            style={styles.studentClassBtn}
+                            onPress={() => router.push('/student/StudentClasses' as any)}
+                        >
+                            <Users size={22} color="#4CAF50" />
+                            <Text style={styles.studentClassText}>My Classes</Text>
                         </TouchableOpacity>
                     )}
 
@@ -200,7 +317,7 @@ export default function LandscapeOptimizedHome() {
                         <View style={styles.miniStat}>
                             <Trophy size={24} color="#FFD700" />
                             <Text style={styles.statVal}>
-                                {String(user?.points ?? 0)}
+                                {String(profileData?.points ?? user?.points ?? 0)}
                             </Text>
                         </View>
 
@@ -278,13 +395,15 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     logoIcon: {
-        width: 32,
-        height: 32,
-        backgroundColor: '#00A8E8',
-        borderRadius: 8,
+        width: 150,
+        height: 150,
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 12,
+    },
+    logoImage: {
+        width: 150,
+        height: 150,
     },
     headerTitle: {
         fontSize: 18,
@@ -398,6 +517,22 @@ const styles = StyleSheet.create({
     },
     teacherText: {
         color: '#6C5CE7',
+        fontWeight: '800',
+        fontSize: 16,
+        marginLeft: 6,
+    },
+    // 新增学生班级按钮样式
+    studentClassBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 15,
+        paddingVertical: 8,
+        marginLeft: 6,
+        backgroundColor: '#E8F5E8',
+        borderRadius: 12,
+    },
+    studentClassText: {
+        color: '#4CAF50',
         fontWeight: '800',
         fontSize: 16,
         marginLeft: 6,
