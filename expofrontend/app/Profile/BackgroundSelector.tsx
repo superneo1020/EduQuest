@@ -52,13 +52,13 @@ interface BackgroundSelectorProps {
 }
 
 export const BackgroundSelector: React.FC<BackgroundSelectorProps> = ({
-    visible,
-    selectedBackground,
-    onSelect,
-    onClose,
-    userItems,
-    onGoToShop
-}) => {
+                                                                          visible,
+                                                                          selectedBackground,
+                                                                          onSelect,
+                                                                          onClose,
+                                                                          userItems,
+                                                                          onGoToShop
+                                                                      }) => {
     // Always include default background
     const ownedBackgroundIds: string[] = ['default'];
 

@@ -4,7 +4,7 @@ import { AvatarIcons } from './AvatarIcons';
 
 // 扩展 avatarOptions，包含商城可购买的四种头像
 export const avatarOptions = [
-        { id: 'happy_cat', name: 'Happy Cat', color: '#FFD93D' },
+    { id: 'happy_cat', name: 'Happy Cat', color: '#FFD93D' },
     { id: 'cool_dog', name: 'Cool Dog', color: '#4ECDC4' },
     { id: 'smart_owl', name: 'Smart Owl', color: '#9B59B6' },
     { id: 'sporty_rabbit', name: 'Sporty Rabbit', color: '#FF6B6B' },
@@ -32,7 +32,7 @@ export const avatarOptions = [
 const iconNameMapping: Record<string, string> = {
     'Hat': 'cool_hat',
     'Cape': 'superhero_cape',
-        };
+};
 
 // Function to render avatar based on selection
 export const renderAvatar = (avatarId: string, size: number = 50) => {
