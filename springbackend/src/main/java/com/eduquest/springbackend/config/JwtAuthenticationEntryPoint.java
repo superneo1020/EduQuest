@@ -17,6 +17,7 @@ import java.util.Map;
 public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
     private final ObjectMapper mapper = new ObjectMapper();
 
+    // Simple implementation of AuthenticationEntryPoint
     @Override
     public void commence(HttpServletRequest request,
                          HttpServletResponse response,
@@ -26,6 +27,7 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
 
+        // returns a JSON response with the error details about authentication
         final Map<String, Object> body = Map.of(
                 "timestamp", Instant.now().toString(),
                 "status", HttpServletResponse.SC_UNAUTHORIZED,

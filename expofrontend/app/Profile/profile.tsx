@@ -510,7 +510,7 @@ export default function ProfileScreen() {
 
                     // Missions
                     try {
-                        const missionsResponse = await axios.get(`${getApiBaseUrl()}/api/user/mission`, {
+                        const missionsResponse = await axios.get(`${getApiBaseUrl()}/api/user/mission/${false}`, {
                             headers: { Authorization: `Bearer ${token}` }
                         });
                         setUserMissions(missionsResponse.data || []);
@@ -557,62 +557,62 @@ export default function ProfileScreen() {
 
     const gameHistory = displayUser?.userGameScores || [];
 
-    // Function to fetch AI learning suggestions
-    const fetchAiLearningSuggestions = useCallback(async () => {
-        if (loadingSuggestions) return;
+    // // Function to fetch AI learning suggestions
+    // const fetchAiLearningSuggestions = useCallback(async () => {
+    //     if (loadingSuggestions) return;
+    //
+    //     setLoadingSuggestions(true);
+    //     try {
+    //         const currentUsername = (displayUser?.username || user?.username || 'Guest').toLowerCase();
+    //
+    //         const gameScoreData = {
+    //             user_id: currentUsername,
+    //             game_scores: gameHistory.map((game: any) => ({
+    //                 game_type: game.gameType || 'GENERAL',
+    //                 game_name: game.name || game.gameName || 'Unknown Game',
+    //                 score: game.scores || 0,
+    //                 difficulty: game.gameDifficulty || 'MEDIUM',
+    //                 createdAt: game.createdAt || new Date().toISOString()
+    //             }))
+    //         };
+    //
+    //         const response = await axios.post(
+    //             `${getApiBaseUrl()}/api/learning/suggestions`,
+    //             gameScoreData,
+    //             {
+    //                 timeout: 20000,
+    //                 headers: {
+    //                     'Content-Type': 'application/json',
+    //                     Authorization: `Bearer ${token}`
+    //                 }
+    //             }
+    //         );
+    //
+    //         if (response.data?.suggestions) {
+    //             setAiSuggestions(response.data.suggestions);
+    //             saveAiSuggestions(response.data.suggestions);
+    //         }
+    //     } catch (error: any) {
+    //         console.error('AI Suggestion Error:', error);
+    //         Alert.alert(
+    //             'AI Analysis Unavailable',
+    //             error.response?.data?.message || 'Please ensure the backend service is running',
+    //             [
+    //                 { text: 'Retry', onPress: fetchAiLearningSuggestions },
+    //                 { text: 'Cancel', style: 'cancel' }
+    //             ]
+    //         );
+    //     } finally {
+    //         setLoadingSuggestions(false);
+    //     }
+    // }, [gameHistory, token, displayUser, user, loadingSuggestions, saveAiSuggestions]);
 
-        setLoadingSuggestions(true);
-        try {
-            const currentUsername = (displayUser?.username || user?.username || 'Guest').toLowerCase();
-
-            const gameScoreData = {
-                user_id: currentUsername,
-                game_scores: gameHistory.map((game: any) => ({
-                    game_type: game.gameType || 'GENERAL',
-                    game_name: game.name || game.gameName || 'Unknown Game',
-                    score: game.scores || 0,
-                    difficulty: game.gameDifficulty || 'MEDIUM',
-                    createdAt: game.createdAt || new Date().toISOString()
-                }))
-            };
-
-            const response = await axios.post(
-                `${getApiBaseUrl()}/api/learning/suggestions`,
-                gameScoreData,
-                {
-                    timeout: 20000,
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `Bearer ${token}`
-                    }
-                }
-            );
-
-            if (response.data?.suggestions) {
-                setAiSuggestions(response.data.suggestions);
-                saveAiSuggestions(response.data.suggestions);
-            }
-        } catch (error: any) {
-            console.error('AI Suggestion Error:', error);
-            Alert.alert(
-                'AI Analysis Unavailable',
-                error.response?.data?.message || 'Please ensure the backend service is running',
-                [
-                    { text: 'Retry', onPress: fetchAiLearningSuggestions },
-                    { text: 'Cancel', style: 'cancel' }
-                ]
-            );
-        } finally {
-            setLoadingSuggestions(false);
-        }
-    }, [gameHistory, token, displayUser, user, loadingSuggestions, saveAiSuggestions]);
-
-    // Fetch AI suggestions when game history changes
-    useEffect(() => {
-        if (gameHistory.length > 0 && !loadingSuggestions) {
-            fetchAiLearningSuggestions();
-        }
-    }, [gameHistory]);
+    // // Fetch AI suggestions when game history changes
+    // useEffect(() => {
+    //     if (gameHistory.length > 0 && !loadingSuggestions) {
+    //         fetchAiLearningSuggestions();
+    //     }
+    // }, [gameHistory]);
 
     const calculateImprovementRate = useCallback(() => {
         if (gameHistory.length < 3) return 0;

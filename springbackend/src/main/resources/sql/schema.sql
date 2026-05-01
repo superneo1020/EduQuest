@@ -415,7 +415,10 @@ BEGIN
         -- delete record (like refund): add points
     ELSIF (TG_OP = 'DELETE') THEN
         SELECT price INTO v_price FROM items WHERE id = OLD.item_id;
-        UPDATE users SET points = points + v_price WHERE id = OLD.user_id;
+        -- Handle case where item doesn't exist (e.g., when deleting all items)
+        IF v_price IS NOT NULL THEN
+            UPDATE users SET points = points + v_price WHERE id = OLD.user_id;
+        END IF;
     END IF;
 
     RETURN NULL;

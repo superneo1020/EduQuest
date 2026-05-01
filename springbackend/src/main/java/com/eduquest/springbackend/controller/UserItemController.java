@@ -18,11 +18,19 @@ public class UserItemController {
         this.userItemService = userItemService;
     }
 
+    /**
+     * Retrieves all items owned by the current user.
+     * Returns the complete inventory of items purchased by the user.
+     */
     @GetMapping
     public ResponseEntity<?> getMyItem(@AuthenticationPrincipal AppUserDetails userDetails) {
         return ResponseEntity.ok(userItemService.showItem(userDetails.getId()));
     }
 
+    /**
+     * Retrieves items of a specific type owned by the current user.
+     * Returns filtered inventory based on item type (e.g., avatar, badge, etc.).
+     */
     @GetMapping("/type/{type}")
     public ResponseEntity<?> getMyItemByType(
             @AuthenticationPrincipal AppUserDetails userDetails,
@@ -31,6 +39,10 @@ public class UserItemController {
         return ResponseEntity.ok(userItemService.showItemByType(userDetails.getId(), type));
     }
 
+    /**
+     * Creates a new item record for the current user.
+     * Typically used when a user purchases or receives an item from the shop.
+     */
     @PostMapping
     public ResponseEntity<?> createMyItem(
             @AuthenticationPrincipal AppUserDetails userDetails,

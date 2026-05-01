@@ -19,11 +19,19 @@ public class AuthController {
         this.authService = authService;
     }
 
+    /**
+     * Registers a new user in the system.
+     * Accepts user registration details and creates a new account.
+     */
     @PostMapping("/register")
     public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest req) {
         return ResponseEntity.ok(authService.register(req));
     }
 
+    /**
+     * Authenticates a user and returns authentication token with user details.
+     * Accepts login credentials and validates them against the system.
+     */
     @PostMapping("/login")
     public ResponseEntity<?> login(@Valid @RequestBody LoginRequest req) {
         return ResponseEntity.ok(authService.loginAndGetUser(req.username().trim(), req.password()));
