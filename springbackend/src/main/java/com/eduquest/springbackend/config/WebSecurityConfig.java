@@ -36,6 +36,14 @@ public class WebSecurityConfig {
         this.authenticationEntryPoint = authenticationEntryPoint;
     }
 
+    /*
+    * Configure the security filter chain
+    * api/auth/**: authentication endpoints
+    * api/hello: simple testing endpoint
+    * api/user/**: common user endpoints
+    * api/educator/**: educator endpoints
+    * api/admin/**: admin endpoints
+    */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
@@ -63,7 +71,7 @@ public class WebSecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:8081", "http://localhost:8000")); // change to your frontend origin(s)
+        configuration.setAllowedOrigins(List.of("http://localhost:8081", "http://localhost:8000")); // origins from other modules
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setMaxAge(3600L);

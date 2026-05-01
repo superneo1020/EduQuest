@@ -25,6 +25,10 @@ public class UserGameController {
         this.aiAnalysisService = aiAnalysisService;
     }
 
+    /**
+     * Retrieves the current user's game scores.
+     * Returns score history for all games or a specific game if name is provided.
+     */
     @GetMapping({"/score", "/{name}/score"})
     public ResponseEntity<?> getMyGameScore(
             @AuthenticationPrincipal AppUserDetails userDetails,
@@ -39,6 +43,10 @@ public class UserGameController {
                 : ResponseEntity.ok(userGameScoreService.showGameRecord(userDetails.getId(), pageable));
     }
 
+    /**
+     * Retrieves the current user's best game scores.
+     * Returns highest scores for all games or a specific game if name is provided.
+     */
     @GetMapping({"/best", "/{name}/best"})
     public ResponseEntity<?> getMyBestGameScore(
             @AuthenticationPrincipal AppUserDetails userDetails,
@@ -49,6 +57,10 @@ public class UserGameController {
                 : ResponseEntity.ok(userGameScoreService.showBestGameRecord(userDetails.getId()));
     }
 
+    /**
+     * Retrieves the school leaderboard for a specific game.
+     * Returns ranked list of players from the user's school for the specified game.
+     */
     @GetMapping("/{name}/leaderboard/school")
     public ResponseEntity<?> getSchoolLeaderboard(
             @AuthenticationPrincipal AppUserDetails userDetails,
@@ -58,6 +70,10 @@ public class UserGameController {
         return ResponseEntity.ok(userGameScoreService.showLeaderboardBySchool(userDetails.getId(), name, pageable));
     }
 
+    /**
+     * Retrieves the class leaderboard for a specific game.
+     * Returns ranked list of players from a specific class for the specified game.
+     */
     @GetMapping("/{name}/leaderboard/class/{classId}")
     @PreAuthorize("@courseMemberSecurity.isCourseMember(#classId)")
     public ResponseEntity<?> getClassLeaderboard(
@@ -68,6 +84,10 @@ public class UserGameController {
         return ResponseEntity.ok(userGameScoreService.showLeaderboardByClass(classId, name, pageable));
     }
 
+    /**
+     * Creates a new game score record for the current user.
+     * Records the user's performance in a specific game session.
+     */
     @PostMapping("/score")
     public ResponseEntity<?> createMyGameScore(
             @AuthenticationPrincipal AppUserDetails userDetails,
@@ -76,6 +96,10 @@ public class UserGameController {
         return ResponseEntity.ok(userGameScoreService.createUserGameScore(userDetails.getId(), request));
     }
 
+    /**
+     * Generates AI analysis of the user's game performance.
+     * Returns insights and trends based on recent game scores or specific game data.
+     */
     @GetMapping({"/results", "/results/{gameId}"})
     public ResponseEntity<?> aiAnalysisWithMyGameScore(
             @AuthenticationPrincipal AppUserDetails userDetails,

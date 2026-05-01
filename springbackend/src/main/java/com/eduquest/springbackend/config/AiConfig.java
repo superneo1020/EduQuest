@@ -20,7 +20,7 @@ public class AiConfig {
                 .defaultHeader("Accept", "application/json")
                 .codecs(configurer -> configurer
                         .defaultCodecs()
-                        .maxInMemorySize(50 * 1024 * 1024)
+                        .maxInMemorySize(50 * 1024 * 1024) //avoid application memory issues
                 );
     }
 }

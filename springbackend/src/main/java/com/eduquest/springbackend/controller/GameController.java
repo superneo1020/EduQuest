@@ -19,6 +19,10 @@ public class GameController {
         this.userGameScoreService = userGameScoreService;
     }
 
+    /**
+     * Retrieves the leaderboard for a specific game.
+     * Returns ranked list of players with their scores for the specified game.
+     */
     @GetMapping("/{name}/leaderboard")
     public ResponseEntity<?> getLeaderboard(
             @PathVariable String name,
