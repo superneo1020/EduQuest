@@ -68,8 +68,10 @@ export default function Login() {
                 role === 'ROLE_ADMIN' || role === 'ADMIN'
             );
             const isEducator = user.roles?.some((role: string) =>
-                role === 'ROLE_EDUCATOR'
+                role === 'ROLE_EDUCATOR' || role === 'EDUCATOR' || role === 'teacher'
             );
+
+            console.log('Login: Role check - isAdmin:', isAdmin, 'isEducator:', isEducator);
 
             if (isAdmin) {
                 console.log("Welcome Admin!");
