@@ -8,6 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/src/auth/AuthContext';
 import { getApiBaseUrl } from '@/src/api/client';
 import { Trophy, Crown, Medal, Star, User, Award } from 'lucide-react-native';
+import { renderAvatar, avatarOptions } from "@/app/Profile/AvatarSelector";
 
 const GAME_CATEGORIES = [
     "Speed Calculation",
@@ -36,7 +37,21 @@ const getAvatarColor = (username: string) => {
 };
 
 // 頭像組件
-const Avatar = ({ username, size = 50 }: { username: string; size?: number }) => {
+const Avatar = ({ username, size = 50, avatarId = 'default' }: { username: string; size?: number; avatarId?: string }) => {
+    console.log(`Avatar component: username=${username}, avatarId=${avatarId}`);
+    
+    // 如果有用戶選擇的 avatar，顯示它；否則顯示默認的文字 avatar
+    if (avatarId && avatarId !== 'default') {
+        console.log(`Rendering custom avatar: ${avatarId} for ${username}`);
+        return (
+            <View style={[styles.avatarContainer, { width: size, height: size, borderRadius: size / 2, backgroundColor: '#F8F9FA' }]}>
+                {renderAvatar(avatarId, size)}
+            </View>
+        );
+    }
+    
+    // 後備方案：顯示文字 avatar
+    console.log(`Rendering fallback avatar for ${username}`);
     const backgroundColor = getAvatarColor(username);
     const initial = username.charAt(0).toUpperCase();
     return (
@@ -47,13 +62,14 @@ const Avatar = ({ username, size = 50 }: { username: string; size?: number }) =>
 };
 
 const LeaderboardScreen = () => {
-    const { token } = useAuth();
+    const { token, user } = useAuth();
     const [selectedGame, setSelectedGame] = useState(GAME_CATEGORIES[0]);
     const [loading, setLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [data, setData] = useState<any[]>([]);
     const [page, setPage] = useState(0);
     const [hasNext, setHasNext] = useState(true);
+    const [userAvatars, setUserAvatars] = useState<{[key: string]: string}>({});
 
     const fetchLeaderboard = async (pageNum: number, isRefreshing = false, targetGame = selectedGame) => {
         if (!hasNext && !isRefreshing && pageNum !== 0) return;
@@ -69,6 +85,83 @@ const LeaderboardScreen = () => {
             );
             const { slice: userGameScores, hasNext: nextExists } = response.data;
             const scoresArray = Array.isArray(userGameScores) ? userGameScores : [];
+            
+            // 獲取用戶 avatar 信息 - 只獲取當前用戶的 avatar（避免權限問題）
+            const newAvatars: {[key: string]: string} = {};
+            
+            console.log('Starting avatar fetch process...');
+            
+            // 只獲取當前用戶的 avatar，避免權限問題
+            try {
+                console.log('Fetching current user profile...');
+                const profileResponse = await axios.get(
+                    `${getApiBaseUrl()}/api/user/profile`,
+                    { headers: { 'Authorization': `Bearer ${authToken}` } }
+                );
+                
+                console.log('Profile response:', profileResponse.data);
+                
+                // 獲取當前用戶的物品
+                const itemsResponse = await axios.get(
+                    `${getApiBaseUrl()}/api/user/item`,
+                    { headers: { 'Authorization': `Bearer ${authToken}` } }
+                );
+                
+                console.log('Items response:', itemsResponse.data);
+                
+                const equippedAvatarId = profileResponse.data?.equipped_items?.AVATAR
+                    || profileResponse.data?.equippedItems?.AVATAR;
+                
+                console.log('Equipped avatar ID:', equippedAvatarId);
+                
+                if (equippedAvatarId) {
+                    const rawItems = itemsResponse.data?.items || itemsResponse.data || [];
+                    const userItemsList = Array.isArray(rawItems) ? rawItems : [];
+                    console.log('User items list:', userItemsList);
+                    
+                    const equippedItem = userItemsList.find((item: any) => {
+                        const itemData = item.item || item;
+                        return itemData.id === equippedAvatarId || itemData.itemId === equippedAvatarId;
+                    });
+                    
+                    console.log('Found equipped item:', equippedItem);
+                    
+                    if (equippedItem) {
+                        const itemData = equippedItem.item || equippedItem;
+                        if (itemData.icon) {
+                            // 獲取當前用戶名 - 使用 AuthContext 中的用戶信息
+                            const currentUsername = user?.username || 
+                                                 profileResponse.data?.username || 
+                                                 profileResponse.data?.name || 
+                                                 profileResponse.data?.user?.username;
+                            console.log('Current username:', currentUsername);
+                            console.log('Auth user:', user);
+                            
+                            if (currentUsername) {
+                                newAvatars[currentUsername] = itemData.icon;
+                                console.log(`Set avatar for ${currentUsername}: ${itemData.icon}`);
+                            } else {
+                                console.log('No valid username found for avatar mapping');
+                            }
+                        }
+                    } else {
+                        console.log('No equipped item found with avatar ID:', equippedAvatarId);
+                    }
+                } else {
+                    console.log('No equipped avatar ID found');
+                }
+            } catch (error) {
+                console.error('Failed to fetch current user avatar:', error);
+            }
+            
+            // 更新 avatar 映射
+            if (Object.keys(newAvatars).length > 0) {
+                setUserAvatars(prev => ({ ...prev, ...newAvatars }));
+                console.log('Updated avatars:', newAvatars);
+            } else {
+                console.log('No avatars to update');
+            }
+            
             if (isRefreshing || pageNum === 0) {
                 setData(scoresArray);
             } else {
@@ -122,13 +215,16 @@ const LeaderboardScreen = () => {
         const rankIcon = getRankIcon(rank);
         const rankStyle = getRankStyle(rank);
         const score = item.scores || 0;
+        const userAvatar = userAvatars[item.username] || 'default';
+
+        console.log(`renderItem: username=${item.username}, userAvatar=${userAvatar}, availableAvatars=${JSON.stringify(userAvatars)}`);
 
         return (
             <View style={[styles.rankItem, isTopThree && styles.topThreeItem]}>
                 <View style={[styles.rankBadge, rankStyle]}>
                     {rankIcon ? rankIcon : <Text style={styles.rankText}>{rank}</Text>}
                 </View>
-                <Avatar username={item.username} size={50} />
+                <Avatar username={item.username} size={50} avatarId={userAvatar} />
                 <View style={styles.userInfo}>
                     <Text style={styles.username}>{item.username}</Text>
                     <View style={styles.levelBadge}>

@@ -165,8 +165,27 @@ export default function TeacherDashboard() {
             // Load students
             await loadStudents();
 
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error loading data:', error);
+            
+            // Handle authentication errors specifically
+            if (error.message === 'AUTH_REQUIRED' || error.message === 'TOKEN_INVALID' || error.message === 'TOKEN_EXPIRED') {
+                console.log('TeacherDashboard - Authentication error in loadData, clearing session');
+                Alert.alert('Session Expired', 'Your session has expired. Please login again.');
+                signOut();
+                router.replace('/Profile/Login');
+                return;
+            }
+            
+            // Handle 401 errors from API
+            if (error.response?.status === 401) {
+                console.log('TeacherDashboard - 401 Unauthorized in loadData, clearing session');
+                Alert.alert('Session Expired', 'Your session has expired. Please login again.');
+                signOut();
+                router.replace('/Profile/Login');
+                return;
+            }
+            
             Alert.alert('Error', 'Failed to load data. Please check your connection.');
         } finally {
             setLoading(false);
@@ -275,8 +294,18 @@ export default function TeacherDashboard() {
         } catch (error: any) {
             console.error('TeacherDashboard - Error loading students:', error.response?.status, error.response?.data || error.message);
 
-            // 只在認證錯誤時登出
+            // Handle authentication errors specifically
+            if (error.message === 'AUTH_REQUIRED' || error.message === 'TOKEN_INVALID' || error.message === 'TOKEN_EXPIRED') {
+                console.log('TeacherDashboard - Authentication error, clearing session');
+                Alert.alert('Session Expired', 'Your session has expired. Please login again.');
+                signOut();
+                router.replace('/Profile/Login');
+                return;
+            }
+            
+            // Handle 401 errors from API
             if (error.response?.status === 401) {
+                console.log('TeacherDashboard - 401 Unauthorized, clearing session');
                 Alert.alert('Session Expired', 'Your session has expired. Please login again.');
                 signOut();
                 router.replace('/Profile/Login');
