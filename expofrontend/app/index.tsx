@@ -15,7 +15,24 @@ import {
     Modal,
     Image
 } from 'react-native';
-import { Calculator, Languages, Atom, Brain, LogOut, User, Trophy, Clock, Target, Sparkles, Star, Zap, GraduationCap, Rocket, ShoppingCart } from 'lucide-react-native';
+import {
+    Calculator,
+    Languages,
+    Atom,
+    Brain,
+    LogOut,
+    User,
+    Trophy,
+    Clock,
+    Target,
+    Sparkles,
+    Star,
+    Zap,
+    GraduationCap,
+    Rocket,
+    ShoppingCart,
+    Users
+} from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/src/auth/AuthContext';
 import axios from 'axios';
@@ -214,6 +231,17 @@ export default function LandscapeOptimizedHome() {
                         >
                             <GraduationCap size={22} color="#6C5CE7" />
                             <Text style={styles.teacherText}>Teacher</Text>
+                        </TouchableOpacity>
+                    )}
+
+                    {/* 新增的学生班级按钮 - 只对学生身份显示 */}
+                    {!user?.roles?.some((role: string) => role === 'ROLE_EDUCATOR' || role === 'EDUCATOR' || role === 'teacher') && (
+                        <TouchableOpacity
+                            style={styles.studentClassBtn}
+                            onPress={() => router.push('/student/StudentClasses' as any)}
+                        >
+                            <Users size={22} color="#4CAF50" />
+                            <Text style={styles.studentClassText}>My Classes</Text>
                         </TouchableOpacity>
                     )}
 
@@ -489,6 +517,22 @@ const styles = StyleSheet.create({
     },
     teacherText: {
         color: '#6C5CE7',
+        fontWeight: '800',
+        fontSize: 16,
+        marginLeft: 6,
+    },
+    // 新增学生班级按钮样式
+    studentClassBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 15,
+        paddingVertical: 8,
+        marginLeft: 6,
+        backgroundColor: '#E8F5E8',
+        borderRadius: 12,
+    },
+    studentClassText: {
+        color: '#4CAF50',
         fontWeight: '800',
         fontSize: 16,
         marginLeft: 6,
