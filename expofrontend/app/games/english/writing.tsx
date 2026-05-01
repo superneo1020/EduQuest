@@ -292,7 +292,7 @@ export default function WritingScreen() {
                 userAnswer: writing,
                 isCorrect: score > 0,
                 questionType: 'writing',
-                timeSpent: 0
+                timeSpent: totalSeconds,   // ✅ 修复：使用实际总用时
             }];
 
             const totalTimeSeconds = totalSeconds;
@@ -516,7 +516,7 @@ export default function WritingScreen() {
             setHistory(prev => [newHistoryItem, ...prev.slice(0, 4)]);
             setFinalScore(overallScore);
 
-            // ✅ 修正：用 stopTimer 回傳值直接設定 summaryTime
+            // ✅ 用 stopTimer 回傳值，並傳給 saveScore 作為題目耗時
             const finalTime = stopTimer();
             setSummaryTime(finalTime);
             setIsFinished(true);
@@ -722,7 +722,7 @@ export default function WritingScreen() {
         </SafeAreaView>
     );
 
-    // 渲染總結畫面（✅ 時間顯示改用 summaryTime）
+    // 渲染總結畫面（時間顯示改用 summaryTime）
     const renderSummaryPage = () => {
         const maxScore = difficulty ? DIFFICULTY_CONFIG[difficulty].maxScore : 100;
         return (
@@ -736,7 +736,6 @@ export default function WritingScreen() {
                             <Text style={styles.totalScoreMax}>/{maxScore}</Text>
                         </View>
                         <Text style={[styles.totalScoreFeedback, { color: getScoreColor(finalScore) }]}>{getScoreFeedback(finalScore)}</Text>
-                        {/* ✅ 使用 summaryTime 顯示總耗時 */}
                         <View style={styles.timeSpentContainer}>
                             <Ionicons name="timer-outline" size={20} color="#4b6cb7" />
                             <Text style={styles.timeSpentText}>Total Time: {formatTime(summaryTime)}</Text>
