@@ -5,7 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { getApiBaseUrl } from "../api/client";
 
-type User = { 
+type User = {
   username: string; 
   email?: string; 
   password?: string; 
@@ -78,7 +78,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             // 強制轉型，確保 points 是數字
             const userData = {
-                username: String(data.user?.username || data.username || 'Guest'),
+                username: String(data.user?.username || data.username || 'Guest').toLowerCase(),
                 email: String(data.user?.email || data.email || ''),
                 points: Number(data.user?.points || data.points || 0), // 確保它是 Number
                 roles: data.user?.roles || data.roles || [],
@@ -103,15 +103,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const signOut = async () => {
         try {
-
+            console.log('Starting sign out process...');
+            
+            // 清除所有存儲的認證數據
             await AsyncStorage.removeItem('auth_token');
             await AsyncStorage.removeItem('auth_user');
-
+            
+            // 清除狀態
             setToken(null);
             setUser(null);
-            console.log("Logout successful");
+            
+            console.log("Logout successful - all auth data cleared");
         } catch (e) {
             console.error("Logout failed", e);
+            // 即使失敗也確保清除狀態
+            setToken(null);
+            setUser(null);
         }
     };
 

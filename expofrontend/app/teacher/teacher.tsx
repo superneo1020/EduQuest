@@ -80,7 +80,7 @@ interface Student {
         completedQuests: number;
         accuracy: number;
     };
-    classes?: Course[]; // 學生所屬的班级
+    classes?: Course[];
     avatar?: string;
     selectedAvatar?: string;
 }
@@ -102,7 +102,7 @@ export default function TeacherDashboard() {
     const [selectedClass, setSelectedClass] = useState<string | null>('all');
     const [showClassFilterModal, setShowClassFilterModal] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
-        const [showAddModal, setShowAddModal] = useState(false);
+    const [showAddModal, setShowAddModal] = useState(false);
     const [newStudent, setNewStudent] = useState<Partial<Student>>({});
     const [classes, setClasses] = useState<Course[]>([]);
     const [metadataModalVisible, setMetadataModalVisible] = useState(false);
@@ -124,14 +124,23 @@ export default function TeacherDashboard() {
     const isTablet = windowWidth > 600;
 
     useEffect(() => {
-        loadData();
-    }, [token]);
+        // 檢查用戶是否為教師角色
+        if (user && !user.roles?.includes('teacher')) {
+            console.log('User is not a teacher, redirecting to home');
+            router.replace('/index_with_teacher');
+            return;
+        }
+        
+        if (user && user.roles?.includes('teacher')) {
+            loadData();
+        }
+    }, [token, user]);
 
     // Load detailed student data when students are loaded
     useEffect(() => {
-        console.log('useEffect triggered - students.length:', students.length);
+
         if (students.length > 0) {
-            console.log('Calling loadStudentDetails...');
+
             loadStudentDetails();
         }
     }, [students.length]);
@@ -143,7 +152,7 @@ export default function TeacherDashboard() {
             setLoading(true);
 
             if (!token) {
-                console.log('TeacherDashboard - No authentication token');
+
                 setLoading(false);
                 return;
             }
@@ -152,7 +161,7 @@ export default function TeacherDashboard() {
             const classesResponse = await educatorService.getClasses();
             const classesData = classesResponse.items || [];
             setClasses(classesData);
-            console.log('Loaded classes:', classesData.length);
+
 
             // Load school members
             try {
@@ -170,7 +179,7 @@ export default function TeacherDashboard() {
             
             // Handle authentication errors specifically
             if (error.message === 'AUTH_REQUIRED' || error.message === 'TOKEN_INVALID' || error.message === 'TOKEN_EXPIRED') {
-                console.log('TeacherDashboard - Authentication error in loadData, clearing session');
+
                 Alert.alert('Session Expired', 'Your session has expired. Please login again.');
                 signOut();
                 router.replace('/Profile/Login');
@@ -179,7 +188,7 @@ export default function TeacherDashboard() {
             
             // Handle 401 errors from API
             if (error.response?.status === 401) {
-                console.log('TeacherDashboard - 401 Unauthorized in loadData, clearing session');
+
                 Alert.alert('Session Expired', 'Your session has expired. Please login again.');
                 signOut();
                 router.replace('/Profile/Login');
@@ -195,11 +204,11 @@ export default function TeacherDashboard() {
     const loadStudents = async () => {
         try {
             if (!token) {
-                console.log('TeacherDashboard - No token available, skipping student load');
+
                 return; // 不要清空現有數據
             }
 
-            console.log('Loading students from API...');
+
             const response = await axios.get(`${getApiBaseUrl()}/api/educator/school/members`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -296,20 +305,26 @@ export default function TeacherDashboard() {
 
             // Handle authentication errors specifically
             if (error.message === 'AUTH_REQUIRED' || error.message === 'TOKEN_INVALID' || error.message === 'TOKEN_EXPIRED') {
-                console.log('TeacherDashboard - Authentication error, clearing session');
                 Alert.alert('Session Expired', 'Your session has expired. Please login again.');
                 signOut();
                 router.replace('/Profile/Login');
                 return;
             }
             
-            // Handle 401 errors from API
+            // Handle 401 errors from API - 只有在用戶是教師時才登出
             if (error.response?.status === 401) {
-                console.log('TeacherDashboard - 401 Unauthorized, clearing session');
-                Alert.alert('Session Expired', 'Your session has expired. Please login again.');
-                signOut();
-                router.replace('/Profile/Login');
-                return;
+                // 檢查用戶是否仍然是教師角色
+                if (user?.roles?.some((role: string) => role === 'ROLE_EDUCATOR' || role === 'EDUCATOR' || role === 'teacher')) {
+                    Alert.alert('Session Expired', 'Your session has expired. Please login again.');
+                    signOut();
+                    router.replace('/Profile/Login');
+                    return;
+                } else {
+                    // 如果用戶不是教師，說明角色已經改變，重定向到主頁
+                    console.log('User is no longer a teacher, redirecting to home');
+                    router.replace('/index_with_teacher');
+                    return;
+                }
             }
 
             // 其他錯誤不清空數據
@@ -578,19 +593,12 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
             setSelectedStudentForScores({ id: studentId, name: studentName });
             setShowGameScoreModal(true);
 
-            console.log(`Loading scores for student ${studentId} (${studentName})`);
-
             // Load student profile, game scores and best scores
             const [profile, gameScores, bestScores] = await Promise.all([
                 educatorService.getStudentProfile(studentId, 0), // No class context in teacher dashboard
                 educatorService.getStudentGameScores(studentId),
                 educatorService.getStudentBestScores(studentId)
             ]);
-
-            console.log('API Responses:');
-            console.log('Profile:', profile);
-            console.log('Game Scores:', gameScores);
-            console.log('Best Scores:', bestScores);
 
             setStudentProfile(profile);
             setStudentGameScores(gameScores);
@@ -642,6 +650,13 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
         </View>
     );
 
+    // 檢查用戶是否為教師角色，如果不是則重定向
+    if (!loading && user && !user.roles?.some((role: string) => role === 'ROLE_EDUCATOR' || role === 'EDUCATOR' || role === 'teacher')) {
+        console.log('User is not a teacher, redirecting to home');
+        router.replace('/index_with_teacher');
+        return null;
+    }
+
     if (loading) {
         return (
             <SafeAreaView style={styles.container}>
@@ -663,7 +678,7 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
         try {
             console.log('loadStudentDetails called - students.length:', students.length);
             if (students.length === 0) {
-                console.log('No students to process');
+
                 return;
             }
 
@@ -671,10 +686,10 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
                 .map(async (student) => {
                     try {
                         const scores = await educatorService.getStudentGameScores(student.id);
-                        console.log(`Student ${student.username} scores:`, scores);
+
 
                         if (!scores || scores.length === 0) {
-                            console.log(`No scores for student ${student.username}`);
+
                             return { student, performance: { averageScore: 0, totalTimeSpent: 0, completedQuests: 0, accuracy: 0 } };
                         }
 
@@ -690,7 +705,7 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
                             accuracy: 0 // GameScore doesn't have isCorrect property
                         };
 
-                        console.log(`Student ${student.username} performance:`, performance);
+
 
                         return { student, performance };
                     } catch (error) {
@@ -705,7 +720,7 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
                 performance: result.performance
             }));
 
-            console.log('Updated students with performance data:', studentsWithPerformance.length);
+
             studentsWithPerformance.forEach(s => {
                 console.log(`Final: ${s.username} - games: ${s.performance.completedQuests}, avg: ${s.performance.averageScore}`);
             });
@@ -720,7 +735,6 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
 
     // Test function to manually trigger data loading
     const testLoadStudentData = () => {
-        console.log('Manual test triggered');
         loadStudentDetails();
     };
 
