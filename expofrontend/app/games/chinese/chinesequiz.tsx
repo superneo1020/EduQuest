@@ -28,7 +28,6 @@ import axios from 'axios';
 import { useAuth } from '@/src/auth/AuthContext';
 import ChineseAIService, { ChineseQuestion } from '../../services/ChineseAIService';
 
-// 只在非 Web 環境導入 Skia
 const isWeb = Platform.OS === 'web';
 let Canvas: any = null;
 let Rect: any = null;
@@ -61,15 +60,18 @@ interface ConveyorItem {
     isAnimating: boolean;
 }
 
+// ✅ 添加 startTime 字段，用于记录这道题开始时的秒数
 interface ExtendedQuestion extends ChineseQuestion {
     userAnswer?: string;
     isAnsweredCorrectly?: boolean;
     userSelectedIndex?: number;
+    timeSpent?: number;
+    startTime?: number;
 }
 
 type CustomerState = 'happy' | 'angry' | 'waiting';
 
-// --- 💥 浮動文字元件 (HIT / OUCH) ---
+// --- 💥 浮動文字元件 ---
 const FloatingText = ({ text, color, onComplete }: { text: string; color: string; onComplete: () => void }) => {
     const opacity = useRef(new Animated.Value(1)).current;
     const translateY = useRef(new Animated.Value(0)).current;
@@ -97,7 +99,7 @@ const FloatingText = ({ text, color, onComplete }: { text: string; color: string
     );
 };
 
-// ---------- ✨ Skia 传送带条纹组件（仅原生平台，持续向左移动）----------
+// ---------- Skia 传送带条纹组件（仅原生平台）----------
 interface StripesCanvasProps {
     beltWidth: number;
     beltHeight: number;
@@ -242,7 +244,6 @@ const ChineseRestaurantGame = () => {
     const [difficulty, setDifficulty] = useState<'beginner' | 'advanced' | null>(null);
     const [aiFeedback, setAiFeedback] = useState<string>('');
     const [maxScore, setMaxScore] = useState(100);
-    // 每題對應的滿分分數（初級: [50,50], 高級: [60,60]）
     const [questionPoints, setQuestionPoints] = useState<number[]>([]);
 
     const [items, setItems] = useState<ConveyorItem[]>([]);
@@ -257,55 +258,25 @@ const ChineseRestaurantGame = () => {
     const [nextQuestionDelay, setNextQuestionDelay] = useState(false);
     const [beltWidth, setBeltWidth] = useState(CONVEYOR_WIDTH);
 
-    // 倒數計時狀態
     const [prepText, setPrepText] = useState<string | null>(null);
     const prepScale = useRef(new Animated.Value(0)).current;
     const [gameActive, setGameActive] = useState(false);
 
-    // ========== 計時器相關狀態 ==========
     const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+    const elapsedSecondsRef = useRef<number>(0);
     const timerIntervalRef = useRef<number | null>(null);
-    const timerStartedRef = useRef<boolean>(false); // 確保計時器只啟動一次
+    const timerStartedRef = useRef<boolean>(false);
 
-    // 格式化時間 (MM:SS)
-    const formatTime = (totalSeconds: number): string => {
-        const minutes = Math.floor(totalSeconds / 60);
-        const seconds = totalSeconds % 60;
-        return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-    };
-
-    // 停止計時器
-    const stopTimer = () => {
-        if (timerIntervalRef.current) {
-            clearInterval(timerIntervalRef.current);
-            timerIntervalRef.current = null;
-        }
-    };
-
-    // 開始計時器（只在第一次調用時生效）
-    const startTimerOnce = () => {
-        if (timerStartedRef.current) return;
-        timerStartedRef.current = true;
-        setElapsedSeconds(0);
-        timerIntervalRef.current = setInterval(() => {
-            setElapsedSeconds(prev => prev + 1);
-        }, 1000);
-    };
-
-    // ========== 防重複提交鎖 ==========
     const isCompletingRef = useRef(false);
 
-    // 特效狀態
     const [floatingText, setFloatingText] = useState<{ id: number; text: string; color: string } | null>(null);
     const screenShake = useRef(new Animated.Value(0)).current;
-
     const scoreAnim = useRef(new Animated.Value(1)).current;
     const comboAnim = useRef(new Animated.Value(1)).current;
     const customerAnim = useRef(new Animated.Value(1)).current;
 
     const currentQuestion = questions[currentIndex];
 
-    // 所有食材圖標列表
     const foodIcons = [
         '🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍒', '🍑', '🥭',
         '🍍', '🥥', '🥝', '🍅', '🍆', '🥑', '🥦', '🥬', '🥒', '🌶️', '🫑', '🌽',
@@ -317,105 +288,59 @@ const ChineseRestaurantGame = () => {
         '🍮', '🍯', '🥛', '☕', '🍵', '🧃', '🥤', '🧋'
     ];
 
-    const getRandomIcon = (): string => {
-        return foodIcons[Math.floor(Math.random() * foodIcons.length)];
+    const getRandomIcon = (): string => foodIcons[Math.floor(Math.random() * foodIcons.length)];
+
+    const formatTime = (totalSeconds: number): string => {
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     };
 
-    // 儲存分數到伺服器（原始分數，滿分分別為100 / 120）
-    // 現已加入 totalTimeSeconds 以及 totalTimeFormatted
-    const saveScore = async (finalScore: number) => {
-        if (!token || !difficulty) return;
-        setIsSaving(true);
-        try {
-            const gameData = {
-                gameName: "ChineseGame",
-                scores: finalScore,
-                gameType: "CHINESE",
-                gameDifficulty: difficulty === 'beginner' ? 'EASY' : 'MEDIUM'
-            };
-
-            const questionsData = questions.map((q, index) => ({
-                id: index + 1,
-                question: q.question,
-                correctAnswer: q.answer,
-                userAnswer: q.userAnswer,
-                isCorrect: q.isAnsweredCorrectly,
-                questionType: 'multiple-choice',
-                options: q.options,
-                timeSpent: 0 // 可選，尚未實現每題計時
-            }));
-
-            // 將遊玩總時間加入 extraData
-            const totalTimeSeconds = elapsedSeconds;
-            const totalTimeFormatted = formatTime(totalTimeSeconds);
-
-            const metadata: GameMetadata = createGameMetadata(
-                gameData.gameType,
-                gameData.gameDifficulty,
-                finalScore,
-                {
-                    totalCharacters: questions.length,
-                    correctCharacters: questions.filter(q => q.isAnsweredCorrectly).length,
-                    totalTimeSeconds: totalTimeSeconds,
-                    totalTimeFormatted: totalTimeFormatted,
-                },
-                questionsData
-            );
-
-            const backendRequest = {
-                gameName: gameData.gameName,
-                scores: gameData.scores,
-                metadata: convertToBackendMetadata(metadata)
-            };
-
-            await axios.post('http://localhost:8080/api/user/game/score', backendRequest, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            console.log("Score synced to server!");
-        } catch (e) {
-            console.error("Failed to sync score:", e);
-        } finally {
-            setIsSaving(false);
+    const stopTimer = () => {
+        if (timerIntervalRef.current) {
+            clearInterval(timerIntervalRef.current);
+            timerIntervalRef.current = null;
         }
     };
 
-    // 倒數準備序列 - 只在第一次開始計時器
-    const startPrepSequence = (isFirstTime: boolean = true) => {
-        setGameActive(false);
-        setTimeout(() => {
-            setPrepText('READY');
-            prepScale.setValue(0);
-            Animated.spring(prepScale, {
-                toValue: 1.2,
-                friction: 4,
-                tension: 100,
-                useNativeDriver: true,
-            }).start();
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-        }, 100);
-        setTimeout(() => {
-            setPrepText('GO!');
-            prepScale.setValue(0);
-            Animated.spring(prepScale, {
-                toValue: 1.5,
-                friction: 3,
-                tension: 150,
-                useNativeDriver: true,
-            }).start();
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-
-            // 只在第一次倒數時啟動計時器
-            if (isFirstTime) {
-                startTimerOnce();
-            }
+    const startTimerOnce = () => {
+        if (timerStartedRef.current) return;
+        timerStartedRef.current = true;
+        setElapsedSeconds(0);
+        elapsedSecondsRef.current = 0;
+        timerIntervalRef.current = setInterval(() => {
+            setElapsedSeconds(prev => {
+                const newVal = prev + 1;
+                elapsedSecondsRef.current = newVal;
+                return newVal;
+            });
         }, 1000);
-        setTimeout(() => {
-            setPrepText(null);
-            setGameActive(true);
-        }, 1600);
     };
 
-    // 觸發螢幕震動效果
+    // ✅ 记录当前题目的开始时间（存储到题目对象自身的 startTime 上）
+    const recordQuestionStartTime = () => {
+        if (!gameComplete && !nextQuestionDelay && currentIndex < questions.length) {
+            setQuestions(prev => {
+                const updated = [...prev];
+                updated[currentIndex] = {
+                    ...updated[currentIndex],
+                    startTime: elapsedSecondsRef.current,
+                };
+                return updated;
+            });
+            console.log(`[Time] Question ${currentIndex + 1} started at ${elapsedSecondsRef.current}s`);
+        }
+    };
+
+    // ✅ 获取当前题目的耗时（秒）
+    const getTimeSpentForCurrent = (): number => {
+        const q = questions[currentIndex];
+        if (q?.startTime !== undefined) {
+            return Math.max(0, elapsedSecondsRef.current - q.startTime);
+        }
+        return 0;
+    };
+
     const triggerScreenShake = () => {
         Animated.sequence([
             Animated.timing(screenShake, { toValue: 10, duration: 50, useNativeDriver: true }),
@@ -428,9 +353,7 @@ const ChineseRestaurantGame = () => {
         ]).start();
     };
 
-    const getAnimatedValue = (value: Animated.Value): number => {
-        return (value as any).__getValue();
-    };
+    const getAnimatedValue = (value: Animated.Value): number => (value as any).__getValue();
 
     // 硬件返回处理
     useEffect(() => {
@@ -462,7 +385,6 @@ const ChineseRestaurantGame = () => {
         return () => backHandler.remove();
     }, [gameState]);
 
-    // 物品生成逻辑
     useEffect(() => {
         if (isGameActive && currentQuestion && !nextQuestionDelay && items.length < 5) {
             const spawnInterval = setInterval(() => {
@@ -474,7 +396,6 @@ const ChineseRestaurantGame = () => {
         }
     }, [isGameActive, currentQuestion, items.length, nextQuestionDelay]);
 
-    // 物品移动逻辑
     useEffect(() => {
         if (isGameActive && !gameComplete && !nextQuestionDelay && items.length > 0) {
             const moveInterval = setInterval(() => {
@@ -536,22 +457,9 @@ const ChineseRestaurantGame = () => {
     const animateItemToCustomer = (item: ConveyorItem, _isCorrect: boolean) => {
         return new Promise<void>((resolve) => {
             Animated.parallel([
-                Animated.timing(item.scale, {
-                    toValue: 1.5,
-                    duration: 150,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(item.x, {
-                    toValue: 50,
-                    duration: 200,
-                    useNativeDriver: true,
-                    easing: Easing.out(Easing.back),
-                }),
-                Animated.timing(item.opacity, {
-                    toValue: 0,
-                    duration: 200,
-                    useNativeDriver: true,
-                }),
+                Animated.timing(item.scale, { toValue: 1.5, duration: 150, useNativeDriver: true }),
+                Animated.timing(item.x, { toValue: 50, duration: 200, useNativeDriver: true, easing: Easing.out(Easing.back) }),
+                Animated.timing(item.opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
             ]).start(() => resolve());
         });
     };
@@ -579,15 +487,104 @@ const ChineseRestaurantGame = () => {
         setTimeout(() => setHintVisible(false), 1500);
     };
 
-    // 修改：加入防重複鎖，避免短時間內多次調用導致雙筆記錄
-    const handleGameComplete = async (scoreOverride?: number) => {
-        // 防止重複提交
-        if (isCompletingRef.current) {
-            console.log("handleGameComplete already running, skipped");
-            return;
-        }
-        isCompletingRef.current = true;
+    // ✅ 修改后的 saveScore 支持传入最新题目数据
+    const saveScore = async (finalScore: number, questionsOverride?: ExtendedQuestion[]) => {
+        if (!token || !difficulty) return;
+        setIsSaving(true);
+        try {
+            const questionsToSave = questionsOverride ?? questions;
 
+            const gameData = {
+                gameName: "ChineseGame",
+                scores: finalScore,
+                gameType: "CHINESE",
+                gameDifficulty: difficulty === 'beginner' ? 'EASY' : 'MEDIUM'
+            };
+
+            const questionsData = questionsToSave.map((q, index) => ({
+                id: index + 1,
+                question: q.question,
+                correctAnswer: q.answer,
+                userAnswer: q.userAnswer || "",
+                isCorrect: q.isAnsweredCorrectly || false,
+                questionType: 'multiple-choice',
+                options: q.options,
+                timeSpent: q.timeSpent !== undefined ? q.timeSpent : 0,
+            }));
+
+            const totalTimeSeconds = elapsedSecondsRef.current;
+            const totalTimeFormatted = formatTime(totalTimeSeconds);
+
+            const metadata: GameMetadata = createGameMetadata(
+                gameData.gameType,
+                gameData.gameDifficulty,
+                finalScore,
+                {
+                    totalCharacters: questionsToSave.length,
+                    correctCharacters: questionsToSave.filter(q => q.isAnsweredCorrectly).length,
+                    totalTimeSeconds: totalTimeSeconds,
+                    totalTimeFormatted: totalTimeFormatted,
+                },
+                questionsData
+            );
+
+            const backendRequest = {
+                gameName: gameData.gameName,
+                scores: gameData.scores,
+                metadata: convertToBackendMetadata(metadata)
+            };
+
+            await axios.post('http://localhost:8080/api/user/game/score', backendRequest, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            console.log("Score synced to server!");
+        } catch (e) {
+            console.error("Failed to sync score:", e);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    // 倒數準備序列
+    const startPrepSequence = (isFirstTime: boolean = true) => {
+        setGameActive(false);
+        setTimeout(() => {
+            setPrepText('READY');
+            prepScale.setValue(0);
+            Animated.spring(prepScale, {
+                toValue: 1.2,
+                friction: 4,
+                tension: 100,
+                useNativeDriver: true,
+            }).start();
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+        }, 100);
+        setTimeout(() => {
+            setPrepText('GO!');
+            prepScale.setValue(0);
+            Animated.spring(prepScale, {
+                toValue: 1.5,
+                friction: 3,
+                tension: 150,
+                useNativeDriver: true,
+            }).start();
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+            if (isFirstTime) {
+                startTimerOnce();
+            }
+        }, 1000);
+        setTimeout(() => {
+            setPrepText(null);
+            setGameActive(true);
+            // ✅ 题目可见，记录开始时间
+            recordQuestionStartTime();
+        }, 1600);
+    };
+
+    // ✅ 游戏结束处理：补录最后一道题的时间
+    const handleGameComplete = async (scoreOverride?: number) => {
+        if (isCompletingRef.current) return;
+        isCompletingRef.current = true;
         try {
             const finalScore = scoreOverride !== undefined ? scoreOverride : score;
             stopTimer();
@@ -595,10 +592,25 @@ const ChineseRestaurantGame = () => {
             setGameActive(false);
             setGameComplete(true);
             setNextQuestionDelay(false);
-            await saveScore(finalScore);
 
-            const totalQuestions = questions.length;
-            const correctCount = questions.filter(q => q.isAnsweredCorrectly).length;
+            // 确保最后一道题也有 timeSpent
+            const updatedQuestions = [...questions];
+            if (currentIndex < updatedQuestions.length) {
+                const q = updatedQuestions[currentIndex];
+                if (q.timeSpent === undefined || q.timeSpent === 0) {
+                    const timeSpentThis = getTimeSpentForCurrent();
+                    updatedQuestions[currentIndex] = {
+                        ...q,
+                        timeSpent: timeSpentThis,
+                    };
+                    setQuestions(updatedQuestions);
+                }
+            }
+
+            await saveScore(finalScore, updatedQuestions);
+
+            const totalQuestions = updatedQuestions.length;
+            const correctCount = updatedQuestions.filter(q => q.isAnsweredCorrectly).length;
             const accuracy = totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0;
 
             let feedback = '';
@@ -616,15 +628,15 @@ const ChineseRestaurantGame = () => {
             setAiFeedback(feedback);
             setGameState('result');
         } finally {
-            // 延遲一點釋放鎖，避免極端情況（React 快速重複渲染）
-            setTimeout(() => {
-                isCompletingRef.current = false;
-            }, 500);
+            setTimeout(() => { isCompletingRef.current = false; }, 500);
         }
     };
 
     const handleItemClick = async (item: ConveyorItem) => {
         if (!isGameActive || gameComplete || nextQuestionDelay || !gameActive) return;
+
+        const timeSpentForThis = getTimeSpentForCurrent();
+        console.log(`[Time] Question ${currentIndex + 1} answered, spent=${timeSpentForThis}s`);
 
         setNextQuestionDelay(true);
         await animateItemToCustomer(item, item.isCorrect);
@@ -636,6 +648,7 @@ const ChineseRestaurantGame = () => {
             userAnswer: item.text,
             isAnsweredCorrectly: item.isCorrect,
             userSelectedIndex: currentQuestion.options.findIndex(opt => opt === item.text),
+            timeSpent: timeSpentForThis,
         };
         setQuestions(updatedQuestions);
 
@@ -707,6 +720,7 @@ const ChineseRestaurantGame = () => {
                 ...q,
                 userAnswer: '',
                 isAnsweredCorrectly: false,
+                timeSpent: 0,
             }));
             setQuestions(extendedQuestions);
             resetGame();
@@ -723,7 +737,6 @@ const ChineseRestaurantGame = () => {
     };
 
     const resetGame = () => {
-        // 重置時也要重置完成鎖
         isCompletingRef.current = false;
         setCurrentIndex(0);
         setScore(0);
@@ -743,6 +756,7 @@ const ChineseRestaurantGame = () => {
     const handleSelectDifficulty = (level: 'beginner' | 'advanced') => {
         timerStartedRef.current = false;
         setElapsedSeconds(0);
+        elapsedSecondsRef.current = 0;
         stopTimer();
         setDifficulty(level);
         loadQuestions(level);
@@ -752,8 +766,9 @@ const ChineseRestaurantGame = () => {
         stopTimer();
         timerStartedRef.current = false;
         setElapsedSeconds(0);
+        elapsedSecondsRef.current = 0;
         if (gameState === 'playing' && score > 0 && difficulty) {
-            await saveScore(score);
+            await saveScore(score, questions);
         }
         setDifficulty(null);
         setGameState('difficulty_select');
@@ -770,6 +785,7 @@ const ChineseRestaurantGame = () => {
             setMaxCombo(0);
             timerStartedRef.current = false;
             setElapsedSeconds(0);
+            elapsedSecondsRef.current = 0;
             stopTimer();
             loadQuestions(difficulty);
         }
@@ -839,7 +855,7 @@ const ChineseRestaurantGame = () => {
                         </TouchableOpacity>
                         <View style={styles.timerContainer}>
                             <Text style={styles.timerIcon}>⏱️</Text>
-                            <Text style={styles.timerText}>{formatTime(elapsedSeconds)}</Text>
+                            <Text style={styles.timerText}>{formatTime(elapsedSecondsRef.current)}</Text>
                         </View>
                         <View style={styles.statsRow}>
                             <View style={styles.statBox}>
@@ -961,7 +977,7 @@ const ChineseRestaurantGame = () => {
 
     const renderResult = () => {
         const { totalQuestions, correctCount, accuracy } = calculateScoreStats();
-        const totalTimeFormatted = formatTime(elapsedSeconds);
+        const totalTimeFormatted = formatTime(elapsedSecondsRef.current);
         return (
             <View style={styles.container}>
                 <StatusBar barStyle="dark-content" />
@@ -1005,6 +1021,9 @@ const ChineseRestaurantGame = () => {
                                     <Text style={styles.summaryNumber}>{index + 1}.</Text>
                                     <Text style={styles.summaryAnswer} numberOfLines={1}>
                                         {q.userAnswer || 'Meal not served'}
+                                    </Text>
+                                    <Text style={styles.summaryTime}>
+                                        ⏱️ {formatTime(q.timeSpent ?? 0)}
                                     </Text>
                                     <Text style={[styles.summaryScore, q.isAnsweredCorrectly ? styles.correctScore : styles.incorrectScore]}>
                                         {q.isAnsweredCorrectly ? '✓' : '✗'}
@@ -1710,6 +1729,14 @@ const styles = StyleSheet.create({
         flex: 1,
         fontSize: 14,
         color: '#333',
+    },
+    // ✅ 新增每題用時的樣式
+    summaryTime: {
+        width: 70,
+        fontSize: 13,
+        color: '#555',
+        textAlign: 'right',
+        marginRight: 15,
     },
     summaryScore: {
         width: 30,
