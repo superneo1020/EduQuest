@@ -47,6 +47,7 @@ import {
     User,
     Trophy,
     Gamepad2,
+    Target,
 } from 'lucide-react-native';
 import { ClassManagementPanel } from './ClassManagementPanel';
 import { ClassAnalyticsPanel } from './ClassAnalyticsPanel';
@@ -54,6 +55,7 @@ import educatorService, { Course, StudentAnalytics } from './educatorService';
 import {StudentMetadataView} from './StudentMetadataView';
 import { getApiBaseUrl } from '@/src/api/client';
 import axios from 'axios';
+import { AvatarIcons } from '../Profile/AvatarIcons';
 
 const { width } = Dimensions.get('window');
 
@@ -78,6 +80,9 @@ interface Student {
         completedQuests: number;
         accuracy: number;
     };
+    classes?: Course[]; // 學生所屬的班级
+    avatar?: string;
+    selectedAvatar?: string;
 }
 
 export default function TeacherDashboard() {
@@ -94,28 +99,42 @@ export default function TeacherDashboard() {
     const [aiAnalysis, setAiAnalysis] = useState('');
     const [analysisLoading, setAnalysisLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
-    const [selectedSubject, setSelectedSubject] = useState<string>('all');
+    const [selectedClass, setSelectedClass] = useState<string>('all');
+    const [showClassFilterModal, setShowClassFilterModal] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
-    const [editModalVisible, setEditModalVisible] = useState(false);
-    const [editingStudent, setEditingStudent] = useState<Student | null>(null);
-    const [showAddModal, setShowAddModal] = useState(false);
+        const [showAddModal, setShowAddModal] = useState(false);
     const [newStudent, setNewStudent] = useState<Partial<Student>>({});
     const [classes, setClasses] = useState<Course[]>([]);
     const [metadataModalVisible, setMetadataModalVisible] = useState(false);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [studentToDelete, setStudentToDelete] = useState<number | null>(null);
+    const [showGameScoreModal, setShowGameScoreModal] = useState(false);
+    const [selectedStudentForScores, setSelectedStudentForScores] = useState<{id: number, name: string} | null>(null);
+    const [studentGameScores, setStudentGameScores] = useState<any[]>([]);
+    const [studentBestScores, setStudentBestScores] = useState<any[]>([]);
+    const [loadingScores, setLoadingScores] = useState(false);
+    const [studentProfile, setStudentProfile] = useState<any>(null);
 
     // Navigation state (移除 studentLeaderboard)
-    type TeacherView = 'dashboard' | 'students' | 'classes' | 'analytics';
+    type TeacherView = 'dashboard' | 'students' | 'classes';
     const [currentView, setCurrentView] = useState<TeacherView>('dashboard');
-    const [selectedClass, setSelectedClass] = useState<Course | null>(null);
+
 
     const isLandscape = windowWidth > 800;
     const isTablet = windowWidth > 600;
 
     useEffect(() => {
         loadData();
-    }, []);
+    }, [token]);
+
+    // Load detailed student data when students are loaded
+    useEffect(() => {
+        console.log('useEffect triggered - students.length:', students.length);
+        if (students.length > 0) {
+            console.log('Calling loadStudentDetails...');
+            loadStudentDetails();
+        }
+    }, [students.length]);
 
     // 移除之前错误的 useEffect 导航副作用
 
@@ -229,8 +248,26 @@ export default function TeacherDashboard() {
                     .filter((result): result is PromiseFulfilledResult<any> => result.status === 'fulfilled')
                     .map(result => result.value);
 
-                setStudents(validStudents);
-                setFilteredStudents(validStudents);
+                // 為每個學生獲取班级信息
+                const studentsWithClasses = await Promise.allSettled(
+                    validStudents.map(async (student) => {
+                        try {
+                            const studentClasses = await educatorService.getStudentClasses(student.id);
+                            return { ...student, classes: studentClasses };
+                        } catch (error) {
+                            console.error(`Error loading classes for student ${student.id}:`, error);
+                            return { ...student, classes: [] };
+                        }
+                    })
+                );
+
+                // 只保留成功的結果
+                const finalStudents = studentsWithClasses
+                    .filter((result): result is PromiseFulfilledResult<any> => result.status === 'fulfilled')
+                    .map(result => result.value);
+
+                setStudents(finalStudents);
+                setFilteredStudents(finalStudents);
             } else {
                 console.log('No members data found, keeping existing students');
                 // 不要清空現有數據
@@ -258,7 +295,8 @@ export default function TeacherDashboard() {
 
     const handleClassSelect = (classItem: Course) => {
         setSelectedClass(classItem);
-        setCurrentView('analytics');
+        // Analytics view was removed, just stay on dashboard or go to classes
+        setCurrentView('classes');
     };
 
     const handleBackToDashboard = () => {
@@ -271,14 +309,14 @@ export default function TeacherDashboard() {
         setSelectedClass(null);
     };
 
-    // 新增：跳转至独立 Leaderboard 页面
+
     const navigateToLeaderboard = () => {
         router.push('/teacher/studentLeaderboard');
     };
 
     useEffect(() => {
         filterStudents();
-    }, [searchQuery, selectedSubject, students]);
+    }, [searchQuery, selectedClass, students]);
 
     const filterStudents = () => {
         let filtered = [...students];
@@ -290,11 +328,12 @@ export default function TeacherDashboard() {
             );
         }
 
-        if (selectedSubject !== 'all') {
-            filtered = filtered.filter(s => {
-                const progress = s.gameProgress[selectedSubject as keyof typeof s.gameProgress];
-                return progress >= 70;
-            });
+        if (selectedClass !== 'all') {
+            filtered = filtered.filter(s => 
+                s.classes && s.classes.some(c => 
+                    `${c.grade} ${c.suffix}` === selectedClass
+                )
+            );
         }
 
         setFilteredStudents(filtered);
@@ -311,6 +350,24 @@ export default function TeacherDashboard() {
         if (score >= 70) return 'Good';
         if (score >= 50) return 'Needs Improvement';
         return 'At Risk';
+    };
+
+    // Function to render user avatar
+    const renderUserAvatar = (student: Student, size: number = 48) => {
+        if (student.selectedAvatar && AvatarIcons[student.selectedAvatar as keyof typeof AvatarIcons]) {
+            const AvatarComponent = AvatarIcons[student.selectedAvatar as keyof typeof AvatarIcons];
+            return <AvatarComponent size={size} />;
+        } else {
+            // Fallback to initials
+            const avatarText = student.username ? student.username.charAt(0).toUpperCase() : '?';
+            return (
+                <View style={[styles.studentAvatar, { width: size, height: size, borderRadius: size / 2 }]}>
+                    <Text style={[styles.avatarText, { fontSize: size / 2.4 }]}>
+                        {avatarText}
+                    </Text>
+                </View>
+            );
+        }
     };
 
     const generateAIAnalysis = async (student: Student) => {
@@ -420,32 +477,6 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
         setStudentToDelete(null);
     };
 
-    const updateStudent = async (updatedStudent: Student) => {
-        try {
-            // Call API to update student information
-            await axios.put(`${getApiBaseUrl()}/api/admin/user/${updatedStudent.id}`, {
-                username: updatedStudent.username,
-                email: updatedStudent.email,
-                points: updatedStudent.points,
-                level: updatedStudent.level,
-            }, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-
-            setStudents(students.map(s =>
-                s.id === updatedStudent.id ? updatedStudent : s
-            ));
-            setFilteredStudents(filteredStudents.map(s =>
-                s.id === updatedStudent.id ? updatedStudent : s
-            ));
-            Alert.alert('Success', 'Student information updated');
-            setEditModalVisible(false);
-            setEditingStudent(null);
-        } catch (error) {
-            console.error('Error updating student:', error);
-            Alert.alert('Error', 'Failed to update student information. Please try again.');
-        }
-    };
 
     const addStudent = async () => {
         if (!newStudent.username || !newStudent.email) {
@@ -512,6 +543,68 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
         setMetadataModalVisible(true);
     };
 
+    const viewStudentScores = async (studentId: number, studentName: string) => {
+        try {
+            setLoadingScores(true);
+            setSelectedStudentForScores({ id: studentId, name: studentName });
+            setShowGameScoreModal(true);
+
+            console.log(`Loading scores for student ${studentId} (${studentName})`);
+
+            // Load student profile, game scores and best scores
+            const [profile, gameScores, bestScores] = await Promise.all([
+                educatorService.getStudentProfile(studentId, 0), // No class context in teacher dashboard
+                educatorService.getStudentGameScores(studentId),
+                educatorService.getStudentBestScores(studentId)
+            ]);
+
+            console.log('API Responses:');
+            console.log('Profile:', profile);
+            console.log('Game Scores:', gameScores);
+            console.log('Best Scores:', bestScores);
+
+            setStudentProfile(profile);
+            setStudentGameScores(gameScores);
+            setStudentBestScores(bestScores);
+        } catch (error: any) {
+            console.error('Error loading student scores:', error);
+            Alert.alert('Error', 'Failed to load student scores: ' + error.message);
+            setShowGameScoreModal(false);
+        } finally {
+            setLoadingScores(false);
+        }
+    };
+
+    // Helper functions for Profile-style display
+    const getGameThemeColor = (type: string) => {
+        switch (type?.toUpperCase()) {
+            case 'MATH': return '#4CAF50';
+            case 'ENGLISH': return '#2196F3';
+            case 'SCIENCE': return '#FF9800';
+            case 'CHINESE': return '#9C27B0';
+            default: return '#636E72';
+        }
+    };
+
+    const getDifficultyColor = (diff: string) => {
+        switch (diff?.toUpperCase()) {
+            case 'HARD': return '#FF4757';
+            case 'MEDIUM': return '#FF9800';
+            default: return '#4CAF50';
+        }
+    };
+
+    const renderGameIcon = (type: string, color: string) => {
+        const props = { size: 22, color };
+        switch (type?.toUpperCase()) {
+            case 'MATH': return <Target {...props} />;
+            case 'ENGLISH': return <BookOpen {...props} />;
+            case 'SCIENCE': return <TrendingUp {...props} />;
+            case 'CHINESE': return <Users {...props} />;
+            default: return <Target {...props} />;
+        }
+    };
+
     const StatCard = ({ title, value, icon: Icon, color }: any) => (
         <View style={[styles.statCard, { backgroundColor: color + '10' }]}>
             <Icon size={28} color={color} />
@@ -533,9 +626,74 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
 
     // 計算整體統計
     const totalStudents = students.length;
-    const avgScore = students.reduce((sum, s) => sum + s.performance.averageScore, 0) / (totalStudents || 1);
+    const totalClasses = classes.length;
+    const activeStudents = students.filter(s => s.lastActive !== 'Unknown').length;
     const totalPoints = students.reduce((sum, s) => sum + s.points, 0);
-    const highPerformers = students.filter(s => s.performance.averageScore >= 85).length;
+
+    const loadStudentDetails = async () => {
+        try {
+            console.log('loadStudentDetails called - students.length:', students.length);
+            if (students.length === 0) {
+                console.log('No students to process');
+                return;
+            }
+
+            const gameDataPromises = students
+                .map(async (student) => {
+                    try {
+                        const scores = await educatorService.getStudentGameScores(student.id);
+                        console.log(`Student ${student.username} scores:`, scores);
+
+                        if (!scores || scores.length === 0) {
+                            console.log(`No scores for student ${student.username}`);
+                            return { student, performance: { averageScore: 0, totalTimeSpent: 0, completedQuests: 0, accuracy: 0 } };
+                        }
+
+                        // Calculate performance metrics from game scores
+                        const totalScore = scores.reduce((sum, score) => sum + (score.scores || 0), 0);
+                        const averageScore = Math.round(totalScore / scores.length);
+                        const gameCount = scores.length;
+
+                        const performance = {
+                            averageScore: averageScore,
+                            totalTimeSpent: 0, // GameScore doesn't have timeSpent property
+                            completedQuests: gameCount, // Use game count as completed quests
+                            accuracy: 0 // GameScore doesn't have isCorrect property
+                        };
+
+                        console.log(`Student ${student.username} performance:`, performance);
+
+                        return { student, performance };
+                    } catch (error) {
+                        console.error(`Error loading game data for student ${student.id}:`, error);
+                        return { student, performance: { averageScore: 0, totalTimeSpent: 0, completedQuests: 0, accuracy: 0 } };
+                    }
+                });
+
+            const results = await Promise.all(gameDataPromises);
+            const studentsWithPerformance = results.map(result => ({
+                ...result.student,
+                performance: result.performance
+            }));
+
+            console.log('Updated students with performance data:', studentsWithPerformance.length);
+            studentsWithPerformance.forEach(s => {
+                console.log(`Final: ${s.username} - games: ${s.performance.completedQuests}, avg: ${s.performance.averageScore}`);
+            });
+
+            setStudents(studentsWithPerformance);
+            setFilteredStudents(studentsWithPerformance);
+
+        } catch (error) {
+            console.error('Error loading student details:', error);
+        }
+    };
+
+    // Test function to manually trigger data loading
+    const testLoadStudentData = () => {
+        console.log('Manual test triggered');
+        loadStudentDetails();
+    };
 
     // 根據 currentView 渲染不同內容
     if (currentView === 'classes') {
@@ -546,16 +704,6 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
         );
     }
 
-    if (currentView === 'analytics' && selectedClass) {
-        return (
-            <SafeAreaView style={styles.container}>
-                <ClassAnalyticsPanel
-                    selectedClass={selectedClass}
-                    onBack={handleBackToClasses}
-                />
-            </SafeAreaView>
-        );
-    }
 
     return (
         <SafeAreaView style={styles.container}>
@@ -587,7 +735,7 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
 
                 {/* Navigation Tabs */}
                 <View style={styles.tabContainer}>
-                    {(['dashboard', 'students', 'classes', 'analytics'] as const).map((tab: TeacherView) => (
+                    {(['dashboard', 'students', 'classes'] as TeacherView[]).map((tab) => (
                         <TouchableOpacity
                             key={tab}
                             style={[styles.tab, currentView === tab && styles.tabActive]}
@@ -596,7 +744,6 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
                             {tab === 'dashboard' && <TrendingUp size={18} color={currentView === tab ? '#6C5CE7' : '#666'} />}
                             {tab === 'students' && <Users size={18} color={currentView === tab ? '#6C5CE7' : '#666'} />}
                             {tab === 'classes' && <BookOpen size={18} color={currentView === tab ? '#6C5CE7' : '#666'} />}
-                            {tab === 'analytics' && <BarChart3 size={18} color={currentView === tab ? '#6C5CE7' : '#666'} />}
                             <Text style={[styles.tabText, currentView === tab && styles.tabTextActive]}>
                                 {tab.charAt(0).toUpperCase() + tab.slice(1)}
                             </Text>
@@ -617,9 +764,9 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
                     <>
                         <View style={[styles.statsGrid, isTablet && styles.statsGridTablet]}>
                             <StatCard title="Total Students" value={totalStudents} icon={Users} color="#6C5CE7" />
-                            <StatCard title="Avg Score" value={`${avgScore.toFixed(1)}%`} icon={TrendingUp} color="#4CAF50" />
-                            <StatCard title="Total XP" value={totalPoints.toLocaleString()} icon={Award} color="#FF9800" />
-                            <StatCard title="High Performers" value={highPerformers} icon={Star} color="#FF4757" />
+                            <StatCard title="Total Classes" value={totalClasses} icon={BookOpen} color="#4CAF50" />
+                            <StatCard title="Active Students" value={activeStudents} icon={TrendingUp} color="#FF9800" />
+                            <StatCard title="Total Points" value={totalPoints.toLocaleString()} icon={Award} color="#FF4757" />
                         </View>
 
                         <View style={styles.quickActionsGrid}>
@@ -633,21 +780,7 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
                                 <Text style={styles.quickActionTitle}>Class Management</Text>
                                 <Text style={styles.quickActionSubtitle}>Manage classes</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity
-                                style={styles.quickActionCard}
-                                onPress={() => {
-                                    if (classes.length > 0) {
-                                        handleClassSelect(classes[0]);
-                                    } else {
-                                        Alert.alert('No Classes', 'Please create a class first');
-                                    }
-                                }}
-                            >
-                                <BarChart3 size={28} color="#FF9800" />
-                                <Text style={styles.quickActionTitle}>Analytics</Text>
-                                <Text style={styles.quickActionSubtitle}>View performance</Text>
-                            </TouchableOpacity>
-                        </View>
+                                                    </View>
                     </>
                 )}
 
@@ -667,12 +800,12 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
                             </View>
                             <View style={styles.actionButtons}>
                                 <TouchableOpacity
-                                    style={[styles.filterBtn, selectedSubject !== 'all' && styles.filterBtnActive]}
-                                    onPress={() => setSelectedSubject(selectedSubject === 'all' ? 'math' : 'all')}
+                                    style={[styles.filterBtn, selectedClass !== 'all' && styles.filterBtnActive]}
+                                    onPress={() => setShowClassFilterModal(true)}
                                 >
-                                    <Filter size={18} color={selectedSubject !== 'all' ? '#6C5CE7' : '#666'} />
-                                    <Text style={[styles.filterBtnText, selectedSubject !== 'all' && styles.filterBtnTextActive]}>
-                                        {selectedSubject === 'all' ? 'All' : selectedSubject}
+                                    <Filter size={18} color={selectedClass !== 'all' ? '#6C5CE7' : '#666'} />
+                                    <Text style={[styles.filterBtnText, selectedClass !== 'all' && styles.filterBtnTextActive]}>
+                                        {selectedClass === 'all' ? 'All Classes' : selectedClass}
                                     </Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity style={styles.addBtn} onPress={() => setShowAddModal(true)}>
@@ -696,20 +829,26 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
                                     {filteredStudents.map((student) => (
                                         <View key={student.id} style={styles.studentCard}>
                                             <View style={styles.studentCardHeader}>
-                                                <View style={styles.studentAvatar}>
-                                                    <Text style={styles.avatarText}>{student.username.charAt(0)}</Text>
-                                                </View>
+                                                {renderUserAvatar(student)}
                                                 <View style={styles.studentInfo}>
                                                     <Text style={styles.studentName} numberOfLines={1} ellipsizeMode="tail">{student.username}</Text>
                                                     <Text style={styles.studentEmail} numberOfLines={1} ellipsizeMode="tail">{student.email}</Text>
+                                                    {student.classes && student.classes.length > 0 && (
+                                                        <View style={styles.classBadgesContainer}>
+                                                            {student.classes.map((classItem) => (
+                                                                <View key={classItem.id} style={styles.classBadge}>
+                                                                    <Text style={styles.classBadgeText}>
+                                                                        {classItem.grade} {classItem.suffix}
+                                                                    </Text>
+                                                                </View>
+                                                            ))}
+                                                        </View>
+                                                    )}
+                                                    {(!student.classes || student.classes.length === 0) && (
+                                                        <Text style={styles.noClassText}>No class assigned</Text>
+                                                    )}
                                                 </View>
                                                 <View style={styles.cardActions}>
-                                                    <TouchableOpacity onPress={() => {
-                                                        setEditingStudent(student);
-                                                        setEditModalVisible(true);
-                                                    }} style={styles.actionIcon}>
-                                                        <Edit size={18} color="#6C5CE7" />
-                                                    </TouchableOpacity>
                                                     <TouchableOpacity onPress={() => deleteStudent(student.id)} style={styles.actionIcon}>
                                                         <Trash2 size={18} color="#FF4757" />
                                                     </TouchableOpacity>
@@ -751,13 +890,10 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
                                                     </Text>
                                                 </View>
                                                 <View style={styles.performanceBadge}>
-                                                    <CheckCircle size={16} color="#4CAF50" />
-                                                    <Text style={styles.performanceText}>{student.performance.accuracy}% Acc.</Text>
+                                                    <Gamepad2 size={16} color="#FF9800" />
+                                                    <Text style={styles.performanceText}>{student.performance.completedQuests} games</Text>
                                                 </View>
-                                                <View style={styles.performanceBadge}>
-                                                    <Clock size={16} color="#FF9800" />
-                                                    <Text style={styles.performanceText}>{student.performance.totalTimeSpent}h</Text>
-                                                </View>
+
                                             </View>
 
 
@@ -765,14 +901,13 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
                                             <TouchableOpacity style={styles.metadataBtn} onPress={() => handleViewMetadata(student)}>
                                                 <Gamepad2 size={18} color="#4CAF50" />
                                                 <Text style={styles.metadataBtnText}>View Game Metadata</Text>
-                                                <ChevronRight size={16} color="#4CAF50" />
+                                                <Sparkles size={12} color="#4CAF50" />
                                             </TouchableOpacity>
 
-                                            <TouchableOpacity style={styles.viewDetailsBtn} onPress={() => {
-                                                setSelectedStudent(student);
-                                                setModalVisible(true);
-                                            }}>
-                                                                                                                                            </TouchableOpacity>
+                                            <TouchableOpacity style={styles.viewDetailsBtn} onPress={() => viewStudentScores(student.id, student.username)}>
+                                                <TrendingUp size={16} color="#6C5CE7" />
+                                                <Text style={styles.viewDetailsBtnText}>View Details</Text>
+                                            </TouchableOpacity>
                                         </View>
                                     ))}
                                 </View>
@@ -890,56 +1025,7 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
                 </View>
             </Modal>
 
-            {/* Edit Student Modal */}
-            <Modal animationType="slide" transparent={true} visible={editModalVisible} onRequestClose={() => setEditModalVisible(false)}>
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Edit Student</Text>
-                            <TouchableOpacity onPress={() => setEditModalVisible(false)}>
-                                <X size={24} color="#999" />
-                            </TouchableOpacity>
-                        </View>
-                        {editingStudent && (
-                            <ScrollView>
-                                <View style={styles.editForm}>
-                                    <Text style={styles.inputLabel}>Username</Text>
-                                    <TextInput
-                                        style={styles.input}
-                                        value={editingStudent.username}
-                                        onChangeText={(text) => setEditingStudent({ ...editingStudent, username: text })}
-                                    />
-                                    <Text style={styles.inputLabel}>Email</Text>
-                                    <TextInput
-                                        style={styles.input}
-                                        value={editingStudent.email}
-                                        onChangeText={(text) => setEditingStudent({ ...editingStudent, email: text })}
-                                        keyboardType="email-address"
-                                    />
-                                    <Text style={styles.inputLabel}>Points</Text>
-                                    <TextInput
-                                        style={styles.input}
-                                        value={String(editingStudent.points)}
-                                        onChangeText={(text) => setEditingStudent({ ...editingStudent, points: parseInt(text) || 0 })}
-                                        keyboardType="numeric"
-                                    />
-                                    <Text style={styles.inputLabel}>Level</Text>
-                                    <TextInput
-                                        style={styles.input}
-                                        value={String(editingStudent.level)}
-                                        onChangeText={(text) => setEditingStudent({ ...editingStudent, level: parseInt(text) || 1 })}
-                                        keyboardType="numeric"
-                                    />
-                                </View>
-                                <TouchableOpacity style={styles.saveBtn} onPress={() => updateStudent(editingStudent)}>
-                                    <Text style={styles.saveBtnText}>Save Changes</Text>
-                                </TouchableOpacity>
-                            </ScrollView>
-                        )}
-                    </View>
-                </View>
-            </Modal>
-
+            
             {/* Add Student Modal */}
             <Modal animationType="slide" transparent={true} visible={showAddModal} onRequestClose={() => setShowAddModal(false)}>
                 <View style={styles.modalOverlay}>
@@ -1041,6 +1127,204 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
                 </View>
             </Modal>
 
+            {/* Game Score Modal */}
+            <Modal animationType="slide" transparent={true} visible={showGameScoreModal} onRequestClose={() => setShowGameScoreModal(false)}>
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, isLandscape && styles.modalContentLandscape]}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>
+                                {selectedStudentForScores?.name}'s Game Scores
+                            </Text>
+                            <TouchableOpacity onPress={() => setShowGameScoreModal(false)}>
+                                <XCircle size={24} color="#999" />
+                            </TouchableOpacity>
+                        </View>
+
+                        {loadingScores ? (
+                            <View style={styles.loadingContainer}>
+                                <ActivityIndicator size="large" color="#007AFF" />
+                                <Text style={styles.loadingText}>Loading scores...</Text>
+                            </View>
+                        ) : (
+                            <ScrollView style={styles.scoresContainer}>
+                                {/* Student Profile Section */}
+                                {studentProfile && (
+                                    <View style={styles.profileSection}>
+                                        <Text style={styles.sectionTitle}>Student Profile</Text>
+                                        <View style={styles.profileCard}>
+                                            <View style={styles.profileInfo}>
+                                                <Text style={styles.profileName}>{studentProfile.name}</Text>
+                                                <Text style={styles.profileEmail}>{studentProfile.email}</Text>
+                                                {studentProfile.type && (
+                                                    <Text style={styles.profileType}>Role: {studentProfile.type}</Text>
+                                                )}
+                                            </View>
+                                            <View style={styles.profileStats}>
+                                                <View style={styles.profileStat}>
+                                                    <Text style={styles.profileStatValue}>{studentGameScores.length}</Text>
+                                                    <Text style={styles.profileStatLabel}>Total Scores</Text>
+                                                </View>
+                                                <View style={styles.profileStat}>
+                                                    <Text style={styles.profileStatValue}>{studentBestScores.length}</Text>
+                                                    <Text style={styles.profileStatLabel}>Best Scores</Text>
+                                                </View>
+                                            </View>
+                                        </View>
+                                    </View>
+                                )}
+                                
+                                {/* Best Scores Section */}
+                                <View style={styles.scoreSection}>
+                                    <Text style={styles.sectionTitle}>Best Scores</Text>
+                                    {!Array.isArray(studentBestScores) || studentBestScores.length === 0 ? (
+                                        <Text style={styles.noDataText}>No best scores available</Text>
+                                    ) : (
+                                        studentBestScores.map((score, index) => (
+                                            <View key={index} style={styles.scoreItem}>
+                                                <View style={styles.scoreInfo}>
+                                                    <Text style={styles.gameName}>{score.name}</Text>
+                                                    <Text style={styles.scoreValue}>{score.scores}</Text>
+                                                </View>
+                                                <Text style={styles.scoreDate}>F
+                                                    {new Date(score.createdAt).toLocaleDateString()}
+                                                </Text>
+                                            </View>
+                                        ))
+                                    )}
+                                </View>
+
+                                {/* Recent Scores Section */}
+                                <View style={styles.scoreSection}>
+                                    <Text style={styles.sectionTitle}>Recent Scores</Text>
+                                    {!Array.isArray(studentGameScores) || studentGameScores.length === 0 ? (
+                                        <Text style={styles.noDataText}>No recent scores available</Text>
+                                    ) : (
+                                        studentGameScores.map((score, index) => (
+                                            <View key={index} style={styles.scoreItem}>
+                                                <View style={styles.scoreInfo}>
+                                                    <Text style={styles.gameName}>{score.name}</Text>
+                                                    <Text style={styles.scoreValue}>{score.scores}</Text>
+                                                    {score.type && (
+                                                        <Text style={styles.scoreType}>Type: {score.type}</Text>
+                                                    )}
+                                                </View>
+                                                <Text style={styles.scoreDate}>
+                                                    {new Date(score.createdAt).toLocaleDateString()}
+                                                </Text>
+                                            </View>
+                                        ))
+                                    )}
+                                </View>
+                                
+                                {/* Game Records Section - Profile Style */}
+                                <View style={styles.gameRecordsSection}>
+                                    <Text style={styles.sectionTitle}>Game Records</Text>
+                                    {!Array.isArray(studentGameScores) || studentGameScores.length === 0 ? (
+                                        <View style={styles.emptyGameRecords}>
+                                            <Gamepad2 size={48} color="#DFE6E9" />
+                                            <Text style={styles.emptyGameRecordsText}>No game records found</Text>
+                                        </View>
+                                    ) : (
+                                        <View style={styles.gameRecordsList}>
+                                            {studentGameScores.map((score, index) => {
+                                                const themeColor = getGameThemeColor(score.type);
+                                                return (
+                                                    <View key={index} style={styles.activityCard}>
+                                                        <View style={[styles.gameIconBg, { backgroundColor: `${themeColor}20` }]}>
+                                                            {renderGameIcon(score.type, themeColor)}
+                                                        </View>
+                                                        <View style={styles.recordInfo}>
+                                                            <Text style={styles.recordName}>{score.name}</Text>
+                                                            <View style={styles.recordMeta}>
+                                                                {score.type && (
+                                                                    <Text style={styles.recordType}>{score.type}</Text>
+                                                                )}
+                                                                <Text style={styles.recordDate}>
+                                                                    {new Date(score.createdAt).toLocaleDateString()}
+                                                                </Text>
+                                                            </View>
+                                                        </View>
+                                                        <View style={styles.recordScores}>
+                                                            <Text style={styles.recordScore}>{score.scores}</Text>
+                                                        </View>
+                                                    </View>
+                                                );
+                                            })}
+                                        </View>
+                                    )}
+                                </View>
+                            </ScrollView>
+                        )}
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Class Filter Selection Modal */}
+            <Modal
+                animationType="fade"
+                transparent={true}
+                visible={showClassFilterModal}
+                onRequestClose={() => setShowClassFilterModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.classFilterModal}>
+                        <View style={styles.classFilterHeader}>
+                            <Text style={styles.classFilterTitle}>Select Class</Text>
+                            <TouchableOpacity onPress={() => setShowClassFilterModal(false)}>
+                                <X size={24} color="#666" />
+                            </TouchableOpacity>
+                        </View>
+                        
+                        <ScrollView style={styles.classFilterList}>
+                            <TouchableOpacity
+                                style={[
+                                    styles.classFilterOption,
+                                    selectedClass === 'all' && styles.classFilterOptionSelected
+                                ]}
+                                onPress={() => {
+                                    setSelectedClass('all');
+                                    setShowClassFilterModal(false);
+                                }}
+                            >
+                                <Text style={[
+                                    styles.classFilterOptionText,
+                                    selectedClass === 'all' && styles.classFilterOptionTextSelected
+                                ]}>
+                                    All Classes
+                                </Text>
+                                {selectedClass === 'all' && (
+                                    <CheckCircle size={20} color="#6C5CE7" />
+                                )}
+                            </TouchableOpacity>
+                            
+                            {classes.map((classItem) => (
+                                <TouchableOpacity
+                                    key={classItem.id}
+                                    style={[
+                                        styles.classFilterOption,
+                                        selectedClass === `${classItem.grade} ${classItem.suffix}` && styles.classFilterOptionSelected
+                                    ]}
+                                    onPress={() => {
+                                        setSelectedClass(`${classItem.grade} ${classItem.suffix}`);
+                                        setShowClassFilterModal(false);
+                                    }}
+                                >
+                                    <Text style={[
+                                        styles.classFilterOptionText,
+                                        selectedClass === `${classItem.grade} ${classItem.suffix}` && styles.classFilterOptionTextSelected
+                                    ]}>
+                                        {classItem.grade} {classItem.suffix}
+                                    </Text>
+                                    {selectedClass === `${classItem.grade} ${classItem.suffix}` && (
+                                        <CheckCircle size={20} color="#6C5CE7" />
+                                    )}
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
+
             <StudentMetadataView
                 visible={metadataModalVisible}
                 onClose={() => setMetadataModalVisible(false)}
@@ -1103,32 +1387,71 @@ const styles = StyleSheet.create({
     addBtnText: { color: 'white', fontWeight: '600', fontSize: 14 },
     studentsSection: { marginTop: 8 },
     sectionSubtitle: { fontSize: 14, color: '#666', marginTop: 4, marginBottom: 20 },
-    studentsGrid: { gap: 16 },
-    studentsGridTablet: { flexDirection: 'row', flexWrap: 'wrap' },
-    studentCard: { backgroundColor: 'white', borderRadius: 20, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 3, minHeight: 280, },
+    studentsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 },
+    studentsGridTablet: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 },
+    studentCard: { backgroundColor: 'white', borderRadius: 20, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 3, width: '48%', minWidth: 280, maxWidth: 320, },
     studentCardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
     studentAvatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#6C5CE7', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
     avatarText: { color: 'white', fontSize: 20, fontWeight: 'bold' },
     studentInfo: { flex: 1 },
     studentName: { fontSize: 16, fontWeight: '700', color: '#2D3436' },
     studentEmail: { fontSize: 12, color: '#999', marginTop: 2 },
+    classBadgesContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 },
+    classBadge: { backgroundColor: '#E3F2FD', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, borderWidth: 1, borderColor: '#BBDEFB' },
+    classBadgeText: { fontSize: 10, fontWeight: '600', color: '#2196F3' },
+    noClassText: { fontSize: 10, color: '#999', fontStyle: 'italic', marginTop: 2 },
     cardActions: { flexDirection: 'row', gap: 8 },
     actionIcon: { padding: 6 },
-    progressSection: { marginVertical: 12 },
+    progressSection: { marginVertical: 12, flex: 1 },
     subjectProgress: { gap: 8 },
     subjectItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     subjectLabel: { fontSize: 12, fontWeight: '600', color: '#666', width: 50 },
     progressBar: { flex: 1, height: 6, backgroundColor: '#E0E0E0', borderRadius: 3, overflow: 'hidden' },
     progressFill: { height: '100%', borderRadius: 3 },
     progressPercent: { fontSize: 11, fontWeight: '600', color: '#666', width: 35, textAlign: 'right' },
-    performanceRow: { flexDirection: 'row', gap: 12, marginVertical: 12,  flexWrap: 'nowrap', },
+    performanceRow: { flexDirection: 'row', gap: 12, marginTop: 8, marginBottom: 16, flexWrap: 'wrap' },
     performanceBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F8F9FA', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
     performanceScore: { fontSize: 14, fontWeight: '700' },
     performanceText: { fontSize: 12, color: '#666' },
     aiAnalysisBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#F0E6FF', paddingVertical: 10, borderRadius: 12, marginTop: 8 },
     aiAnalysisBtnText: { color: '#6C5CE7', fontWeight: '600', fontSize: 14 },
     viewDetailsBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 12, paddingVertical: 8 },
-    viewDetailsText: { color: '#6C5CE7', fontSize: 13, fontWeight: '600' },
+    viewDetailsBtnText: { color: '#6C5CE7', fontSize: 13, fontWeight: '600' },
+    scoresContainer: { flex: 1, padding: 20 },
+    scoreSection: { marginBottom: 24 },
+    scoreItem: { backgroundColor: '#FFF', padding: 16, borderRadius: 8, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2 },
+    scoreInfo: { flex: 1 },
+    gameName: { fontSize: 16, fontWeight: '600', color: '#2D3436' },
+    scoreValue: { fontSize: 20, fontWeight: 'bold', color: '#007AFF', marginTop: 4 },
+    scoreDate: { fontSize: 12, color: '#666' },
+    scoreType: { fontSize: 12, color: '#2196F3', marginTop: 2 },
+    noDataText: { fontSize: 14, color: '#666', textAlign: 'center', fontStyle: 'italic', padding: 20 },
+    // Student profile styles
+    profileSection: { marginBottom: 24 },
+    profileCard: { backgroundColor: '#FFF', padding: 16, borderRadius: 8, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2 },
+    profileInfo: { marginBottom: 16 },
+    profileName: { fontSize: 18, fontWeight: 'bold', color: '#2D3436', marginBottom: 4 },
+    profileEmail: { fontSize: 14, color: '#666', marginBottom: 4 },
+    profileType: { fontSize: 12, color: '#007AFF', fontWeight: '500' },
+    profileStats: { flexDirection: 'row', justifyContent: 'space-around' },
+    profileStat: { alignItems: 'center' },
+    profileStatValue: { fontSize: 20, fontWeight: 'bold', color: '#007AFF' },
+    profileStatLabel: { fontSize: 12, color: '#666', marginTop: 2 },
+    // Game records styles
+    gameRecordsSection: { backgroundColor: '#FFF', marginHorizontal: 20, marginTop: 10, borderRadius: 24, paddingHorizontal: 20, paddingVertical: 5, elevation: 2 },
+    gameRecordsList: { },
+    emptyGameRecords: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 50 },
+    emptyGameRecordsText: { fontSize: 18, fontWeight: '700', color: '#636E72', marginTop: 15 },
+    activityCard: { flexDirection: 'row', alignItems: 'center', padding: 15, borderBottomWidth: 1, borderBottomColor: '#F1F2F6' },
+    gameIconBg: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F8F9FA', justifyContent: 'center', alignItems: 'center', marginRight: 15 },
+    recordInfo: { flex: 1 },
+    recordName: { fontSize: 16, fontWeight: '700', color: '#2D3436' },
+    recordMeta: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
+    recordDate: { fontSize: 12, color: '#636E72', marginLeft: 8 },
+    recordType: { fontSize: 12, color: '#4CAF50', fontWeight: '600', marginLeft: 8 },
+    recordScores: { alignItems: 'flex-end' },
+    recordScore: { fontSize: 16, fontWeight: '700', color: '#2D3436' },
+    recordPoints: { fontSize: 12, color: '#4CAF50', fontWeight: '600' },
     emptyState: { alignItems: 'center', paddingVertical: 48 },
     emptyStateText: { marginTop: 12, fontSize: 16, color: '#999' },
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
@@ -1229,5 +1552,50 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
         color: 'white',
+    },
+    // Class Filter Modal Styles
+    classFilterModal: {
+        backgroundColor: 'white',
+        borderRadius: 16,
+        width: '80%',
+        maxWidth: 300,
+        maxHeight: '60%',
+    },
+    classFilterHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F0F0F0',
+    },
+    classFilterTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#2D3436',
+    },
+    classFilterList: {
+        flex: 1,
+        paddingHorizontal: 20,
+    },
+    classFilterOption: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F8F9FA',
+    },
+    classFilterOptionSelected: {
+        backgroundColor: '#F0E6FF',
+    },
+    classFilterOptionText: {
+        fontSize: 16,
+        color: '#2D3436',
+        fontWeight: '500',
+    },
+    classFilterOptionTextSelected: {
+        color: '#6C5CE7',
+        fontWeight: '600',
     },
 });
