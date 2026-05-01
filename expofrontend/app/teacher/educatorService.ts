@@ -27,6 +27,8 @@ export interface UserMini {
     name?: string;
     username?: string;
     email: string;
+    avatar?: string;
+    selectedAvatar?: string;
 }
 
 export interface CourseMember {
@@ -117,28 +119,24 @@ export interface StudentAnalytics {
 class EducatorService {
     private async getAuthHeaders() {
         const token = await AsyncStorage.getItem('auth_token');
-        console.log('EducatorService: Token exists:', !!token);
-        console.log('EducatorService: Token length:', token?.length || 0);
 
         if (!token || token.trim() === '') {
             console.error('EducatorService: No authentication token found');
-            throw new Error('No authentication token found');
+            throw new Error('AUTH_REQUIRED');
         }
 
         // Check if token has valid JWT format (3 parts separated by dots)
         const parts = token.split('.');
         if (parts.length !== 3) {
             console.error('EducatorService: Invalid token format - expected 3 parts, got', parts.length);
-            await AsyncStorage.removeItem('auth_token');
-            await AsyncStorage.removeItem('auth_user');
-            throw new Error('Invalid token format. Please log in again.');
+            // Don't auto-clear, let the caller handle it
+            throw new Error('TOKEN_INVALID');
         }
 
         if (isTokenExpired(token)) {
-            console.log('EducatorService: Token is expired');
-            await AsyncStorage.removeItem('auth_token');
-            await AsyncStorage.removeItem('auth_user');
-            throw new Error('Authentication token has expired. Please log in again.');
+            console.log('EducatorService: Token expired');
+            // Don't auto-clear, let the caller handle it
+            throw new Error('TOKEN_EXPIRED');
         }
 
         return {
@@ -148,27 +146,24 @@ class EducatorService {
     }
 
     private async handleResponse(response: Response, endpoint: string) {
-        console.log(`EducatorService: ${endpoint} - Response status:`, response.status);
 
         if (!response.ok) {
             let errorMessage = `Failed to fetch ${endpoint}`;
             try {
                 const errorData = await response.json();
-                console.log(`EducatorService: ${endpoint} - Error response:`, errorData);
                 errorMessage = errorData.message || errorData.warning || errorMessage;
             } catch (e) {
-                console.log(`EducatorService: ${endpoint} - Could not parse error response`);
+                // Could not parse error response
             }
 
             if (response.status === 401) {
-                console.log('EducatorService: Authentication failed - token may be expired');
+                // Authentication failed - token may be expired
             }
 
             throw new Error(`${errorMessage}`);
         }
 
         const data = await response.json();
-        console.log(`EducatorService: ${endpoint} - Response data:`, JSON.stringify(data, null, 2));
         return data;
     }
 
@@ -208,27 +203,21 @@ class EducatorService {
         return this.handleResponse(response, 'createClass');
     }
     async deleteClass(classId: number): Promise<OperationResult> {
-        console.log(`EducatorService.deleteClass: Starting deletion for class ${classId}`);
-
         const headers = await this.getAuthHeaders();
         const url = `${getApiBaseUrl()}/api/educator/class/${classId}`;
-        console.log(`EducatorService.deleteClass: URL: ${url}`);
 
         const response = await fetch(url, {
             method: 'DELETE',
             headers,
         });
 
-        console.log(`EducatorService.deleteClass: Response status: ${response.status}`);
-
         if (!response.ok) {
             let errorMessage = `Failed to delete class`;
             try {
                 const errorData = await response.json();
-                console.log(`EducatorService.deleteClass: Error response:`, errorData);
                 errorMessage = errorData.message || errorData.warning || errorMessage;
             } catch (e) {
-                console.log(`EducatorService.deleteClass: Could not parse error response`);
+                // Could not parse error response
             }
 
             if (response.status === 403) {
@@ -244,14 +233,11 @@ class EducatorService {
         let data;
         try {
             const responseText = await response.text();
-            console.log(`EducatorService.deleteClass: Response body:`, responseText);
             data = responseText ? JSON.parse(responseText) : { message: 'Class deleted successfully', error: false };
         } catch (e) {
-            console.log(`EducatorService.deleteClass: Could not parse response`);
             data = { message: 'Class deleted successfully', warning: false };
         }
 
-        console.log(`EducatorService.deleteClass: Success, returning:`, data);
         return data;
     }
 
@@ -267,7 +253,6 @@ class EducatorService {
 
         // 返回純文字而不是 JSON
         const schoolName = await response.text();
-        console.log(`EducatorService: User school:`, schoolName);
         return schoolName;
     }
 
@@ -275,7 +260,6 @@ class EducatorService {
     async getSchoolMembers(page: number = 0, size: number = 20): Promise<UserMini[]> {
         const headers = await this.getAuthHeaders();
         const url = `${getApiBaseUrl()}/api/educator/school/members?page=${page}&size=${size}`;
-        console.log('EducatorService: Fetching school members from:', url);
 
         try {
             const response = await fetch(url, {
@@ -283,14 +267,15 @@ class EducatorService {
             });
 
             if (!response.ok) {
-                console.warn(`EducatorService: getSchoolMembers failed with status ${response.status}`);
                 return [];
             }
 
             const data = await response.json();
-            return data.content || data.data || [];
+            console.log('getSchoolMembers API response:', data);
+            const members = data.content || data.data || [];
+            console.log('First member data:', members[0]);
+            return members;
         } catch (error) {
-            console.warn('EducatorService: getSchoolMembers error:', error);
             return [];
         }
     }
@@ -335,7 +320,6 @@ class EducatorService {
 
         // Try school member endpoints first
         for (const url of schoolEndpoints) {
-            console.log(`EducatorService: Trying to remove student ${userId} from school at: ${url}`);
 
             try {
                 const response = await fetch(url, {
@@ -343,29 +327,23 @@ class EducatorService {
                     headers,
                 });
 
-                console.log(`EducatorService.removeStudentFromSchool: Response status: ${response.status}`);
-
                 if (response.ok) {
                     let data;
                     try {
                         const responseText = await response.text();
-                        console.log(`EducatorService.removeStudentFromSchool: Response body:`, responseText);
                         data = responseText ? JSON.parse(responseText) : { message: 'Student removed from school successfully', warning: false };
                     } catch (e) {
-                        console.log(`EducatorService.removeStudentFromSchool: Could not parse response`);
                         data = { message: 'Student removed from school successfully', warning: false };
                     }
 
-                    console.log(`EducatorService.removeStudentFromSchool: Success, returning:`, data);
                     return data;
                 } else {
                     let errorMessage = `Failed to remove student from school`;
                     try {
                         const errorData = await response.json();
-                        console.log(`EducatorService.removeStudentFromSchool: Error response:`, errorData);
                         errorMessage = errorData.message || errorData.warning || errorMessage;
                     } catch (e) {
-                        console.log(`EducatorService.removeStudentFromSchool: Could not parse error response`);
+                        // Could not parse error response
                     }
 
                     if (response.status === 403) {
@@ -379,14 +357,12 @@ class EducatorService {
                     continue;
                 }
             } catch (error) {
-                console.log(`EducatorService.removeStudentFromSchool: Request failed for ${url}:`, error);
                 lastError = error as Error;
                 continue;
             }
         }
 
         // If school endpoints failed, try removing from all classes as fallback
-        console.log(`EducatorService: School endpoints failed, trying class removal as fallback`);
         try {
             // Get all classes to find which classes the student belongs to
             const classesResponse = await this.getClasses();
@@ -519,6 +495,39 @@ class EducatorService {
         return data.trim();
     }
 
+    // Method to get classes for a specific student by checking all classes
+    async getStudentClasses(studentId: number): Promise<Course[]> {
+        try {
+            // Get all classes first
+            const classesResponse = await this.getClasses();
+            const allClasses = classesResponse.items || [];
+            
+            const studentClasses: Course[] = [];
+            
+            // Check each class to see if the student is a member
+            for (const classItem of allClasses) {
+                try {
+                    const classMembers = await this.getClassMembersSafe(classItem.id);
+                    const isStudentInClass = classMembers.some(member => member.userId === studentId);
+                    
+                    if (isStudentInClass) {
+                        studentClasses.push(classItem);
+                    }
+                } catch (error) {
+                    // If we can't check a specific class, continue with others
+                    console.warn(`Could not check class ${classItem.id} for student ${studentId}:`, error);
+                    continue;
+                }
+            }
+            
+            return studentClasses;
+        } catch (error) {
+            console.error('Error in getStudentClasses:', error);
+            // Fallback: return empty array
+            return [];
+        }
+    }
+
     // New method to get class members with permission handling
     async getClassMembersSafe(classId: number): Promise<CourseMember[]> {
         const headers = await this.getAuthHeaders();
@@ -614,6 +623,29 @@ class EducatorService {
         return [];
     }
 
+    // Get user avatar information
+    async getUserAvatar(userId: number): Promise<string | null> {
+        try {
+            // Try to get user profile information that might contain avatar
+            const response = await fetch(`${getApiBaseUrl()}/api/auth/me/${userId}`, {
+                headers: await this.getAuthHeaders(),
+            });
+
+            if (!response.ok) {
+                return null;
+            }
+
+            const profileData = await response.json();
+            console.log('User profile data for avatar:', profileData);
+            
+            // Check various possible avatar field names
+            return profileData.selectedAvatar || profileData.avatar || profileData.profilePicture || null;
+        } catch (error) {
+            console.log('Error getting user avatar:', error);
+            return null;
+        }
+    }
+
     // Get student profile information
     async getStudentProfile(userId: number, classId?: number): Promise<StudentProfile | null> {
         try {
@@ -621,6 +653,7 @@ class EducatorService {
             const schoolMembers = await this.getSchoolMembers();
             const student = schoolMembers.find(member => member.id === userId);
             
+                        
             if (student) {
                 return {
                     id: student.id,

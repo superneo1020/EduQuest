@@ -4,6 +4,7 @@ import com.eduquest.springbackend.dao.GameRepository;
 import com.eduquest.springbackend.dao.UserGameScoreRepository;
 import com.eduquest.springbackend.dto.EducatorAiAnalysisResponse;
 import com.eduquest.springbackend.dto.EducatorAiOverallResponse;
+import com.eduquest.springbackend.dto.EducatorAiOverallResponseForCourse;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,11 +33,12 @@ public class EducatorAiAnalysisService {
 
     private final List<String> fieldLibrary = List.of(
             "\"overallAnalysis\": Summary: most played 'Category', highest score, and one general improvement area.",
-            "\"studentAnalysis\": Summary and suggestions: each student's performance based on their top 3 achievements and top 3 challenges at most.",
+            "\"studentAnalysis\": Summary and suggestions: each student's performance based on their top 5 achievements and top 5 challenges at most.",
             "\"strengths\": List of strengths based on student's achievements.",
             "\"weaknesses\": List of weaknesses based on student's challenges.",
             "\"emotions\": List of the student's likely emotional state (e.g., vocabulary is inappropriate: Boundary Testing; correctness is low but attempts are high: Struggling; correctness is high but answers are nonsensical: Disengaged/Bored; progress is consistent: Focused) based on the nature of their challenges and achievements",
-            "\"suggestions\": List of suggestions for improvement based on student's results."
+            "\"suggestions\": List of suggestions for improvement based on student's results.",
+            "\"gameAnalysis\": Summary and suggestions: each game performance based on their achievements and challenges."
     );
 
     private ChatClient chatClient;
@@ -110,17 +112,17 @@ public class EducatorAiAnalysisService {
         }
     }
 
-    public EducatorAiOverallResponse analysisRecentProgress(Long courseId, Pageable pageable) {
+    public EducatorAiOverallResponse analyzeStudentGameProgress(Long userId, Pageable pageable) {
         // Get user game scores
-        var userGameScores = userGameScoreRepo.findAllUserGameScoresByCourseId(courseId, pageable);
-        var formattedLeanData = promptSerializer.simplifyCourseDataForAi(userGameScores.getContent());
+        var userGameScores = userGameScoreRepo.findGameRecordMiniByUserId(userId, pageable);
+        var formattedLeanData = promptSerializer.simplifyForAi(userGameScores.getContent());
 
         // Build request
         PromptTemplate userTemplate = new PromptTemplate(analysisPromptResource);
         Message userMessage = userTemplate.createMessage(Map.of(
-                "intro", "recent process for all students",
+                "intro", "a student's process",
                 "data", formattedLeanData,
-                "instructions", promptSerializer.buildInstructions(fieldLibrary,0, 1)
+                "instructions", promptSerializer.buildInstructions(fieldLibrary,0, 6)
         ));
 
         try {
@@ -130,6 +132,29 @@ public class EducatorAiAnalysisService {
                     .entity(EducatorAiOverallResponse.class);
         } catch (Exception e) {
             return new EducatorAiOverallResponse("We encountered an unexpected error while processing your ai analysis request. Please refresh the page or try again in a few minutes.", List.of());
+        }
+    }
+
+    public EducatorAiOverallResponseForCourse analysisRecentProgressForCourse(Long courseId, Pageable pageable) {
+        // Get user game scores
+        var userGameScores = userGameScoreRepo.findAllUserGameScoresByCourseId(courseId, pageable);
+        var formattedLeanData = promptSerializer.simplifyCourseDataForAi(userGameScores.getContent());
+
+        // Build request
+        PromptTemplate userTemplate = new PromptTemplate(analysisPromptResource);
+        Message userMessage = userTemplate.createMessage(Map.of(
+                "intro", "recent process for all students (may only have 1 student only)",
+                "data", formattedLeanData,
+                "instructions", promptSerializer.buildInstructions(fieldLibrary,0, 1)
+        ));
+
+        try {
+            return chatClient.prompt(new Prompt(userMessage))
+                    .options(ChatOptions.builder().temperature(0.2).maxTokens(1500).build())
+                    .call()
+                    .entity(EducatorAiOverallResponseForCourse.class);
+        } catch (Exception e) {
+            return new EducatorAiOverallResponseForCourse("We encountered an unexpected error while processing your ai analysis request. Please refresh the page or try again in a few minutes.", List.of());
         }
     }
 }

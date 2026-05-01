@@ -8,7 +8,8 @@ import {
     ActivityIndicator,
     KeyboardAvoidingView,
     Platform,
-    Animated
+    Animated,
+    Image
 } from "react-native";
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "expo-router";
@@ -67,8 +68,10 @@ export default function Login() {
                 role === 'ROLE_ADMIN' || role === 'ADMIN'
             );
             const isEducator = user.roles?.some((role: string) =>
-                role === 'ROLE_EDUCATOR'
+                role === 'ROLE_EDUCATOR' || role === 'EDUCATOR' || role === 'teacher'
             );
+
+            console.log('Login: Role check - isAdmin:', isAdmin, 'isEducator:', isEducator);
 
             if (isAdmin) {
                 console.log("Welcome Admin!");
@@ -98,9 +101,11 @@ export default function Login() {
                     {/* Header Section */}
                     <View style={styles.header}>
                         <Animated.View style={[styles.logoCircle, { transform: [{ scale: logoScale }] }]}>
-                            <View style={styles.logoIcon}>
-                                <Sparkles size={24} color="white" fill="white" />
-                            </View>
+                            <Image 
+                                source={require('../../assets/images/icon/EduQuest_icon.png')} 
+                                style={styles.logoImage}
+                                resizeMode="contain"
+                            />
                         </Animated.View>
                         <Text style={styles.title}>EduQuest</Text>
                         <Text style={styles.subtitle}>Welcome Back</Text>
@@ -177,27 +182,23 @@ const styles = StyleSheet.create({
         marginBottom: 40
     },
     logoCircle: {
-        width: 64,
-        height: 64,
-        borderRadius: 32,
-        backgroundColor: '#4CAF50',
+        width: 40,
+        height: 400,
+        borderRadius: 60,
         justifyContent: "center",
         alignItems: "center",
         marginBottom: 20,
     },
-    logoIcon: {
-        width: 32,
-        height: 32,
-        backgroundColor: '#4CAF50',
-        borderRadius: 8,
-        justifyContent: 'center',
-        alignItems: 'center',
+    logoImage: {
+        width: 400,
+        height: 400,
     },
     title: {
-        fontSize: 28,
+        fontSize: 32,
         fontWeight: "800",
         color: '#4CAF50',
-        marginBottom: 8
+        marginBottom: 8,
+        letterSpacing: -0.5
     },
     subtitle: {
         fontSize: 16,
@@ -206,13 +207,13 @@ const styles = StyleSheet.create({
     },
     form: {
         backgroundColor: "white",
-        padding: 24,
-        borderRadius: 16,
+        padding: 28,
+        borderRadius: 20,
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 6,
         borderWidth: 1,
         borderColor: '#E2E8F0'
     },
@@ -245,10 +246,15 @@ const styles = StyleSheet.create({
     },
     loginButton: {
         backgroundColor: '#4CAF50',
-        paddingVertical: 14,
-        borderRadius: 12,
-        marginTop: 8,
+        paddingVertical: 16,
+        borderRadius: 14,
+        marginTop: 12,
         alignItems: "center",
+        shadowColor: "#4CAF50",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+        elevation: 4,
     },
     disabledBtn: {
         backgroundColor: '#94A3B8',
@@ -256,8 +262,9 @@ const styles = StyleSheet.create({
     },
     loginText: {
         color: "white",
-        fontSize: 16,
-        fontWeight: "700"
+        fontSize: 18,
+        fontWeight: "700",
+        letterSpacing: 0.5
     },
     errorText: {
         color: '#EF4444',

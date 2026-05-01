@@ -3,9 +3,9 @@ import { View, Dimensions } from 'react-native';
 import Svg, { Polygon, Line, Text as SvgText, Circle, G } from 'react-native-svg';
 
 const { width } = Dimensions.get('window');
-const CHART_SIZE = width * 0.35; // 缩小尺寸 (原为 0.5)
+const CHART_SIZE = width * 0.35; // Reduced size (originally 0.5)
 const CENTER = CHART_SIZE / 2;
-const RADIUS = CENTER * 0.65; // 减小半径比例，使图形更紧凑
+const RADIUS = CENTER * 0.65; // Reduce radius ratio for more compact graph
 
 interface RadarData {
     label: string;
@@ -69,13 +69,13 @@ export default function SkillRadarChart({ gameHistory }: { gameHistory: any[] })
         <View style={{ alignItems: 'center', justifyContent: 'center' }}>
             <Svg height={CHART_SIZE} width={CHART_SIZE}>
                 <G>
-                    {/* 背景网格：三个圆圈 */}
+                    {/* Background grid: three circles */}
                     {[0.3, 0.6, 1].map((r, i) => (
                         <Circle key={i} cx={CENTER} cy={CENTER} r={RADIUS * r}
                                 fill="none" stroke="#E2E8F0" strokeWidth="1" strokeDasharray="3" />
                     ))}
 
-                    {/* 轴线和标签 */}
+                    {/* Axes and labels */}
                     {skills.map((s, i) => {
                         const end = getCoordinates(i, skills.length, 1);
                         const labelPos = getCoordinates(i, skills.length, 1.15);
@@ -93,7 +93,7 @@ export default function SkillRadarChart({ gameHistory }: { gameHistory: any[] })
                         );
                     })}
 
-                    {/* 雷达区域 */}
+                    {/* Radar area */}
                     <Polygon
                         points={points}
                         fill="rgba(76, 175, 80, 0.2)"
@@ -101,7 +101,7 @@ export default function SkillRadarChart({ gameHistory }: { gameHistory: any[] })
                         strokeWidth="2"
                     />
 
-                    {/* 顶点小圆点 */}
+                    {/* Vertex dots */}
                     {skills.map((s, i) => {
                         const p = getCoordinates(i, skills.length, s.value);
                         return <Circle key={i} cx={p.x} cy={p.y} r="3" fill="#4CAF50" />;
