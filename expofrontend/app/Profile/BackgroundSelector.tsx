@@ -4,7 +4,7 @@ import { BackgroundIcons } from './BackgroundIcons';
 
 // Background options matching the database items
 export const backgroundOptions = [
-    { id: 'default', name: 'Default', color: '#F0F4F8' },
+    { id: 'default', name: 'Default Background', color: '#F0F4F8' },
     { id: 'Space', name: 'Space Theme', color: '#0F172A' },
     { id: 'Ocean', name: 'Ocean View', color: '#006994' },
     { id: 'Forest', name: 'Forest Adventure', color: '#228B22' },
