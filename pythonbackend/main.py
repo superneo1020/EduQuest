@@ -154,7 +154,7 @@ class OllamaEmbeddingClient:
         return self.embedding_dim
 
 class ImageGenRequest(BaseModel):
-    prompt: str = Field(..., min_length=1, max_length=1000)
+    prompt: str = Field(..., min_length=1, max_length=10000)
     style: str = Field(default="animated")
     width: int = Field(default=1024, ge=512, le=2048)
     height: int = Field(default=1024, ge=512, le=2048)
