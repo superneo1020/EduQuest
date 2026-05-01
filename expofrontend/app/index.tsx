@@ -12,11 +12,16 @@ import {
     Dimensions,
     Platform,
     StatusBar,
-    Modal
+    Modal,
+    Image
 } from 'react-native';
 import { Calculator, Languages, Atom, Brain, LogOut, User, Trophy, Clock, Target, Sparkles, Star, Zap, GraduationCap, Rocket, ShoppingCart } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/src/auth/AuthContext';
+import axios from 'axios';
+import { getApiBaseUrl } from '@/src/api/client';
+import { renderAvatar, avatarOptions } from "@/app/Profile/AvatarSelector";
+import { badgeIconNameMapping } from "@/app/Profile/BadgeSelector";
 
 import {Bot} from "lucide-react-native/icons";
 
@@ -25,8 +30,58 @@ export default function LandscapeOptimizedHome() {
     const [showLogoutModal, setShowLogoutModal] = useState(false);
     const { width, height } = useWindowDimensions();
 
-
     const { token, loading, signOut, user } = useAuth();
+    const [profileData, setProfileData] = useState<any>(null);
+    const [selectedAvatar, setSelectedAvatar] = useState<string>('default');
+    const [userItems, setUserItems] = useState<any[]>([]);
+
+    // 獲取用戶資料和 avatar
+    useEffect(() => {
+        const fetchUserProfile = async () => {
+            if (!token) return;
+            
+            try {
+                // 獲取用戶資料
+                const profileResponse = await axios.get(`${getApiBaseUrl()}/api/user/profile`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                setProfileData(profileResponse.data);
+
+                // 獲取用戶物品
+                const itemsResponse = await axios.get(`${getApiBaseUrl()}/api/user/item`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                const rawItems = itemsResponse.data?.items || itemsResponse.data || [];
+                const userItemsList = Array.isArray(rawItems) ? rawItems : [];
+                setUserItems(userItemsList);
+
+                // 獲取裝備的 avatar
+                const equippedAvatarId = profileResponse.data?.equipped_items?.AVATAR
+                    || profileResponse.data?.equippedItems?.AVATAR;
+                
+                if (equippedAvatarId) {
+                    const equippedItem = userItemsList.find((item: any) => {
+                        const itemData = item.item || item;
+                        return itemData.id === equippedAvatarId || itemData.itemId === equippedAvatarId;
+                    });
+                    
+                    if (equippedItem) {
+                        const itemData = equippedItem.item || equippedItem;
+                        if (itemData.icon) {
+                            setSelectedAvatar(itemData.icon);
+                        }
+                    }
+                } else {
+                    setSelectedAvatar('default');
+                }
+            } catch (error) {
+                console.error('Failed to fetch user profile:', error);
+                setSelectedAvatar('default');
+            }
+        };
+
+        fetchUserProfile();
+    }, [token]);
 
     // Debug: 檢查用戶角色數據
     console.log('User data:', user);
@@ -92,7 +147,11 @@ export default function LandscapeOptimizedHome() {
                 {/* 左側：Logo 與 名稱 */}
                 <View style={styles.headerLeft}>
                     <View style={styles.logoIcon}>
-                        <Sparkles size={20} color="white" fill="white" />
+                        <Image 
+                            source={require('../assets/images/icon/EduQuest_icon.png')} 
+                            style={styles.logoImage}
+                            resizeMode="contain"
+                        />
                     </View>
                     <Text style={styles.headerTitle}>EduQuest</Text>
                 </View>
@@ -106,19 +165,17 @@ export default function LandscapeOptimizedHome() {
                         onPress={() => router.push('/Profile/profile' as any)}
                     >
                         <View style={styles.avatarCircle}>
-                            <Text style={styles.avatarLetter}>
-                                {user?.username?.charAt(0).toUpperCase() || 'U'}
-                            </Text>
+                            {renderAvatar(selectedAvatar, 34)}
                         </View>
                         <View style={styles.userMeta}>
-                            <Text style={styles.userNameText}>{user?.username || 'Guest'}</Text>
-                            <Text style={styles.userRoleText}>{(user?.roles?.includes('teacher') || user?.roles === 'teacher') ? 'Teacher' : 'Student'}</Text>
+                            <Text style={styles.userNameText}>{profileData?.nickname || user?.username || 'Guest'}</Text>
+                            <Text style={styles.userRoleText}>{user?.roles?.includes('teacher') ? 'Teacher' : 'Student'}</Text>
                         </View>
                     </TouchableOpacity>
 
                     {/* 新增的教师页面按钮 */}
                     {/* 新增的教师页面按钮 - 只对教师身份显示 */}
-                    {(user?.roles?.includes('teacher') || user?.roles === 'teacher') && (
+                    {user?.roles?.includes('teacher') && (
                         <TouchableOpacity
                             style={styles.teacherBtn}
                             onPress={() => router.push('/teacher/teacher' as any)}
@@ -200,7 +257,7 @@ export default function LandscapeOptimizedHome() {
                         <View style={styles.miniStat}>
                             <Trophy size={24} color="#FFD700" />
                             <Text style={styles.statVal}>
-                                {String(user?.points ?? 0)}
+                                {String(profileData?.points ?? user?.points ?? 0)}
                             </Text>
                         </View>
 
@@ -278,13 +335,15 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     logoIcon: {
-        width: 32,
-        height: 32,
-        backgroundColor: '#00A8E8',
-        borderRadius: 8,
+        width: 150,
+        height: 150,
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 12,
+    },
+    logoImage: {
+        width: 150,
+        height: 150,
     },
     headerTitle: {
         fontSize: 18,

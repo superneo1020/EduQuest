@@ -116,11 +116,11 @@ export const BadgeSelector: React.FC<BadgeSelectorProps> = ({
                                         selectedBadges.includes(badge.id) && styles.selectedBadge
                                     ]}
                                     onPress={() => {
-                                    const newSelection = selectedBadges.includes(badge.id)
-                                        ? selectedBadges.filter(id => id !== badge.id)
-                                        : [...selectedBadges, badge.id];
-                                    onSelect(newSelection);
-                                }}
+                                        const newSelection = selectedBadges.includes(badge.id)
+                                            ? selectedBadges.filter(id => id !== badge.id)
+                                            : [...selectedBadges, badge.id];
+                                        onSelect(newSelection);
+                                    }}
                                 >
                                     {renderBadge(badge.id, 55)}
                                     <Text style={styles.badgeName}>{badge.name}</Text>

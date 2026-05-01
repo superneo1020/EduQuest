@@ -25,11 +25,14 @@ import {
 import { useAuth } from '@/src/auth/AuthContext';
 import { getApiBaseUrl } from '@/src/api/client';
 import axios from 'axios';
+import { AvatarIcons } from '../Profile/AvatarIcons';
 
 interface LeaderboardEntry {
     username: string;
     scores: number;
     createdAt: string;
+    avatar?: string;
+    selectedAvatar?: string;
 }
 
 interface Game {
@@ -53,13 +56,28 @@ export default function StudentLeaderboard() {
     const [hasMore, setHasMore] = useState(true);
     const pageSize = 20;
 
+    // Function to render user avatar
+    const renderUserAvatar = (entry: LeaderboardEntry, size: number = 32) => {
+        if (entry.selectedAvatar && AvatarIcons[entry.selectedAvatar as keyof typeof AvatarIcons]) {
+            const AvatarComponent = AvatarIcons[entry.selectedAvatar as keyof typeof AvatarIcons];
+            return <AvatarComponent size={size} />;
+        } else {
+            // Fallback to initials
+            const avatarText = entry.username ? entry.username.charAt(0).toUpperCase() : '?';
+            return (
+                <View style={[styles.avatarPlaceholder, { width: size, height: size, borderRadius: size / 2 }]}>
+                    <Text style={[styles.avatarText, { fontSize: size / 2 }]}>
+                        {avatarText}
+                    </Text>
+                </View>
+            );
+        }
+    };
+
     useEffect(() => {
         // Load games when token is available
-        console.log('StudentLeaderboard - Token check:', { token: token ? 'exists' : 'missing', tokenLength: token?.length });
         if (token) {
             loadGames();
-        } else {
-            console.log('StudentLeaderboard - No token available, waiting for authentication...');
         }
     }, [token]);
 
@@ -84,8 +102,7 @@ export default function StudentLeaderboard() {
             { id: 10, name: 'ChineseGame'},
             { id: 11, name: 'ChineseSentenceGame'}
         ];
-        
-        console.log('StudentLeaderboard - Using hardcoded games:', hardcodedGames);
+
         setGames(hardcodedGames);
         if (hardcodedGames.length > 0) {
             setSelectedGame(hardcodedGames[0].name);
@@ -115,8 +132,8 @@ export default function StudentLeaderboard() {
             );
 
             const newEntries = response.data.slice || [];
-            console.log('StudentLeaderboard - Response received:', response.status, response.data);
-            console.log('StudentLeaderboard - Extracted entries:', newEntries);
+            console.log('Leaderboard API response:', response.data);
+            console.log('First leaderboard entry:', newEntries[0]);
             
             if (reset) {
                 setLeaderboard(newEntries);
@@ -262,10 +279,15 @@ export default function StudentLeaderboard() {
                                     {getRankIcon(index + 1)}
                                 </View>
                                 <View style={styles.playerInfo}>
-                                    <Text style={styles.topPlayerName}>{entry.username}</Text>
-                                    <Text style={styles.playerDate}>
-                                        {new Date(entry.createdAt).toLocaleDateString()}
-                                    </Text>
+                                    <View style={styles.playerHeader}>
+                                        {renderUserAvatar(entry, 40)}
+                                        <View style={styles.playerDetails}>
+                                            <Text style={styles.topPlayerName}>{entry.username}</Text>
+                                            <Text style={styles.playerDate}>
+                                                {new Date(entry.createdAt).toLocaleDateString()}
+                                            </Text>
+                                        </View>
+                                    </View>
                                 </View>
                                 <View style={styles.scoreContainer}>
                                     <Text style={[
@@ -286,10 +308,15 @@ export default function StudentLeaderboard() {
                                     <Text style={styles.rankNumber}>{index + 4}</Text>
                                 </View>
                                 <View style={styles.playerInfo}>
-                                    <Text style={styles.playerName}>{entry.username}</Text>
-                                    <Text style={styles.playerDate}>
-                                        {new Date(entry.createdAt).toLocaleDateString()}
-                                    </Text>
+                                    <View style={styles.playerHeader}>
+                                        {renderUserAvatar(entry, 32)}
+                                        <View style={styles.playerDetails}>
+                                            <Text style={styles.playerName}>{entry.username}</Text>
+                                            <Text style={styles.playerDate}>
+                                                {new Date(entry.createdAt).toLocaleDateString()}
+                                            </Text>
+                                        </View>
+                                    </View>
                                 </View>
                                 <View style={styles.scoreContainer}>
                                     <Text style={styles.score}>{entry.scores}</Text>
@@ -512,5 +539,23 @@ const styles = StyleSheet.create({
         marginLeft: 8,
         fontSize: 14,
         color: '#666',
+    },
+    // Avatar styles
+    playerHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    playerDetails: {
+        marginLeft: 12,
+        flex: 1,
+    },
+    avatarPlaceholder: {
+        backgroundColor: '#F0E6FF',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    avatarText: {
+        color: '#6C5CE7',
+        fontWeight: 'bold',
     },
 });

@@ -52,6 +52,10 @@ export default function ProfileScreen() {
     const [showAiAnalysis, setShowAiAnalysis] = useState(false);
     const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
     const [analyzingWithAi, setAnalyzingWithAi] = useState(false);
+    
+    // Game analysis state
+    const [gameAnalyses, setGameAnalyses] = useState<{[key: string]: any}>({});
+    const [expandedGames, setExpandedGames] = useState<Set<string>>(new Set());
 
     // School change state (removed editing ability, only display)
     const [currentSchool, setCurrentSchool] = useState('');
@@ -1173,9 +1177,9 @@ export default function ProfileScreen() {
                 'rgba(59, 130, 246, 0.85)'   // Urban Blue
             ] as const;
             default: return [
-                'rgba(99, 102, 241, 0.85)',  // Purple Blue
-                'rgba(139, 92, 246, 0.85)',  // Purple
-                'rgba(236, 72, 153, 0.85)'   // Pink
+                '#FFFFFF',  // White solid color for default background
+                '#FFFFFF',  // White solid color for default background
+                '#FFFFFF'   // White solid color for default background
             ] as const;
         }
     };
@@ -1304,6 +1308,114 @@ export default function ProfileScreen() {
         
         result += `\n🎯 Keep up the good work, you'll get better and better!`;
         return result;
+    };
+
+    // Game analysis functions
+    const toggleGameExpansion = async (gameData: any) => {
+        // Create a unique identifier using game name + timestamp
+        const gameName = gameData.gameName || gameData.name || 'Unknown Game';
+        const createdAt = gameData.createdAt || gameData.timestamp || Date.now().toString();
+        const gameIdentifier = `${gameName}_${createdAt}`;
+        
+        setExpandedGames(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(gameIdentifier)) {
+                newSet.delete(gameIdentifier);
+            } else {
+                newSet.add(gameIdentifier);
+                // Fetch analysis if not already loaded
+                if (!gameAnalyses[gameIdentifier]) {
+                    fetchGameAnalysis(gameIdentifier, gameData);
+                }
+            }
+            return newSet;
+        });
+    };
+
+    const fetchGameAnalysis = async (gameIdentifier: string, gameData: any) => {
+        if (!token || !gameIdentifier) return;
+        
+        try {
+            console.log(`=== FETCHING GAME ANALYSIS FOR: ${gameIdentifier} ===`);
+            
+            // Extract pure game name from gameData for ID lookup
+            const gameName = gameData.gameName || gameData.name || 'Unknown Game';
+            console.log(`=== EXTRACTED GAME NAME: ${gameName} ===`);
+            
+            // Get game ID using the pure game name
+            const gameId = await getGameIdByName(gameName);
+            
+            if (gameId) {
+                console.log(`=== USING GAME ID: ${gameId} FOR ${gameName} ===`);
+                const response = await axios.get(
+                    `${getApiBaseUrl()}/api/user/game/results/${gameId}`,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+                
+                console.log(`Successfully fetched analysis for ${gameIdentifier}:`, response.data);
+                
+                setGameAnalyses(prev => ({
+                    ...prev,
+                    [gameIdentifier]: response.data
+                }));
+            } else {
+                throw new Error(`Game ID not found for ${gameName}`);
+            }
+        } catch (error: any) {
+            console.error(`=== FAILED TO FETCH ANALYSIS FOR ${gameIdentifier} ===`);
+            console.error(`Error details:`, error);
+            
+            // Set error state for this game
+            setGameAnalyses(prev => ({
+                ...prev,
+                [gameIdentifier]: { 
+                    error: true, 
+                    message: error.response?.data?.message || 'Unable to load analysis' 
+                }
+            }));
+        }
+    };
+
+    const getGameIdByName = async (gameName: string): Promise<number | null> => {
+        try {
+            console.log(`Looking up game ID for: ${gameName}`);
+            
+            // Create a mapping based on known game names
+            const gameNameToIdMap: { [key: string]: number } = {
+                'Speed Calculation': 1,
+                'AI Math Adventure': 2,
+                'Listening Game': 3,
+                'Writing Game': 4,
+                'Sentence Reorder': 5,
+                'Animal Catcher': 6,
+                'Animal Classification': 7,
+                'Body Parts Matching': 8,
+                'Human organs': 9,
+                'ChineseGame': 10,
+                'ChineseSentenceGame': 11
+            };
+            
+            // Try to find exact match first
+            if (gameNameToIdMap[gameName]) {
+                console.log(`Found game ID ${gameNameToIdMap[gameName]} for ${gameName}`);
+                return gameNameToIdMap[gameName];
+            }
+            
+            // Try case-insensitive match
+            const lowerGameName = gameName.toLowerCase();
+            for (const [name, id] of Object.entries(gameNameToIdMap)) {
+                if (name.toLowerCase() === lowerGameName) {
+                    console.log(`Found game ID ${id} for ${gameName} (case-insensitive match)`);
+                    return id;
+                }
+            }
+            
+            console.log(`Game ID not found for ${gameName}`);
+            return null;
+        } catch (error) {
+            console.error(`Error getting game ID for ${gameName}:`, error);
+            return null;
+        }
     };
 
     return (
@@ -1535,17 +1647,12 @@ export default function ProfileScreen() {
                                     </View>
                                 )}
                                 
-                                                                
-                                {/* 技能分析區域 */}
                                 <View style={styles.skillsSection}>
                                     <Text style={[styles.sectionLabel, { color: cardTextColor }]}>📊 Skills Analysis & AI Tips</Text>
                                     <View style={{ width: chartWidth, alignSelf: 'center' }}>
                                         <SkillBarsChart gameHistory={gameHistory} />
                                     </View>
 
-
-                                    {/* AI 建議直接顯示 */}
-                                    {/* AI 建議直接顯示 */}
                                     <View style={{ marginTop: 16 }}>
                                         <Text style={[styles.sectionLabel, { color: cardTextColor, marginBottom: 8 }]}>Learning Suggestions</Text>
                                         {loadingSuggestions ? (
@@ -1583,10 +1690,76 @@ export default function ProfileScreen() {
                         ) : (
                             <View style={styles.masterInfoCard}>
                                 {/* 卡片標題 */}
-
-                                
-                                {/* 基本資訊區域 - 緊湊網格布局 */}
-
+                                <View style={styles.cardHeader}>
+                                    <Text style={styles.cardTitle}>👤 My Profile</Text>
+                                    <TouchableOpacity
+                                        style={styles.editCardBtn}
+                                        onPress={() => setShowEditProfileModal(true)}
+                                    >
+                                        <Edit size={16} color="#636E72" />
+                                    </TouchableOpacity>
+                                </View>
+                            
+                            {/* 基本資訊區域 - 緊湊網格布局 */}
+                                <View style={styles.infoSection}>
+                                    <Text style={styles.sectionLabel}>Basic Info</Text>
+                                    <View style={styles.compactInfoGrid}>
+                                        <View style={styles.infoRow}>
+                                            <View style={styles.compactInfoItem}>
+                                                <UserIcon size={12} color="#636E72" />
+                                                <View style={styles.compactInfoContent}>
+                                                    <Text style={styles.compactInfoLabel}>Username</Text>
+                                                    <Text style={styles.compactInfoValue}>{displayUser?.username || 'N/A'}</Text>
+                                                </View>
+                                            </View>
+                                            <View style={styles.compactInfoItem}>
+                                                <Trophy size={12} color="#636E72" />
+                                                <View style={styles.compactInfoContent}>
+                                                    <Text style={styles.compactInfoLabel}>Points</Text>
+                                                    <Text style={styles.compactInfoValue}>{displayUser?.points || 0} XP</Text>
+                                                </View>
+                                            </View>
+                                        </View>
+                                        <View style={styles.infoRow}>
+                                            <View style={styles.compactInfoItem}>
+                                                <Mail size={12} color="#636E72" />
+                                                <View style={styles.compactInfoContent}>
+                                                    <Text style={styles.compactInfoLabel}>Email</Text>
+                                                    <Text style={styles.compactInfoValue} numberOfLines={1}>{displayUser?.email || 'N/A'}</Text>
+                                                </View>
+                                            </View>
+                                            <View style={styles.compactInfoItem}>
+                                                <Gamepad2 size={12} color="#636E72" />
+                                                <View style={styles.compactInfoContent}>
+                                                    <Text style={styles.compactInfoLabel}>Games</Text>
+                                                    <Text style={styles.compactInfoValue}>{gameHistory.length}</Text>
+                                                </View>
+                                            </View>
+                                        </View>
+                                        {(currentSchool || userRoles.length > 0) && (
+                                            <View style={styles.infoRow}>
+                                                {currentSchool && (
+                                                    <View style={styles.compactInfoItem}>
+                                                        <BookOpen size={12} color="#636E72" />
+                                                        <View style={styles.compactInfoContent}>
+                                                            <Text style={styles.compactInfoLabel}>School</Text>
+                                                            <Text style={styles.compactInfoValue}>{currentSchool}</Text>
+                                                        </View>
+                                                    </View>
+                                                )}
+                                                {userRoles.length > 0 && (
+                                                    <View style={styles.compactInfoItem}>
+                                                        <Award size={12} color="#636E72" />
+                                                        <View style={styles.compactInfoContent}>
+                                                            <Text style={styles.compactInfoLabel}>Role</Text>
+                                                            <Text style={styles.compactInfoValue}>{userRoles.join(', ')}</Text>
+                                                        </View>
+                                                    </View>
+                                                )}
+                                            </View>
+                                        )}
+                                    </View>
+                                </View>
                                 
                                 {/* 徽章和背景組合區域 - 善用空間 */}
                                 {(ownedBadges.length > 0 || ownedBackgrounds.length > 0) && (
@@ -1658,18 +1831,20 @@ export default function ProfileScreen() {
                                                                 
                                 {/* 技能分析區域 */}
                                 <View style={styles.skillsSection}>
-                                    <Text style={[styles.sectionLabel, { color: cardTextColor }]}>📊 Skills Analysis & AI Tips</Text>
+                                    <Text style={styles.sectionLabel}>📊 Skills Analysis & AI Tips</Text>
                                     <View style={{ width: chartWidth, alignSelf: 'center' }}>
                                         <SkillBarsChart gameHistory={gameHistory} />
                                     </View>
                                     
                                     {/* AI 建議直接顯示 */}
                                     <View style={{ marginTop: 16 }}>
-                                        <Text style={[styles.sectionLabel, { color: cardTextColor, marginBottom: 8 }]}>Learning Suggestions</Text>
+                                        <Text style={[styles.sectionLabel, { marginBottom: 8 }]}>Learning Suggestions</Text>
                                         {loadingSuggestions ? (
-                                            <View style={{ alignItems: 'center', padding: 20 }}>
+                                            <View style={[styles.statsCard, { alignItems: 'center', padding: 20 }]}>
                                                 <ActivityIndicator size="small" color="#4CAF50" />
-                                                <Text style={{ marginTop: 8, color: '#636E72', fontSize: 12 }}>AI is analyzing your learning patterns...</Text>
+                                                <Text style={[styles.statsLabel, { textAlign: 'center', marginTop: 8 }]}>
+                                                    AI is analyzing your learning patterns...
+                                                </Text>
                                             </View>
                                         ) : generateLearningSuggestions.length > 0 ? (
                                             generateLearningSuggestions.slice(0, 3).map((suggestion: any, index: number) => (
@@ -1678,15 +1853,15 @@ export default function ProfileScreen() {
                                                         {suggestion.icon && typeof suggestion.icon === 'object' && suggestion.icon.$$typeof ? suggestion.icon : (suggestion.icon || <Trophy size={16} color="#4CAF50" />)}
                                                     </View>
                                                     <View style={styles.suggestionContent}>
-                                                        <Text style={[styles.suggestionTitle, { color: cardTextColor }]}>{suggestion.title}</Text>
-                                                        <Text style={[styles.suggestionDescription, { color: cardTextColor }]}>{suggestion.description}</Text>
+                                                        <Text style={styles.suggestionTitle}>{suggestion.title}</Text>
+                                                        <Text style={styles.suggestionDescription}>{suggestion.description}</Text>
                                                     </View>
                                                 </View>
                                             ))
                                         ) : (
                                             <View style={[styles.statsCard, { alignItems: 'center', padding: 16 }]}>
-                                                <Text style={[styles.statsCardTitle, { color: cardTextColor, marginBottom: 8 }]}>Great Job! 🎉</Text>
-                                                <Text style={[styles.statsLabel, { textAlign: 'center', color: cardTextColor }]}>
+                                                <Text style={[styles.statsCardTitle, { marginBottom: 8 }]}>Great Job! 🎉</Text>
+                                                <Text style={[styles.statsLabel, { textAlign: 'center' }]}>
                                                     You're doing excellently! Keep up the good work and continue challenging yourself.
                                                 </Text>
                                             </View>
@@ -1756,7 +1931,7 @@ export default function ProfileScreen() {
 
                         {/* AI Analysis Button */}
                         <LinearGradient
-                            colors={['#6C5CE7', '#A29BFE']}
+                            colors={['#10B981', '#059669']}
                             style={styles.aiAnalysisBtn}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 1 }}
@@ -1772,29 +1947,13 @@ export default function ProfileScreen() {
                                     <Brain size={20} color="#fff" />
                                 )}
                                 <Text style={styles.aiAnalysisBtnText}>
-                                    {analyzingWithAi ? '分析中...' : 'AI 學習分析'}
+                                    {analyzingWithAi ? 'In the analysis...' : 'AI Learning analytics'}
                                 </Text>
                                 <ChevronRight size={20} color="#fff" />
                             </TouchableOpacity>
                         </LinearGradient>
 
-                        {/* Analytics Button */}
-                        <LinearGradient
-                            colors={['#6C5CE7', '#A29BFE']}
-                            style={styles.analyticsBtn}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
-                        >
-                            <TouchableOpacity
-                                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16 }}
-                                onPress={() => router.push('/analytics')}
-                            >
-                            <BarChart3 size={20} color="#fff" />
-                                <Text style={styles.analyticsBtnText}>📊 Analytics</Text>
-                                <ChevronRight size={20} color="#fff" />
-                            </TouchableOpacity>
-                        </LinearGradient>
-
+                        
                         {/* View All Game Records Button */}
                         <LinearGradient
                             colors={gradientColors}
@@ -1870,7 +2029,7 @@ export default function ProfileScreen() {
 
                         {/* AI Analysis Button */}
                         <LinearGradient
-                            colors={['#6C5CE7', '#A29BFE']}
+                            colors={['#10B981', '#059669']}
                             style={styles.aiAnalysisBtn}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 1 }}
@@ -1886,29 +2045,13 @@ export default function ProfileScreen() {
                                     <Brain size={20} color="#fff" />
                                 )}
                                 <Text style={styles.aiAnalysisBtnText}>
-                                    {analyzingWithAi ? '分析中...' : 'AI 學習分析'}
+                                    {analyzingWithAi ? 'In the analysis...' : 'AI learning analytics'}
                                 </Text>
                                 <ChevronRight size={20} color="#fff" />
                             </TouchableOpacity>
                         </LinearGradient>
 
-                        {/* Analytics Button */}
-                        <LinearGradient
-                            colors={['#6C5CE7', '#A29BFE']}
-                            style={styles.analyticsBtn}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
-                        >
-                            <TouchableOpacity
-                                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16 }}
-                                onPress={() => router.push('/analytics')}
-                            >
-                            <BarChart3 size={20} color="#fff" />
-                                <Text style={styles.analyticsBtnText}>📊 Analytics</Text>
-                                <ChevronRight size={20} color="#fff" />
-                            </TouchableOpacity>
-                        </LinearGradient>
-
+                        
                         {/* View All Game Records Button */}
                         <LinearGradient
                             colors={gradientColors}
@@ -1945,16 +2088,128 @@ export default function ProfileScreen() {
                         <View style={styles.aiAnalysisModalHeader}>
                             <View style={styles.aiAnalysisModalTitleContainer}>
                                 <Brain size={24} color="#6C5CE7" />
-                                <Text style={styles.aiAnalysisModalTitle}>AI 學習分析報告</Text>
+                                <Text style={styles.aiAnalysisModalTitle}>AI Learning Analysis Report</Text>
                             </View>
                             <TouchableOpacity onPress={() => setShowAiAnalysis(false)} style={styles.aiAnalysisCloseButton}>
                                 <X size={24} color="#333" />
                             </TouchableOpacity>
                         </View>
                         <ScrollView style={styles.aiAnalysisModalContent}>
+                            {/* Overall Analysis */}
                             <View style={styles.aiAnalysisModalCard}>
                                 <Text style={styles.aiAnalysisModalText}>{aiAnalysis}</Text>
                             </View>
+                            
+                            {/* Game Analysis Section */}
+                            {gameHistory.length > 0 && (
+                                <View style={styles.gameAnalysisSection}>
+                                    <Text style={styles.gameAnalysisSectionTitle}>🎮 Detailed Game Analysis</Text>
+                                    {gameHistory.map((game: any, index: number) => {
+                                        // Create the same unique identifier as in toggleGameExpansion
+                                        const gameName = game.gameName || game.name || 'Unknown Game';
+                                        const createdAt = game.createdAt || game.timestamp || Date.now().toString();
+                                        const gameIdentifier = `${gameName}_${createdAt}`;
+                                        const isExpanded = expandedGames.has(gameIdentifier);
+                                        const analysis = gameAnalyses[gameIdentifier];
+                                        const hasScoreData = game.scores !== undefined && game.scores !== null;
+                                        
+                                        return (
+                                            <View key={index} style={styles.gameCardContainer}>
+                                                <TouchableOpacity
+                                                    style={styles.gameCard}
+                                                    onPress={() => toggleGameExpansion(game)}
+                                                >
+                                                    <View style={styles.gameInfo}>
+                                                        <View style={styles.gameIcon}>
+                                                            <Brain size={20} color="#4CAF50" />
+                                                        </View>
+                                                        <View style={styles.gameDetails}>
+                                                            <Text style={styles.gameName}>{game.name || game.gameName || 'Unknown Game'}</Text>
+                                                            <Text style={styles.gameMeta}>
+                                                                {game.gameType || game.type || '益智'}
+                                                            </Text>
+                                                        </View>
+                                                    </View>
+                                                    <View style={styles.gameStats}>
+                                                        <Text style={[
+                                                            styles.gameScore, 
+                                                            !hasScoreData && styles.noScoreText
+                                                        ]}>
+                                                            {hasScoreData ? game.scores : 'Unplayed'}
+                                                        </Text>
+                                                        <ChevronRight 
+                                                            size={16} 
+                                                            color="#999" 
+                                                            style={{transform: [{rotate: isExpanded ? '90deg' : '0deg'}]}}
+                                                        />
+                                                    </View>
+                                                </TouchableOpacity>
+                                                
+                                                {/* Expanded Analysis Section */}
+                                                {isExpanded && (
+                                                    <View style={styles.expandedAnalysis}>
+                                                        {hasScoreData ? (
+                                                            analysis ? (
+                                                                analysis.error ? (
+                                                                    <View style={styles.errorContainer}>
+                                                                        <Text style={styles.errorText}>⚠️ {analysis.message}</Text>
+                                                                        <Text style={styles.errorSubtext}>請稍後再試</Text>
+                                                                    </View>
+                                                                ) : (
+                                                                    <View style={styles.analysisContent}>
+                                                                        {analysis.encouragementMessage && (
+                                                                            <View style={styles.analysisItem}>
+                                                                                <Trophy size={16} color="#FFD700" />
+                                                                                <Text style={styles.analysisText}>{analysis.encouragementMessage}</Text>
+                                                                            </View>
+                                                                        )}
+                                                                        {analysis.analysis && (
+                                                                            <View style={styles.analysisItem}>
+                                                                                <Brain size={16} color="#4CAF50" />
+                                                                                <Text style={styles.analysisText}>{analysis.analysis}</Text>
+                                                                            </View>
+                                                                        )}
+                                                                        {analysis.strengths && (
+                                                                            <View style={styles.analysisItem}>
+                                                                                <TrendingUp size={16} color="#2196F3" />
+                                                                                <Text style={styles.analysisText}>
+                                                                                    {Array.isArray(analysis.strengths) 
+                                                                                        ? analysis.strengths.join('\n') 
+                                                                                        : analysis.strengths}
+                                                                                </Text>
+                                                                            </View>
+                                                                        )}
+                                                                        {analysis.powerUpTips && (
+                                                                            <View style={styles.analysisItem}>
+                                                                                <Zap size={16} color="#FF9800" />
+                                                                                <Text style={styles.analysisText}>
+                                                                                    {Array.isArray(analysis.powerUpTips) 
+                                                                                        ? analysis.powerUpTips.join('\n') 
+                                                                                        : analysis.powerUpTips}
+                                                                                </Text>
+                                                                            </View>
+                                                                        )}
+                                                                    </View>
+                                                                )
+                                                            ) : (
+                                                                <View style={styles.analysisLoading}>
+                                                                    <ActivityIndicator size="small" color="#4CAF50" />
+                                                                    <Text style={styles.analysisLoadingText}>Loading AI analysis...</Text>
+                                                                </View>
+                                                            )
+                                                        ) : (
+                                                            <View style={styles.noGameDataContainer}>
+                                                                <Text style={styles.noGameDataText}>🎮 I haven't played this game yet.</Text>
+                                                                <Text style={styles.noGameDataSubtext}>Start playing to receive personalized AI analysis</Text>
+                                                            </View>
+                                                        )}
+                                                    </View>
+                                                )}
+                                            </View>
+                                        );
+                                    })}
+                                </View>
+                            )}
                         </ScrollView>
                     </SafeAreaView>
                 </Modal>
@@ -2859,28 +3114,7 @@ export default function ProfileScreen() {
 // Styles (unchanged, keep existing styles)
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: 'transparent' },
-    unifiedCard: {
-        backgroundColor: 'rgba(255, 255, 255, 0.92)',  // 半透明白色
-        borderRadius: 28,
-        marginHorizontal: 24,                         // 縮小寬度，左右留白更多
-        marginBottom: 24,
-        paddingVertical: 20,
-        paddingHorizontal: 20,
-        overflow: 'hidden',
-        elevation: 4,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.05)',
-    },
-    cardDivider: {
-        height: 1,
-        backgroundColor: 'rgba(0,0,0,0.08)',
-        marginVertical: 16,
-    },
-    unifiedProfileContainer: { marginHorizontal: 20, marginTop: 20 },
+        unifiedProfileContainer: { marginHorizontal: 20, marginTop: 20 },
     profileCover: {
         height: 200,
         borderRadius: 24,
@@ -2909,22 +3143,9 @@ const styles = StyleSheet.create({
         bottom: 0,
         zIndex: -1,
     },
-    unifiedTransparentContainer: {
-        backgroundColor: 'rgba(255,255,255,0.15)',
-        backdropFilter: 'blur(10px)',
-        borderRadius: 24,
-        padding: 20,
-        marginHorizontal: 20,
-        marginTop: 20,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.2)',
-        elevation: 2,
-    },
     avatarAndBadgeRow: { flexDirection: 'row', alignItems: 'center', marginRight: 20 },
     avatarContainer: { position: 'relative', marginRight: 0 },
     avatarCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255, 255, 255, 0.2)', justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: 'rgba(255, 255, 255, 0.3)' },
-    badgeContainer: { alignItems: 'center', marginLeft: 10 },
-    badgeLabel: { fontSize: 10, color: '#FFF', marginTop: 4, fontWeight: '500' },
     profileInfo: { flex: 1 },
     userName: { fontSize: 28, fontWeight: '900', color: '#FFF', marginBottom: 4 },
     userTitle: { fontSize: 14, color: 'rgba(255, 255, 255, 0.8)', marginBottom: 15 },
@@ -2933,11 +3154,6 @@ const styles = StyleSheet.create({
     statDivider: { width: 1, height: 24, backgroundColor: 'rgba(255, 255, 255, 0.3)', marginHorizontal: 12 },
     statValue: { fontSize: 16, fontWeight: '700', color: '#FFF', marginLeft: 4 },
     statLabel: { fontSize: 12, color: 'rgba(255, 255, 255, 0.7)', marginLeft: 4 },
-    profileActions: { flexDirection: 'row', gap: 10 },
-    inventoryBtn: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'rgba(255, 255, 255, 0.3)', position: 'relative' },
-    inventoryBadge: { position: 'absolute', top: -5, right: -5, backgroundColor: '#FF6B6B', borderRadius: 10, minWidth: 18, height: 18, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFF' },
-    inventoryBadgeText: { fontSize: 10, fontWeight: '700', color: '#FFF' },
-    editProfileBtn: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255, 255, 255, 0.2)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'rgba(255, 255, 255, 0.3)' },
     masterInfoCard: {
         backgroundColor: 'rgba(255,255,255,0.85)',  // 提高不透明度，減少疊加問題
         borderRadius: 20,
@@ -3003,13 +3219,10 @@ const styles = StyleSheet.create({
     scrollContent: { paddingHorizontal: 20, paddingBottom: 20 },
     gameIconBg: { width: 42, height: 42, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
     activityName: { fontSize: 17, fontWeight: '800', color: '#FFFFFF' },
-    row: { flexDirection: 'row', alignItems: 'center' },
     activityDifficulty: { fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.8)' },
-    dot: { color: 'rgba(255,255,255,0.85)' },
     activityDate: { fontSize: 11, color: 'rgba(255,255,255,0.85)' },
     scoreContainer: { alignItems: 'flex-end' },
     activityScore: { fontSize: 16, fontWeight: '900', color: '#FFFFFF' },
-    activityScoreValue: { fontSize: 10, color: 'rgba(255,255,255,0.85)', fontWeight: '600' },
     logoutBtn: { margin: 0, marginTop: 20, padding: 15, backgroundColor: '#FFF', borderRadius: 20, alignItems: 'center' },
     logoutText: { color: '#FF4757', fontWeight: '800', fontSize: 18 },
     emptyText: { textAlign: 'center', padding: 20, color: 'rgba(255,255,255,0.85)' },
@@ -3212,21 +3425,7 @@ const styles = StyleSheet.create({
         borderColor: 'rgba(255,255,255,0.8)',
     },
 
-    // Analytics Button styles
-    analyticsBtn: {
-        borderRadius: 12,
-        marginBottom: 15,
-        borderWidth: 1,
-        borderColor: 'rgba(108, 92, 231, 0.3)',
-        marginHorizontal: 0, // 移除水平邊距，適應大卡片
-    },
-    analyticsBtnText: {
-        color: '#fff',
-        fontSize: 18,
-        fontWeight: '700',
-        marginLeft: 8,
-    },
-
+    
     // AI Analysis Modal styles
     aiAnalysisBtn: {
         borderRadius: 12,
@@ -3286,5 +3485,130 @@ const styles = StyleSheet.create({
         fontSize: 16,
         lineHeight: 24,
         color: '#2D3436',
+    },
+    
+    // Game Analysis styles
+    gameAnalysisSection: {
+        marginTop: 20,
+        paddingHorizontal: 20,
+    },
+    gameAnalysisSectionTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#2D3436',
+        marginBottom: 15,
+    },
+    gameCardContainer: {
+        marginBottom: 12,
+    },
+    gameCard: {
+        backgroundColor: 'white',
+        borderRadius: 12,
+        padding: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    gameInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+    },
+    gameIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#F8F9FA',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    gameDetails: {
+        flex: 1,
+    },
+    gameName: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#2D3436',
+        marginBottom: 4,
+    },
+    gameMeta: {
+        fontSize: 12,
+        color: '#636E72',
+    },
+    gameStats: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    gameScore: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#4CAF50',
+        marginRight: 8,
+    },
+    noScoreText: {
+        color: '#999',
+    },
+    expandedAnalysis: {
+        backgroundColor: '#F8F9FA',
+        marginTop: 4,
+        borderRadius: 8,
+        padding: 16,
+        borderLeftWidth: 3,
+        borderLeftColor: '#4CAF50',
+    },
+    analysisContent: {
+        gap: 12,
+    },
+    analysisItem: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 8,
+    },
+    analysisText: {
+        flex: 1,
+        fontSize: 14,
+        color: '#2D3436',
+        lineHeight: 20,
+    },
+    analysisLoading: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingVertical: 12,
+    },
+    analysisLoadingText: {
+        fontSize: 14,
+        color: '#636E72',
+    },
+    errorContainer: {
+        padding: 12,
+    },
+    errorText: {
+        fontSize: 14,
+        color: '#F44336',
+        marginBottom: 4,
+    },
+    errorSubtext: {
+        fontSize: 12,
+        color: '#666',
+    },
+    noGameDataContainer: {
+        alignItems: 'center',
+        paddingVertical: 20,
+    },
+    noGameDataText: {
+        fontSize: 16,
+        color: '#636E72',
+        marginBottom: 4,
+    },
+    noGameDataSubtext: {
+        fontSize: 12,
+        color: '#999',
     },
     });

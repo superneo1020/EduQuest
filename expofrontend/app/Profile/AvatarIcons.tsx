@@ -12,7 +12,7 @@ export const AvatarIcons = {
             <Path d="M 35 60 Q 50 70 65 60" stroke="#fff" strokeWidth="3" fill="none" />
         </Svg>
     ),
-    
+
     happy_cat: ({ size = 50, color = '#FFD93D' }) => (
         <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
             <Circle cx="50" cy="50" r="45" fill={color} />
@@ -25,7 +25,7 @@ export const AvatarIcons = {
             <Path d="M 45 65 L 50 70 L 55 65" stroke="#000" strokeWidth="2" fill="none" />
         </Svg>
     ),
-    
+
     cool_dog: ({ size = 50, color = '#4ECDC4' }) => (
         <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
             <Ellipse cx="50" cy="50" rx="40" ry="35" fill={color} />
@@ -37,7 +37,7 @@ export const AvatarIcons = {
             <Path d="M 30 75 Q 50 85 70 75" stroke="#000" strokeWidth="2" fill="none" />
         </Svg>
     ),
-    
+
     smart_owl: ({ size = 50, color = '#9B59B6' }) => (
         <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
             <Ellipse cx="50" cy="55" rx="35" ry="30" fill={color} />
@@ -50,7 +50,7 @@ export const AvatarIcons = {
             <Path d="M 35 65 Q 50 70 65 65" stroke="#FFD93D" strokeWidth="3" fill="none" />
         </Svg>
     ),
-    
+
     sporty_rabbit: ({ size = 50, color = '#FF6B6B' }) => (
         <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
             <Ellipse cx="50" cy="60" rx="30" ry="25" fill={color} />
@@ -65,7 +65,7 @@ export const AvatarIcons = {
             <Circle cx="75" cy="65" r="3" fill="#fff" />
         </Svg>
     ),
-    
+
     artistic_butterfly: ({ size = 50, color = '#FF9FF3' }) => (
         <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
             <Ellipse cx="50" cy="50" rx="8" ry="20" fill={color} />
@@ -78,7 +78,7 @@ export const AvatarIcons = {
             <Path d="M 50 50 L 50 55" stroke="#000" strokeWidth="1" />
         </Svg>
     ),
-    
+
     bookworm_bear: ({ size = 50, color = '#54A0FF' }) => (
         <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
             <Circle cx="50" cy="50" r="35" fill={color} />
@@ -92,7 +92,7 @@ export const AvatarIcons = {
             <Path d="M 40 86 L 55 86" stroke="#000" strokeWidth="1" />
         </Svg>
     ),
-    
+
     explorer_monkey: ({ size = 50, color = '#1DD1A1' }) => (
         <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
             <Circle cx="50" cy="50" r="35" fill={color} />
@@ -106,7 +106,7 @@ export const AvatarIcons = {
             <Path d="M 40 65 Q 50 70 60 65" stroke="#000" strokeWidth="2" fill="none" />
         </Svg>
     ),
-    
+
     star_student: ({ size = 50, color = '#FFA502' }) => (
         <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
             <Circle cx="50" cy="50" r="40" fill={color} />
@@ -116,7 +116,7 @@ export const AvatarIcons = {
             <Path d="M 45 70 Q 50 75 55 70" stroke="#000" strokeWidth="2" fill="none" />
         </Svg>
     ),
-    
+
     rainbow_unicorn: ({ size = 50, color = '#A29BFE' }) => (
         <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
             <Ellipse cx="50" cy="60" rx="30" ry="25" fill={color} />
@@ -131,7 +131,7 @@ export const AvatarIcons = {
             <Path d="M 45 65 Q 50 70 55 65" stroke="#000" strokeWidth="2" fill="none" />
         </Svg>
     ),
-    
+
     rocket_raccoon: ({ size = 50, color = '#FF6348' }) => (
         <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
             <Circle cx="50" cy="50" r="35" fill={color} />
@@ -145,7 +145,7 @@ export const AvatarIcons = {
             <Path d="M 40 75 L 45 85 L 50 75 L 55 85 L 60 75" stroke="#FFD700" strokeWidth="2" fill="none" />
         </Svg>
     ),
-    
+
     heart_panda: ({ size = 50, color = '#FF4757' }) => (
         <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
             <Circle cx="50" cy="50" r="40" fill="#fff" />
@@ -159,7 +159,7 @@ export const AvatarIcons = {
             <Path d="M 75 25 Q 85 15 90 20 Q 95 25 85 30 Z" fill={color} />
         </Svg>
     ),
-    
+
     sunshine_bee: ({ size = 50, color = '#FFA500' }) => (
         <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
             <Circle cx="50" cy="50" r="40" fill={color} />
@@ -177,7 +177,7 @@ export const AvatarIcons = {
             <Path d="M 25 75 L 20 80 L 15 75 L 20 70 Z" fill="#fff" />
         </Svg>
     ),
-    
+
     moon_turtle: ({ size = 50, color = '#3498DB' }) => (
         <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
             <Ellipse cx="50" cy="55" rx="35" ry="30" fill={color} />
@@ -190,11 +190,11 @@ export const AvatarIcons = {
             <Path d="M 40 75 L 45 80 L 50 75 L 55 80 L 60 75" stroke="#000" strokeWidth="1" fill="none" />
         </Svg>
     ),
-    
+
     flower_ladybug: ({ size = 50, color = '#E91E63' }) => (
         <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
             <Circle cx="50" cy="50" r="35" fill="#FF0000" />
-                        <Circle cx="40" cy="40" r="5" fill="#000" />
+            <Circle cx="40" cy="40" r="5" fill="#000" />
             <Circle cx="60" cy="40" r="5" fill="#000" />
             <Circle cx="40" cy="60" r="5" fill="#000" />
             <Circle cx="60" cy="60" r="5" fill="#000" />
@@ -208,7 +208,7 @@ export const AvatarIcons = {
             <Path d="M 85 50 Q 95 40 85 30" fill="#FFB6C1" />
         </Svg>
     ),
-    
+
     rainbow_frog: ({ size = 50, color = '#00BCD4' }) => (
         <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
             <Ellipse cx="50" cy="60" rx="35" ry="30" fill={color} />
@@ -223,7 +223,7 @@ export const AvatarIcons = {
             <Path d="M 20 45 Q 50 35 80 45" stroke="#00FF00" strokeWidth="3" fill="none" />
         </Svg>
     ),
-    
+
     cloud_sheep: ({ size = 50, color = '#ECF0F1' }) => (
         <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
             <Circle cx="50" cy="50" r="40" fill={color} />
@@ -238,7 +238,7 @@ export const AvatarIcons = {
             <Path d="M 45 55 Q 50 60 55 55" stroke="#000" strokeWidth="2" fill="none" />
         </Svg>
     ),
-    
+
     apple_teacher: ({ size = 50, color = '#27AE60' }) => (
         <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
             <Circle cx="50" cy="50" r="40" fill={color} />
@@ -250,7 +250,7 @@ export const AvatarIcons = {
             <Path d="M 45 65 Q 50 70 55 65" stroke="#000" strokeWidth="2" fill="none" />
         </Svg>
     ),
-    
+
     pencil_wizard: ({ size = 50, color = '#8E44AD' }) => (
         <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
             <Circle cx="50" cy="50" r="40" fill={color} />
@@ -266,7 +266,7 @@ export const AvatarIcons = {
             <Path d="M 70 70 Q 80 80 90 75" stroke="#FFD700" strokeWidth="2" />
         </Svg>
     ),
-    
+
     crayon_dragon: ({ size = 50, color = '#E74C3C' }) => (
         <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
             <Ellipse cx="50" cy="50" rx="35" ry="30" fill={color} />
@@ -465,5 +465,5 @@ export const AvatarIcons = {
         </Svg>
     ),
 
-    
-    };
+
+};
