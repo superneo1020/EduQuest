@@ -122,22 +122,21 @@ class EducatorService {
 
         if (!token || token.trim() === '') {
             console.error('EducatorService: No authentication token found');
-            throw new Error('No authentication token found');
+            throw new Error('AUTH_REQUIRED');
         }
 
         // Check if token has valid JWT format (3 parts separated by dots)
         const parts = token.split('.');
         if (parts.length !== 3) {
             console.error('EducatorService: Invalid token format - expected 3 parts, got', parts.length);
-            await AsyncStorage.removeItem('auth_token');
-            await AsyncStorage.removeItem('auth_user');
-            throw new Error('Invalid token format. Please log in again.');
+            // Don't auto-clear, let the caller handle it
+            throw new Error('TOKEN_INVALID');
         }
 
         if (isTokenExpired(token)) {
-            await AsyncStorage.removeItem('auth_token');
-            await AsyncStorage.removeItem('auth_user');
-            throw new Error('Authentication token has expired. Please log in again.');
+            console.log('EducatorService: Token expired');
+            // Don't auto-clear, let the caller handle it
+            throw new Error('TOKEN_EXPIRED');
         }
 
         return {
