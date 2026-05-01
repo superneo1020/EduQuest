@@ -2104,7 +2104,7 @@ export default function ProfileScreen() {
                             {gameHistory.length > 0 && (
                                 <View style={styles.gameAnalysisSection}>
                                     <Text style={styles.gameAnalysisSectionTitle}>🎮 Detailed Game Analysis</Text>
-                                    {gameHistory.map((game, index) => {
+                                    {gameHistory.map((game: any, index: number) => {
                                         // Create the same unique identifier as in toggleGameExpansion
                                         const gameName = game.gameName || game.name || 'Unknown Game';
                                         const createdAt = game.createdAt || game.timestamp || Date.now().toString();
