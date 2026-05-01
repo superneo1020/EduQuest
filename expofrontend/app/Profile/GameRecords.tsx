@@ -4,7 +4,7 @@ import {
     StatusBar, Dimensions, ActivityIndicator, TextInput, FlatList
 } from 'react-native';
 import {
-    Trophy, Gamepad2, Calculator, BookOpen, Brain, FlaskConical,
+    Trophy, Gamepad2, Calculator, BookOpen, Brain, Languages, FlaskConical,
     ArrowLeft, Search, Filter, ChevronRight, Clock, Star, Zap, ChevronDown, TrendingUp
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
@@ -166,7 +166,7 @@ export default function GameRecordsScreen() {
             case 'MATH': return <Calculator {...props} />;
             case 'ENGLISH': return <BookOpen {...props} />;
             case 'SCIENCE': return <FlaskConical {...props} />;
-            case 'CHINESE': return <Brain {...props} />;
+            case 'CHINESE': return <Languages {...props} />;
             default: return <Gamepad2 {...props} />;
         }
     };

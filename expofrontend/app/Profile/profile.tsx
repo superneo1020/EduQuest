@@ -6,7 +6,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
     Trophy, Gamepad2, Mail, User as UserIcon, Settings, ChevronRight,
-    LogOut, Calculator, BookOpen, Brain, FlaskConical, Eye, EyeOff, Key, ShoppingCart, List,
+    LogOut, Calculator, BookOpen, Brain, Languages, FlaskConical, Eye, EyeOff, Key, ShoppingCart, List,
     Calendar, Clock, TrendingUp, Award, Target, Zap, Star, BarChart3, PieChart, Package, Edit, X
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
@@ -653,8 +653,8 @@ export default function ProfileScreen() {
         const difficultyCount: { [key: string]: number } = {};
         let totalScore = 0;
         gameHistory.forEach((record: any) => {
-            const subject = record.gameType || 'UNKNOWN';
-            const difficulty = record.gameDifficulty || 'MEDIUM';
+            const subject = record.type || 'UNKNOWN';
+            const difficulty = record.difficulty || 'MEDIUM';
             const score = record.scores || 0;
             if (!subjectScores[subject]) subjectScores[subject] = [];
             subjectScores[subject].push(score);
@@ -676,7 +676,7 @@ export default function ProfileScreen() {
             const difficultyTimeMap: { [key: string]: number } = { 'EASY': 5, 'MEDIUM': 10, 'HARD': 15 };
             let totalTime = 0;
             gameHistory.forEach((record: any) => {
-                const difficulty = record.gameDifficulty || 'MEDIUM';
+                const difficulty = record.difficulty || 'MEDIUM';
                 totalTime += difficultyTimeMap[difficulty] || 10;
             });
             return totalTime;
@@ -721,7 +721,7 @@ export default function ProfileScreen() {
             suggestions.push({
                 type: 'challenge', icon: <Zap size={16} color="#FFA500" />,
                 title: 'Break out of your comfort zone',
-                description: `You spent ${Math.round(easyRatio * 100)}% of your time on easy mode. AI analysis shows you have mastered the basics; we recommend trying medium difficulty to stimulate brain development.`
+                description: `You spent ${Math.round(easyRatio * 100)}% of your time on easy mode. Study Buddy analysis shows you have mastered the basics; we recommend trying medium difficulty to stimulate brain development.`
             });
         } else if (hardRatio > 0.4 && stats.averageScore < 80) {
             suggestions.push({
@@ -738,7 +738,7 @@ export default function ProfileScreen() {
                 suggestions.push({
                     type: 'consistency', icon: <TrendingUp size={16} color="#4ECDC4" />,
                     title: 'Improve learning stability',
-                    description: `AI analysis shows your score fluctuates significantly. We recommend establishing a fixed study schedule and maintaining a consistent practice rhythm.`
+                    description: `Study Buddy analysis shows your score fluctuates significantly. We recommend establishing a fixed study schedule and maintaining a consistent practice rhythm.`
                 });
             }
         }
@@ -759,7 +759,7 @@ export default function ProfileScreen() {
                 suggestions.push({
                     type: 'advanced', icon: <Award size={16} color="#4CAF50" />,
                     title: 'Advanced learning suggestions',
-                    description: `You're excelling in multiple subjects! AI suggests you start trying cross-subject integrated practice or take on more challenging tasks.`
+                    description: `You're excelling in multiple subjects! Study Buddy suggests you start trying cross-subject integrated practice or take on more challenging tasks.`
                 });
             }
         }
@@ -769,7 +769,7 @@ export default function ProfileScreen() {
             suggestions.push({
                 type: 'habit', icon: <Calendar size={16} color="#2196F3" />,
                 title: 'Develop learning habits',
-                description: `AI analysis suggests completing at least 1-2 games daily to maintain learning continuity. Research indicates that consistent learning is more effective than intermittent learning.`
+                description: `Study Buddy analysis suggests completing at least 1-2 games daily to maintain learning continuity. Research indicates that consistent learning is more effective than intermittent learning.`
             });
         }
         return suggestions;
@@ -853,7 +853,7 @@ export default function ProfileScreen() {
             case 'MATH': return <Calculator size={20} color="#4CAF50" />;
             case 'ENGLISH': return <BookOpen size={20} color="#2196F3" />;
             case 'SCIENCE': return <FlaskConical size={20} color="#FF9800" />;
-            case 'MEMORY': return <Brain size={20} color="#9C27B0" />;
+            case 'CHINESE': return <Languages size={20} color="#9C27B0" />;
             default: return <Gamepad2 size={20} color="#636E72" />;
         }
     };
@@ -1262,7 +1262,7 @@ export default function ProfileScreen() {
         
         // Game type statistics
         const gameTypeStats = records.reduce((acc, record) => {
-            const type = record.gameType || 'Unknown';
+            const type = record.type || 'Unknown';
             if (!acc[type]) acc[type] = { count: 0, totalScore: 0 };
             acc[type].count++;
             acc[type].totalScore += record.scores || 0;
@@ -1648,18 +1648,18 @@ export default function ProfileScreen() {
                                 )}
                                 
                                 <View style={styles.skillsSection}>
-                                    <Text style={[styles.sectionLabel, { color: cardTextColor }]}>📊 Skills Analysis & AI Tips</Text>
+                                    <Text style={[styles.sectionLabel, { color: cardTextColor }]}>📊 Skills Analysis & Study Buddy Tips</Text>
                                     <View style={{ width: chartWidth, alignSelf: 'center' }}>
                                         <SkillBarsChart gameHistory={gameHistory} />
                                     </View>
 
                                     <View style={{ marginTop: 16 }}>
-                                        <Text style={[styles.sectionLabel, { color: cardTextColor, marginBottom: 8 }]}>Learning Suggestions</Text>
+                                        <Text style={[styles.sectionLabel, { color: cardTextColor, marginBottom: 8 }]}>Study Buddy Suggestions</Text>
                                         {loadingSuggestions ? (
                                             <View style={[styles.statsCard, { alignItems: 'center', padding: 20 }]}>
                                                 <ActivityIndicator size="small" color="#4CAF50" />
                                                 <Text style={[styles.statsLabel, { textAlign: 'center', color: cardTextColor, marginTop: 8 }]}>
-                                                    AI is analyzing your learning patterns...
+                                                    Study Buddy is analyzing your learning patterns...
                                                 </Text>
                                             </View>
                                         ) : (aiSuggestions.length > 0 || generateLearningSuggestions.length > 0) ? (
@@ -1831,19 +1831,19 @@ export default function ProfileScreen() {
                                                                 
                                 {/* 技能分析區域 */}
                                 <View style={styles.skillsSection}>
-                                    <Text style={styles.sectionLabel}>📊 Skills Analysis & AI Tips</Text>
+                                    <Text style={styles.sectionLabel}>📊 Skills Analysis & Study Buddy Tips</Text>
                                     <View style={{ width: chartWidth, alignSelf: 'center' }}>
                                         <SkillBarsChart gameHistory={gameHistory} />
                                     </View>
                                     
                                     {/* AI 建議直接顯示 */}
                                     <View style={{ marginTop: 16 }}>
-                                        <Text style={[styles.sectionLabel, { marginBottom: 8 }]}>Learning Suggestions</Text>
+                                        <Text style={[styles.sectionLabel, { marginBottom: 8 }]}>Study Buddy</Text>
                                         {loadingSuggestions ? (
                                             <View style={[styles.statsCard, { alignItems: 'center', padding: 20 }]}>
                                                 <ActivityIndicator size="small" color="#4CAF50" />
                                                 <Text style={[styles.statsLabel, { textAlign: 'center', marginTop: 8 }]}>
-                                                    AI is analyzing your learning patterns...
+                                                    Study Buddy is analyzing your learning patterns...
                                                 </Text>
                                             </View>
                                         ) : generateLearningSuggestions.length > 0 ? (
@@ -1914,7 +1914,7 @@ export default function ProfileScreen() {
                             {displayList.length > 0 ? displayList.map((record: any, index: number) => (
                                 <View key={index} style={styles.activityCard}>
                                     <View style={styles.gameIconBg}>
-                                        {recordMode === 'best' ? <Trophy size={18} color="#F1C40F" /> : renderGameIcon(record.gameType)}
+                                        {recordMode === 'best' ? <Trophy size={18} color="#F1C40F" /> : renderGameIcon(record.type)}
                                     </View>
                                     <View style={{ flex: 1, marginLeft: 12 }}>
                                         <Text style={[styles.activityName, { color: cardTextColor }]}>{record.name}</Text>
@@ -1947,7 +1947,7 @@ export default function ProfileScreen() {
                                     <Brain size={20} color="#fff" />
                                 )}
                                 <Text style={styles.aiAnalysisBtnText}>
-                                    {analyzingWithAi ? 'In the analysis...' : 'AI Learning analytics'}
+                                    {analyzingWithAi ? 'In the analysis...' : 'Study Buddy Learning analytics'}
                                 </Text>
                                 <ChevronRight size={20} color="#fff" />
                             </TouchableOpacity>
@@ -2012,7 +2012,7 @@ export default function ProfileScreen() {
                             {displayList.length > 0 ? displayList.map((record: any, index: number) => (
                                 <View key={index} style={styles.activityCard}>
                                     <View style={styles.gameIconBg}>
-                                        {recordMode === 'best' ? <Trophy size={18} color="#F1C40F" /> : renderGameIcon(record.gameType)}
+                                        {recordMode === 'best' ? <Trophy size={18} color="#F1C40F" /> : renderGameIcon(record.type)}
                                     </View>
                                     <View style={{ flex: 1, marginLeft: 12 }}>
                                         <Text style={[styles.activityName, { color: cardTextColor }]}>{record.name}</Text>
@@ -2045,7 +2045,7 @@ export default function ProfileScreen() {
                                     <Brain size={20} color="#fff" />
                                 )}
                                 <Text style={styles.aiAnalysisBtnText}>
-                                    {analyzingWithAi ? 'In the analysis...' : 'AI learning analytics'}
+                                    {analyzingWithAi ? 'In the analysis...' : 'Study Buddy learning analytics'}
                                 </Text>
                                 <ChevronRight size={20} color="#fff" />
                             </TouchableOpacity>
@@ -2088,7 +2088,7 @@ export default function ProfileScreen() {
                         <View style={styles.aiAnalysisModalHeader}>
                             <View style={styles.aiAnalysisModalTitleContainer}>
                                 <Brain size={24} color="#6C5CE7" />
-                                <Text style={styles.aiAnalysisModalTitle}>AI Learning Analysis Report</Text>
+                                <Text style={styles.aiAnalysisModalTitle}>Study Buddy Learning Analysis Report</Text>
                             </View>
                             <TouchableOpacity onPress={() => setShowAiAnalysis(false)} style={styles.aiAnalysisCloseButton}>
                                 <X size={24} color="#333" />
@@ -2194,13 +2194,13 @@ export default function ProfileScreen() {
                                                             ) : (
                                                                 <View style={styles.analysisLoading}>
                                                                     <ActivityIndicator size="small" color="#4CAF50" />
-                                                                    <Text style={styles.analysisLoadingText}>Loading AI analysis...</Text>
+                                                                    <Text style={styles.analysisLoadingText}>Loading Study Buddy analysis...</Text>
                                                                 </View>
                                                             )
                                                         ) : (
                                                             <View style={styles.noGameDataContainer}>
                                                                 <Text style={styles.noGameDataText}>🎮 I haven't played this game yet.</Text>
-                                                                <Text style={styles.noGameDataSubtext}>Start playing to receive personalized AI analysis</Text>
+                                                                <Text style={styles.noGameDataSubtext}>Start playing to receive personalized Study Buddy analysis</Text>
                                                             </View>
                                                         )}
                                                     </View>
@@ -2841,13 +2841,13 @@ export default function ProfileScreen() {
                 >
                     <View style={styles.modalOverlay}>
                         <View style={[styles.modalContent, { maxHeight: '80%' }]}>
-                            <Text style={styles.modalTitle}>Learning Suggestions</Text>
+                            <Text style={styles.modalTitle}>Study Buddy Suggestions</Text>
 
                             <ScrollView style={{ flex: 1, maxHeight: 400 }}>
                                 {loadingSuggestions ? (
                                     <View style={{ alignItems: 'center', padding: 40 }}>
                                         <ActivityIndicator size="large" color="#4CAF50" />
-                                        <Text style={{ marginTop: 10, color: '#636E72' }}>AI is analyzing your learning patterns...</Text>
+                                        <Text style={{ marginTop: 10, color: '#636E72' }}>Study Buddy is analyzing your learning patterns...</Text>
                                     </View>
                                 ) : aiSuggestions.length > 0 ? (
                                     aiSuggestions.map((suggestion: any, index: number) => (
@@ -2896,7 +2896,7 @@ export default function ProfileScreen() {
                                 )}
 
                                 <View style={styles.statsCard}>
-                                    <Text style={styles.statsCardTitle}>AI Learning Strategy Suggestions</Text>
+                                    <Text style={styles.statsCardTitle}>Study Buddy Learning Strategy Suggestions</Text>
                                     <Text style={styles.statsLabel}>🧠 **Principles of Cognitive Science**: Spaced repetition is more effective than massed learning</Text>
                                     <Text style={styles.statsLabel}>⏰ **Optimal Study Duration**: 25-30 minutes each session, followed by a 5-minute break</Text>
                                     <Text style={styles.statsLabel}>🎯 **Goal Setting**: Set specific and measurable learning objectives</Text>
