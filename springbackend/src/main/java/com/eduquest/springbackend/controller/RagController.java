@@ -19,6 +19,10 @@ public class RagController {
         this.externalAiService = externalAiService;
     }
 
+    /**
+     * Queries the RAG (Retrieval-Augmented Generation) system with a user question.
+     * Returns AI-generated answers based on the user's uploaded documents.
+     */
     @PostMapping("/query")
     public Mono<RAGQueryResponse> queryRag(
             @Valid @RequestBody RAGQueryRequest query,
@@ -27,6 +31,10 @@ public class RagController {
         return externalAiService.postRagRequestWithUserId("/rag/query", query, RAGQueryResponse.class, userDetails.getId());
     }
 
+    /**
+     * Deletes documents from the user's RAG knowledge base.
+     * Removes specified documents from the AI's document collection.
+     */
     @PostMapping("/delete")
     public Mono<RAGDeleteResponse> deleteRag(
             @Valid @RequestBody RAGDeleteRequest query,
@@ -35,6 +43,10 @@ public class RagController {
         return externalAiService.postRagRequestWithUserId("/rag/delete", query, RAGDeleteResponse.class, userDetails.getId());
     }
 
+    /**
+     * Lists all documents in the user's RAG knowledge base.
+     * Returns a catalog of uploaded documents available for querying.
+     */
     @GetMapping("/documents")
     public Mono<RAGListResponse> documentsRag(
             @AuthenticationPrincipal AppUserDetails userDetails
@@ -42,6 +54,10 @@ public class RagController {
         return externalAiService.getRagRequestWithUserId("/rag/documents", RAGListResponse.class, userDetails.getId());
     }
 
+    /**
+     * Uploads a file to the user's RAG knowledge base.
+     * Accepts various document formats for AI-powered search and retrieval.
+     */
     @PostMapping(value = "/upload-file", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Mono<RAGUploadResponse> uploadFile(
             @RequestParam("file") MultipartFile file,

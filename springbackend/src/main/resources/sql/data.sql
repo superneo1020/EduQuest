@@ -183,7 +183,7 @@ WHERE user_id IN (SELECT id FROM users WHERE username IN ('student1', 'student2'
 INSERT INTO items (type, name, icon, description, price)
 VALUES
     -- Avatar Items
-    ('AVATAR', 'Default', 'default', 'Default avatar icon', 100),
+    ('AVATAR', 'Default', 'default', 'Default avatar icon', 0),
     ('AVATAR', 'Happy Cat', 'happy_cat', 'Cute and friendly cat avatar', 100),
     ('AVATAR', 'Cool Dog', 'cool_dog', 'Playful dog with cool style', 100),
     ('AVATAR', 'Smart Owl', 'smart_owl', 'Wise owl with glasses', 100),
@@ -209,6 +209,7 @@ VALUES
     ('AVATAR', 'Sports Jersey', 'Jersey', 'Show your team spirit', 60),
 
     -- Background Items
+    ('BACKGROUND', 'Default Background', 'default', 'Simple default background', 0),
     ('BACKGROUND', 'Space Theme', 'Space', 'Explore the cosmos', 80),
     ('BACKGROUND', 'Ocean View', 'Ocean', 'Relaxing beach background', 70),
     ('BACKGROUND', 'Forest Adventure', 'Forest', 'Nature-inspired learning environment', 65),

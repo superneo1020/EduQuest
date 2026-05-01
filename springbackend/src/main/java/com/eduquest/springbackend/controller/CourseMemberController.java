@@ -22,6 +22,9 @@ public class CourseMemberController {
         this.courseMemberService = courseMemberService;
     }
 
+    /**
+     * Lists all available courses within the user's registered school.
+     */
     @GetMapping
     public ResponseEntity<UtilDetailedListResponse<CourseDto>> showAllCourse(
             @AuthenticationPrincipal AppUserDetails userDetails
@@ -29,12 +32,18 @@ public class CourseMemberController {
         return ResponseEntity.ok(courseMemberService.showAllCourse(userDetails.getId()));
     }
 
+    /**
+     * Retrieves the full roster of members for a specific course.
+     */
     @GetMapping("/{id}/members")
     @PreAuthorize("@courseMemberSecurity.isCourseMember(#id)")
     public ResponseEntity<UtilDetailedListResponse<CourseMemberDto>> showAllMembersInMyCourse(@PathVariable Long id) {
         return ResponseEntity.ok(courseMemberService.showAllCourseMembers(id));
     }
 
+    /**
+     * Returns the specific role (e.g., Student, Teacher) of the current user within a course.
+     */
     @GetMapping("/{id}/role")
     @PreAuthorize("@courseMemberSecurity.isCourseMember(#id)")
     public ResponseEntity<String> showMyRoleInClass(

@@ -21,6 +21,10 @@ public class ItemController {
         this.itemService = itemService;
     }
 
+    /**
+     * Searches for items in the shop using filters and pagination.
+     * Returns items available for purchase based on the provided criteria.
+     */
     @GetMapping("/find")
     public ResponseEntity<?> findItems(
             @AuthenticationPrincipal AppUserDetails userDetails,

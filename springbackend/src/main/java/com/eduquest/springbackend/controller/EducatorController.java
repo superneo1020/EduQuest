@@ -34,6 +34,10 @@ public class EducatorController {
         this.userGameScoreService = userGameScoreService;
     }
 
+    /**
+     * Retrieves all users within the educator's school.
+     * Useful for looking up potential members to add to a class.
+     */
     @GetMapping("/school/members")
     public ResponseEntity<UtilPageResponse<UserMiniDto>> showCourseMembers(
             @AuthenticationPrincipal AppUserDetails userDetails,
@@ -42,6 +46,9 @@ public class EducatorController {
         return ResponseEntity.ok(educatorService.showAllSchoolMembers(userDetails.getId(), pageable));
     }
 
+    /**
+     * Lists school members who are eligible to join a specific course.
+     */
     @GetMapping("/class/{courseId}/members/potential")
     @PreAuthorize("@courseSecurity.isCourseExists(#courseId) && " +
             "@courseMemberSecurity.isCourseMember(#courseId) && " +
@@ -54,6 +61,9 @@ public class EducatorController {
         return ResponseEntity.ok(educatorService.showAllPotentialSchoolMembers(userDetails.getId(), courseId, pageable));
     }
 
+    /**
+     * Retrieves a detailed list of all courses the current user is associated with.
+     */
     @GetMapping("/class")
     public ResponseEntity<UtilDetailedListResponse<CourseDto>> showAllCourse(
             @AuthenticationPrincipal AppUserDetails userDetails
@@ -61,6 +71,9 @@ public class EducatorController {
         return ResponseEntity.ok(educatorService.showAllCourse(userDetails.getId()));
     }
 
+    /**
+     * Creates a new course and assigns the creator as the head teacher.
+     */
     @PostMapping("/class")
     public ResponseEntity<Map<String, Record>> createCourse(
             @AuthenticationPrincipal AppUserDetails userDetails,
@@ -69,6 +82,10 @@ public class EducatorController {
         return ResponseEntity.ok(educatorService.createCourse(request, userDetails.getId()));
     }
 
+    /**
+     * Deletes a course.
+     * Restricted to head teachers; prevents deletion if it would leave the course orphaned.
+     */
     @DeleteMapping("/class/{courseId}")
     @PreAuthorize("@courseSecurity.isCourseExists(#courseId) && " +
             "@courseMemberSecurity.canDeleteClass(#courseId) && " +
@@ -77,6 +94,9 @@ public class EducatorController {
         return ResponseEntity.ok(educatorService.removeCourse(courseId));
     }
 
+    /**
+     * Adds a new member (student or staff) to a course.
+     */
     @PostMapping("/class/member")
     @PreAuthorize("@userSecurity.isBothUserSameSchool(#request.userId) && " +
             "!@courseMemberSecurity.isCourseMember(#request.courseId, #request.userId) && " +
@@ -85,6 +105,9 @@ public class EducatorController {
         return ResponseEntity.ok(educatorService.addCourseMember(request));
     }
 
+    /**
+     * Updates a member's role within a course.
+     */
     @PatchMapping("/class/member")
     @PreAuthorize("@courseMemberSecurity.canChangeRoles(#request.courseId, #request.role) && " +
             "@courseMemberSecurity.isCourseMember(#request.courseId, #request.userId) && " +
@@ -93,6 +116,9 @@ public class EducatorController {
         return ResponseEntity.ok(educatorService.updateCourseMember(request));
     }
 
+    /**
+     * Removes a specific member from a course.
+     */
     @DeleteMapping("/class/{courseId}/member/{userId}")
     @PreAuthorize("@courseMemberSecurity.canDeleteMember(#courseId, #userId) && " +
             "@courseMemberSecurity.isCourseMember(#courseId, #userId) && " +
@@ -104,6 +130,9 @@ public class EducatorController {
         return ResponseEntity.ok(educatorService.removeCourseMember(courseId, userId));
     }
 
+    /**
+     * Retrieves the history of game scores for all students enrolled in the course.
+     */
     @GetMapping("/class/{courseId}/game/score")
     @PreAuthorize("@courseMemberSecurity.isCourseMember(#courseId)")
     public ResponseEntity<?> showAllCourseMembersGameRecord(
@@ -117,6 +146,9 @@ public class EducatorController {
         return ResponseEntity.ok(userGameScoreService.showAllGameRecordByCourseId(courseId, pageable));
     }
 
+    /**
+     * Generates an AI analysis of recent performance trends for the entire class.
+     */
     @GetMapping("/class/{courseId}/game/score/result")
     @PreAuthorize("@courseMemberSecurity.isCourseMember(#courseId)")
     public ResponseEntity<?> aiAnalysisAllCourseMembersGameRecord(
@@ -126,6 +158,9 @@ public class EducatorController {
         return ResponseEntity.ok(educatorAiAnalysisService.analysisRecentProgress(courseId, pageable));
     }
 
+    /**
+     * Fetches game scores for a specific student, optionally filtered by game name.
+     */
     @GetMapping({"student/{userId}/game/score", "student/{userId}/game/{name}/score"})
     @PreAuthorize("@userSecurity.isBothUserSameSchool(#userId)")
     public ResponseEntity<?> getStudentGameScore(
@@ -141,6 +176,9 @@ public class EducatorController {
                 : ResponseEntity.ok(userGameScoreService.showGameRecord(userId, pageable));
     }
 
+    /**
+     * Fetches best game scores for a specific student, optionally filtered by game name.
+     */
     @GetMapping({"student/{userId}/game/best", "student/{userId}/game/{name}/best"})
     @PreAuthorize("@userSecurity.isBothUserSameSchool(#userId)")
     public ResponseEntity<?> getStudentBestGameScore(
@@ -152,6 +190,9 @@ public class EducatorController {
                 : ResponseEntity.ok(userGameScoreService.showBestGameRecord(userId));
     }
 
+    /**
+     * Generates an AI analysis of recent performance trends of a specific game for a specific student.
+     */
     @GetMapping("student/{userId}/game/{gameId}/result")
     @PreAuthorize("@userSecurity.isBothUserSameSchool(#userId)")
     public ResponseEntity<?> aiAnalysisStudentGameScore(

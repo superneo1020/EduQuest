@@ -4,7 +4,7 @@ import Svg, { Circle, Path, Ellipse, Rect, LinearGradient, Stop, Defs } from 're
 
 // Background icons using SVG patterns and designs
 export const BackgroundIcons = {
-    default: ({ size = 50, color = '#F0F4F8' }) => (
+    default: ({ size = '100%', color = '#F0F4F8' }) => (
         <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
             <Rect width="100" height="100" fill={color} />
             <Circle cx="50" cy="50" r="30" fill="#E2E8F0" opacity="0.5" />
@@ -56,7 +56,7 @@ export const BackgroundIcons = {
     ),
 
 
-    Forest: ({ size = 50, color = '#228B22' }) => (
+    Forest: ({ size = '100%', color = '#228B22' }) => (
         <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
             <Defs>
                 <LinearGradient id="forestGradient" x1="0%" y1="100%" x2="0%" y2="0%">
@@ -77,7 +77,7 @@ export const BackgroundIcons = {
         </Svg>
     ),
 
-    City: ({ size = 50, color = '#708090' }) => (
+    City: ({ size = '100%', color = '#708090' }) => (
         <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
             <Defs>
                 <LinearGradient id="cityGradient" x1="0%" y1="0%" x2="0%" y2="100%">
