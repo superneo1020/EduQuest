@@ -99,7 +99,7 @@ export default function TeacherDashboard() {
     const [aiAnalysis, setAiAnalysis] = useState('');
     const [analysisLoading, setAnalysisLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
-    const [selectedClass, setSelectedClass] = useState<string>('all');
+    const [selectedClass, setSelectedClass] = useState<string | null>('all');
     const [showClassFilterModal, setShowClassFilterModal] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
         const [showAddModal, setShowAddModal] = useState(false);
@@ -294,7 +294,7 @@ export default function TeacherDashboard() {
     }, []);
 
     const handleClassSelect = (classItem: Course) => {
-        setSelectedClass(classItem);
+        setSelectedClass(`${classItem.grade} ${classItem.suffix}`);
         // Analytics view was removed, just stay on dashboard or go to classes
         setCurrentView('classes');
     };
