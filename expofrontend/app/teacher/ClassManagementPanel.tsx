@@ -15,7 +15,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
     Plus, BookOpen, Users2, TrendingUp, Target, UserPlus, X, Edit2, Trash2, Gamepad2, Trophy, ChevronLeft, RefreshCw,
-    Clock, Award, CheckCircle, ChevronRight, Brain, Atom, Languages, Calculator
+    Clock, Award, CheckCircle, ChevronRight, Brain, Atom, Languages, Calculator, Pin, PinOff, Search, Sparkles
 } from 'lucide-react-native';
 import educatorService, {Course, CourseRequest, UserMini, CourseMemberRequest, CourseMember, GameScore, BestGameScore, StudentProfile} from './educatorService';
 import { getApiBaseUrl } from '@/src/api/client';
@@ -24,6 +24,8 @@ import { ApiListHandler, DetailedListResponse } from './ApiListHandler';
 import axios from 'axios';
 import { useRouter } from 'expo-router';
 import ClassAiAnalysisView from './ClassAiAnalysisView';
+import { StudentMetadataView } from './StudentMetadataView';
+import { AvatarIcons } from '../Profile/AvatarIcons';
 
 interface ClassManagementPanelProps {
     onBack?: () => void;
@@ -36,6 +38,8 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
     const [schoolMembers, setSchoolMembers] = useState<UserMini[]>([]);
     const [classMembers, setClassMembers] = useState<CourseMember[]>([]);
     const [classMemberCounts, setClassMemberCounts] = useState<Map<number, number>>(new Map());
+    const [allClassMembers, setAllClassMembers] = useState<Map<number, CourseMember[]>>(new Map());
+    const [userAvatars, setUserAvatars] = useState<Map<number, string>>(new Map());
     const [loading, setLoading] = useState(true);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showAddStudentModal, setShowAddStudentModal] = useState(false);
@@ -51,6 +55,8 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
     const [deleteType, setDeleteType] = useState<'class' | 'student'>('class');
     const [pendingStudentId, setPendingStudentId] = useState<number | null>(null);
     const [pendingStudentName, setPendingStudentName] = useState('');
+    const [pinnedClasses, setPinnedClasses] = useState<number[]>([]);
+    const [searchQuery, setSearchQuery] = useState('');
     // Game score modal state
     const [showGameScoreModal, setShowGameScoreModal] = useState(false);
     const [selectedStudentForScores, setSelectedStudentForScores] = useState<{id: number, name: string} | null>(null);
@@ -63,14 +69,38 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
     const [selectedMemberForRole, setSelectedMemberForRole] = useState<CourseMember | null>(null);
     // Member game data state
     const [memberGameData, setMemberGameData] = useState<Record<number, GameScore[]>>({});
+    const [memberPointsData, setMemberPointsData] = useState<Record<number, number>>({});
     const [loadingMemberData, setLoadingMemberData] = useState(false);
     // Class AI Analysis state
     const [showClassAiAnalysisModal, setShowClassAiAnalysisModal] = useState(false);
     const [selectedClassForAiAnalysis, setSelectedClassForAiAnalysis] = useState<Course | null>(null);
+    // Student Metadata state
+    const [showStudentMetadataModal, setShowStudentMetadataModal] = useState(false);
+    const [selectedStudentForMetadata, setSelectedStudentForMetadata] = useState<{id: number, username: string, email: string} | null>(null);
 
     
+    // Function to fetch user avatar
+    const fetchUserAvatar = async (userId: number): Promise<string | null> => {
+        // Check cache first
+        if (userAvatars.has(userId)) {
+            return userAvatars.get(userId) || null;
+        }
+
+        try {
+            const avatar = await educatorService.getUserAvatar(userId);
+            if (avatar) {
+                setUserAvatars(prev => new Map(prev.set(userId, avatar)));
+            }
+            return avatar;
+        } catch (error) {
+            console.error('Error fetching user avatar:', error);
+            return null;
+        }
+    };
+
     useEffect(() => {
         loadData();
+        loadPinnedClasses();
     }, []);
 
     // ClassManagementPanel.tsx - 確保 loadData 正確刷新列表
@@ -84,21 +114,25 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                 setClassesResponse(classesData);
                 console.log('Classes loaded:', classesData.items.length);
                 
-                // Load member counts for each class
+                // Load member counts and members for each class
                 if (classesData?.items) {
                     const counts = new Map<number, number>();
+                    const allMembers = new Map<number, CourseMember[]>();
                     await Promise.all(
                         classesData.items.map(async (course) => {
                             try {
                                 const members = await educatorService.getClassMembersSafe(course.id);
                                 counts.set(course.id, members.length);
+                                allMembers.set(course.id, members);
                             } catch (error) {
                                 console.error(`Error loading members for class ${course.id}:`, error);
                                 counts.set(course.id, 0);
+                                allMembers.set(course.id, []);
                             }
                         })
                     );
                     setClassMemberCounts(counts);
+                    setAllClassMembers(allMembers);
                 }
             } catch (classError) {
                 console.error('Error loading classes:', classError);
@@ -137,6 +171,58 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
         } finally {
             setLoading(false);
         }
+    };
+
+    const loadPinnedClasses = async () => {
+        try {
+            const pinned = await AsyncStorage.getItem('pinnedClasses');
+            if (pinned) {
+                setPinnedClasses(JSON.parse(pinned));
+            }
+        } catch (error) {
+            console.error('Error loading pinned classes:', error);
+        }
+    };
+
+    const togglePinClass = async (classId: number) => {
+        try {
+            const currentPinned = [...pinnedClasses];
+            if (currentPinned.includes(classId)) {
+                // Remove from pinned
+                const newPinned = currentPinned.filter(id => id !== classId);
+                setPinnedClasses(newPinned);
+                await AsyncStorage.setItem('pinnedClasses', JSON.stringify(newPinned));
+            } else {
+                // Add to pinned and move to first position
+                const newPinned = [classId, ...currentPinned.filter(id => id !== classId)];
+                setPinnedClasses(newPinned);
+                await AsyncStorage.setItem('pinnedClasses', JSON.stringify(newPinned));
+            }
+        } catch (error) {
+            console.error('Error toggling pin class:', error);
+        }
+    };
+
+    const getSortedClasses = () => {
+        const allClasses = classesResponse?.items || [];
+        
+        // Filter classes based on search query
+        const filteredClasses = searchQuery 
+            ? allClasses.filter(classItem => 
+                classItem.grade.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                classItem.suffix.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                classItem.academicYear.toLowerCase().includes(searchQuery.toLowerCase())
+            )
+            : allClasses;
+            
+        const pinnedClassesList = filteredClasses.filter(classItem => pinnedClasses.includes(classItem.id));
+        const unpinnedClasses = filteredClasses.filter(classItem => !pinnedClasses.includes(classItem.id));
+        
+        // Sort pinned classes by most recently pinned (first in array = most recent)
+        const sortedPinned = [...pinnedClassesList].reverse();
+        
+        // Combine: pinned classes first (most recent first), then unpinned classes
+        return [...sortedPinned, ...unpinnedClasses];
     };
 
     const createClass = async () => {
@@ -350,7 +436,7 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
         return results;
     };
 
-    // Load game data for all class members
+    // Load game data and points for all class members
     const loadMemberGameData = async (members: CourseMember[]) => {
         try {
             setLoadingMemberData(true);
@@ -362,10 +448,12 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
             if (studentMembers.length === 0) {
                 console.log('No student members found, skipping game data loading');
                 setMemberGameData({});
+                setMemberPointsData({});
                 setLoadingMemberData(false);
                 return;
             }
             
+            // Load both game scores and user points
             const gameDataPromises = studentMembers
                 .map(async (member) => {
                     try {
@@ -379,14 +467,15 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                     }
                 });
 
-            const results = await Promise.all(gameDataPromises);
-            const gameDataMap = results.reduce((acc, result) => {
+            const gameResults = await Promise.all(gameDataPromises);
+
+            const gameDataMap = gameResults.reduce((acc, result) => {
                 acc[result.userId] = result.scores;
                 return acc;
             }, {} as Record<number, GameScore[]>);
 
-            console.log('Final memberGameData map:', gameDataMap);
             setMemberGameData(gameDataMap);
+            setMemberPointsData({}); // Set empty points data since we don't use points anymore
         } catch (error) {
             console.error('Error loading member game data:', error);
         } finally {
@@ -467,6 +556,16 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
     const openRoleManagement = (member: CourseMember) => {
         setSelectedMemberForRole(member);
         setShowRoleManagementModal(true);
+    };
+
+    // Student Metadata functions
+    const openStudentMetadata = (member: CourseMember) => {
+        setSelectedStudentForMetadata({
+            id: member.userId,
+            username: member.username,
+            email: member.email
+        });
+        setShowStudentMetadataModal(true);
     };
 
     const updateMemberRole = async (newRole: 'STUDENT' | 'TEACHER' | 'ASSISTANT') => {
@@ -559,8 +658,7 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
             // 確保外層點擊明確觸發查看成員
             onPress={() => {
                 console.log('Outer card pressed for:', classItem.id);
-                // Navigate to class leaderboard with selected class
-                router.push(`/teacher/classLeaderboard?classId=${classItem.id}&className=${encodeURIComponent(`${classItem.grade} ${classItem.suffix}`)}`);
+                viewClassMembers(classItem);
             }}
             activeOpacity={0.7}
         >
@@ -576,20 +674,21 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                         style={styles.actionBtn}
                         onPress={(e) => {
                             e.stopPropagation();
-                            viewClassMembers(classItem);
-                        }}
-                    >
-                        <Users2 size={16} color="#6C5CE7" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={styles.actionBtn}
-                        onPress={(e) => {
-                            e.stopPropagation();
                             setSelectedClassForAiAnalysis(classItem);
                             setShowClassAiAnalysisModal(true);
                         }}
                     >
                         <Brain size={16} color="#FF9800" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.actionBtn}
+                        onPress={() => {
+                            console.log('Outer card pressed for:', classItem.id);
+                            // Navigate to class leaderboard with selected class
+                            router.push(`/teacher/classLeaderboard?classId=${classItem.id}&className=${encodeURIComponent(`${classItem.grade} ${classItem.suffix}`)}`);
+                        }}
+                    >
+                        <Trophy size={16} color="#6C5CE7" />
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={styles.actionBtn}
@@ -604,8 +703,19 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={styles.actionBtn}
-                        onPress={(e) => {
-                            e.stopPropagation();  // 阻止事件冒泡到父級
+                        onPress={() => {
+                            togglePinClass(classItem.id);
+                        }}
+                    >
+                        {pinnedClasses.includes(classItem.id) ? (
+                            <Pin size={16} color="#FF4757" />
+                        ) : (
+                            <PinOff size={16} color="#999" />
+                        )}
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.actionBtn}
+                        onPress={() => {
                             console.log('Delete button pressed for class:', classItem.id);
                             deleteClass(classItem.id);
                         }}
@@ -617,7 +727,7 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
             <View style={styles.classStats}>
                 <View style={styles.statRow}>
                     <View style={styles.statItem}>
-                        <Users2 size={16} color="#6C5CE7" />
+                        <Trophy size={16} color="#6C5CE7" />
                         <Text style={styles.statText}>{classMemberCounts.get(classItem.id) || 0} Members</Text>
                     </View>
                     <View style={styles.statItem}>
@@ -694,28 +804,67 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
         );
     };
 
+    // Reusable function to render user avatar
+    const renderUserAvatar = (user: UserMini | CourseMember, size: number = 40) => {
+        // Get user ID
+        const userId = 'id' in user ? user.id : user.userId;
+        
+        // Check if we have cached avatar information
+        const cachedAvatar = userAvatars.get(userId);
+        
+        if (cachedAvatar && AvatarIcons[cachedAvatar as keyof typeof AvatarIcons]) {
+            const AvatarComponent = AvatarIcons[cachedAvatar as keyof typeof AvatarIcons];
+            return <AvatarComponent size={size} />;
+        }
+        
+        // Try to get avatar from user data
+        let selectedAvatar = undefined;
+        if ('selectedAvatar' in user) {
+            selectedAvatar = user.selectedAvatar;
+        } else {
+            // For CourseMember, try to find the corresponding user in schoolMembers
+            const schoolMember = schoolMembers.find(member => member.id === userId);
+            selectedAvatar = schoolMember?.selectedAvatar;
+        }
+        
+        if (selectedAvatar && AvatarIcons[selectedAvatar as keyof typeof AvatarIcons]) {
+            const AvatarComponent = AvatarIcons[selectedAvatar as keyof typeof AvatarIcons];
+            return <AvatarComponent size={size} />;
+        } else {
+            // Fallback to initials
+            const primaryName = user.username || ('name' in user ? user.name : '');
+            const avatarText = primaryName ? primaryName.charAt(0).toUpperCase() : '?';
+            return (
+                <Text style={[styles.studentListItemAvatarText, { fontSize: size / 2.4 }]}>
+                    {avatarText}
+                </Text>
+            );
+        }
+    };
+
     // Render function for student list view (used in Students tab)
     const renderStudentListItem = ({ item }: { item: UserMini }) => {
-        // Check which classes this student belongs to
-        // Since classMembers only contains members for the currently selected class,
-        // we'll show the class if the student is in classMembers and a class is selected
-        const studentClasses = selectedClass && classMembers.some(member => member.userId === item.id) 
-            ? [selectedClass] 
-            : [];
+        // Check which classes this student belongs to by checking all class members
+        const studentClasses: Course[] = [];
+        if (classesResponse && classesResponse.items) {
+            classesResponse.items.forEach(classItem => {
+                // Check if this student is a member of this class using allClassMembers
+                const classMembers = allClassMembers.get(classItem.id);
+                if (classMembers && classMembers.some(member => member.userId === item.id)) {
+                    studentClasses.push(classItem);
+                }
+            });
+        }
 
         // Safety checks for undefined properties - prioritize username over name
         const displayName = item.username || item.name || `User ${item.id}`;
         const displayEmail = item.email || 'No email provided';
-        const primaryName = item.username || item.name;
-        const avatarText = primaryName ? primaryName.charAt(0).toUpperCase() : '?';
 
         return (
             <View style={styles.studentListItem}>
                 <View style={styles.studentListItemHeader}>
                     <View style={styles.studentListItemAvatar}>
-                        <Text style={styles.studentListItemAvatarText}>
-                            {avatarText}
-                        </Text>
+                        {renderUserAvatar(item)}
                     </View>
                     <View style={styles.studentListInfo}>
                         <Text style={styles.studentListItemName}>{displayName}</Text>
@@ -772,6 +921,23 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                 </TouchableOpacity>
             </View>
 
+            {/* Search Bar */}
+            <View style={styles.searchContainer}>
+                <Search size={20} color="#999" style={styles.searchIcon} />
+                <TextInput
+                    style={styles.searchInput}
+                    placeholder="Search classes by grade, suffix, or year..."
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    placeholderTextColor="#999"
+                />
+                {searchQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => setSearchQuery('')}>
+                        <X size={20} color="#999" />
+                    </TouchableOpacity>
+                )}
+            </View>
+
             {/* View Tabs */}
             <View style={styles.tabContainer}>
                 <TouchableOpacity
@@ -797,7 +963,7 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
             {/* Content */}
             {currentView === 'classes' && (
                 <FlatList
-                    data={classesResponse?.items || []}
+                    data={getSortedClasses()}
                     renderItem={renderClassCard}
                     keyExtractor={(item) => item.id.toString()}
                     refreshing={loading}
@@ -924,6 +1090,7 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
             </Modal>
 
             {/* Class Members Modal - 保留這個有刪除按鈕的版本 */}
+            {/* Class Members Modal - 统一卡片样式 */}
             <Modal
                 visible={showClassMembersModal}
                 animationType="slide"
@@ -950,100 +1117,106 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                                 <Text>No members found</Text>
                             </View>
                         ) : (
-                            // 在 ClassMembers Modal 的 FlatList renderItem 中
-                            <FlatList
-                                data={classMembers}
-                                renderItem={({ item }) => {
-                                    const isStudent = item.roleInClass === 'STUDENT';
-                                    const gameData = memberGameData[item.userId] || [];
-                                    const subjectScores = calculateSubjectScores(gameData);
-                                    const studentStats = isStudent ? calculateStudentStats(gameData) : { averageScore: 0, accuracy: 0, totalTimeSpent: 0, completedQuests: 0 };
+                            <ScrollView showsVerticalScrollIndicator={false}>
+                                <View style={styles.unifiedStudentsGrid}>
+                                    {classMembers.map((member) => {
+                                        const isStudent = member.roleInClass === 'STUDENT';
+                                        const gameData = memberGameData[member.userId] || [];
+                                        const subjectScores = isStudent ? calculateSubjectScores(gameData) : [];
+                                        const studentStats = isStudent ? calculateStudentStats(gameData) : null;
 
-                                    return (
-                                        <View style={styles.memberCard}>
-                                            {/* 卡片頭部：頭像 + 姓名 + 操作按鈕 */}
-                                            <View style={styles.memberCardHeader}>
-                                                <View style={styles.memberAvatar}>
-                                                    <Text style={styles.memberAvatarText}>
-                                                        {item.username.charAt(0).toUpperCase()}
-                                                    </Text>
-                                                </View>
-                                                <View style={styles.memberInfo}>
-                                                    <Text style={styles.memberName}>{item.username}</Text>
-                                                    <Text style={styles.memberEmail}>{item.email}</Text>
-                                                    <View style={[
-                                                        styles.roleBadge,
-                                                        item.roleInClass === 'TEACHER' && styles.teacherBadge,
-                                                        item.roleInClass === 'ASSISTANT' && styles.assistantBadge,
-                                                        item.roleInClass === 'STUDENT' && styles.studentBadge
-                                                    ]}>
-                                                        <Text style={styles.roleBadgeText}>{item.roleInClass}</Text>
+                                        return (
+                                            <View key={member.userId} style={styles.unifiedStudentCard}>
+                                                {/* 卡片头部：头像 + 基本信息 + 角色徽章 + 操作图标 */}
+                                                <View style={styles.unifiedCardHeader}>
+                                                    <View style={styles.unifiedStudentAvatar}>
+                                                        {renderUserAvatar(member, 40)}
                                                     </View>
-                                                </View>
-                                                <View style={styles.memberCardActions}>
-                                                    <TouchableOpacity onPress={() => openRoleManagement(item)} style={styles.memberActionIcon}>
-                                                        <Edit2 size={18} color="#6C5CE7" />
-                                                    </TouchableOpacity>
-                                                    {isStudent && (
-                                                        <TouchableOpacity onPress={() => viewStudentScores(item.userId, item.username)} style={styles.memberActionIcon}>
-                                                            <TrendingUp size={18} color="#4CAF50" />
+                                                    <View style={styles.unifiedStudentInfo}>
+                                                        <Text style={styles.unifiedStudentName}>{member.username}</Text>
+                                                        <Text style={styles.unifiedStudentEmail}>{member.email}</Text>
+                                                        <View style={[
+                                                            styles.unifiedRoleBadge,
+                                                            member.roleInClass === 'TEACHER' && styles.unifiedTeacherBadge,
+                                                            member.roleInClass === 'ASSISTANT' && styles.unifiedAssistantBadge,
+                                                            member.roleInClass === 'STUDENT' && styles.unifiedStudentBadge
+                                                        ]}>
+                                                            <Text style={styles.unifiedRoleBadgeText}>{member.roleInClass}</Text>
+                                                        </View>
+                                                    </View>
+                                                    <View style={styles.unifiedCardActions}>
+                                                        <TouchableOpacity onPress={() => openRoleManagement(member)} style={styles.unifiedActionIcon}>
+                                                            <Edit2 size={18} color="#6C5CE7" />
                                                         </TouchableOpacity>
-                                                    )}
-                                                    {isStudent && (
-                                                        <TouchableOpacity onPress={() => confirmRemoveStudent(item.userId, item.username)} style={styles.memberActionIcon}>
+                                                        <TouchableOpacity onPress={() => confirmRemoveStudent(member.userId, member.username)} style={styles.unifiedActionIcon}>
                                                             <Trash2 size={18} color="#FF4757" />
                                                         </TouchableOpacity>
-                                                    )}
+                                                    </View>
                                                 </View>
-                                            </View>
 
-                                            {/* 學生成績區塊（僅學生顯示） */}
-                                            {isStudent && (
-                                                <>
-                                                    <View style={styles.progressSection}>
-                                                        <View style={styles.subjectProgress}>
+                                                {/* 学生专属内容：学科进度条 + 游戏统计 + 两个按钮 */}
+                                                {isStudent && subjectScores.length > 0 && (
+                                                    <>
+                                                        <View style={styles.unifiedProgressSection}>
                                                             {subjectScores.map((subject, idx) => (
-                                                                <View key={idx} style={styles.subjectItem}>
+                                                                <View key={idx} style={styles.unifiedSubjectItem}>
                                                                     {subject.label === 'Math' && <Calculator size={14} color="#4CAF50" />}
                                                                     {subject.label === 'English' && <Languages size={14} color="#2196F3" />}
                                                                     {subject.label === 'Science' && <Atom size={14} color="#FF9800" />}
                                                                     {subject.label === 'Chinese' && <Brain size={14} color="#9C27B0" />}
-                                                                    <Text style={styles.subjectLabel}>{subject.label}</Text>
-                                                                    <View style={styles.progressBar}>
-                                                                        <View style={[styles.progressFill, { width: `${subject.percentage}%`, backgroundColor: subject.color }]} />
+                                                                    <Text style={styles.unifiedSubjectLabel}>{subject.label}</Text>
+                                                                    <View style={styles.unifiedProgressBar}>
+                                                                        <View style={[styles.unifiedProgressFill, { width: `${subject.percentage}%`, backgroundColor: subject.color }]} />
                                                                     </View>
-                                                                    <Text style={styles.progressPercent}>{subject.percentage}%</Text>
+                                                                    <Text style={styles.unifiedProgressPercent}>{subject.percentage}%</Text>
                                                                 </View>
                                                             ))}
                                                         </View>
-                                                    </View>
 
-                                                    <View style={styles.performanceRow}>
-                                                        <View style={styles.performanceBadge}>
-                                                            <Award size={16} color={getPerformanceColor(studentStats.averageScore)} />
-                                                            <Text style={[styles.performanceScore, { color: getPerformanceColor(studentStats.averageScore) }]}>
-                                                                {studentStats.averageScore}%
-                                                            </Text>
+                                                        <View style={styles.unifiedPerformanceRow}>
+                                                            <View style={styles.unifiedPerformanceBadge}>
+                                                                <Award size={16} color={getPerformanceColor(studentStats?.averageScore || 0)} />
+                                                                <Text style={[styles.unifiedPerformanceScore, { color: getPerformanceColor(studentStats?.averageScore || 0) }]}>
+                                                                    {studentStats?.averageScore || 0}%
+                                                                </Text>
+                                                            </View>
+                                                            <View style={styles.unifiedPerformanceBadge}>
+                                                                <Gamepad2 size={16} color="#FF9800" />
+                                                                <Text style={styles.unifiedPerformanceText}>{studentStats?.completedQuests || 0} games</Text>
+                                                            </View>
                                                         </View>
-                                                        <View style={styles.performanceBadge}>
-                                                            <CheckCircle size={16} color="#4CAF50" />
-                                                            <Text style={styles.performanceText}>{studentStats.accuracy}% Acc.</Text>
-                                                        </View>
-                                                        <View style={styles.performanceBadge}>
-                                                            <Clock size={16} color="#FF9800" />
-                                                            <Text style={styles.performanceText}>{studentStats.completedQuests} games</Text>
-                                                        </View>
-                                                    </View>
-                                                </>
-                                            )}
 
-                                            {/* 底部按鈕（原本的操作按鈕已移到右上角，這裡可保留查看詳細報告的按鈕，非必須） */}
-                                                                                    </View>
-                                    );
-                                }}
-                                keyExtractor={item => item.userId.toString()}
-                                contentContainerStyle={styles.modalStudentList}
-                            />
+                                                        <View style={styles.unifiedButtonRow}>
+                                                            <TouchableOpacity
+                                                                style={[styles.unifiedActionBtn, styles.unifiedViewDetailsBtn]}
+                                                                onPress={() => viewStudentScores(member.userId, member.username)}
+                                                            >
+                                                                <TrendingUp size={16} color="#6C5CE7" />
+                                                                <Text style={styles.unifiedBtnText}>View Details</Text>
+                                                            </TouchableOpacity>
+                                                            <TouchableOpacity
+                                                                style={[styles.unifiedActionBtn, styles.unifiedMetadataBtn]}
+                                                                onPress={() => openStudentMetadata(member)}
+                                                            >
+                                                                <Gamepad2 size={18} color="#4CAF50" />
+                                                                <Text style={styles.unifiedBtnText}>Game Metadata</Text>
+                                                                <Sparkles size={12} color="#4CAF50" />
+                                                            </TouchableOpacity>
+                                                        </View>
+                                                    </>
+                                                )}
+
+
+                                                {!isStudent && (
+                                                    <View style={styles.unifiedNonStudentMessage}>
+                                                        <Text style={styles.unifiedNonStudentText}>Educator account – no game data available</Text>
+                                                    </View>
+                                                )}
+                                            </View>
+                                        );
+                                    })}
+                                </View>
+                            </ScrollView>
                         )}
                     </View>
                 </View>
@@ -1147,9 +1320,6 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                                             <View style={styles.scoreInfo}>
                                                 <Text style={styles.gameName}>{score.name}</Text>
                                                 <Text style={styles.scoreValue}>{score.scores}</Text>
-                                                {score.difficulty && (
-                                                    <Text style={styles.scoreDifficulty}>Difficulty: {score.difficulty}</Text>
-                                                )}
                                             </View>
                                             <Text style={styles.scoreDate}>
                                                 {new Date(score.createdAt).toLocaleDateString()}
@@ -1170,9 +1340,6 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                                             <View style={styles.scoreInfo}>
                                                 <Text style={styles.gameName}>{score.name}</Text>
                                                 <Text style={styles.scoreValue}>{score.scores}</Text>
-                                                {score.difficulty && (
-                                                    <Text style={styles.scoreDifficulty}>Difficulty: {score.difficulty}</Text>
-                                                )}
                                                 {score.type && (
                                                     <Text style={styles.scoreType}>Type: {score.type}</Text>
                                                 )}
@@ -1205,9 +1372,9 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                                                     <View style={styles.recordInfo}>
                                                         <Text style={styles.recordName}>{score.name}</Text>
                                                         <View style={styles.recordMeta}>
-                                                            <Text style={[styles.recordDifficulty, { color: getDifficultyColor(score.difficulty) }]}>
-                                                                {score.difficulty}
-                                                            </Text>
+                                                            {score.type && (
+                                                                <Text style={styles.recordType}>{score.type}</Text>
+                                                            )}
                                                             <Text style={styles.recordDate}>
                                                                 {new Date(score.createdAt).toLocaleDateString()}
                                                             </Text>
@@ -1215,9 +1382,6 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                                                     </View>
                                                     <View style={styles.recordScores}>
                                                         <Text style={styles.recordScore}>{score.scores}</Text>
-                                                        {score.type && (
-                                                            <Text style={styles.recordPoints}>{score.type}</Text>
-                                                        )}
                                                     </View>
                                                 </View>
                                             );
@@ -1302,6 +1466,19 @@ export const ClassManagementPanel: React.FC<ClassManagementPanelProps> = ({ onBa
                 className={selectedClassForAiAnalysis ? `${selectedClassForAiAnalysis.grade} ${selectedClassForAiAnalysis.suffix}` : ''}
                 token={token || ''}
             />
+
+            {/* Student Metadata Modal */}
+            {selectedStudentForMetadata && (
+                <StudentMetadataView
+                    visible={showStudentMetadataModal}
+                    onClose={() => {
+                        setShowStudentMetadataModal(false);
+                        setSelectedStudentForMetadata(null);
+                    }}
+                    student={selectedStudentForMetadata}
+                    token={token || ''}
+                />
+            )}
         </View>
     );
 };
@@ -1312,6 +1489,7 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#F8F9FA',
     },
+
     // 成員卡片主容器
     memberCard: {
         backgroundColor: '#FFF',
@@ -1646,6 +1824,27 @@ const styles = StyleSheet.create({
     },
     tabTextActive: {
         color: '#fff',
+    },
+    searchContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F8F9FA',
+        marginHorizontal: 20,
+        marginVertical: 16,
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderWidth: 1,
+        borderColor: '#E0E0E0',
+    },
+    searchIcon: {
+        marginRight: 12,
+    },
+    searchInput: {
+        flex: 1,
+        fontSize: 16,
+        color: '#2D3436',
+        padding: 0,
     },
     content: {
         flex: 1,
@@ -2033,12 +2232,7 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#666',
     },
-    scoreDifficulty: {
-        fontSize: 12,
-        color: '#FF9800',
-        marginTop: 2,
-    },
-    scoreType: {
+        scoreType: {
         fontSize: 12,
         color: '#2196F3',
         marginTop: 2,
@@ -2140,16 +2334,7 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         fontWeight: '500',
     },
-    gameRecordDifficulty: {
-        fontSize: 12,
-        color: '#FF9800',
-        backgroundColor: '#FFF3E0',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 12,
-        fontWeight: '500',
-    },
-    gameRecordScore: {
+        gameRecordScore: {
         fontSize: 20,
         fontWeight: 'bold',
         color: '#4CAF50',
@@ -2241,13 +2426,15 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginTop: 4,
     },
-    recordDifficulty: {
-        fontSize: 12,
-        fontWeight: '600',
-    },
-    recordDate: {
+        recordDate: {
         fontSize: 12,
         color: '#636E72',
+        marginLeft: 8,
+    },
+    recordType: {
+        fontSize: 12,
+        color: '#4CAF50',
+        fontWeight: '600',
         marginLeft: 8,
     },
     recordScores: {
@@ -2543,4 +2730,305 @@ const styles = StyleSheet.create({
         color: '#666',
         marginLeft: 8,
     },
+    // Student card styles
+    studentCardsGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        gap: 16,
+    },
+    studentMainCard: {
+        width: '48%',
+        backgroundColor: '#fff',
+        borderRadius: 12,
+        padding: 16,
+        marginBottom: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    studentMainCardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    studentMainAvatar: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#6C5CE7',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    studentMainAvatarText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    studentMainInfo: {
+        flex: 1,
+    },
+    studentMainName: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#2D3436',
+    },
+    studentMainEmail: {
+        fontSize: 14,
+        color: '#636E72',
+        marginTop: 2,
+    },
+    studentCardActions: {
+        flexDirection: 'row',
+        gap: 8,
+    },
+    studentActionIcon: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: '#f5f5f5',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    studentMainProgressSection: {
+        marginTop: 16,
+    },
+    studentMainSubjectProgress: {
+        gap: 8,
+    },
+    studentMainSubjectItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    studentMainSubjectLabel: {
+        fontSize: 12,
+        color: '#636E72',
+        width: 60,
+    },
+    studentMainProgressBar: {
+        flex: 1,
+        height: 4,
+        backgroundColor: '#f0f0f0',
+        borderRadius: 2,
+        overflow: 'hidden',
+    },
+    studentMainProgressFill: {
+        height: '100%',
+        borderRadius: 2,
+    },
+    studentMainProgressPercent: {
+        fontSize: 12,
+        color: '#636E72',
+        width: 35,
+        textAlign: 'right',
+    },
+    studentMainPerformanceRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 12,
+        gap: 8,
+    },
+    studentMainPerformanceBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    studentMainPerformanceScore: {
+        fontSize: 12,
+        fontWeight: 'bold',
+    },
+    studentMainPerformanceText: {
+        fontSize: 12,
+        color: '#636E72',
+    },
+    studentMainAiAnalysisBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#6C5CE7',
+        borderRadius: 8,
+        padding: 12,
+        marginTop: 12,
+        gap: 8,
+    },
+    studentMainAiAnalysisBtnText: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: '600',
+    },
+
+    unifiedStudentsGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'flex-start',
+        gap: 16,
+        paddingBottom: 20,
+    },
+    unifiedStudentCard: {
+        backgroundColor: 'white',
+        borderRadius: 20,
+        padding: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 3,
+        height: 360,
+        width: '48%',
+        minWidth: 280,
+        maxWidth: 320,
+    },
+    unifiedCardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    unifiedStudentAvatar: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: '#6C5CE7',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    unifiedAvatarText: {
+        color: 'white',
+        fontSize: 20,
+        fontWeight: 'bold',
+    },
+    unifiedStudentInfo: {
+        flex: 1,
+    },
+    unifiedStudentName: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#2D3436',
+    },
+    unifiedStudentEmail: {
+        fontSize: 12,
+        color: '#999',
+        marginTop: 2,
+    },
+    unifiedRoleBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        alignSelf: 'flex-start',
+        marginTop: 6,
+    },
+    unifiedTeacherBadge: { backgroundColor: '#FF6B6B' },
+    unifiedAssistantBadge: { backgroundColor: '#4ECDC4' },
+    unifiedStudentBadge: { backgroundColor: '#95E1D3' },
+    unifiedRoleBadgeText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#FFF',
+    },
+    unifiedCardActions: {
+        flexDirection: 'row',
+        gap: 8,
+    },
+    unifiedActionIcon: {
+        padding: 6,
+    },
+    unifiedProgressSection: {
+        marginVertical: 12,
+        flex: 1,
+    },
+    unifiedSubjectItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 8,
+    },
+    unifiedSubjectLabel: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#666',
+        width: 50,
+    },
+    unifiedProgressBar: {
+        flex: 1,
+        height: 6,
+        backgroundColor: '#E0E0E0',
+        borderRadius: 3,
+        overflow: 'hidden',
+    },
+    unifiedProgressFill: {
+        height: '100%',
+        borderRadius: 3,
+    },
+    unifiedProgressPercent: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: '#666',
+        width: 35,
+        textAlign: 'right',
+    },
+    unifiedPerformanceRow: {
+        flexDirection: 'row',
+        gap: 12,
+        marginVertical: 12,
+    },
+    unifiedPerformanceBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: '#F8F9FA',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+    },
+    unifiedPerformanceScore: {
+        fontSize: 14,
+        fontWeight: '700',
+    },
+    unifiedPerformanceText: {
+        fontSize: 12,
+        color: '#666',
+    },
+    unifiedButtonRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        gap: 12,
+        marginTop: 8,
+    },
+    unifiedActionBtn: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        paddingVertical: 8,
+        borderRadius: 12,
+    },
+    unifiedViewDetailsBtn: {
+        backgroundColor: '#F0E6FF',
+    },
+    unifiedMetadataBtn: {
+        backgroundColor: '#E8F5E8',
+    },
+    unifiedBtnText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#2D3436',
+    },
+    unifiedNonStudentMessage: {
+        marginTop: 16,
+        padding: 12,
+        backgroundColor: '#F5F5F5',
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    unifiedNonStudentText: {
+        fontSize: 12,
+        color: '#999',
+        fontStyle: 'italic',
+    },
+
 });
