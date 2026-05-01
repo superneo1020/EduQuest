@@ -627,7 +627,7 @@ class EducatorService {
     async getUserAvatar(userId: number): Promise<string | null> {
         try {
             // Try to get user profile information that might contain avatar
-            const response = await fetch(`${getApiBaseUrl()}/api/user/profile/${userId}`, {
+            const response = await fetch(`${getApiBaseUrl()}/api/auth/me/${userId}`, {
                 headers: await this.getAuthHeaders(),
             });
 
