@@ -125,13 +125,13 @@ export default function TeacherDashboard() {
 
     useEffect(() => {
         // 檢查用戶是否為教師角色
-        if (user && !user.roles?.includes('teacher')) {
-            console.log('User is not a teacher, redirecting to home');
+        if (user && !user.roles?.includes('ROLE_EDUCATOR')) {
+            console.log('User is not a educator, redirecting to home');
             router.replace('/index_with_teacher');
             return;
         }
         
-        if (user && user.roles?.includes('teacher')) {
+        if (user && user.roles?.includes('ROLE_EDUCATOR')) {
             loadData();
         }
     }, [token, user]);
