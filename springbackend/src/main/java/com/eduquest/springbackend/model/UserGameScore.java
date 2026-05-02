@@ -1,9 +1,12 @@
 package com.eduquest.springbackend.model;
 
+import com.eduquest.springbackend.dto.GameMetadata;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Min;
 import org.hibernate.annotations.Generated;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.generator.EventType;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 
@@ -14,31 +17,36 @@ public class UserGameScore {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     private AppUser user;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "game_id", nullable = false)
     private Game game;
 
     @Column(nullable = false)
-    @Min(value = 0)
+    @Min(value = 0, message = "Game scores must be at least 0")
     private Integer scores = 0;
 
-    @Column(name = "created_at",
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "jsonb")
+    private GameMetadata metadata;
+
+    @Column(nullable = false,
             insertable = false,
             updatable = false,
-            columnDefinition = "TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP")
+            columnDefinition = "TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP")
     @Generated(event = {EventType.INSERT})
     private Instant createdAt;
 
     public UserGameScore() {}
 
-    public UserGameScore(AppUser user, Game game, Integer scores) {
+    public UserGameScore(AppUser user, Game game, Integer scores, GameMetadata metadata) {
         this.user = user;
         this.game = game;
         this.scores = scores;
+        this.metadata = metadata;
     }
 
     public Long getId() {
@@ -71,6 +79,14 @@ public class UserGameScore {
 
     public void setScores(Integer scores) {
         this.scores = scores;
+    }
+
+    public GameMetadata getMetadata() {
+        return metadata;
+    }
+
+    public void setMetadata(GameMetadata metadata) {
+        this.metadata = metadata;
     }
 
     public Instant getCreatedAt() {

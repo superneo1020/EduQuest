@@ -1,77 +1,450 @@
-import React, { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import {
+    View,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    StyleSheet,
+    ActivityIndicator,
+    ScrollView,
+    SafeAreaView,
+    KeyboardAvoidingView,
+    Platform,
+    Animated,
+    Image
+} from "react-native";
 import { router } from "expo-router";
+import axios from "axios";
+import { User, Lock, Mail, GraduationCap, Sparkles } from "lucide-react-native";
+import { getApiBaseUrl } from "../../src/api/client";
+import { TeacherRegistrationStorage } from "../../src/utils/teacherRegistrationStorage";
 
 export default function Register() {
     const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [errorMsg, setErrorMsg] = useState<string | null>(null);
+    const [userType, setUserType] = useState<"student" | "teacher">("student");
+    const [schoolName, setSchoolName] = useState("");
+    const [teacherReason, setTeacherReason] = useState("");
+    
+    // Animation values
+    const logoScale = useRef(new Animated.Value(1)).current;
+    
+    useEffect(() => {
+        const pulseAnimation = Animated.sequence([
+            Animated.timing(logoScale, {
+                toValue: 1.05,
+                duration: 1000,
+                useNativeDriver: true,
+            }),
+            Animated.timing(logoScale, {
+                toValue: 1,
+                duration: 1000,
+                useNativeDriver: true,
+            }),
+        ]);
+        
+        const loopAnimation = Animated.loop(pulseAnimation);
+        loopAnimation.start();
+        
+        return () => loopAnimation.stop();
+    }, []);
 
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Create An Account</Text>
+    const handleRegister = async () => {
+        setErrorMsg(null);
 
-        <TextInput
-            style={styles.input}
-            placeholder="Username"
-            placeholderTextColor="#777"
-            value={username}
-            onChangeText={setUsername}
-        />
+        // Check if all fields are filled
+        if (!username || !email || !password || !confirmPassword) {
+            setErrorMsg("Please fill in all fields");
+            return;
+        }
 
-        <TextInput
-        style={styles.input}
-        placeholder="Email"
-        placeholderTextColor="#777"
-        value={email}
-        onChangeText={setEmail}
-      />
+        // Check if passwords match
+        if (password !== confirmPassword) {
+            setErrorMsg("Passwords do not match");
+            return;
+        }
 
-      <TextInput
-        style={styles.input}
-        placeholder="Password"
-        placeholderTextColor="#777"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-      />
+        // Check password length (backend requires minimum 8 characters)
+        if (password.length < 8) {
+            setErrorMsg("Password must be at least 8 characters long");
+            return;
+        }
 
-      <TouchableOpacity style={styles.registerBtn}>
-        <Text style={styles.registerText}>Register</Text>
-      </TouchableOpacity>
+        // Additional validation for teacher registration
+        if (userType === "teacher") {
+            if (!teacherReason) {
+                setErrorMsg("Please provide a reason for teacher registration");
+                return;
+            }
+        }
 
-      <Text style={styles.loginLink} onPress={() => router.push("/Profile/Login")}>
-        Already have an account? Login →
-      </Text>
-    </View>
-  );
+        // School name is required for both students and teachers
+        if (!schoolName) {
+            setErrorMsg("School name is required");
+            return;
+        }
+
+        setLoading(true);
+
+        try {
+            // Direct registration for both student and teacher
+            await axios.post(`${getApiBaseUrl()}/api/auth/register`, {
+                username,
+                email,
+                password,
+                isEducator: userType === "teacher",
+                schoolName: schoolName
+            });
+
+            if (userType === "teacher") {
+                // Also save the request reason for admin review
+                await TeacherRegistrationStorage.createRequest({
+                    username,
+                    email,
+                    password,
+                    schoolName,
+                    reason: teacherReason
+                });
+
+                setErrorMsg(null);
+                alert("Teacher registration submitted successfully! Your account is created and pending admin approval.");
+            } else {
+                setErrorMsg(null);
+                alert("Student registration successful!");
+            }
+            router.replace("/Profile/Login");
+        } catch (error: any) {
+            const serverData = error.response?.data;
+            let displayMsg = "Registration failed, please try again.";
+            if (typeof serverData === 'string') displayMsg = serverData;
+            else if (serverData?.message) displayMsg = serverData.message;
+            else if (error.message) displayMsg = error.message;
+            setErrorMsg(displayMsg);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <SafeAreaView style={styles.container}>
+            <KeyboardAvoidingView
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                style={{ flex: 1 }}
+            >
+                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+                    <View style={styles.header}>
+                        <Animated.View style={[styles.logoCircle, { transform: [{ scale: logoScale }] }]}>
+                            <Image 
+                                source={require('../../assets/images/icon/EduQuest_icon.png')} 
+                                style={styles.logoImage}
+                                resizeMode="contain"
+                            />
+                        </Animated.View>
+                        <Text style={styles.title}>Create Account</Text>
+                        <Text style={styles.subtitle}>Join EduQuest today</Text>
+                    </View>
+
+                    <View style={styles.card}>
+                        {/* User Type Selection */}
+                        <View style={styles.userTypeContainer}>
+                            <Text style={styles.userTypeLabel}>I am a:</Text>
+                            <View style={styles.userTypeButtons}>
+                                <TouchableOpacity
+                                    style={[styles.userTypeButton, userType === "student" && styles.userTypeButtonActive]}
+                                    onPress={() => setUserType("student")}
+                                >
+                                    <User size={20} color={userType === "student" ? "#FFF" : "#64748B"} />
+                                    <Text style={[styles.userTypeButtonText, userType === "student" && styles.userTypeButtonTextActive]}>
+                                        Student
+                                    </Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.userTypeButton, userType === "teacher" && styles.userTypeButtonActive]}
+                                    onPress={() => setUserType("teacher")}
+                                >
+                                    <GraduationCap size={20} color={userType === "teacher" ? "#FFF" : "#64748B"} />
+                                    <Text style={[styles.userTypeButtonText, userType === "teacher" && styles.userTypeButtonTextActive]}>
+                                        Teacher
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+
+                        {/* Username Input */}
+                        <View style={styles.inputWrapper}>
+                            <View style={styles.iconContainer}>
+                                <User size={20} color="#64748B" />
+                            </View>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Username"
+                                value={username}
+                                onChangeText={(t) => { setUsername(t); setErrorMsg(null); }}
+                                autoCapitalize="none"
+                                placeholderTextColor="#94A3B8"
+                            />
+                        </View>
+
+                        {/* Email Input */}
+                        <View style={styles.inputWrapper}>
+                            <View style={styles.iconContainer}>
+                                <Mail size={20} color="#64748B" />
+                            </View>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Email"
+                                value={email}
+                                onChangeText={(t) => { setEmail(t); setErrorMsg(null); }}
+                                keyboardType="email-address"
+                                autoCapitalize="none"
+                                placeholderTextColor="#94A3B8"
+                            />
+                        </View>
+
+                        {/* Password Input */}
+                        <View style={styles.inputWrapper}>
+                            <View style={styles.iconContainer}>
+                                <Lock size={20} color="#64748B" />
+                            </View>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Password (min 8 characters)"
+                                value={password}
+                                onChangeText={(t) => { setPassword(t); setErrorMsg(null); }}
+                                secureTextEntry
+                                placeholderTextColor="#94A3B8"
+                            />
+                        </View>
+
+                        {/* Confirm Password Input */}
+                        <View style={styles.inputWrapper}>
+                            <View style={styles.iconContainer}>
+                                <Lock size={20} color="#64748B" />
+                            </View>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Confirm Password"
+                                value={confirmPassword}
+                                onChangeText={(t) => { setConfirmPassword(t); setErrorMsg(null); }}
+                                secureTextEntry
+                                placeholderTextColor="#94A3B8"
+                            />
+                        </View>
+
+                        {/* School Name - Required for both students and teachers */}
+                        <View style={styles.inputWrapper}>
+                            <View style={styles.iconContainer}>
+                                <GraduationCap size={20} color="#64748B" />
+                            </View>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="School Name"
+                                value={schoolName}
+                                onChangeText={(t) => { setSchoolName(t); setErrorMsg(null); }}
+                                placeholderTextColor="#94A3B8"
+                            />
+                        </View>
+
+                        {/* Teacher-specific fields */}
+                        {userType === "teacher" && (
+                            <>
+
+                                <View style={styles.inputWrapper}>
+                                    <View style={styles.iconContainer}>
+                                        <User size={20} color="#64748B" />
+                                    </View>
+                                    <TextInput
+                                        style={[styles.input, styles.textArea]}
+                                        placeholder="Why do you want to become a teacher?"
+                                        value={teacherReason}
+                                        onChangeText={(t) => { setTeacherReason(t); setErrorMsg(null); }}
+                                        multiline
+                                        numberOfLines={3}
+                                        placeholderTextColor="#94A3B8"
+                                    />
+                                </View>
+                            </>
+                        )}
+
+                        {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
+
+                        <TouchableOpacity
+                            style={[styles.registerBtn, loading && { opacity: 0.7 }]}
+                            onPress={handleRegister}
+                            disabled={loading}
+                        >
+                            {loading ? (
+                                <ActivityIndicator color="#FFF" size="large" />
+                            ) : (
+                                <Text style={styles.registerText}>
+                                    {userType === "teacher" ? "Submit Teacher Request" : "Create Account"}
+                                </Text>
+                            )}
+                        </TouchableOpacity>
+                    </View>
+
+                    <TouchableOpacity onPress={() => router.push("/Profile/Login")}>
+                        <Text style={styles.loginLink}>
+                            Already have an account? <Text style={styles.loginLinkText}>Sign In</Text>
+                        </Text>
+                    </TouchableOpacity>
+                </ScrollView>
+            </KeyboardAvoidingView>
+        </SafeAreaView>
+    );
 }
+
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", padding: 30 },
-  title: { fontSize: 30, fontWeight: "bold", color: "#4CAF50", textAlign: "center", marginBottom: 40 },
+    container: { flex: 1, backgroundColor: '#F8F9FA' },
+    scrollContent: { padding: 30, justifyContent: "center", flexGrow: 1 },
+    header: { marginBottom: 30, alignItems: 'center' },
+    logoCircle: {
+        width: 400,
+        height: 400,
+        borderRadius: 60,
+        justifyContent: "center",
+        alignItems: "center",
+        marginBottom: 20,
+    },
+    logoImage: {
+        width: 400,
+        height: 400,
+    },
+    title: { 
+        fontSize: 32, 
+        fontWeight: "800", 
+        color: '#4CAF50',
+        marginBottom: 8,
+        letterSpacing: -0.5
+    },
+    subtitle: { 
+        fontSize: 16, 
+        color: '#64748B', 
+        fontWeight: "500"
+    },
+    card: { 
+        backgroundColor: "white", 
+        borderRadius: 20, 
+        padding: 28, 
+        shadowColor: "#000", 
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15, 
+        shadowRadius: 8, 
+        elevation: 6,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
 
-  input: {
-    borderWidth: 1,
-    borderColor: "#aaa",
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 20,
-    fontSize: 16,
-  },
+    // User Type Selection Styles
+    userTypeContainer: { marginBottom: 24 },
+    userTypeLabel: { 
+        fontSize: 16, 
+        fontWeight: "700", 
+        color: '#1E293B', 
+        marginBottom: 12,
+        textAlign: "center"
+    },
+    userTypeButtons: { flexDirection: "row", gap: 12 },
+    userTypeButton: {
+        flex: 1,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: '#F8FAFC',
+        padding: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        height: 56
+    },
+    userTypeButtonActive: { 
+        backgroundColor: '#4CAF50', 
+        borderColor: '#4CAF50'
+    },
+    userTypeButtonText: { 
+        fontSize: 14, 
+        fontWeight: "600", 
+        color: "#64748B", 
+        marginLeft: 8 
+    },
+    userTypeButtonTextActive: { 
+        color: "#FFF",
+        fontWeight: "700"
+    },
 
-  registerBtn: {
-    backgroundColor: "#4CAF50",
-    padding: 15,
-    borderRadius: 10,
-    marginTop: 10,
-  },
-  registerText: { color: "#fff", fontWeight: "bold", textAlign: "center", fontSize: 18 },
-
-  loginLink: {
-    marginTop: 20,
-    textAlign: "center",
-    color: "#4CAF50",
-    fontWeight: "bold",
-    fontSize: 16,
-  },
+    inputWrapper: { 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        backgroundColor: '#F8FAFC', 
+        borderRadius: 12, 
+        marginBottom: 16, 
+        paddingHorizontal: 16,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        height: 56
+    },
+    iconContainer: {
+        width: 32,
+        height: 32,
+        borderRadius: 8,
+        backgroundColor: "#F8FAFC",
+        justifyContent: "center",
+        alignItems: "center",
+        marginRight: 12,
+    },
+    input: { 
+        flex: 1, 
+        paddingVertical: 12, 
+        fontSize: 16, 
+        color: '#1E293B',
+        fontWeight: "500"
+    },
+    textArea: { 
+        height: 80, 
+        textAlignVertical: 'top',
+        paddingTop: 12
+    },
+    registerBtn: { 
+        backgroundColor: '#4CAF50', 
+        paddingVertical: 16, 
+        borderRadius: 14, 
+        marginTop: 12,
+        shadowColor: "#4CAF50",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+        elevation: 4,
+    },
+    registerText: { 
+        color: "#FFF", 
+        fontWeight: "700", 
+        textAlign: "center", 
+        fontSize: 18,
+        letterSpacing: 0.5
+    },
+    errorText: { 
+        color: '#EF4444', 
+        textAlign: "center", 
+        marginVertical: 12, 
+        fontWeight: "600",
+        fontSize: 14,
+        backgroundColor: '#FEF2F2',
+        padding: 8,
+        borderRadius: 8
+    },
+    loginLink: { 
+        marginTop: 24, 
+        textAlign: "center", 
+        color: '#64748B', 
+        fontSize: 14, 
+        fontWeight: '500' 
+    },
+    loginLinkText: {
+        color: '#4CAF50',
+        fontWeight: '700'
+    }
 });

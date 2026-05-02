@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Diagram>
+  <ID>DATABASE</ID>
+  <OriginalElement>2b8e2cfa-842c-4432-b5fa-c8d5d8c49611</OriginalElement>
+  <nodes>
+    <node x="1416.7599999999998" y="467.6966704085259">2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.games</node>
+    <node x="1356.2599999999998" y="1120.1574999999996">2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.user_game_scores</node>
+    <node x="651.5291619893428" y="695.6766704085258">2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.user_items</node>
+    <node x="-210.53199999999993" y="500.0">2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.classes</node>
+    <node x="549.511" y="995.3599999999999">2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.documents</node>
+    <node x="-210.53199999999993" y="-4.80000000000004">2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.schools</node>
+    <node x="383.30832397868556" y="296.1533408170515">2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.users</node>
+    <node x="588.5291619893428" y="33.15334081705181">2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.user_profiles</node>
+    <node x="142.75199999999995" y="875.0719999999999">2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.activities</node>
+    <node x="1282.02" y="331.52">2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.difficulty_rewards</node>
+    <node x="996.5145809946712" y="816.825">2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.user_missions</node>
+    <node x="514.371" y="1345.3124999999998">2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.document_chunks</node>
+    <node x="202.5682958436944" y="296.1533408170515">2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.roles</node>
+    <node x="226.00199999999992" y="1204.8">2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.user_activities</node>
+    <node x="-148.78199999999993" y="875.0719999999999">2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.class_members</node>
+    <node x="755.044161989343" y="332.15334081705157">2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.items</node>
+    <node x="1066.144580994671" y="467.6966704085259">2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.missions</node>
+    <node x="213.0682958436944" y="536.24">2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.user_roles</node>
+  </nodes>
+  <notes />
+  <edges>
+    <edge source="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.user_activities" target="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.activities" relationship="REFERENCES">
+      <point x="-61.75" y="-104.0" />
+      <point x="287.75199999999995" y="1341.536" />
+      <point x="263.75199999999995" y="1341.536" />
+      <point x="0.0" y="128.0" />
+    </edge>
+    <edge source="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.class_members" target="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.classes" relationship="REFERENCES">
+      <point x="-61.75" y="-92.0" />
+      <point x="0.0" y="104.0" />
+    </edge>
+    <edge source="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.user_items" target="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.items" relationship="REFERENCES">
+      <point x="60.5" y="-68.0" />
+      <point x="833.0291619893428" y="788.0" />
+      <point x="876.044161989343" y="788.0" />
+      <point x="0.0" y="104.0" />
+    </edge>
+    <edge source="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.class_members" target="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.users" relationship="REFERENCES">
+      <point x="61.75" y="-92.0" />
+      <point x="36.468000000000075" y="729.376" />
+      <point x="429.228623232678" y="729.376" />
+      <point x="-77.57970074600757" y="140.24665918293528" />
+    </edge>
+    <edge source="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.user_items" target="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.users" relationship="REFERENCES">
+      <point x="-60.5" y="-68.0" />
+      <point x="712.0291619893428" y="802.4" />
+      <point x="570.0286232326176" y="802.4" />
+      <point x="63.22029925393207" y="140.44665918292816" />
+    </edge>
+    <edge source="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.document_chunks" target="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.documents" relationship="REFERENCES">
+      <point x="0.0" y="-116.0" />
+      <point x="631.011" y="1345.3124999999998" />
+      <point x="0.0" y="140.0" />
+    </edge>
+    <edge source="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.user_roles" target="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.users" relationship="REFERENCES">
+      <point x="-0.10727261101044405" y="-43.16252106572051" />
+      <point x="268.46102323268394" y="680.4494789342793" />
+      <point x="401.59828291296617" y="680.4494789342793" />
+      <point x="401.59828291296617" y="576.1533408170515" />
+      <point x="61.75" y="140.0" />
+    </edge>
+    <edge source="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.user_missions" target="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.missions" relationship="REFERENCES">
+      <point x="67.84613598784858" y="115.21500000000174" />
+      <point x="1187.8607169825198" y="832.8870852042629" />
+      <point x="1187.144580994671" y="832.8870852042629" />
+      <point x="0.0" y="128.0" />
+    </edge>
+    <edge source="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.user_game_scores" target="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.users" relationship="REFERENCES">
+      <point x="-90.3592830174332" y="88.92124999999919" />
+      <point x="1386.9007169825666" y="1103.2349999999813" />
+      <point x="803.8425000000008" y="1103.2349999999813" />
+      <point x="803.8425000000008" y="918.6366704085258" />
+      <point x="525.4607169825628" y="918.6366704085258" />
+      <point x="18.652393003877194" y="137.6466591829498" />
+    </edge>
+    <edge source="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.activities" target="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.users" relationship="REFERENCES">
+      <point x="0.0" y="-128.0" />
+      <point x="263.75199999999995" y="796.42" />
+      <point x="457.228623232678" y="796.42" />
+      <point x="-49.579700746007575" y="139.4466591829352" />
+    </edge>
+    <edge source="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.games" target="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.difficulty_rewards" relationship="REFERENCES">
+      <point x="0.0" y="-104.0" />
+      <point x="1537.7599999999998" y="360.29999999999995" />
+      <point x="1362.52" y="360.29999999999995" />
+      <point x="0.0" y="44.0" />
+    </edge>
+    <edge source="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.documents" target="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.users" relationship="REFERENCES">
+      <point x="0.0" y="-140.0" />
+      <point x="631.011" y="953.7599999999998" />
+      <point x="503.62862323267404" y="953.7599999999998" />
+      <point x="-3.1797007460115196" y="140.2466591829138" />
+    </edge>
+    <edge source="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.user_missions" target="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.users" relationship="REFERENCES">
+      <point x="-61.75" y="-116.0" />
+      <point x="1058.2645809946712" y="882.3999999999999" />
+      <point x="550.4207169825627" y="882.3999999999999" />
+      <point x="43.612393003877116" y="140.20665918294975" />
+    </edge>
+    <edge source="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.user_activities" target="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.users" relationship="REFERENCES">
+      <point x="61.75" y="-104.0" />
+      <point x="411.25199999999995" y="1143.2000000000003" />
+      <point x="480.4286232326779" y="1143.2000000000003" />
+      <point x="-26.379700746007643" y="138.64665918293525" />
+    </edge>
+    <edge source="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.user_game_scores" target="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.games" relationship="REFERENCES">
+      <point x="60.5" y="-92.0" />
+      <point x="0.0" y="104.0" />
+    </edge>
+    <edge source="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.missions" target="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.difficulty_rewards" relationship="REFERENCES">
+      <point x="0.0" y="-128.0" />
+      <point x="1187.144580994671" y="360.0" />
+      <point x="1362.52" y="360.0" />
+      <point x="0.0" y="44.0" />
+    </edge>
+    <edge source="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.users" target="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.schools" relationship="REFERENCES">
+      <point x="0.0" y="-140.0" />
+      <point x="506.80832397868556" y="244.0" />
+      <point x="-58.771376767323204" y="244.0" />
+      <point x="28.26062323267672" y="105.9999999999992" />
+    </edge>
+    <edge source="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.classes" target="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.schools" relationship="REFERENCES">
+      <point x="0.0" y="-104.0" />
+      <point x="0.0" y="104.0" />
+    </edge>
+    <edge source="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.user_profiles" target="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.users" relationship="REFERENCES">
+      <point x="0.0" y="-116.0" />
+      <point x="712.0291619893428" y="607.2" />
+      <point x="623.6286232326565" y="607.2" />
+      <point x="116.82029925397097" y="140.4466591829393" />
+    </edge>
+    <edge source="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.user_roles" target="2b8e2cfa-842c-4432-b5fa-c8d5d8c49611.TABLE:eduquestdb.public.roles" relationship="REFERENCES">
+      <point x="-0.10767261101011627" y="-36.56560000000047" />
+      <point x="268.46062323268427" y="455.07667040852573" />
+      <point x="268.5682958436944" y="455.07667040852573" />
+      <point x="0.0" y="44.0" />
+    </edge>
+  </edges>
+  <settings layout="Hierarchic Compact" zoom="1.0000000000000022" showDependencies="false" x="-185.8111580174783" y="817.7431250000031" />
+  <SelectedNodes />
+  <Categories>
+    <Category>Columns</Category>
+    <Category>Comments</Category>
+    <Category>Key columns</Category>
+    <Category>Virtual foreign keys</Category>
+  </Categories>
+</Diagram>
+

@@ -1,15 +1,14 @@
 package com.eduquest.springbackend.controller;
 
-import com.eduquest.springbackend.model.AppUser;
+import com.eduquest.springbackend.dto.LoginRequest;
+import com.eduquest.springbackend.dto.RegisterRequest;
 import com.eduquest.springbackend.service.AuthService;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
-import java.util.Map;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -20,32 +19,21 @@ public class AuthController {
         this.authService = authService;
     }
 
-    public record RegisterRequest(@NotBlank @Size(max = 20) String username,
-                                  @NotBlank @Email @Size(max = 50) String email,
-                                  @NotBlank @Size(max = 255) String password) {}
-    public record LoginRequest(@NotBlank @Size(max = 20) String username,
-                               @NotBlank @Size(max = 255) String password) {}
-
+    /**
+     * Registers a new user in the system.
+     * Accepts user registration details and creates a new account.
+     */
     @PostMapping("/register")
     public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest req) {
-        AppUser savedUser = authService.register(new AppUser(req.username(), req.email(), req.password()));
-        return ResponseEntity.ok(Map.of(
-                "id", savedUser.getId(),
-                "username", savedUser.getUsername(),
-                "email", savedUser.getEmail()));
+        return ResponseEntity.ok(authService.register(req));
     }
 
+    /**
+     * Authenticates a user and returns authentication token with user details.
+     * Accepts login credentials and validates them against the system.
+     */
     @PostMapping("/login")
-    public ResponseEntity<?>login(@Valid @RequestBody LoginRequest req) {
-        String token = authService.login(req.username(), req.password());
-        return ResponseEntity.ok(Map.of(
-                "token", token,
-                "user", req.username()
-        ));
-    }
-
-    @GetMapping("/test-password")
-    public String testPassword() {
-        return authService.testEncoder("password");
+    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest req) {
+        return ResponseEntity.ok(authService.loginAndGetUser(req.username().trim(), req.password()));
     }
 }

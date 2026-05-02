@@ -1,7 +1,12 @@
 package com.eduquest.springbackend.model;
 
+import com.eduquest.springbackend.enums.EducatorStatus;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Min;
+import org.hibernate.annotations.Generated;
+import org.hibernate.generator.EventType;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -9,7 +14,6 @@ import java.util.List;
 @Entity
 @Table(name = "users")
 public class AppUser {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -17,11 +21,41 @@ public class AppUser {
     @Column(nullable = false, length = 20, unique = true)
     private String username;
 
-    @Column(nullable = false, length = 50, unique = true)
+    @Column(nullable = false, unique = true)
     private String email;
 
     @Column(nullable = false)
     private String password;
+
+    @Column(nullable = false, insertable = false)
+    @Generated(event = {EventType.INSERT, EventType.UPDATE})
+    @Min(value = 0, message = "User points must be at least 0")
+    private Integer points = 0;
+
+    @Column(nullable = false)
+    private Boolean isActive = true;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 10)
+    private EducatorStatus educatorStatus = EducatorStatus.NONE;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "school_id")
+    private School school;
+
+    @Column(nullable = false,
+            insertable = false,
+            updatable = false,
+            columnDefinition = "TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP")
+    @Generated(event = {EventType.INSERT})
+    private Instant createdAt;
+
+    @Column(nullable = false,
+            insertable = false,
+            updatable = false,
+            columnDefinition = "TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP")
+    @Generated(event = {EventType.INSERT})
+    private Instant updatedAt;
 
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
@@ -34,16 +68,20 @@ public class AppUser {
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<UserGameScore> userGameScores = new ArrayList<>();
 
-    @ManyToMany
-    @JoinTable(
-            name = "user_missions",
-            joinColumns = @JoinColumn(name = "user_id"),
-            inverseJoinColumns = @JoinColumn(name = "mission_id")
-    )
-    private Collection<Mission> missions = new ArrayList<>();
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<UserMission> userMissions = new ArrayList<>();
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<UserExp> userExps = new ArrayList<>();
+    private List<UserItem> userItems = new ArrayList<>();
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<CourseMember> courseMemberships = new ArrayList<>();
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<UserActivity> userActivities = new ArrayList<>();
+
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private UserProfile userProfile;
 
     public AppUser() {}
 
@@ -85,6 +123,46 @@ public class AppUser {
         this.password = password;
     }
 
+    public Integer getPoints() {
+        return points;
+    }
+
+    public void setPoints(Integer points) {
+        this.points = points;
+    }
+
+    public Boolean getActive() {
+        return isActive;
+    }
+
+    public void setActive(Boolean active) {
+        isActive = active;
+    }
+
+    public EducatorStatus getEducatorStatus() {
+        return educatorStatus;
+    }
+
+    public void setEducatorStatus(EducatorStatus educatorStatus) {
+        this.educatorStatus = educatorStatus;
+    }
+
+    public School getSchool() {
+        return school;
+    }
+
+    public void setSchool(School school) {
+        this.school = school;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
+
     public Collection<Role> getRoles() {
         return roles;
     }
@@ -101,19 +179,43 @@ public class AppUser {
         this.userGameScores = userGameScores;
     }
 
-    public Collection<Mission> getMissions() {
-        return missions;
+    public List<UserMission> getUserMissions() {
+        return userMissions;
     }
 
-    public void setMissions(Collection<Mission> missions) {
-        this.missions = missions;
+    public void setUserMissions(List<UserMission> userMissions) {
+        this.userMissions = userMissions;
     }
 
-    public List<UserExp> getUserExps() {
-        return userExps;
+    public List<UserItem> getUserItems() {
+        return userItems;
     }
 
-    public void setUserExps(List<UserExp> userExps) {
-        this.userExps = userExps;
+    public void setUserItems(List<UserItem> userItems) {
+        this.userItems = userItems;
+    }
+
+    public List<CourseMember> getCourseMemberships() {
+        return courseMemberships;
+    }
+
+    public void setCourseMemberships(List<CourseMember> courseMemberships) {
+        this.courseMemberships = courseMemberships;
+    }
+
+    public List<UserActivity> getUserActivities() {
+        return userActivities;
+    }
+
+    public void setUserActivities(List<UserActivity> userActivities) {
+        this.userActivities = userActivities;
+    }
+
+    public UserProfile getUserProfile() {
+        return userProfile;
+    }
+
+    public void setUserProfile(UserProfile userProfile) {
+        this.userProfile = userProfile;
     }
 }
