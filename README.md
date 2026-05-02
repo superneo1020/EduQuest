@@ -61,23 +61,23 @@ cd springbackend
 ```
 
 4. **Database Setup**
-```bash
+```sql
 -- Create the database
 CREATE DATABASE eduquestdb;
 ```
-```bash
+```sql
 -- Create the application user
 CREATE USER eduquestuser WITH PASSWORD 'eduquestpass';
 ```
-```bash
+```sql
 -- Grant access to the database
 GRANT ALL PRIVILEGES ON DATABASE eduquestdb TO eduquestuser;
 ```
-```bash
+```sql
 -- Connect to the database to configure schema permissions
 \c eduquestdb
 ```
-```bash
+```sql
 -- Ensure the user can create tables in the public schema
 GRANT ALL PRIVILEGES ON SCHEMA public TO eduquestuser;
 ```
