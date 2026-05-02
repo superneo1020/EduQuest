@@ -40,9 +40,20 @@ cd springbackend
 
 4. **Database Setup**
 ```bash
-# Create PostgreSQL database
-createdb eduquestdb
-# User: eduquestuser, Password: eduquestpass
+-- Create the database
+CREATE DATABASE eduquestdb;
+
+-- Create the application user
+CREATE USER eduquestuser WITH PASSWORD 'eduquestpass';
+
+-- Grant access to the database
+GRANT ALL PRIVILEGES ON DATABASE eduquestdb TO eduquestuser;
+
+-- Connect to the database to configure schema permissions
+\c eduquestdb
+
+-- Ensure the user can create tables in the public schema
+GRANT ALL PRIVILEGES ON SCHEMA public TO your_user;
 ```
 
 ## Testing Scenarios for Professor
