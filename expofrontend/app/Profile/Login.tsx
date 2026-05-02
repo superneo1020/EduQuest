@@ -9,7 +9,8 @@ import {
     KeyboardAvoidingView,
     Platform,
     Animated,
-    Image
+    Image,
+    ScrollView, // 1. 引入 ScrollView
 } from "react-native";
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "expo-router";
@@ -24,10 +25,10 @@ export default function Login() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const { signIn } = useAuth();
-    
+
     // Animation values
     const logoScale = useRef(new Animated.Value(1)).current;
-    
+
     useEffect(() => {
         const pulseAnimation = Animated.sequence([
             Animated.timing(logoScale, {
@@ -41,10 +42,10 @@ export default function Login() {
                 useNativeDriver: true,
             }),
         ]);
-        
+
         const loopAnimation = Animated.loop(pulseAnimation);
         loopAnimation.start();
-        
+
         return () => loopAnimation.stop();
     }, []);
 
@@ -93,75 +94,86 @@ export default function Login() {
             setLoading(false);
         }
     };
-    
+
     return (
         <SafeAreaView style={styles.container}>
-            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{flex: 1}}>
-                <View style={styles.inner}>
-                    {/* Header Section */}
-                    <View style={styles.header}>
-                        <Animated.View style={[styles.logoCircle, { transform: [{ scale: logoScale }] }]}>
-                            <Image 
-                                source={require('../../assets/images/icon/EduQuest_icon.png')} 
-                                style={styles.logoImage}
-                                resizeMode="contain"
-                            />
-                        </Animated.View>
-                        <Text style={styles.title}>EduQuest</Text>
-                        <Text style={styles.subtitle}>Welcome Back</Text>
-                    </View>
-
-                    {/* Form Section */}
-                    <View style={styles.form}>
-                        <View style={styles.inputWrapper}>
-                            <View style={styles.iconContainer}>
-                                <User size={20} color="#64748B" />
-                            </View>
-                            <TextInput
-                                placeholder="Username"
-                                value={username}
-                                onChangeText={setUsername}
-                                style={styles.input}
-                                placeholderTextColor="#94A3B8"
-                                autoCapitalize="none"
-                            />
+            <KeyboardAvoidingView
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                style={{ flex: 1 }}
+                keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20} // 調整偏移量
+            >
+                {/* 2. 將原本的 View 換成 ScrollView，使內容可滾動 */}
+                <ScrollView
+                    contentContainerStyle={styles.scrollContainer}
+                    showsVerticalScrollIndicator={false} // 可選：隱藏滾動條
+                    bounces={false} // 可選：避免橡皮筋效果，視需求調整
+                >
+                    <View style={styles.inner}>
+                        {/* Header Section */}
+                        <View style={styles.header}>
+                            <Animated.View style={[styles.logoCircle, { transform: [{ scale: logoScale }] }]}>
+                                <Image
+                                    source={require('../../assets/images/icon/EduQuest_icon.png')}
+                                    style={styles.logoImage}
+                                    resizeMode="contain"
+                                />
+                            </Animated.View>
+                            <Text style={styles.title}>EduQuest</Text>
+                            <Text style={styles.subtitle}>Welcome Back</Text>
                         </View>
 
-                        <View style={styles.inputWrapper}>
-                            <View style={styles.iconContainer}>
-                                <Lock size={20} color="#64748B" />
+                        {/* Form Section */}
+                        <View style={styles.form}>
+                            <View style={styles.inputWrapper}>
+                                <View style={styles.iconContainer}>
+                                    <User size={20} color="#64748B" />
+                                </View>
+                                <TextInput
+                                    placeholder="Username"
+                                    value={username}
+                                    onChangeText={setUsername}
+                                    style={styles.input}
+                                    placeholderTextColor="#94A3B8"
+                                    autoCapitalize="none"
+                                />
                             </View>
-                            <TextInput
-                                placeholder="Password"
-                                value={password}
-                                onChangeText={setPassword}
-                                style={styles.input}
-                                secureTextEntry
-                                placeholderTextColor="#94A3B8"
-                            />
+
+                            <View style={styles.inputWrapper}>
+                                <View style={styles.iconContainer}>
+                                    <Lock size={20} color="#64748B" />
+                                </View>
+                                <TextInput
+                                    placeholder="Password"
+                                    value={password}
+                                    onChangeText={setPassword}
+                                    style={styles.input}
+                                    secureTextEntry
+                                    placeholderTextColor="#94A3B8"
+                                />
+                            </View>
+
+                            {error && <Text style={styles.errorText}>{error}</Text>}
+
+                            <TouchableOpacity
+                                style={[styles.loginButton, (!username || !password) && styles.disabledBtn]}
+                                onPress={handleLogin}
+                                disabled={!username || !password || loading}
+                            >
+                                {loading ? (
+                                    <ActivityIndicator color="#FFF" size="large" />
+                                ) : (
+                                    <Text style={styles.loginText}>Sign In</Text>
+                                )}
+                            </TouchableOpacity>
                         </View>
 
-                        {error && <Text style={styles.errorText}>{error}</Text>}
-
-                        <TouchableOpacity
-                            style={[styles.loginButton, (!username || !password) && styles.disabledBtn]}
-                            onPress={handleLogin}
-                            disabled={!username || !password || loading}
-                        >
-                            {loading ? (
-                                <ActivityIndicator color="#FFF" size="large" />
-                            ) : (
-                                <Text style={styles.loginText}>Sign In</Text>
-                            )}
+                        <TouchableOpacity onPress={() => router.push("/Profile/Register")}>
+                            <Text style={styles.registerText}>
+                                New to EduQuest? <Text style={styles.registerLink}>Create Account</Text>
+                            </Text>
                         </TouchableOpacity>
                     </View>
-
-                    <TouchableOpacity onPress={() => router.push("/Profile/Register")}>
-                        <Text style={styles.registerText}>
-                            New to EduQuest? <Text style={styles.registerLink}>Create Account</Text>
-                        </Text>
-                    </TouchableOpacity>
-                </View>
+                </ScrollView>
             </KeyboardAvoidingView>
         </SafeAreaView>
     );
@@ -171,6 +183,10 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#F8F9FA',
+    },
+    scrollContainer: {
+        flexGrow: 1, // 確保 ScrollView 內容可以擴展，使內容少時也能置中（配合 inner 的 justifyContent: "center"）
+        justifyContent: 'center',
     },
     inner: {
         flex: 1,
