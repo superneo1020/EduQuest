@@ -155,7 +155,7 @@ public class EducatorController {
             @PathVariable Long courseId,
             @PageableDefault(size = 100) Pageable pageable
     ) {
-        return ResponseEntity.ok(educatorAiAnalysisService.analysisRecentProgress(courseId, pageable));
+        return ResponseEntity.ok(educatorAiAnalysisService.analysisRecentProgressForCourse(courseId, pageable));
     }
 
     /**
@@ -191,18 +191,21 @@ public class EducatorController {
     }
 
     /**
-     * Generates an AI analysis of recent performance trends of a specific game for a specific student.
+     * Generates an AI analysis of recent performance trends of a specific game (or all games) for a specific student.
      */
-    @GetMapping("student/{userId}/game/{gameId}/result")
+    @GetMapping({"student/{userId}/game/result", "student/{userId}/game/{gameId}/result"})
     @PreAuthorize("@userSecurity.isBothUserSameSchool(#userId)")
     public ResponseEntity<?> aiAnalysisStudentGameScore(
             @PathVariable Long userId,
-            @PathVariable Long gameId,
+            @PathVariable(required = false) Long gameId,
             @PageableDefault(
+                    size = 100,
                     sort = "createdAt",
                     direction = Sort.Direction.DESC
             ) Pageable pageable
     ) {
-        return ResponseEntity.ok(educatorAiAnalysisService.analyzeStudentGameProgress(userId, gameId, pageable));
+        return gameId != null
+                ? ResponseEntity.ok(educatorAiAnalysisService.analyzeStudentGameProgress(userId, gameId, pageable))
+                : ResponseEntity.ok(educatorAiAnalysisService.analyzeStudentGameProgress(userId, pageable));
     }
 }

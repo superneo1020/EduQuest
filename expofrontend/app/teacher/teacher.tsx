@@ -124,14 +124,18 @@ export default function TeacherDashboard() {
     const isTablet = windowWidth > 600;
 
     useEffect(() => {
-        // 檢查用戶是否為教師角色
-        if (user && !user.roles?.includes('teacher')) {
+        // 檢查用戶是否為教師角色 (支持 ROLE_EDUCATOR, EDUCATOR, teacher 格式)
+        const isTeacher = user?.roles?.some((role: string) =>
+            role === 'ROLE_EDUCATOR' || role === 'EDUCATOR' || role === 'teacher'
+        );
+
+        if (user && !isTeacher) {
             console.log('User is not a teacher, redirecting to home');
             router.replace('/index_with_teacher');
             return;
         }
-        
-        if (user && user.roles?.includes('teacher')) {
+
+        if (user && isTeacher) {
             loadData();
         }
     }, [token, user]);
@@ -533,8 +537,9 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
             const response = await axios.post(`${getApiBaseUrl()}/api/auth/register`, {
                 username: newStudent.username,
                 email: newStudent.email,
-                password: 'defaultPassword123', // You may want to generate or ask for this
+                password: 'defaultPassword123', // Default password for new students
                 isEducator: false, // This is a student, not educator
+                schoolName: user?.school || '', // Include teacher's school name
             }, {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -556,7 +561,7 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
                 setFilteredStudents([newStudentData, ...filteredStudents]);
                 setShowAddModal(false);
                 setNewStudent({});
-                Alert.alert('Success', 'Student added successfully');
+                Alert.alert('Success', 'Student added successfully\n\nDefault password: defaultPassword123\n\nPlease share this password with the student for their first login.');
             }
         } catch (error) {
             console.error('Error adding student:', error);
@@ -1096,13 +1101,16 @@ ${student.performance.averageScore < 70 ? '🔴 Immediate intervention recommend
                                     placeholder="Enter email"
                                     keyboardType="email-address"
                                 />
-                                <Text style={styles.inputLabel}>Initial Points</Text>
+
+                                <Text style={styles.inputLabel}>School Name</Text>
                                 <TextInput
                                     style={styles.input}
-                                    value={String(newStudent.points || 0)}
-                                    onChangeText={(text) => setNewStudent({ ...newStudent, points: parseInt(text) || 0 })}
-                                    keyboardType="numeric"
+                                    value={user?.school || ''}
+                                    editable={false}
+                                    placeholder="Your school will be assigned automatically"
                                 />
+
+                                <Text style={styles.inputLabel}>Default password for new students is 'defaultPassword123'</Text>
                             </View>
                             <TouchableOpacity style={styles.saveBtn} onPress={addStudent}>
                                 <Text style={styles.saveBtnText}>Add Student</Text>
