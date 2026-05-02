@@ -53,7 +53,7 @@ GRANT ALL PRIVILEGES ON DATABASE eduquestdb TO eduquestuser;
 \c eduquestdb
 
 -- Ensure the user can create tables in the public schema
-GRANT ALL PRIVILEGES ON SCHEMA public TO your_user;
+GRANT ALL PRIVILEGES ON SCHEMA public TO eduquestuser;
 ```
 
 ## Testing Scenarios for Professor
