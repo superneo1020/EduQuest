@@ -124,14 +124,18 @@ export default function TeacherDashboard() {
     const isTablet = windowWidth > 600;
 
     useEffect(() => {
-        // 檢查用戶是否為教師角色
-        if (user && !user.roles?.includes('teacher')) {
+        // 檢查用戶是否為教師角色 (支持 ROLE_EDUCATOR, EDUCATOR, teacher 格式)
+        const isTeacher = user?.roles?.some((role: string) =>
+            role === 'ROLE_EDUCATOR' || role === 'EDUCATOR' || role === 'teacher'
+        );
+
+        if (user && !isTeacher) {
             console.log('User is not a teacher, redirecting to home');
             router.replace('/index_with_teacher');
             return;
         }
-        
-        if (user && user.roles?.includes('teacher')) {
+
+        if (user && isTeacher) {
             loadData();
         }
     }, [token, user]);
