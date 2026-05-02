@@ -84,7 +84,7 @@ export default function StudentClasses() {
             if (isNaN(date.getTime())) {
                 return 'Unknown Date';
             }
-            return date.toLocaleDateString('zh-TW', {
+            return date.toLocaleDateString('en-US', {
                 year: 'numeric',
                 month: 'short',
                 day: 'numeric'
