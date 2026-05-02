@@ -66,10 +66,10 @@ class Settings(BaseSettings):
     port: int = 8000
 
     # Gemini Configuration (REQUIRED for LLM)
-    gemini_api_key: str = "AQ.Ab8RN6LRCyCveOXOfmbpbpGofO_WqyYEjtRRjhGjNvGvpClqRw"
-    gemini_model: str = "gemini-2.5-flash-lite"
-    gemini_location: str = "us-central1"
-    gemini_project: str = "mimetic-campus-488707-k7"
+    gemini_api_key: str = "api_key(original_one_deprecated)"
+    gemini_model: str = "model(original_one_deprecated)"
+    gemini_location: str = "location(original_one_deprecated)"
+    gemini_project: str = "project_id(original_one_deprecated)"
 
     # Ollama Configuration for Embeddings
     ollama_host: str = "http://localhost:11434"
