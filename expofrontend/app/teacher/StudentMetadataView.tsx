@@ -197,6 +197,23 @@ export function StudentMetadataView({ visible, onClose, student, token }: Studen
         });
     };
 
+    const getGameIcon = (gameName: string) => {
+        const gameIcons: { [key: string]: string } = {
+            'Speed Calculation': '🧮',
+            'AI Math Adventure': '🤖',
+            'Listening Game': '🎧',
+            'Writing Game': '✍️',
+            'Sentence Reorder': '📝',
+            'Animal Catcher': '🦁',
+            'Human organs': '🫀',
+            'Animal Classification': '🐾',
+            'Body Parts Matching': '🦴',
+            'ChineseGame': '🀄',
+            'ChineseSentenceGame': '📖'
+        };
+        return gameIcons[gameName] || '🎮';
+    };
+
     const analyzeSelectedGameWithAI = async () => {
         if (!selectedGameForAnalysis) {
             Alert.alert('Error', 'Please select a game');
@@ -264,10 +281,10 @@ export function StudentMetadataView({ visible, onClose, student, token }: Studen
         return result;
     };
 
-    const renderGameDetails = (metadata: GameMetadata) => {
+    const renderGameDetails = (metadata: GameMetadata, gameScore: number) => {
         const correctCount = metadata.questions.filter(q => q.isCorrect).length;
         const totalQuestions = metadata.questions.length;
-        const totalScore = metadata.questions.reduce((sum, q) => sum + (q.score || 0), 0);
+        const totalScore = gameScore; // Use the actual game score
         const totalTime = metadata.questions.reduce((sum, q) => sum + (q.timeSpent || 0), 0);
 
         return (
@@ -399,7 +416,7 @@ export function StudentMetadataView({ visible, onClose, student, token }: Studen
                                 >
                                     <View style={styles.gameCardHeader}>
                                         <View style={styles.gameIcon}>
-                                            <Gamepad2 size={20} color="#6C5CE7" />
+                                            <Text style={styles.gameIconText}>{getGameIcon(record.gameName)}</Text>
                                         </View>
                                         <View style={styles.gameCardInfo}>
                                             <Text style={styles.gameCardName}>{record.gameName}</Text>
@@ -439,7 +456,7 @@ export function StudentMetadataView({ visible, onClose, student, token }: Studen
                                 <X size={24} color="#333" />
                             </TouchableOpacity>
                         </View>
-                        {selectedGame && renderGameDetails(selectedGame.metadata)}
+                        {selectedGame && renderGameDetails(selectedGame.metadata, selectedGame.scores)}
                     </SafeAreaView>
                 </Modal>
 
@@ -463,7 +480,7 @@ export function StudentMetadataView({ visible, onClose, student, token }: Studen
                                             onPress={() => setSelectedGameForAnalysis(gameName)}
                                         >
                                             <View style={styles.gameSelectionItemContent}>
-                                                <Gamepad2 size={20} color="#6C5CE7" />
+                                                <Text style={styles.gameSelectionItemIcon}>{getGameIcon(gameName)}</Text>
                                                 <Text style={styles.gameSelectionItemText}>{gameName}</Text>
                                             </View>
                                             <View style={[styles.gameSelectionRadio, selectedGameForAnalysis === gameName && styles.gameSelectionRadioSelected]}>
@@ -585,6 +602,9 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginRight: 12,
     },
+    gameIconText: {
+        fontSize: 20,
+    },
     gameCardInfo: { flex: 1 },
     gameCardName: { fontSize: 16, fontWeight: '700', color: '#2D3436', marginBottom: 2 },
     gameCardDate: { fontSize: 12, color: '#999' },
@@ -674,6 +694,7 @@ const styles = StyleSheet.create({
     },
     gameSelectionItemSelected: { backgroundColor: '#F0F4FF', borderColor: '#6C5CE7' },
     gameSelectionItemContent: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    gameSelectionItemIcon: { fontSize: 20 },
     gameSelectionItemText: { fontSize: 16, fontWeight: '500', color: '#2D3436' },
     gameSelectionRadio: { width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: '#ddd', justifyContent: 'center', alignItems: 'center' },
     gameSelectionRadioSelected: { borderColor: '#6C5CE7' },

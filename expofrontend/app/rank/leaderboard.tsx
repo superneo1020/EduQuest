@@ -26,6 +26,24 @@ const GAME_CATEGORIES = [
 
 const { width } = Dimensions.get('window');
 
+// Game icon mapping
+const getGameIcon = (gameName: string) => {
+    const gameIcons: { [key: string]: string } = {
+        'Speed Calculation': '🧮',
+        'AI Math Adventure': '🤖',
+        'Listening Game': '🎧',
+        'Writing Game': '✍️',
+        'Sentence Reorder': '📝',
+        'Animal Catcher': '🦁',
+        'Human organs': '🫀',
+        'Animal Classification': '🐾',
+        'Body Parts Matching': '🦴',
+        'ChineseGame': '🀄',
+        'ChineseSentenceGame': '📖'
+    };
+    return gameIcons[gameName] || '🎮';
+};
+
 // 隨機頭像顏色（根據用戶名生成固定顏色）
 const getAvatarColor = (username: string) => {
     const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'];
@@ -259,6 +277,12 @@ const LeaderboardScreen = () => {
                             onPress={() => setSelectedGame(game)}
                         >
                             <Text style={[
+                                styles.categoryIcon,
+                                selectedGame === game && styles.categoryIconActive
+                            ]}>
+                                {getGameIcon(game)}
+                            </Text>
+                            <Text style={[
                                 styles.categoryText,
                                 selectedGame === game && styles.categoryTextActive
                             ]}>
@@ -322,7 +346,9 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     categoryButtonActive: { backgroundColor: '#FF6B6B', transform: [{ scale: 1.02 }] },
-    categoryText: { color: '#FF8C42', fontWeight: 'bold', fontSize: 14 },
+    categoryIcon: { fontSize: 24, marginBottom: 4 },
+    categoryIconActive: { fontSize: 24, marginBottom: 4 },
+    categoryText: { color: '#FF8C42', fontWeight: 'bold', fontSize: 12 },
     categoryTextActive: { color: '#FFF', fontWeight: 'bold' },
 
     listContent: { paddingHorizontal: 16, paddingBottom: 20 },
