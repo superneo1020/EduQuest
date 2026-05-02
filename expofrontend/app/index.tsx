@@ -31,7 +31,8 @@ import {
     GraduationCap,
     Rocket,
     ShoppingCart,
-    Users
+    Users,
+    BookOpen
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/src/auth/AuthContext';
@@ -180,9 +181,9 @@ export default function LandscapeOptimizedHome() {
 
     const gameButtons = [
         { id: 1, title: 'Math', icon: Calculator, color: '#4CAF50', route: '/games/math/math', pos: { x: '20%', y: '25%' } },
-        { id: 2, title: 'Language', icon: Languages, color: '#2196F3', route: '/games/english/language', pos: { x: '70%', y: '20%' } },
+        { id: 2, title: 'Language', icon: BookOpen, color: '#2196F3', route: '/games/english/language', pos: { x: '70%', y: '20%' } },
         { id: 3, title: 'Science', icon: Atom, color: '#FF9800', route: '/games/science', pos: { x: '25%', y: '65%' } },
-        { id: 4, title: 'Chinese', icon: Brain, color: '#9C27B0', route: '/games/chinese/chinese', pos: { x: '75%', y: '60%' } },
+        { id: 4, title: 'Chinese', icon: Languages, color: '#9C27B0', route: '/games/chinese/chinese', pos: { x: '75%', y: '60%' } },
     ];
 
     return (
