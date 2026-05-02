@@ -287,12 +287,10 @@ export default function StudentClasses() {
                                                     {getRoleDisplay(member.roleInClass)}
                                                 </Text>
                                             </View>
-                                            {member.points !== undefined && (
-                                                <View style={styles.memberPoints}>
-                                                    <Award size={16} color="#FFD700" />
-                                                    <Text style={styles.memberPointsText}>{member.points}</Text>
-                                                </View>
-                                            )}
+                                            <View style={styles.memberPoints}>
+                                                <Award size={16} color="#FFD700" />
+                                                <Text style={styles.memberPointsText}>{member.points || 0}</Text>
+                                            </View>
                                         </View>
                                     </View>
                                 ))}
