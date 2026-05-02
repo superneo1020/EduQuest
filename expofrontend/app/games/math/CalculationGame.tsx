@@ -376,7 +376,17 @@ export default function CalculationGame() {
                 godzillaScale.value = withSequence(withTiming(1.3, { duration: 100 }), withSpring(1));
                 setFloatingText({ id: Date.now(), text: 'HIT!', color: '#FFD700' });
             }, 300);
-            setBossHP(prev => Math.max(0, prev - 15));
+            setBossHP(prev => {
+                const newHP = Math.max(0, prev - 15);
+                if (newHP <= 0) {
+                    setGameActive(false);
+                    setTimeout(() => {
+                        stopTimerAndRecord();
+                        setGameEnded(true);
+                    }, 600);
+                }
+                return newHP;
+            });
             setScore(prev => prev + 10 + combo);
             setCombo(prev => prev + 1);
             setTimeout(nextQuestion, 800);
