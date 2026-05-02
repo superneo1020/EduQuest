@@ -149,7 +149,7 @@ class StudentService {
         // 處理後端返回格式: { items: [...], total: N, isEmpty: false }
         if (data.items && Array.isArray(data.items)) {
             return data.items.map((item: any) => ({
-                id: item.id,
+                id: item.userId, // Backend uses userId, frontend expects id
                 username: item.username,
                 email: item.email,
                 roles: item.roles || [],
