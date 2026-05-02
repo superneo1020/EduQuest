@@ -81,6 +81,10 @@ GRANT ALL PRIVILEGES ON DATABASE eduquestdb TO eduquestuser;
 -- Ensure the user can create tables in the public schema
 GRANT ALL PRIVILEGES ON SCHEMA public TO eduquestuser;
 ```
+```sql
+-- This only needs to be run once per database after installed pgvector
+CREATE EXTENSION IF NOT EXISTS vector;
+```
 
 5. **Ollama Setup**
 ```bash
