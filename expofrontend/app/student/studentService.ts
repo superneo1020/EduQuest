@@ -18,10 +18,10 @@ export interface ClassMember {
     id: number;
     username: string;
     email?: string;
-    roles: string[];
     points?: number;
-    joinedAt?: string;
-    roleInClass?: string;
+    createdAt?: string;
+    updatedAt?: string;
+    roleInClass: string;
 }
 
 class StudentService {

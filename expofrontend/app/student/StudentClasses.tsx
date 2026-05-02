@@ -94,15 +94,15 @@ export default function StudentClasses() {
         }
     };
 
-    const getRoleDisplay = (roles: string[]) => {
-        if (roles.some(role => role.includes('EDUCATOR') || role === 'teacher')) {
+    const getRoleDisplay = (role: string) => {
+        if (['ASSISTANT', 'HEAD_TEACHER', 'TEACHER'].includes(role)) {
             return 'Teacher';
         }
         return 'Student';
     };
 
-    const getRoleColor = (roles: string[]) => {
-        if (roles.some(role => role.includes('EDUCATOR') || role === 'teacher')) {
+    const getRoleColor = (role: string) => {
+        if (['ASSISTANT', 'HEAD_TEACHER', 'TEACHER'].includes(role)) {
             return '#6C5CE7';
         }
         return '#4CAF50';
@@ -271,9 +271,9 @@ export default function StudentClasses() {
                                                 {member.email && (
                                                     <Text style={styles.memberEmail}>{member.email}</Text>
                                                 )}
-                                                {member.joinedAt && (
+                                                {member.createdAt && (
                                                     <Text style={styles.memberJoined}>
-                                                        Joined {formatDate(member.joinedAt)}
+                                                        Joined {formatDate(member.createdAt)}
                                                     </Text>
                                                 )}
                                             </View>
@@ -282,9 +282,9 @@ export default function StudentClasses() {
                                             <View style={styles.memberRole}>
                                                 <Text style={[
                                                     styles.memberRoleText,
-                                                    { color: getRoleColor(member.roles) }
+                                                    { color: getRoleColor(member.roleInClass) }
                                                 ]}>
-                                                    {getRoleDisplay(member.roles)}
+                                                    {getRoleDisplay(member.roleInClass)}
                                                 </Text>
                                             </View>
                                             {member.points !== undefined && (
