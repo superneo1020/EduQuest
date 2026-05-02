@@ -9,6 +9,7 @@ import java.time.Instant;
  * @param userId
  * @param username
  * @param email
+ * @param points
  * @param createdAt
  * @param updatedAt
  * @param roleInClass
