@@ -239,7 +239,13 @@ export default function StudentClassLeaderboard() {
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
-                <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+                <TouchableOpacity style={styles.backBtn} onPress={() => {
+                    if (router.canGoBack()) {
+                        router.back();
+                    } else {
+                        router.push('/student/StudentClasses');
+                    }
+                }}>
                     <ChevronLeft size={24} color="#2D3436" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>{className || 'Class'} Leaderboard</Text>
