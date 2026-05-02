@@ -20,21 +20,43 @@
 
 1. **Frontend Setup**
 ```bash
+-- In the project
 cd expofrontend
+```
+```bash
+-- Run
 npm install
 npx expo start
 ```
 
 2. **Python Backend Setup**
 ```bash
+-- Create virtual environment
+python -m venv venv
+source venv/bin/activate  # Windows: venv\\Scripts\\activate
+```
+```bash
+-- Set .env file
+GEMINI_API_KEY=your-google-api-key
+GEMINI_MODEL=your-model
+```
+```bash
+-- In the project
 cd pythonbackend
 pip install -r requirements.txt
-python main.py
+```
+```bash
+-- Run
+uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
 3. **Spring Backend Setup**
 ```bash
+-- In the project
 cd springbackend
+```
+```bash
+-- Run
 ./gradlew bootRun
 ```
 
@@ -42,35 +64,29 @@ cd springbackend
 ```bash
 -- Create the database
 CREATE DATABASE eduquestdb;
-
+```
+```bash
 -- Create the application user
 CREATE USER eduquestuser WITH PASSWORD 'eduquestpass';
-
+```
+```bash
 -- Grant access to the database
 GRANT ALL PRIVILEGES ON DATABASE eduquestdb TO eduquestuser;
-
+```
+```bash
 -- Connect to the database to configure schema permissions
 \c eduquestdb
-
+```
+```bash
 -- Ensure the user can create tables in the public schema
 GRANT ALL PRIVILEGES ON SCHEMA public TO eduquestuser;
 ```
 
-## Testing Scenarios
-
-### Login Credentials (Test Accounts)
-
-**Teacher Account:**
-- Username: `edu_teacher1`
-- Password: `password`
-
-**Student Account:**
-- Username: `student1`
-- Password: `password`
-
-**Admin Account:**
-- Username: `admin`
-- Password: `password`
+5. **Ollama Setup**
+```bash
+-- After installed ollama
+ollama run nomic-embed-text
+```
 
 ### App Testing
 
