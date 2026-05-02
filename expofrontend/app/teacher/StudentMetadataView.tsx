@@ -103,7 +103,7 @@ export function StudentMetadataView({ visible, onClose, student, token }: Studen
 
     const callSpringBootAIAnalysis = async (studentName: string): Promise<string> => {
         try {
-            const response = await axios.get(`${getApiBaseUrl()}/api/user/game/results`, {
+            const response = await axios.get(`${getApiBaseUrl()}/api/educator/student/${student.id}/game/result`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             return formatSpringBootAIResponse(response.data, studentName, gameRecords);
@@ -121,7 +121,7 @@ export function StudentMetadataView({ visible, onClose, student, token }: Studen
         const accuracyRate = allQuestions.length ? (correctAnswers / allQuestions.length) * 100 : 0;
 
         const gameTypeStats = records.reduce((acc, record) => {
-            const type = record.metadata?.gameType || 'Unknown';
+            const type = record.gameName || 'Unknown'; // Use gameName from the record
             if (!acc[type]) acc[type] = { count: 0, totalScore: 0 };
             acc[type].count++;
             acc[type].totalScore += record.scores;
@@ -142,19 +142,16 @@ export function StudentMetadataView({ visible, onClose, student, token }: Studen
         });
         result += `\n💡 AI Suggestions\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
         if (aiData) {
-            if (aiData.encouragementMessage) result += `🌟 ${aiData.encouragementMessage}\n\n`;
-            if (aiData.analysis) result += `📊 ${aiData.analysis}\n\n`;
-            if (aiData.strengths && Array.isArray(aiData.strengths)) {
-                result += `💪 Strengths:\n`;
-                aiData.strengths.forEach((s: string, idx: number) => result += `  ${idx + 1}. ${s}\n`);
-                result += `\n`;
+            if (aiData.overallAnalysis) {
+                result += `📊 Overall Analysis:\n`;
+                result += `${aiData.overallAnalysis}\n\n`;
             }
-            if (aiData.powerUpTips && Array.isArray(aiData.powerUpTips)) {
-                result += `⚡ Improvement tips:\n`;
-                aiData.powerUpTips.forEach((t: string, idx: number) => result += `  ${idx + 1}. ${t}\n`);
-                result += `\n`;
+            if (aiData.gameAnalysis && Array.isArray(aiData.gameAnalysis)) {
+                result += `🎮 Game-specific Analysis:\n`;
+                aiData.gameAnalysis.forEach((analysis: string, idx: number) =>
+                  result += `  ${idx + 1}. ${analysis}\n`
+                );
             }
-            if (aiData.gamesForNextSteps) result += `🎮 Next recommended: ${aiData.gamesForNextSteps}\n`;
         } else {
             result += `AI analysis temporarily unavailable. Please try again later.\n`;
         }
