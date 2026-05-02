@@ -119,7 +119,7 @@ export default function StudentClassLeaderboard() {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
-            const newEntries = response.data.content || response.data || [];
+            const newEntries = response.data.slice || response.data.content || response.data.items || response.data || [];
             
             if (reset) {
                 setLeaderboard(newEntries);
@@ -239,7 +239,13 @@ export default function StudentClassLeaderboard() {
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
-                <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+                <TouchableOpacity style={styles.backBtn} onPress={() => {
+                    if (router.canGoBack()) {
+                        router.back();
+                    } else {
+                        router.push('/student/StudentClasses');
+                    }
+                }}>
                     <ChevronLeft size={24} color="#2D3436" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>{className || 'Class'} Leaderboard</Text>
@@ -290,9 +296,9 @@ export default function StudentClassLeaderboard() {
                 ) : leaderboard.length === 0 ? (
                     <View style={styles.emptyContainer}>
                         <Trophy size={48} color="#DDD" />
-                        <Text style={styles.emptyTitle}>No Scores Yet</Text>
+                        <Text style={styles.emptyTitle}>No Class Scores Yet</Text>
                         <Text style={styles.emptyDescription}>
-                            Be the first to play {selectedGame} and set a record!
+                            No one in your class has played {selectedGame} yet. Be the first to set a record!
                         </Text>
                     </View>
                 ) : (

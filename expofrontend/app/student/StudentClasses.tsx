@@ -229,7 +229,7 @@ export default function StudentClasses() {
             <Modal
                 visible={showMembersModal}
                 animationType="slide"
-                presentationStyle="page"
+                presentationStyle="pageSheet"
                 onRequestClose={() => setShowMembersModal(false)}
             >
                 <SafeAreaView style={styles.modalContainer}>

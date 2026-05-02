@@ -72,20 +72,37 @@ export default function ClassLeaderboard() {
         }
     }, [selectedGame, classId, token]);
 
+    const getGameIcon = (gameName: string) => {
+        const gameIcons: { [key: string]: string } = {
+            'Speed Calculation': '🧮',
+            'AI Math Adventure': '🤖',
+            'Listening Game': '🎧',
+            'Writing Game': '✍️',
+            'Sentence Reorder': '📝',
+            'Animal Catcher': '🦁',
+            'Human organs': '🫀',
+            'Animal Classification': '🐾',
+            'Body Parts Matching': '🦴',
+            'ChineseGame': '🀄',
+            'ChineseSentenceGame': '📖'
+        };
+        return gameIcons[gameName] || '🎮';
+    };
+
     const loadGames = async () => {
         // Hardcoded games list since backend doesn't have /api/games endpoint
         const hardcodedGames = [
-            { id: 1, name: 'Speed Calculation'},
-            { id: 2, name: 'AI Math Adventure'},
-            { id: 3, name: 'Listening Game'},
-            { id: 4, name: 'Writing Game'},
-            { id: 5, name: 'Sentence Reorder'},
-            { id: 6, name: 'Animal Catcher'},
-            { id: 7, name: 'Human organs'},
-            { id: 8, name: 'Animal Classification'},
-            { id: 9, name: 'Body Parts Matching'},
-            { id: 10, name: 'ChineseGame'},
-            { id: 11, name: 'ChineseSentenceGame'}
+            { id: 1, name: 'Speed Calculation', icon: '🧮'},
+            { id: 2, name: 'AI Math Adventure', icon: '🤖'},
+            { id: 3, name: 'Listening Game', icon: '🎧'},
+            { id: 4, name: 'Writing Game', icon: '✍️'},
+            { id: 5, name: 'Sentence Reorder', icon: '📝'},
+            { id: 6, name: 'Animal Catcher', icon: '🦁'},
+            { id: 7, name: 'Human organs', icon: '🫀'},
+            { id: 8, name: 'Animal Classification', icon: '🐾'},
+            { id: 9, name: 'Body Parts Matching', icon: '🦴'},
+            { id: 10, name: 'ChineseGame', icon: '🀄'},
+            { id: 11, name: 'ChineseSentenceGame', icon: '📖'}
         ];
 
         setGames(hardcodedGames);
@@ -226,6 +243,12 @@ export default function ClassLeaderboard() {
                                 ]}
                                 onPress={() => setSelectedGame(game.name)}
                             >
+                                <Text style={[
+                                    styles.gameChipIcon,
+                                    selectedGame === game.name && styles.gameChipIconActive
+                                ]}>
+                                    {game.icon}
+                                </Text>
                                 <Text style={[
                                     styles.gameChipText,
                                     selectedGame === game.name && styles.gameChipTextActive
@@ -388,17 +411,28 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     gameChip: {
-        paddingHorizontal: 16,
+        paddingHorizontal: 12,
         paddingVertical: 8,
         borderRadius: 20,
         backgroundColor: '#F0E6FF',
         marginRight: 8,
+        alignItems: 'center',
+        flexDirection: 'row',
+        minWidth: 100,
     },
     gameChipActive: {
         backgroundColor: '#6C5CE7',
     },
+    gameChipIcon: {
+        fontSize: 16,
+        marginRight: 4,
+    },
+    gameChipIconActive: {
+        fontSize: 16,
+        marginRight: 4,
+    },
     gameChipText: {
-        fontSize: 14,
+        fontSize: 12,
         color: '#666',
         fontWeight: '500',
     },
