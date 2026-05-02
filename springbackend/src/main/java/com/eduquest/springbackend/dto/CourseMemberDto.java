@@ -17,6 +17,7 @@ public record CourseMemberDto(
         Long userId,
         String username,
         String email,
+        Integer points,
         Instant createdAt,
         Instant updatedAt,
         RoleInClass roleInClass
