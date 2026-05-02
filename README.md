@@ -56,7 +56,7 @@ GRANT ALL PRIVILEGES ON DATABASE eduquestdb TO eduquestuser;
 GRANT ALL PRIVILEGES ON SCHEMA public TO eduquestuser;
 ```
 
-## Testing Scenarios for Professor
+## Testing Scenarios
 
 ### Login Credentials (Test Accounts)
 
