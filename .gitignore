@@ -1,0 +1,26 @@
+# --- IDEs & OS System Junk ---
+.idea/
+EduQuest.iml
+.vscode/
+.DS_Store
+Thumbs.db
+
+# --- Spring Boot Backend (Java / Gradle) ---
+springbackend/.gradle/
+springbackend/build/
+springbackend/out/
+springbackend/bin/
+springbackend/.settings/
+!springbackend/gradle/wrapper/gradle-wrapper.jar
+
+# --- Python Backend (FastAPI / AI) ---
+pythonbackend/venv/
+pythonbackend/.venv/
+**/__pycache__/
+*.pyc
+pythonbackend/.env
+
+# --- Expo / React Native Frontend (JavaScript) ---
+expofrontend/node_modules/
+expofrontend/.expo/
+expofrontend/web-build/
